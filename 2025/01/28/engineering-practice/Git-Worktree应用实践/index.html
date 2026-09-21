@@ -1,0 +1,1247 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Git Worktree 应用实践指南 · 飞轮之道</title>
+<meta name="description" content="让同一个 Git Repository 同时拥有多个独立的工作目录，每个目录可以处于不同 branch / commit，从而实现真正的并行开发。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/01/28/engineering-practice/Git-Worktree%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Git Worktree 应用实践指南 · 飞轮之道">
+<meta property="og:description" content="让同一个 Git Repository 同时拥有多个独立的工作目录，每个目录可以处于不同 branch / commit，从而实现真正的并行开发。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/01/28/engineering-practice/Git-Worktree%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / 实践指南
+    </div>
+    <h1>Git Worktree 应用实践指南</h1>
+    <p class="article-deck">让同一个 Git Repository 同时拥有多个独立的工作目录，每个目录可以处于不同 branch / commit，从而实现真正的并行开发。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>12 分钟</span>
+      <span>发布于 2025.01</span>
+      <a class="article-meta__tag" href="/tags/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">#工程实践</a><a class="article-meta__tag" href="/tags/DevOps/">#DevOps</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>git worktree 是 Git 中一个非常值得掌握、但实际开发中经常被低估的能力。它解决的核心问题不是“多分几个 branch”，而是：</p>
+<p>让同一个 Git Repository 同时拥有多个独立的工作目录，每个目录可以处于不同 branch &#x2F; commit，从而实现真正的并行开发。</p>
+<p>Git 官方定义就是“Manage multiple working trees”。一个 repository 可以拥有一个 main worktree，以及多个 linked worktree；这些 worktree 共享 Git object database，但各自拥有独立的 HEAD、index 和工作目录。</p>
+<p>对于你这种 Cursor &#x2F; ClaudeCode &#x2F; Codex + Python&#x2F;FastAPI + Agent 微服务 的开发模式，我尤其推荐把 Worktree 纳入日常工作流，因为它非常适合 多 Agent 并行开发。</p>
+<h2 id="1-先理解：Worktree-到底解决什么问题"><a href="#1-先理解：Worktree-到底解决什么问题" class="headerlink" title="1. 先理解：Worktree 到底解决什么问题"></a>1. 先理解：Worktree 到底解决什么问题</h2><p>传统 Git 开发：</p>
+<p>一个 Repository</p>
+<pre><code>  │
+
+  └── 一个工作目录
+
+          │
+
+          ├── main
+
+          ├── feature/a
+
+          ├── feature/b
+
+          └── hotfix
+</code></pre>
+<p>你只能：</p>
+<p>git switch feature&#x2F;a</p>
+<p>然后：</p>
+<p>git switch feature&#x2F;b</p>
+<p>如果当前有未提交修改，就需要：</p>
+<p>git stash</p>
+<p>git switch feature&#x2F;b</p>
+<p>…</p>
+<p>git stash pop</p>
+<p>这就是典型的上下文切换成本。</p>
+<p>Worktree 则变成：</p>
+<p>~&#x2F;workspace&#x2F;</p>
+<p>│</p>
+<p>├── flywhl-cloud&#x2F;                 # main</p>
+<p>│</p>
+<p>├── flywhl-cloud-agent&#x2F;           # feature&#x2F;agent</p>
+<p>│</p>
+<p>├── flywhl-cloud-security&#x2F;        # feature&#x2F;security</p>
+<p>│</p>
+<p>├── flywhl-cloud-evaluation&#x2F;      # feature&#x2F;evaluation</p>
+<p>│</p>
+<p>└── flywhl-cloud-hotfix&#x2F;          # hotfix&#x2F;xxx</p>
+<p>实际上：</p>
+<pre><code>             ┌── main worktree
+
+             │
+</code></pre>
+<p>Git Repository ──┼── feature&#x2F;agent</p>
+<pre><code>             │
+
+             ├── feature/security
+
+             │
+
+             ├── feature/evaluation
+
+             │
+
+             └── hotfix
+</code></pre>
+<p>它们共享 Git 对象存储，但每个 worktree 都有自己的：</p>
+<ul>
+<li>工作目录</li>
+<li>HEAD</li>
+<li>staging area &#x2F; index</li>
+<li>branch checkout 状态</li>
+</ul>
+<p>所以你可以：</p>
+<p>Cursor Window 1 → feature&#x2F;agent</p>
+<p>Cursor Window 2 → feature&#x2F;security</p>
+<p>Claude Code     → feature&#x2F;evaluation</p>
+<p>Codex           → hotfix</p>
+<p>同时工作。</p>
+<p>Git 官方文档明确说明，linked worktree 的管理信息位于 $GIT_DIR&#x2F;worktrees，而 branch refs 等核心 Git 对象则共享。</p>
+<h2 id="2-Worktree-vs-Branch-vs-Clone"><a href="#2-Worktree-vs-Branch-vs-Clone" class="headerlink" title="2. Worktree vs Branch vs Clone"></a>2. Worktree vs Branch vs Clone</h2><p>这是最重要的概念区别。</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>能力</td>
+<td>Branch</td>
+<td>Worktree</td>
+<td>Clone</td>
+</tr>
+<tr>
+<td>创建分支</td>
+<td>✅</td>
+<td>通常配合 branch</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>同时打开多个分支</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>独立工作目录</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Git object 是否共享</td>
+<td>N&#x2F;A</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>磁盘占用</td>
+<td>最低</td>
+<td>较低</td>
+<td>高</td>
+</tr>
+<tr>
+<td>适合并行开发</td>
+<td>一般</td>
+<td>非常适合</td>
+<td>可以</td>
+</tr>
+<tr>
+<td>适合 PR Review</td>
+<td>一般</td>
+<td>非常适合</td>
+<td>可以</td>
+</tr>
+<tr>
+<td>适合 Hotfix</td>
+<td>一般</td>
+<td>非常适合</td>
+<td>可以</td>
+</tr>
+<tr>
+<td>适合多个 AI Agent</td>
+<td>不方便</td>
+<td>非常适合</td>
+<td>可以</td>
+</tr>
+<tr>
+<td>Repository 历史重复</td>
+<td>不存在</td>
+<td>不重复</td>
+<td>重复</td>
+</tr>
+</tbody></table>
+<p>所以可以简单记：</p>
+<p>Branch</p>
+<p>&#x3D; Git 逻辑上的开发分支</p>
+<p>Worktree</p>
+<p>&#x3D; Branch + 独立物理工作目录</p>
+<p>Clone</p>
+<p>&#x3D; 完整独立 Repository</p>
+<p>Worktree 相比 clone 最大优势就是共享 Git object database，因此大型 repository 尤其有价值。</p>
+<h2 id="3-最核心的-6-个命令"><a href="#3-最核心的-6-个命令" class="headerlink" title="3. 最核心的 6 个命令"></a>3. 最核心的 6 个命令</h2><p>实际上日常开发掌握下面几个就够了。</p>
+<p>git worktree add</p>
+<p>git worktree list</p>
+<p>git worktree remove</p>
+<p>git worktree move</p>
+<p>git worktree prune</p>
+<p>git worktree lock</p>
+<h2 id="4-创建-Worktree"><a href="#4-创建-Worktree" class="headerlink" title="4. 创建 Worktree"></a>4. 创建 Worktree</h2><p>4.1 从当前 HEAD 创建新 branch</p>
+<p>最常用：</p>
+<p>git worktree add -b feature&#x2F;auth ..&#x2F;project-auth</p>
+<p>相当于：</p>
+<p>当前 HEAD</p>
+<p>   │</p>
+<p>   └── 创建 feature&#x2F;auth</p>
+<pre><code>       │
+
+       └── ../project-auth
+</code></pre>
+<p>然后：</p>
+<p>cd ..&#x2F;project-auth</p>
+<p>现在：</p>
+<p>git branch –show-current</p>
+<p>得到：</p>
+<p>feature&#x2F;auth</p>
+<h2 id="5-从已有-Branch-创建-Worktree"><a href="#5-从已有-Branch-创建-Worktree" class="headerlink" title="5. 从已有 Branch 创建 Worktree"></a>5. 从已有 Branch 创建 Worktree</h2><p>假设已经存在：</p>
+<p>feature&#x2F;payment</p>
+<p>执行：</p>
+<p>git worktree add ..&#x2F;project-payment feature&#x2F;payment</p>
+<p>现在：</p>
+<p>project&#x2F;</p>
+<p>project-payment&#x2F;</p>
+<p>两个目录分别 checkout：</p>
+<p>project          → main</p>
+<p>project-payment  → feature&#x2F;payment</p>
+<h2 id="6-创建-Hotfix-Worktree"><a href="#6-创建-Hotfix-Worktree" class="headerlink" title="6. 创建 Hotfix Worktree"></a>6. 创建 Hotfix Worktree</h2><p>这是 Worktree 最经典的应用场景。</p>
+<p>假设你正在：</p>
+<p>feature&#x2F;agent</p>
+<p>开发，而且当前有大量未提交代码：</p>
+<p>feature&#x2F;agent</p>
+<p>├── 修改 20 个文件</p>
+<p>├── Debug session</p>
+<p>├── 本地测试</p>
+<p>└── 未提交代码</p>
+<p>突然线上需要：</p>
+<p>hotfix&#x2F;login-timeout</p>
+<p>传统方案：</p>
+<p>git stash</p>
+<p>git switch main</p>
+<p>git switch -c hotfix&#x2F;login-timeout</p>
+<p>…</p>
+<p>git switch feature&#x2F;agent</p>
+<p>git stash pop</p>
+<p>Worktree：</p>
+<p>git worktree add -b hotfix&#x2F;login-timeout ..&#x2F;project-hotfix main</p>
+<p>然后：</p>
+<p>cd ..&#x2F;project-hotfix</p>
+<p>修复：</p>
+<p>git add .</p>
+<p>git commit -m “fix: login timeout”</p>
+<p>git push origin hotfix&#x2F;login-timeout</p>
+<p>完成：</p>
+<p>cd ..&#x2F;project</p>
+<p>git worktree remove ..&#x2F;project-hotfix</p>
+<p>你的原来的：</p>
+<p>feature&#x2F;agent</p>
+<p>完全没有被打断。</p>
+<p>这正是 Git 官方文档给出的典型 emergency fix 场景。</p>
+<h2 id="7-PR-Review-是另一个非常好的场景"><a href="#7-PR-Review-是另一个非常好的场景" class="headerlink" title="7. PR Review 是另一个非常好的场景"></a>7. PR Review 是另一个非常好的场景</h2><p>假设你当前：</p>
+<p>feature&#x2F;a</p>
+<p>正在开发。</p>
+<p>GitHub 上来了：</p>
+<p>PR #128</p>
+<p>feature&#x2F;security → main</p>
+<p>不要：</p>
+<p>git stash</p>
+<p>git switch feature&#x2F;security</p>
+<p>而是：</p>
+<p>git fetch origin</p>
+<p>git worktree add ..&#x2F;project-pr-128 feature&#x2F;security</p>
+<p>然后：</p>
+<p>cd ..&#x2F;project-pr-128</p>
+<p>直接：</p>
+<p>pytest</p>
+<p>或者：</p>
+<p>docker compose up</p>
+<p>甚至：</p>
+<p>cursor .</p>
+<p>单独打开这个 PR。</p>
+<p>Review 完：</p>
+<p>cd ..&#x2F;project</p>
+<p>git worktree remove ..&#x2F;project-pr-128</p>
+<p>你的原开发环境完全保持原样。</p>
+<p>Worktree 非常适合这种“Review while coding”场景。</p>
+<h2 id="8-多-Feature-并行开发"><a href="#8-多-Feature-并行开发" class="headerlink" title="8. 多 Feature 并行开发"></a>8. 多 Feature 并行开发</h2><p>例如你的项目：</p>
+<p>flywhl-cloud</p>
+<p>同时有：</p>
+<p>feature&#x2F;agent-runtime</p>
+<p>feature&#x2F;security</p>
+<p>feature&#x2F;evaluation</p>
+<p>feature&#x2F;knowledge</p>
+<p>可以：</p>
+<p>git worktree add -b feature&#x2F;agent-runtime ..&#x2F;flywhl-cloud-agent</p>
+<p>git worktree add -b feature&#x2F;security ..&#x2F;flywhl-cloud-security</p>
+<p>git worktree add -b feature&#x2F;evaluation ..&#x2F;flywhl-cloud-evaluation</p>
+<p>git worktree add -b feature&#x2F;knowledge ..&#x2F;flywhl-cloud-knowledge</p>
+<p>形成：</p>
+<p>~&#x2F;workspace&#x2F;</p>
+<p>flywhl-cloud&#x2F;</p>
+<pre><code>main
+</code></pre>
+<p>flywhl-cloud-agent&#x2F;</p>
+<pre><code>feature/agent-runtime
+</code></pre>
+<p>flywhl-cloud-security&#x2F;</p>
+<pre><code>feature/security
+</code></pre>
+<p>flywhl-cloud-evaluation&#x2F;</p>
+<pre><code>feature/evaluation
+</code></pre>
+<p>flywhl-cloud-knowledge&#x2F;</p>
+<pre><code>feature/knowledge
+</code></pre>
+<p>以后不需要：</p>
+<p>git switch xxx</p>
+<p>而是：</p>
+<p>cd ..&#x2F;flywhl-cloud-agent</p>
+<h2 id="9-对-AI-Coding-Agent-尤其有价值"><a href="#9-对-AI-Coding-Agent-尤其有价值" class="headerlink" title="9. 对 AI Coding Agent 尤其有价值"></a>9. 对 AI Coding Agent 尤其有价值</h2><p>这是我认为你最应该重点采用 Worktree 的地方。</p>
+<p>假设你要实现：</p>
+<p>AIDO Platform</p>
+<p>现在拆成：</p>
+<p>Agent Runtime</p>
+<p>Security</p>
+<p>Evaluation</p>
+<p>Observability</p>
+<p>可以建立：</p>
+<p>flywhl-cloud&#x2F;</p>
+<p>│</p>
+<p>├── flywhl-cloud-agent&#x2F;</p>
+<p>├── flywhl-cloud-security&#x2F;</p>
+<p>├── flywhl-cloud-eval&#x2F;</p>
+<p>└── flywhl-cloud-observability&#x2F;</p>
+<p>然后：</p>
+<pre><code>                Git Repository
+
+                      │
+
+   ┌──────────────────┼──────────────────┐
+
+   │                  │                  │
+
+   ▼                  ▼                  ▼
+</code></pre>
+<p>  Agent Runtime       Security          Evaluation</p>
+<pre><code>   │                  │                  │
+
+Codex              Claude            Cursor
+</code></pre>
+<p>每一个 Agent 都拥有独立 filesystem。</p>
+<p>这意味着：</p>
+<p>Agent A 修改 src&#x2F;agent&#x2F;</p>
+<p>Agent B 修改 src&#x2F;security&#x2F;</p>
+<p>Agent C 修改 tests&#x2F;</p>
+<p>不会因为大家共享同一个工作目录而发生：</p>
+<p>Agent A 正在编辑文件</p>
+<pre><code>    ↓
+</code></pre>
+<p>Agent B 同时修改同一个文件</p>
+<pre><code>    ↓
+</code></pre>
+<p>代码互相覆盖</p>
+<p>这也是目前 Worktree 在 AI coding agent 场景中非常重要的应用方向。</p>
+<h2 id="10-推荐你的-AI-Agent-Worktree-模式"><a href="#10-推荐你的-AI-Agent-Worktree-模式" class="headerlink" title="10. 推荐你的 AI Agent Worktree 模式"></a>10. 推荐你的 AI Agent Worktree 模式</h2><p>对于你现在的开发工具组合，我建议：</p>
+<pre><code>                Git Repository
+
+                      │
+
+        ┌─────────────┼─────────────┐
+
+        │             │             │
+
+        ▼             ▼             ▼
+
+   worktree-1    worktree-2    worktree-3
+
+        │             │             │
+
+      Codex        ClaudeCode     Cursor
+
+        │             │             │
+
+        ▼             ▼             ▼
+
+   Agent开发       Security      Review
+</code></pre>
+<p>例如：</p>
+<p>git worktree add -b feature&#x2F;agent-runtime ..&#x2F;flywhl-agent</p>
+<p>git worktree add -b feature&#x2F;security ..&#x2F;flywhl-security</p>
+<p>git worktree add -b feature&#x2F;evaluation ..&#x2F;flywhl-evaluation</p>
+<p>分别：</p>
+<p>cd ..&#x2F;flywhl-agent</p>
+<p>codex</p>
+<p>cd ..&#x2F;flywhl-security</p>
+<p>claude</p>
+<p>cd ..&#x2F;flywhl-evaluation</p>
+<p>cursor .</p>
+<p>这比让多个 Agent 在同一个目录工作安全得多。</p>
+<h2 id="11-Detached-Worktree：实验场景"><a href="#11-Detached-Worktree：实验场景" class="headerlink" title="11. Detached Worktree：实验场景"></a>11. Detached Worktree：实验场景</h2><p>如果只是想测试某个 commit，而不需要 branch：</p>
+<p>git worktree add –detach ..&#x2F;project-test HEAD</p>
+<p>或者：</p>
+<p>git worktree add –detach ..&#x2F;project-test abc1234</p>
+<p>适合：</p>
+<p>性能测试</p>
+<p>Benchmark</p>
+<p>回归测试</p>
+<p>Bisect</p>
+<p>临时实验</p>
+<p>版本比较</p>
+<p>例如：</p>
+<p>git worktree add –detach ..&#x2F;benchmark-v1 v1.2.0</p>
+<p>然后：</p>
+<p>cd ..&#x2F;benchmark-v1</p>
+<p>pytest</p>
+<p>测试完成：</p>
+<p>cd ..&#x2F;project</p>
+<p>git worktree remove ..&#x2F;benchmark-v1</p>
+<p>官方文档也明确将 detached worktree 定位为实验和测试用途。</p>
+<h2 id="12-同时运行不同版本测试"><a href="#12-同时运行不同版本测试" class="headerlink" title="12. 同时运行不同版本测试"></a>12. 同时运行不同版本测试</h2><p>这是一个非常实用的工程场景。</p>
+<p>例如：</p>
+<p>main</p>
+<p>feature&#x2F;new-parser</p>
+<p>你可以：</p>
+<p>project-main&#x2F;</p>
+<p>project-parser&#x2F;</p>
+<p>分别：</p>
+<p>cd project-main</p>
+<p>pytest</p>
+<p>同时：</p>
+<p>cd project-parser</p>
+<p>pytest</p>
+<p>甚至：</p>
+<p>Docker Compose A → main</p>
+<p>Docker Compose B → feature&#x2F;new-parser</p>
+<p>这样可以进行：</p>
+<p>性能对比</p>
+<p>API 对比</p>
+<p>数据库迁移验证</p>
+<p>Agent trajectory 对比</p>
+<p>LLM evaluation</p>
+<p>Benchmark</p>
+<p>特别适合你做 Evaluation Engineering。</p>
+<h2 id="13-Worktree-与"><a href="#13-Worktree-与" class="headerlink" title="13. Worktree 与"></a>13. Worktree 与</h2><p>stash</p>
+<p>的关系</p>
+<p>不是说 Worktree 完全取代 stash。</p>
+<p>两者解决的问题不同。</p>
+<p>stash</p>
+<p>解决：</p>
+<p>“我现在这几个修改暂时不想提交。”</p>
+<p>例如：</p>
+<p>git stash push -m “WIP parser”</p>
+<p>worktree</p>
+<p>解决：</p>
+<p>“我需要同时维护多个开发上下文。”</p>
+<p>例如：</p>
+<p>Agent feature</p>
+<p>Security feature</p>
+<p>Hotfix</p>
+<p>PR Review</p>
+<p>Benchmark</p>
+<p>因此：</p>
+<p>临时保存修改 → stash</p>
+<p>并行维护多个工作上下文 → worktree</p>
+<p>这是一个非常重要的判断标准。</p>
+<h2 id="14-Worktree-的状态查看"><a href="#14-Worktree-的状态查看" class="headerlink" title="14. Worktree 的状态查看"></a>14. Worktree 的状态查看</h2><p>执行：</p>
+<p>git worktree list</p>
+<p>例如：</p>
+<p>&#x2F;Users&#x2F;me&#x2F;workspace&#x2F;project</p>
+<p>abc1234 [main]</p>
+<p>&#x2F;Users&#x2F;me&#x2F;workspace&#x2F;project-agent</p>
+<p>def5678 [feature&#x2F;agent]</p>
+<p>&#x2F;Users&#x2F;me&#x2F;workspace&#x2F;project-security</p>
+<p>789abcd [feature&#x2F;security]</p>
+<p>更详细：</p>
+<p>git worktree list -v</p>
+<p>脚本处理则推荐：</p>
+<p>git worktree list –porcelain</p>
+<h2 id="15-删除-Worktree"><a href="#15-删除-Worktree" class="headerlink" title="15. 删除 Worktree"></a>15. 删除 Worktree</h2><p>正常情况下：</p>
+<p>git worktree remove ..&#x2F;project-security</p>
+<p>注意：</p>
+<p>remove Worktree</p>
+<p>≠</p>
+<p>delete Branch</p>
+<p>例如：</p>
+<p>git worktree remove ..&#x2F;project-security</p>
+<p>只是删除：</p>
+<p>..&#x2F;project-security</p>
+<p>branch：</p>
+<p>feature&#x2F;security</p>
+<p>仍然存在。</p>
+<p>如果 branch 已经 merge：</p>
+<p>git branch -d feature&#x2F;security</p>
+<p>所以完整清理：</p>
+<p>git worktree remove ..&#x2F;project-security</p>
+<p>git branch -d feature&#x2F;security</p>
+<h2 id="16-手动删除目录后怎么办？"><a href="#16-手动删除目录后怎么办？" class="headerlink" title="16. 手动删除目录后怎么办？"></a>16. 手动删除目录后怎么办？</h2><p>不要直接：</p>
+<p>rm -rf ..&#x2F;project-security</p>
+<p>虽然文件目录没了，但是 Git 可能仍然认为 worktree 存在。</p>
+<p>此时：</p>
+<p>git worktree prune</p>
+<p>推荐先：</p>
+<p>git worktree prune -n</p>
+<p>查看将要清理什么。</p>
+<p>然后：</p>
+<p>git worktree prune</p>
+<p>官方文档也明确说明，如果 linked worktree 没通过 git worktree remove 删除，其管理元数据可以通过 prune 清理。</p>
+<h2 id="17-Move-Worktree"><a href="#17-Move-Worktree" class="headerlink" title="17. Move Worktree"></a>17. Move Worktree</h2><p>如果：</p>
+<p>..&#x2F;project-agent</p>
+<p>想移动：</p>
+<p>..&#x2F;worktrees&#x2F;project-agent</p>
+<p>不要直接 mv。</p>
+<p>使用：</p>
+<p>git worktree move ..&#x2F;project-agent ..&#x2F;worktrees&#x2F;project-agent</p>
+<p>然后：</p>
+<p>git worktree list</p>
+<p>确认。</p>
+<h2 id="18-Worktree-Lock"><a href="#18-Worktree-Lock" class="headerlink" title="18. Worktree Lock"></a>18. Worktree Lock</h2><p>如果 worktree 在：</p>
+<p>外置磁盘</p>
+<p>网络文件系统</p>
+<p>不稳定挂载路径</p>
+<p>可以：</p>
+<p>git worktree lock ..&#x2F;project-agent –reason “external SSD”</p>
+<p>解除：</p>
+<p>git worktree unlock ..&#x2F;project-agent</p>
+<p>对于普通 MacBook 本地开发一般不需要。</p>
+<h2 id="19-一个非常推荐的目录结构"><a href="#19-一个非常推荐的目录结构" class="headerlink" title="19. 一个非常推荐的目录结构"></a>19. 一个非常推荐的目录结构</h2><p>对于你的开发环境，我建议不要把 Worktree 放在 Repository 内部：</p>
+<p>不推荐：</p>
+<p>project&#x2F;</p>
+<p>├── .git&#x2F;</p>
+<p>├── src&#x2F;</p>
+<p>├── worktree-a&#x2F;</p>
+<p>└── worktree-b&#x2F;</p>
+<p>推荐：</p>
+<p>workspace&#x2F;</p>
+<p>│</p>
+<p>├── flywhl-cloud&#x2F;</p>
+<p>├── flywhl-cloud-agent&#x2F;</p>
+<p>├── flywhl-cloud-security&#x2F;</p>
+<p>├── flywhl-cloud-evaluation&#x2F;</p>
+<p>└── flywhl-cloud-hotfix&#x2F;</p>
+<p>也就是：</p>
+<p>workspace&#x2F;</p>
+<p>   ├── repo-main</p>
+<p>   ├── repo-feature-a</p>
+<p>   ├── repo-feature-b</p>
+<p>   └── repo-feature-c</p>
+<p>这样 Cursor、ClaudeCode、Codex 的工作目录边界非常清晰。</p>
+<h2 id="20-Python-项目的一个重要问题"><a href="#20-Python-项目的一个重要问题" class="headerlink" title="20. Python 项目的一个重要问题"></a>20. Python 项目的一个重要问题</h2><p>Worktree 虽然共享 Git object，但：</p>
+<p>Python virtualenv</p>
+<p>node_modules</p>
+<p>build&#x2F;</p>
+<p>dist&#x2F;</p>
+<p>缓存</p>
+<p>并不会因为 Git Worktree 自动共享。</p>
+<p>例如：</p>
+<p>project&#x2F;</p>
+<p>├── .venv&#x2F;</p>
+<p>│</p>
+<p>project-agent&#x2F;</p>
+<p>├── .venv&#x2F;</p>
+<p>│</p>
+<p>project-security&#x2F;</p>
+<p>├── .venv&#x2F;</p>
+<p>可能产生重复空间。</p>
+<p>对于你的 Python&#x2F;FastAPI 项目，我更推荐：</p>
+<p>uv</p>
+<p>管理 environment，例如：</p>
+<p>uv sync</p>
+<p>每个 Worktree 保持自己的环境状态。</p>
+<p>如果使用：</p>
+<p>Docker &#x2F; OrbStack</p>
+<p>则更加适合 Worktree：</p>
+<p>Worktree A</p>
+<pre><code>↓
+</code></pre>
+<p>docker compose</p>
+<pre><code>↓
+</code></pre>
+<p>container A</p>
+<p>Worktree B</p>
+<pre><code>↓
+</code></pre>
+<p>docker compose</p>
+<pre><code>↓
+</code></pre>
+<p>container B</p>
+<p>但要注意端口和数据卷隔离。</p>
+<p>例如：</p>
+<p>agent worktree</p>
+<p>127.0.0.1:8001</p>
+<p>security worktree</p>
+<p>127.0.0.1:8002</p>
+<p>evaluation worktree</p>
+<p>127.0.0.1:8003</p>
+<p>否则多个 Compose 项目可能抢占同一个端口。</p>
+<ol start="21">
+<li></li>
+</ol>
+<p>.env</p>
+<p>是 Worktree 的一个关键问题</p>
+<p>例如：</p>
+<p>project&#x2F;</p>
+<p>├── .env</p>
+<p>project-agent&#x2F;</p>
+<p>├── .env</p>
+<p>project-security&#x2F;</p>
+<p>├── .env</p>
+<p>如果每个 Worktree 都启动独立服务，建议：</p>
+<p>.env</p>
+<p>.env.local</p>
+<p>.env.worktree</p>
+<p>或者通过：</p>
+<p>APP_PORT&#x3D;8001</p>
+<p>动态注入。</p>
+<p>不要让多个 Worktree 共用：</p>
+<p>同一个数据库</p>
+<p>同一个 Redis</p>
+<p>同一个 MinIO</p>
+<p>除非你明确希望测试它们之间的交互。</p>
+<h2 id="22-数据库尤其要注意"><a href="#22-数据库尤其要注意" class="headerlink" title="22. 数据库尤其要注意"></a>22. 数据库尤其要注意</h2><p>例如：</p>
+<p>feature&#x2F;a</p>
+<p>feature&#x2F;b</p>
+<p>同时修改：</p>
+<p>Alembic migration</p>
+<p>然后两个 Worktree 都连接：</p>
+<p>localhost:5432</p>
+<p>就可能产生：</p>
+<p>A migration</p>
+<pre><code>   ↓
+</code></pre>
+<p>DB schema changed</p>
+<pre><code>   ↓
+</code></pre>
+<p>B branch 测试失败</p>
+<p>更好的方案：</p>
+<p>worktree-a → PostgreSQL database_a</p>
+<p>worktree-b → PostgreSQL database_b</p>
+<p>或者：</p>
+<p>worktree-a → Docker Compose project-a</p>
+<p>worktree-b → Docker Compose project-b</p>
+<p>对于 Agent 项目尤其重要。</p>
+<h2 id="23-Worktree-Docker-Compose"><a href="#23-Worktree-Docker-Compose" class="headerlink" title="23. Worktree + Docker Compose"></a>23. Worktree + Docker Compose</h2><p>推荐：</p>
+<p>docker compose -p flywhl-agent up -d</p>
+<p>另一个：</p>
+<p>docker compose -p flywhl-security up -d</p>
+<p>这样 Docker resource namespace 不冲突：</p>
+<p>flywhl-agent</p>
+<p>├── postgres</p>
+<p>├── redis</p>
+<p>└── api</p>
+<p>flywhl-security</p>
+<p>├── postgres</p>
+<p>├── redis</p>
+<p>└── api</p>
+<p>如果数据库数据也要隔离：</p>
+<p>volumes:</p>
+<p>  postgres_data:</p>
+<p>最好结合 Compose project name 做隔离。</p>
+<h2 id="24-Worktree-IDE"><a href="#24-Worktree-IDE" class="headerlink" title="24. Worktree + IDE"></a>24. Worktree + IDE</h2><p>推荐把每个 Worktree 当作一个独立项目打开：</p>
+<p>cd ..&#x2F;flywhl-agent</p>
+<p>cursor .</p>
+<p>另一个：</p>
+<p>cd ..&#x2F;flywhl-security</p>
+<p>cursor .</p>
+<p>这样：</p>
+<p>Cursor Window A</p>
+<pre><code>↓
+</code></pre>
+<p>flywhl-agent</p>
+<pre><code>↓
+</code></pre>
+<p>feature&#x2F;agent</p>
+<p>Cursor Window B</p>
+<pre><code>↓
+</code></pre>
+<p>flywhl-security</p>
+<pre><code>↓
+</code></pre>
+<p>feature&#x2F;security</p>
+<p>不要在一个 IDE workspace 中人为模拟多个 branch。</p>
+<p>Worktree 本身已经提供了更清晰的 filesystem isolation。</p>
+<h2 id="25-Worktree-Codex-ClaudeCode"><a href="#25-Worktree-Codex-ClaudeCode" class="headerlink" title="25. Worktree + Codex &#x2F; ClaudeCode"></a>25. Worktree + Codex &#x2F; ClaudeCode</h2><p>如果使用 AI Coding Agent，我建议采用：</p>
+<pre><code>            Git Repository
+
+                   │
+
+    ┌──────────────┼──────────────┐
+
+    │              │              │
+
+    ▼              ▼              ▼
+
+ Agent-A        Agent-B        Agent-C
+
+    │              │              │
+
+worktree-1      worktree-2      worktree-3
+
+    │              │              │
+
+feature/a       feature/b       feature/c
+</code></pre>
+<p>每个 Agent：</p>
+<p>一个 Worktree</p>
+<ul>
+<li></li>
+</ul>
+<p>一个 Branch</p>
+<ul>
+<li></li>
+</ul>
+<p>一个任务</p>
+<p>形成非常清晰的：</p>
+<p>1 Agent &#x3D; 1 Worktree &#x3D; 1 Branch &#x3D; 1 Task</p>
+<p>这是我最推荐的 Agent Engineering 工作模式。</p>
+<h2 id="26-更进一步：Worktree-Agent-Orchestration"><a href="#26-更进一步：Worktree-Agent-Orchestration" class="headerlink" title="26. 更进一步：Worktree + Agent Orchestration"></a>26. 更进一步：Worktree + Agent Orchestration</h2><p>对于你的多 Agent 架构，可以进一步形成：</p>
+<pre><code>                Task Planner
+
+                     │
+
+      ┌──────────────┼──────────────┐
+
+      │              │              │
+
+      ▼              ▼              ▼
+
+   Task A         Task B         Task C
+
+      │              │              │
+
+      ▼              ▼              ▼
+
+ Worktree A      Worktree B      Worktree C
+
+      │              │              │
+
+   Agent A         Agent B         Agent C
+
+      │              │              │
+
+      ▼              ▼              ▼
+
+  Branch A        Branch B        Branch C
+
+      │              │              │
+
+      └──────────────┼──────────────┘
+
+                     ▼
+
+                Integration
+</code></pre>
+<p>例如：</p>
+<p>Task #101</p>
+<p>实现 Agent Runtime</p>
+<pre><code>    ↓
+</code></pre>
+<p>feature&#x2F;agent-runtime</p>
+<pre><code>    ↓
+</code></pre>
+<p>worktree-agent-runtime</p>
+<pre><code>    ↓
+</code></pre>
+<p>Codex</p>
+<p>同时：</p>
+<p>Task #102</p>
+<p>实现 Evaluation Framework</p>
+<pre><code>    ↓
+</code></pre>
+<p>feature&#x2F;evaluation</p>
+<pre><code>    ↓
+</code></pre>
+<p>worktree-evaluation</p>
+<pre><code>    ↓
+</code></pre>
+<p>ClaudeCode</p>
+<p>最后由：</p>
+<p>Integration Agent</p>
+<p>负责：</p>
+<p>review</p>
+<p>test</p>
+<p>merge</p>
+<p>这已经从 Git 工具技巧演变成了一种 AI-native software development workflow。</p>
+<h2 id="27-一个非常实用的脚本"><a href="#27-一个非常实用的脚本" class="headerlink" title="27. 一个非常实用的脚本"></a>27. 一个非常实用的脚本</h2><p>你可以在 Mac 上做一个简单的 helper。</p>
+<p>例如：</p>
+<p>#!&#x2F;usr&#x2F;bin&#x2F;env bash</p>
+<p>set -euo pipefail</p>
+<p>BRANCH&#x3D;”${1:?branch required}”</p>
+<p>DIR&#x3D;”${2:-..&#x2F;$(basename “$BRANCH”)}”</p>
+<p>git fetch origin</p>
+<p>git worktree add -b “$BRANCH” “$DIR” origin&#x2F;main</p>
+<p>echo</p>
+<p>echo “Worktree created:”</p>
+<p>echo “  branch: $BRANCH”</p>
+<p>echo “  path:   $DIR”</p>
+<p>echo</p>
+<p>echo “Next:”</p>
+<p>echo “  cd $DIR”</p>
+<p>保存：</p>
+<p>~&#x2F;bin&#x2F;gwt-add</p>
+<p>然后：</p>
+<p>chmod +x ~&#x2F;bin&#x2F;gwt-add</p>
+<p>以后：</p>
+<p>gwt-add feature&#x2F;agent-runtime</p>
+<p>自动：</p>
+<p>fetch</p>
+<p>↓</p>
+<p>创建 branch</p>
+<p>↓</p>
+<p>创建 worktree</p>
+<p>↓</p>
+<p>基于 origin&#x2F;main</p>
+<h2 id="28-推荐再增加一个清理脚本"><a href="#28-推荐再增加一个清理脚本" class="headerlink" title="28. 推荐再增加一个清理脚本"></a>28. 推荐再增加一个清理脚本</h2><p>例如：</p>
+<p>#!&#x2F;usr&#x2F;bin&#x2F;env bash</p>
+<p>set -euo pipefail</p>
+<p>git worktree list</p>
+<p>echo</p>
+<p>read -r -p “Remove worktree path: “ PATH_TO_REMOVE</p>
+<p>git worktree remove “$PATH_TO_REMOVE”</p>
+<p>echo</p>
+<p>git worktree prune</p>
+<p>echo</p>
+<p>git worktree list</p>
+<p>可以避免误删。</p>
+<h2 id="29-常见坑"><a href="#29-常见坑" class="headerlink" title="29. 常见坑"></a>29. 常见坑</h2><p>坑 1：一个 Branch 不能同时 checkout 到两个 Worktree</p>
+<p>例如：</p>
+<p>git worktree add ..&#x2F;a feature&#x2F;test</p>
+<p>git worktree add ..&#x2F;b feature&#x2F;test</p>
+<p>通常 Git 会拒绝。</p>
+<p>因为：</p>
+<p>feature&#x2F;test</p>
+<pre><code> ↓
+</code></pre>
+<p>已经被 worktree A 使用</p>
+<p>这是 Worktree 保持 branch 状态一致性的核心机制。</p>
+<p>如果确实需要特殊操作，可以考虑：</p>
+<p>git worktree add -f …</p>
+<p>但不建议日常使用。</p>
+<p>坑 2：Worktree 不是 Clone</p>
+<p>不要误以为：</p>
+<p>Worktree A</p>
+<p>Worktree B</p>
+<p>拥有两个完全独立的 Git Repository。</p>
+<p>实际上它们共享 repository 的 Git object storage。</p>
+<p>因此：</p>
+<p>git gc</p>
+<p>git repack</p>
+<p>git fetch</p>
+<p>等 Repository 级操作，需要理解它们的共享关系。</p>
+<h2 id="30-坑-3：不要直接删除"><a href="#30-坑-3：不要直接删除" class="headerlink" title="30. 坑 3：不要直接删除"></a>30. 坑 3：不要直接删除</h2><p>.git&#x2F;worktrees</p>
+<p>不要：</p>
+<p>rm -rf .git&#x2F;worktrees</p>
+<p>Git 官方内部管理结构不要手动修改。</p>
+<p>优先：</p>
+<p>git worktree remove</p>
+<p>如果目录已经被手工删除：</p>
+<p>git worktree prune</p>
+<h2 id="31-坑-4：Submodule"><a href="#31-坑-4：Submodule" class="headerlink" title="31. 坑 4：Submodule"></a>31. 坑 4：Submodule</h2><p>如果项目大量使用：</p>
+<p>Git Submodule</p>
+<p>Worktree 要更加谨慎。</p>
+<p>Git 官方目前仍明确提示：multiple checkout 对 submodules 的支持并不完整，因此不推荐在复杂 superproject&#x2F;submodule 场景中盲目使用。</p>
+<p>如果你的项目：</p>
+<p>Spring Cloud</p>
+<ul>
+<li></li>
+</ul>
+<p>大量 Git Submodule</p>
+<p>建议先做 POC。</p>
+<h2 id="32-Worktree-Config"><a href="#32-Worktree-Config" class="headerlink" title="32. Worktree Config"></a>32. Worktree Config</h2><p>这是比较高级但非常有用的能力。</p>
+<p>Git 默认很多 configuration 是共享的，但可以开启：</p>
+<p>git config extensions.worktreeConfig true</p>
+<p>之后可以使用：</p>
+<p>git config –worktree …</p>
+<p>让某些 configuration 变成：</p>
+<p>Worktree A → 独立配置</p>
+<p>Worktree B → 独立配置</p>
+<p>Git 官方文档对此有专门说明。</p>
+<p>这对于：</p>
+<p>不同 Worktree</p>
+<p>不同 sparse checkout</p>
+<p>不同 core 配置</p>
+<p>不同开发环境</p>
+<p>比较有价值。</p>
+<h2 id="33-你可以建立一套固定命名规范"><a href="#33-你可以建立一套固定命名规范" class="headerlink" title="33. 你可以建立一套固定命名规范"></a>33. 你可以建立一套固定命名规范</h2><p>我建议：</p>
+<p><repo>-<purpose></p>
+<p>例如：</p>
+<p>flywhl-cloud&#x2F;</p>
+<p>flywhl-cloud-agent&#x2F;</p>
+<p>flywhl-cloud-security&#x2F;</p>
+<p>flywhl-cloud-eval&#x2F;</p>
+<p>flywhl-cloud-hotfix&#x2F;</p>
+<p>flywhl-cloud-pr-128&#x2F;</p>
+<p>Branch：</p>
+<p>feature&#x2F;agent-runtime</p>
+<p>feature&#x2F;security</p>
+<p>feature&#x2F;evaluation</p>
+<p>fix&#x2F;login-timeout</p>
+<p>review&#x2F;pr-128</p>
+<p>形成：</p>
+<p>Directory</p>
+<pre><code>    ↓
+</code></pre>
+<p>Branch</p>
+<pre><code>    ↓
+</code></pre>
+<p>Task</p>
+<pre><code>    ↓
+</code></pre>
+<p>Agent</p>
+<p>一一对应。</p>
+<h2 id="34-推荐你的最终工作流"><a href="#34-推荐你的最终工作流" class="headerlink" title="34. 推荐你的最终工作流"></a>34. 推荐你的最终工作流</h2><p>结合你的 Cursor + ClaudeCode + Codex + Python&#x2F;FastAPI + Docker&#x2F;OrbStack 环境，我建议直接采用下面这套模式：</p>
+<pre><code>                main
+
+                 │
+
+          ┌──────┼──────┐
+
+          │      │      │
+
+          ▼      ▼      ▼
+
+      feature  feature  fix
+
+      /agent   /eval    /xxx
+
+          │      │      │
+
+          ▼      ▼      ▼
+
+      worktree worktree worktree
+
+          │      │      │
+
+        Codex  Claude   Cursor
+
+          │      │      │
+
+          ▼      ▼      ▼
+
+       coding  eval    review
+
+          │      │      │
+
+          └──────┼──────┘
+
+                 ▼
+
+               PR
+
+                 │
+
+                 ▼
+
+               main
+</code></pre>
+<p>核心原则：</p>
+<p>一个独立任务</p>
+<pre><code>↓
+</code></pre>
+<p>一个 Branch</p>
+<pre><code>↓
+</code></pre>
+<p>一个 Worktree</p>
+<pre><code>↓
+</code></pre>
+<p>一个 AI Agent &#x2F; IDE</p>
+<h2 id="35-最终-Cheat-Sheet"><a href="#35-最终-Cheat-Sheet" class="headerlink" title="35. 最终 Cheat Sheet"></a>35. 最终 Cheat Sheet</h2><p>创建新 Branch + Worktree</p>
+<p>git worktree add -b feature&#x2F;foo ..&#x2F;project-foo</p>
+<p>已存在 Branch</p>
+<p>git worktree add ..&#x2F;project-foo feature&#x2F;foo</p>
+<p>从 main 创建</p>
+<p>git worktree add -b feature&#x2F;foo ..&#x2F;project-foo main</p>
+<p>从远程分支创建</p>
+<p>git fetch origin</p>
+<p>git worktree add ..&#x2F;project-foo feature&#x2F;foo</p>
+<p>Detached</p>
+<p>git worktree add –detach ..&#x2F;project-test HEAD</p>
+<p>查看</p>
+<p>git worktree list</p>
+<p>详细查看</p>
+<p>git worktree list -v</p>
+<p>删除</p>
+<p>git worktree remove ..&#x2F;project-foo</p>
+<p>清理失效 Worktree</p>
+<p>git worktree prune</p>
+<p>预览清理</p>
+<p>git worktree prune -n</p>
+<p>移动</p>
+<p>git worktree move ..&#x2F;project-foo ..&#x2F;worktrees&#x2F;project-foo</p>
+<p>Lock</p>
+<p>git worktree lock ..&#x2F;project-foo</p>
+<p>Unlock</p>
+<p>git worktree unlock ..&#x2F;project-foo</p>
+<p>最值得记住的一句话</p>
+<p>传统 Git：</p>
+<p>一个目录</p>
+<ul>
+<li></li>
+</ul>
+<p>多个 Branch</p>
+<ul>
+<li></li>
+</ul>
+<p>不断 switch</p>
+<p>Worktree：</p>
+<p>多个目录</p>
+<ul>
+<li></li>
+</ul>
+<p>多个 Branch</p>
+<ul>
+<li></li>
+</ul>
+<p>无需 switch</p>
+<p>而对于现在的 AI Coding：</p>
+<p>一个任务</p>
+<pre><code>↓
+</code></pre>
+<p>一个 Branch</p>
+<pre><code>↓
+</code></pre>
+<p>一个 Worktree</p>
+<pre><code>↓
+</code></pre>
+<p>一个 Agent</p>
+<p>这实际上是比传统“单目录 + branch switch”更适合 并行 Agent Engineering 的 Git 工作模型。</p>
+<p>Git 官方文档是最权威的命令参考，当前 git-worktree 文档覆盖 add&#x2F;list&#x2F;lock&#x2F;move&#x2F;prune&#x2F;remove&#x2F;repair&#x2F;unlock 等完整生命周期。</p>
+<p>Git 官方 git-worktree 文档⁠ </p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">延伸阅读 · 工程实践</div>
+        <a class="article-next__item" href="/2026/07/21/engineering-practice/Warp%E7%BB%88%E7%AB%AF%E5%85%A5%E9%97%A8%E5%AE%9E%E6%93%8D/"><strong>Warp 终端入门实操手册</strong><span>11 分钟</span></a><a class="article-next__item" href="/2026/07/07/engineering-practice/Obsidian-Agent-Skills%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/"><strong>Obsidian Agent Skills 最佳实践</strong><span>23 分钟</span></a>
+      </div>
+      
+      
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 35 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#%E6%A6%82%E8%BF%B0" data-toc-target="概述"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">概述</span></a><a class="toc-level-2" href="#1-%E5%85%88%E7%90%86%E8%A7%A3%EF%BC%9AWorktree-%E5%88%B0%E5%BA%95%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98" data-toc-target="1-先理解：Worktree-到底解决什么问题"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 先理解：Worktree 到底解决什么问题</span></a><a class="toc-level-2" href="#2-Worktree-vs-Branch-vs-Clone" data-toc-target="2-Worktree-vs-Branch-vs-Clone"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. Worktree vs Branch vs Clone</span></a><a class="toc-level-2" href="#3-%E6%9C%80%E6%A0%B8%E5%BF%83%E7%9A%84-6-%E4%B8%AA%E5%91%BD%E4%BB%A4" data-toc-target="3-最核心的-6-个命令"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 最核心的 6 个命令</span></a><a class="toc-level-2" href="#4-%E5%88%9B%E5%BB%BA-Worktree" data-toc-target="4-创建-Worktree"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 创建 Worktree</span></a><a class="toc-level-2" href="#5-%E4%BB%8E%E5%B7%B2%E6%9C%89-Branch-%E5%88%9B%E5%BB%BA-Worktree" data-toc-target="5-从已有-Branch-创建-Worktree"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 从已有 Branch 创建 Worktree</span></a><a class="toc-level-2" href="#6-%E5%88%9B%E5%BB%BA-Hotfix-Worktree" data-toc-target="6-创建-Hotfix-Worktree"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 创建 Hotfix Worktree</span></a><a class="toc-level-2" href="#7-PR-Review-%E6%98%AF%E5%8F%A6%E4%B8%80%E4%B8%AA%E9%9D%9E%E5%B8%B8%E5%A5%BD%E7%9A%84%E5%9C%BA%E6%99%AF" data-toc-target="7-PR-Review-是另一个非常好的场景"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. PR Review 是另一个非常好的场景</span></a><a class="toc-level-2" href="#8-%E5%A4%9A-Feature-%E5%B9%B6%E8%A1%8C%E5%BC%80%E5%8F%91" data-toc-target="8-多-Feature-并行开发"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 多 Feature 并行开发</span></a><a class="toc-level-2" href="#9-%E5%AF%B9-AI-Coding-Agent-%E5%B0%A4%E5%85%B6%E6%9C%89%E4%BB%B7%E5%80%BC" data-toc-target="9-对-AI-Coding-Agent-尤其有价值"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 对 AI Coding Agent 尤其有价值</span></a><a class="toc-level-2" href="#10-%E6%8E%A8%E8%8D%90%E4%BD%A0%E7%9A%84-AI-Agent-Worktree-%E6%A8%A1%E5%BC%8F" data-toc-target="10-推荐你的-AI-Agent-Worktree-模式"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 推荐你的 AI Agent Worktree 模式</span></a><a class="toc-level-2" href="#11-Detached-Worktree%EF%BC%9A%E5%AE%9E%E9%AA%8C%E5%9C%BA%E6%99%AF" data-toc-target="11-Detached-Worktree：实验场景"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. Detached Worktree：实验场景</span></a><a class="toc-level-2" href="#12-%E5%90%8C%E6%97%B6%E8%BF%90%E8%A1%8C%E4%B8%8D%E5%90%8C%E7%89%88%E6%9C%AC%E6%B5%8B%E8%AF%95" data-toc-target="12-同时运行不同版本测试"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">12. 同时运行不同版本测试</span></a><a class="toc-level-2" href="#13-Worktree-%E4%B8%8E" data-toc-target="13-Worktree-与"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">13. Worktree 与</span></a><a class="toc-level-2" href="#14-Worktree-%E7%9A%84%E7%8A%B6%E6%80%81%E6%9F%A5%E7%9C%8B" data-toc-target="14-Worktree-的状态查看"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">14. Worktree 的状态查看</span></a><a class="toc-level-2" href="#15-%E5%88%A0%E9%99%A4-Worktree" data-toc-target="15-删除-Worktree"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">15. 删除 Worktree</span></a><a class="toc-level-2" href="#16-%E6%89%8B%E5%8A%A8%E5%88%A0%E9%99%A4%E7%9B%AE%E5%BD%95%E5%90%8E%E6%80%8E%E4%B9%88%E5%8A%9E%EF%BC%9F" data-toc-target="16-手动删除目录后怎么办？"><i class="toc-num" aria-hidden="true">17</i><span class="toc-text">16. 手动删除目录后怎么办？</span></a><a class="toc-level-2" href="#17-Move-Worktree" data-toc-target="17-Move-Worktree"><i class="toc-num" aria-hidden="true">18</i><span class="toc-text">17. Move Worktree</span></a><a class="toc-level-2" href="#18-Worktree-Lock" data-toc-target="18-Worktree-Lock"><i class="toc-num" aria-hidden="true">19</i><span class="toc-text">18. Worktree Lock</span></a><a class="toc-level-2" href="#19-%E4%B8%80%E4%B8%AA%E9%9D%9E%E5%B8%B8%E6%8E%A8%E8%8D%90%E7%9A%84%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84" data-toc-target="19-一个非常推荐的目录结构"><i class="toc-num" aria-hidden="true">20</i><span class="toc-text">19. 一个非常推荐的目录结构</span></a><a class="toc-level-2" href="#20-Python-%E9%A1%B9%E7%9B%AE%E7%9A%84%E4%B8%80%E4%B8%AA%E9%87%8D%E8%A6%81%E9%97%AE%E9%A2%98" data-toc-target="20-Python-项目的一个重要问题"><i class="toc-num" aria-hidden="true">21</i><span class="toc-text">20. Python 项目的一个重要问题</span></a><a class="toc-level-2" href="#22-%E6%95%B0%E6%8D%AE%E5%BA%93%E5%B0%A4%E5%85%B6%E8%A6%81%E6%B3%A8%E6%84%8F" data-toc-target="22-数据库尤其要注意"><i class="toc-num" aria-hidden="true">22</i><span class="toc-text">22. 数据库尤其要注意</span></a><a class="toc-level-2" href="#23-Worktree-Docker-Compose" data-toc-target="23-Worktree-Docker-Compose"><i class="toc-num" aria-hidden="true">23</i><span class="toc-text">23. Worktree + Docker Compose</span></a><a class="toc-level-2" href="#24-Worktree-IDE" data-toc-target="24-Worktree-IDE"><i class="toc-num" aria-hidden="true">24</i><span class="toc-text">24. Worktree + IDE</span></a><a class="toc-level-2" href="#25-Worktree-Codex-ClaudeCode" data-toc-target="25-Worktree-Codex-ClaudeCode"><i class="toc-num" aria-hidden="true">25</i><span class="toc-text">25. Worktree + Codex / ClaudeCode</span></a><a class="toc-level-2" href="#26-%E6%9B%B4%E8%BF%9B%E4%B8%80%E6%AD%A5%EF%BC%9AWorktree-Agent-Orchestration" data-toc-target="26-更进一步：Worktree-Agent-Orchestration"><i class="toc-num" aria-hidden="true">26</i><span class="toc-text">26. 更进一步：Worktree + Agent Orchestration</span></a><a class="toc-level-2" href="#27-%E4%B8%80%E4%B8%AA%E9%9D%9E%E5%B8%B8%E5%AE%9E%E7%94%A8%E7%9A%84%E8%84%9A%E6%9C%AC" data-toc-target="27-一个非常实用的脚本"><i class="toc-num" aria-hidden="true">27</i><span class="toc-text">27. 一个非常实用的脚本</span></a><a class="toc-level-2" href="#28-%E6%8E%A8%E8%8D%90%E5%86%8D%E5%A2%9E%E5%8A%A0%E4%B8%80%E4%B8%AA%E6%B8%85%E7%90%86%E8%84%9A%E6%9C%AC" data-toc-target="28-推荐再增加一个清理脚本"><i class="toc-num" aria-hidden="true">28</i><span class="toc-text">28. 推荐再增加一个清理脚本</span></a><a class="toc-level-2" href="#29-%E5%B8%B8%E8%A7%81%E5%9D%91" data-toc-target="29-常见坑"><i class="toc-num" aria-hidden="true">29</i><span class="toc-text">29. 常见坑</span></a><a class="toc-level-2" href="#30-%E5%9D%91-3%EF%BC%9A%E4%B8%8D%E8%A6%81%E7%9B%B4%E6%8E%A5%E5%88%A0%E9%99%A4" data-toc-target="30-坑-3：不要直接删除"><i class="toc-num" aria-hidden="true">30</i><span class="toc-text">30. 坑 3：不要直接删除</span></a><a class="toc-level-2" href="#31-%E5%9D%91-4%EF%BC%9ASubmodule" data-toc-target="31-坑-4：Submodule"><i class="toc-num" aria-hidden="true">31</i><span class="toc-text">31. 坑 4：Submodule</span></a><a class="toc-level-2" href="#32-Worktree-Config" data-toc-target="32-Worktree-Config"><i class="toc-num" aria-hidden="true">32</i><span class="toc-text">32. Worktree Config</span></a><a class="toc-level-2" href="#33-%E4%BD%A0%E5%8F%AF%E4%BB%A5%E5%BB%BA%E7%AB%8B%E4%B8%80%E5%A5%97%E5%9B%BA%E5%AE%9A%E5%91%BD%E5%90%8D%E8%A7%84%E8%8C%83" data-toc-target="33-你可以建立一套固定命名规范"><i class="toc-num" aria-hidden="true">33</i><span class="toc-text">33. 你可以建立一套固定命名规范</span></a><a class="toc-level-2" href="#34-%E6%8E%A8%E8%8D%90%E4%BD%A0%E7%9A%84%E6%9C%80%E7%BB%88%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="34-推荐你的最终工作流"><i class="toc-num" aria-hidden="true">34</i><span class="toc-text">34. 推荐你的最终工作流</span></a><a class="toc-level-2" href="#35-%E6%9C%80%E7%BB%88-Cheat-Sheet" data-toc-target="35-最终-Cheat-Sheet"><i class="toc-num" aria-hidden="true">35</i><span class="toc-text">35. 最终 Cheat Sheet</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots toc-strip__dots--dense" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#%E6%A6%82%E8%BF%B0" data-toc-target="概述" data-title="01 · 概述" aria-label="概述"></a><a class="toc-strip__dot" href="#1-%E5%85%88%E7%90%86%E8%A7%A3%EF%BC%9AWorktree-%E5%88%B0%E5%BA%95%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98" data-toc-target="1-先理解：Worktree-到底解决什么问题" data-title="02 · 1. 先理解：Worktree 到底解决什么问题" aria-label="1. 先理解：Worktree 到底解决什么问题"></a><a class="toc-strip__dot" href="#2-Worktree-vs-Branch-vs-Clone" data-toc-target="2-Worktree-vs-Branch-vs-Clone" data-title="03 · 2. Worktree vs Branch vs Clone" aria-label="2. Worktree vs Branch vs Clone"></a><a class="toc-strip__dot" href="#3-%E6%9C%80%E6%A0%B8%E5%BF%83%E7%9A%84-6-%E4%B8%AA%E5%91%BD%E4%BB%A4" data-toc-target="3-最核心的-6-个命令" data-title="04 · 3. 最核心的 6 个命令" aria-label="3. 最核心的 6 个命令"></a><a class="toc-strip__dot" href="#4-%E5%88%9B%E5%BB%BA-Worktree" data-toc-target="4-创建-Worktree" data-title="05 · 4. 创建 Worktree" aria-label="4. 创建 Worktree"></a><a class="toc-strip__dot" href="#5-%E4%BB%8E%E5%B7%B2%E6%9C%89-Branch-%E5%88%9B%E5%BB%BA-Worktree" data-toc-target="5-从已有-Branch-创建-Worktree" data-title="06 · 5. 从已有 Branch 创建 Worktree" aria-label="5. 从已有 Branch 创建 Worktree"></a><a class="toc-strip__dot" href="#6-%E5%88%9B%E5%BB%BA-Hotfix-Worktree" data-toc-target="6-创建-Hotfix-Worktree" data-title="07 · 6. 创建 Hotfix Worktree" aria-label="6. 创建 Hotfix Worktree"></a><a class="toc-strip__dot" href="#7-PR-Review-%E6%98%AF%E5%8F%A6%E4%B8%80%E4%B8%AA%E9%9D%9E%E5%B8%B8%E5%A5%BD%E7%9A%84%E5%9C%BA%E6%99%AF" data-toc-target="7-PR-Review-是另一个非常好的场景" data-title="08 · 7. PR Review 是另一个非常好的场景" aria-label="7. PR Review 是另一个非常好的场景"></a><a class="toc-strip__dot" href="#8-%E5%A4%9A-Feature-%E5%B9%B6%E8%A1%8C%E5%BC%80%E5%8F%91" data-toc-target="8-多-Feature-并行开发" data-title="09 · 8. 多 Feature 并行开发" aria-label="8. 多 Feature 并行开发"></a><a class="toc-strip__dot" href="#9-%E5%AF%B9-AI-Coding-Agent-%E5%B0%A4%E5%85%B6%E6%9C%89%E4%BB%B7%E5%80%BC" data-toc-target="9-对-AI-Coding-Agent-尤其有价值" data-title="10 · 9. 对 AI Coding Agent 尤其有价值" aria-label="9. 对 AI Coding Agent 尤其有价值"></a><a class="toc-strip__dot" href="#10-%E6%8E%A8%E8%8D%90%E4%BD%A0%E7%9A%84-AI-Agent-Worktree-%E6%A8%A1%E5%BC%8F" data-toc-target="10-推荐你的-AI-Agent-Worktree-模式" data-title="11 · 10. 推荐你的 AI Agent Worktree 模式" aria-label="10. 推荐你的 AI Agent Worktree 模式"></a><a class="toc-strip__dot" href="#11-Detached-Worktree%EF%BC%9A%E5%AE%9E%E9%AA%8C%E5%9C%BA%E6%99%AF" data-toc-target="11-Detached-Worktree：实验场景" data-title="12 · 11. Detached Worktree：实验场景" aria-label="11. Detached Worktree：实验场景"></a><a class="toc-strip__dot" href="#12-%E5%90%8C%E6%97%B6%E8%BF%90%E8%A1%8C%E4%B8%8D%E5%90%8C%E7%89%88%E6%9C%AC%E6%B5%8B%E8%AF%95" data-toc-target="12-同时运行不同版本测试" data-title="13 · 12. 同时运行不同版本测试" aria-label="12. 同时运行不同版本测试"></a><a class="toc-strip__dot" href="#13-Worktree-%E4%B8%8E" data-toc-target="13-Worktree-与" data-title="14 · 13. Worktree 与" aria-label="13. Worktree 与"></a><a class="toc-strip__dot" href="#14-Worktree-%E7%9A%84%E7%8A%B6%E6%80%81%E6%9F%A5%E7%9C%8B" data-toc-target="14-Worktree-的状态查看" data-title="15 · 14. Worktree 的状态查看" aria-label="14. Worktree 的状态查看"></a><a class="toc-strip__dot" href="#15-%E5%88%A0%E9%99%A4-Worktree" data-toc-target="15-删除-Worktree" data-title="16 · 15. 删除 Worktree" aria-label="15. 删除 Worktree"></a><a class="toc-strip__dot" href="#16-%E6%89%8B%E5%8A%A8%E5%88%A0%E9%99%A4%E7%9B%AE%E5%BD%95%E5%90%8E%E6%80%8E%E4%B9%88%E5%8A%9E%EF%BC%9F" data-toc-target="16-手动删除目录后怎么办？" data-title="17 · 16. 手动删除目录后怎么办？" aria-label="16. 手动删除目录后怎么办？"></a><a class="toc-strip__dot" href="#17-Move-Worktree" data-toc-target="17-Move-Worktree" data-title="18 · 17. Move Worktree" aria-label="17. Move Worktree"></a><a class="toc-strip__dot" href="#18-Worktree-Lock" data-toc-target="18-Worktree-Lock" data-title="19 · 18. Worktree Lock" aria-label="18. Worktree Lock"></a><a class="toc-strip__dot" href="#19-%E4%B8%80%E4%B8%AA%E9%9D%9E%E5%B8%B8%E6%8E%A8%E8%8D%90%E7%9A%84%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84" data-toc-target="19-一个非常推荐的目录结构" data-title="20 · 19. 一个非常推荐的目录结构" aria-label="19. 一个非常推荐的目录结构"></a><a class="toc-strip__dot" href="#20-Python-%E9%A1%B9%E7%9B%AE%E7%9A%84%E4%B8%80%E4%B8%AA%E9%87%8D%E8%A6%81%E9%97%AE%E9%A2%98" data-toc-target="20-Python-项目的一个重要问题" data-title="21 · 20. Python 项目的一个重要问题" aria-label="20. Python 项目的一个重要问题"></a><a class="toc-strip__dot" href="#22-%E6%95%B0%E6%8D%AE%E5%BA%93%E5%B0%A4%E5%85%B6%E8%A6%81%E6%B3%A8%E6%84%8F" data-toc-target="22-数据库尤其要注意" data-title="22 · 22. 数据库尤其要注意" aria-label="22. 数据库尤其要注意"></a><a class="toc-strip__dot" href="#23-Worktree-Docker-Compose" data-toc-target="23-Worktree-Docker-Compose" data-title="23 · 23. Worktree + Docker Compose" aria-label="23. Worktree + Docker Compose"></a><a class="toc-strip__dot" href="#24-Worktree-IDE" data-toc-target="24-Worktree-IDE" data-title="24 · 24. Worktree + IDE" aria-label="24. Worktree + IDE"></a><a class="toc-strip__dot" href="#25-Worktree-Codex-ClaudeCode" data-toc-target="25-Worktree-Codex-ClaudeCode" data-title="25 · 25. Worktree + Codex / ClaudeCode" aria-label="25. Worktree + Codex / ClaudeCode"></a><a class="toc-strip__dot" href="#26-%E6%9B%B4%E8%BF%9B%E4%B8%80%E6%AD%A5%EF%BC%9AWorktree-Agent-Orchestration" data-toc-target="26-更进一步：Worktree-Agent-Orchestration" data-title="26 · 26. 更进一步：Worktree + Agent Orchestration" aria-label="26. 更进一步：Worktree + Agent Orchestration"></a><a class="toc-strip__dot" href="#27-%E4%B8%80%E4%B8%AA%E9%9D%9E%E5%B8%B8%E5%AE%9E%E7%94%A8%E7%9A%84%E8%84%9A%E6%9C%AC" data-toc-target="27-一个非常实用的脚本" data-title="27 · 27. 一个非常实用的脚本" aria-label="27. 一个非常实用的脚本"></a><a class="toc-strip__dot" href="#28-%E6%8E%A8%E8%8D%90%E5%86%8D%E5%A2%9E%E5%8A%A0%E4%B8%80%E4%B8%AA%E6%B8%85%E7%90%86%E8%84%9A%E6%9C%AC" data-toc-target="28-推荐再增加一个清理脚本" data-title="28 · 28. 推荐再增加一个清理脚本" aria-label="28. 推荐再增加一个清理脚本"></a><a class="toc-strip__dot" href="#29-%E5%B8%B8%E8%A7%81%E5%9D%91" data-toc-target="29-常见坑" data-title="29 · 29. 常见坑" aria-label="29. 常见坑"></a><a class="toc-strip__dot" href="#30-%E5%9D%91-3%EF%BC%9A%E4%B8%8D%E8%A6%81%E7%9B%B4%E6%8E%A5%E5%88%A0%E9%99%A4" data-toc-target="30-坑-3：不要直接删除" data-title="30 · 30. 坑 3：不要直接删除" aria-label="30. 坑 3：不要直接删除"></a><a class="toc-strip__dot" href="#31-%E5%9D%91-4%EF%BC%9ASubmodule" data-toc-target="31-坑-4：Submodule" data-title="31 · 31. 坑 4：Submodule" aria-label="31. 坑 4：Submodule"></a><a class="toc-strip__dot" href="#32-Worktree-Config" data-toc-target="32-Worktree-Config" data-title="32 · 32. Worktree Config" aria-label="32. Worktree Config"></a><a class="toc-strip__dot" href="#33-%E4%BD%A0%E5%8F%AF%E4%BB%A5%E5%BB%BA%E7%AB%8B%E4%B8%80%E5%A5%97%E5%9B%BA%E5%AE%9A%E5%91%BD%E5%90%8D%E8%A7%84%E8%8C%83" data-toc-target="33-你可以建立一套固定命名规范" data-title="33 · 33. 你可以建立一套固定命名规范" aria-label="33. 你可以建立一套固定命名规范"></a><a class="toc-strip__dot" href="#34-%E6%8E%A8%E8%8D%90%E4%BD%A0%E7%9A%84%E6%9C%80%E7%BB%88%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="34-推荐你的最终工作流" data-title="34 · 34. 推荐你的最终工作流" aria-label="34. 推荐你的最终工作流"></a><a class="toc-strip__dot" href="#35-%E6%9C%80%E7%BB%88-Cheat-Sheet" data-toc-target="35-最终-Cheat-Sheet" data-title="35 · 35. 最终 Cheat Sheet" aria-label="35. 最终 Cheat Sheet"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/Git-Worktree应用实践","title":"Git Worktree 应用实践指南","url":"/2025/01/28/engineering-practice/Git-Worktree%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5/","path":null,"index":null,"total":null,"next":null}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

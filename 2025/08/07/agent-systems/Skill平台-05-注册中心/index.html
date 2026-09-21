@@ -1,0 +1,502 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Skill 注册中心架构 · 飞轮之道</title>
+<meta name="description" content="企业级 Skill Registry 平台工程手册 · 第 05 篇前置阅读：04 篇（plugin 产物契约、订阅解析）、02 篇（校验 API 已给出发布流水线第一闸）本篇回答：Registry 作为平台心脏的完整设计——存什么（Schema/DDL）、怎么进（发布审批流）、怎么出（发现与解析 …">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/08/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-05-%E6%B3%A8%E5%86%8C%E4%B8%AD%E5%BF%83/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Skill 注册中心架构 · 飞轮之道">
+<meta property="og:description" content="企业级 Skill Registry 平台工程手册 · 第 05 篇前置阅读：04 篇（plugin 产物契约、订阅解析）、02 篇（校验 API 已给出发布流水线第一闸）本篇回答：Registry 作为平台心脏的完整设计——存什么（Schema/DDL）、怎么进（发布审批流）、怎么出（发现与解析 …">
+<meta property="og:url" content="https://flywhlway.github.io/2025/08/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-05-%E6%B3%A8%E5%86%8C%E4%B8%AD%E5%BF%83/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/skill-platform/">平台工程</a><a class="series-chip" href="/paths/skill-platform/" title="查看学习路径">第 4 / 11 篇</a>
+    </div>
+    <h1>Skill 注册中心架构</h1>
+    <p class="article-deck">企业级 Skill Registry 平台工程手册 · 第 05 篇前置阅读：04 篇（plugin 产物契约、订阅解析）、02 篇（校验 API 已给出发布流水线第一闸）本篇回答…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>15 分钟</span>
+      <span>发布于 2025.08</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/Skill/">#Skill</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="05-·-Skill-Registry-架构：元数据、API、存储与发布治理"><a href="#05-·-Skill-Registry-架构：元数据、API、存储与发布治理" class="headerlink" title="05 · Skill Registry 架构：元数据、API、存储与发布治理"></a>05 · Skill Registry 架构：元数据、API、存储与发布治理</h2><blockquote>
+<p>企业级 Skill Registry 平台工程手册 · 第 05 篇<br>前置阅读：04 篇（plugin 产物契约、订阅解析）、02 篇（校验 API 已给出发布流水线第一闸）<br>本篇回答：<strong>Registry 作为平台心脏的完整设计——存什么（Schema&#x2F;DDL）、怎么进（发布审批流）、怎么出（发现与解析 API）、怎么找（三索引搜索）、怎么评（统计与评分）、怎么隔（租户模型）、怎么联（事件体系）。</strong></p>
+</blockquote>
+<hr>
+<h2 id="1-概述：Registry-的职责边界"><a href="#1-概述：Registry-的职责边界" class="headerlink" title="1. 概述：Registry 的职责边界"></a>1. 概述：Registry 的职责边界</h2><p>先钉边界，再谈架构。Registry 是<strong>控制面</strong>，只做五件事：</p>
+<ol>
+<li><strong>真理源</strong>：技能&#x2F;插件的元数据与产物指针的唯一权威记录；</li>
+<li><strong>准入闸</strong>：发布流水线的编排与裁决记录；</li>
+<li><strong>解析器</strong>：把租户订阅解析为冻结集（04 篇附录 B 的服务化）；</li>
+<li><strong>索引</strong>：面向人（Marketplace 搜索）与面向机器（embedding 补充召回）的双索引；</li>
+<li><strong>账本</strong>：激活&#x2F;执行统计、评分、评测结果的聚合存储。</li>
+</ol>
+<p>Registry <strong>不做</strong>的事同样重要：不在会话关键路径上（Runtime 读本地缓存，06 篇）；不执行技能（07 篇 Runtime 的事）；不存产物本体（对象存储的事，Registry 只存内容哈希与指针）。违反第一条是最常见的架构事故——Registry 一抖动全平台会话初始化失败。</p>
+<h2 id="2-总体架构"><a href="#2-总体架构" class="headerlink" title="2. 总体架构"></a>2. 总体架构</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">                       ┌────────────────────────────────────────┐</span><br><span class="line">族 Owner CI ──publish──▶│              API 网关                   │◀──search── Marketplace UI</span><br><span class="line">租户管理员 ──subscribe──▶│  (认证/限流/审计, 面向控制面调用)          │◀──resolve── Runtime(仅缓存回源)</span><br><span class="line">                       └───┬────────┬─────────┬────────┬────────┘</span><br><span class="line">                           ▼        ▼         ▼        ▼</span><br><span class="line">                     ┌─────────┐┌─────────┐┌────────┐┌──────────┐</span><br><span class="line">                     │发布服务  ││订阅解析  ││搜索服务 ││统计服务   │</span><br><span class="line">                     │·流水线编排││·冻结集   ││·三索引  ││·聚合/评分 │</span><br><span class="line">                     │·审批状态机││·冲突调和 ││·排序    ││·SLO 看板 │</span><br><span class="line">                     └────┬────┘└────┬────┘└───┬────┘└────┬─────┘</span><br><span class="line">                          │          │         │          │</span><br><span class="line">     ┌────────────────────┴──────────┴─────────┴──────────┴──────┐</span><br><span class="line">     │                     存 储 层                               │</span><br><span class="line">     │  PostgreSQL(元数据/审批/订阅/统计聚合)                        │</span><br><span class="line">     │  对象存储(签名产物, 内容寻址 sha256/…)                        │</span><br><span class="line">     │  向量索引(trigger_examples 多向量) + 倒排(tag/category)      │</span><br><span class="line">     └────────────────────────────┬───────────────────────────────┘</span><br><span class="line">                                  ▼</span><br><span class="line">                           事件总线 (skill.*, plugin.*, subscription.*)</span><br><span class="line">                                  ▼</span><br><span class="line">                 消费方: 分发同步(06) · 评测调度(10) · 观测聚合(07) · 通告</span><br></pre></td></tr></table></figure>
+
+<p>组件间一条铁律：<strong>写路径全部经发布服务的状态机，读路径全部可缓存</strong>。搜索&#x2F;解析&#x2F;统计三服务对 PG 只读；发布服务是唯一写入方——这使审计（11 篇）只需覆盖一个服务的写日志。</p>
+<h2 id="3-元数据-Schema（权威版）"><a href="#3-元数据-Schema（权威版）" class="headerlink" title="3. 元数据 Schema（权威版）"></a>3. 元数据 Schema（权威版）</h2><p>02&#x2F;03&#x2F;04 篇分散出现的字段在此合并为权威 Schema。顶层四实体：<code>Skill</code>（抽象身份）、<code>SkillVersion</code>（不可变快照）、<code>Plugin</code>、<code>PluginVersion</code>。</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;$id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;registry.schema/skill-version/v1&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;required&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;skill_ref&quot;</span><span class="punctuation">,</span> <span class="string">&quot;version&quot;</span><span class="punctuation">,</span> <span class="string">&quot;content&quot;</span><span class="punctuation">,</span> <span class="string">&quot;routing&quot;</span><span class="punctuation">,</span> <span class="string">&quot;capabilities&quot;</span><span class="punctuation">,</span></span><br><span class="line">               <span class="string">&quot;permissions&quot;</span><span class="punctuation">,</span> <span class="string">&quot;provenance&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;skill_ref&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;pattern&quot;</span><span class="punctuation">:</span> <span class="string">&quot;^[a-z0-9.-]+:[a-z0-9-]+$&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;version&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;SemVer&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;maxLength&quot;</span><span class="punctuation">:</span> <span class="number">1200</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;artifact_digest&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sha256 of bundle&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;file_tree&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;array&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;items&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;path&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;type&quot;</span><span class="punctuation">:</span><span class="string">&quot;string&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span> <span class="attr">&quot;digest&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;type&quot;</span><span class="punctuation">:</span><span class="string">&quot;string&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">                          <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;enum&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;skill_md&quot;</span><span class="punctuation">,</span><span class="string">&quot;script&quot;</span><span class="punctuation">,</span><span class="string">&quot;reference&quot;</span><span class="punctuation">,</span></span><br><span class="line">                                             <span class="string">&quot;asset&quot;</span><span class="punctuation">,</span><span class="string">&quot;example&quot;</span><span class="punctuation">,</span><span class="string">&quot;manifest&quot;</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;l1_tokens&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;integer&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;skill_md_lines&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;integer&quot;</span> <span class="punctuation">&#125;</span></span><br><span class="line">      <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;routing&quot;</span><span class="punctuation">:</span>      <span class="punctuation">&#123;</span> <span class="attr">&quot;$ref&quot;</span><span class="punctuation">:</span> <span class="string">&quot;registry.schema/routing/v1&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;capabilities&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;$ref&quot;</span><span class="punctuation">:</span> <span class="string">&quot;registry.schema/capabilities/v1&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;permissions&quot;</span><span class="punctuation">:</span>  <span class="punctuation">&#123;</span> <span class="attr">&quot;$ref&quot;</span><span class="punctuation">:</span> <span class="string">&quot;registry.schema/permissions/v1&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;lifecycle&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;channel&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;enum&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;dev&quot;</span><span class="punctuation">,</span> <span class="string">&quot;beta&quot;</span><span class="punctuation">,</span> <span class="string">&quot;stable&quot;</span><span class="punctuation">,</span> <span class="string">&quot;deprecated&quot;</span><span class="punctuation">,</span> <span class="string">&quot;archived&quot;</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;maturity&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;enum&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;experimental&quot;</span><span class="punctuation">,</span> <span class="string">&quot;supported&quot;</span><span class="punctuation">,</span> <span class="string">&quot;certified&quot;</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;deprecation&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">          <span class="attr">&quot;successor_ref&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;migration_note&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;sunset_date&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;format&quot;</span><span class="punctuation">:</span> <span class="string">&quot;date&quot;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span></span><br><span class="line">      <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;provenance&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;owner&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;source_repo&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;pipeline_run&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;signature&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">          <span class="attr">&quot;alg&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;enum&quot;</span><span class="punctuation">:</span><span class="punctuation">[</span><span class="string">&quot;ed25519&quot;</span><span class="punctuation">]</span><span class="punctuation">&#125;</span><span class="punctuation">,</span> <span class="attr">&quot;keyid&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;type&quot;</span><span class="punctuation">:</span><span class="string">&quot;string&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;sig&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;type&quot;</span><span class="punctuation">:</span><span class="string">&quot;string&quot;</span><span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;review_record&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;string&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;审批记录 ID&quot;</span> <span class="punctuation">&#125;</span></span><br><span class="line">      <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;quality&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;object&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;由评测/统计服务回写, 发布方不可自填&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;trigger_rate_eval&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;number&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;exec_success_rate&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;number&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;rating&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;number&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;activations_30d&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;integer&quot;</span> <span class="punctuation">&#125;</span></span><br><span class="line">      <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>Schema 的三条设计纪律：</p>
+<ol>
+<li><strong><code>quality</code> 段只能由平台服务回写</strong>——发布方自填质量数据在 schema 层就不给字段权限（API 侧 400），杜绝”自报триgger 率”。</li>
+<li><strong><code>file_tree</code> 带角色标注</strong>：分发层（06 篇）据此实现”元数据全同步、reference 懒拉取”；审计层据此检查”声明为 script 的文件是否出现在非执行路径”。</li>
+<li><strong>一切版本化字段进 <code>SkillVersion</code>，<code>Skill</code> 只存身份与当前指针</strong>——历史版本永不可变，回滚与审计因此免费。</li>
+</ol>
+<h2 id="4-数据库-Schema（PostgreSQL-DDL-核心）"><a href="#4-数据库-Schema（PostgreSQL-DDL-核心）" class="headerlink" title="4. 数据库 Schema（PostgreSQL DDL 核心）"></a>4. 数据库 Schema（PostgreSQL DDL 核心）</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> skills (</span><br><span class="line">  skill_ref      TEXT <span class="keyword">PRIMARY KEY</span>,             <span class="comment">-- vehicle.diag:ota-log-diagnosis</span></span><br><span class="line">  namespace      TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  owner_team     TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  created_at     TIMESTAMPTZ <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> now(),</span><br><span class="line">  latest_stable  TEXT,                         <span class="comment">-- 反范式指针, 触发器维护</span></span><br><span class="line">  <span class="keyword">UNIQUE</span> (namespace, skill_ref)</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE TABLE</span> skill_versions (</span><br><span class="line">  skill_ref      TEXT <span class="keyword">NOT NULL</span> <span class="keyword">REFERENCES</span> skills(skill_ref),</span><br><span class="line">  version        TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  channel        TEXT <span class="keyword">NOT NULL</span> <span class="keyword">CHECK</span> (channel <span class="keyword">IN</span></span><br><span class="line">                   (<span class="string">&#x27;dev&#x27;</span>,<span class="string">&#x27;beta&#x27;</span>,<span class="string">&#x27;stable&#x27;</span>,<span class="string">&#x27;deprecated&#x27;</span>,<span class="string">&#x27;archived&#x27;</span>)),</span><br><span class="line">  manifest       JSONB <span class="keyword">NOT NULL</span>,               <span class="comment">-- §3 Schema 全文</span></span><br><span class="line">  artifact_digest TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  l1_tokens      <span class="type">INT</span>  <span class="keyword">NOT NULL</span>,</span><br><span class="line">  description_tsv tsvector GENERATED ALWAYS <span class="keyword">AS</span></span><br><span class="line">                   (to_tsvector(<span class="string">&#x27;simple&#x27;</span>, manifest<span class="operator">-</span><span class="operator">&gt;</span><span class="string">&#x27;content&#x27;</span><span class="operator">-</span><span class="operator">&gt;&gt;</span><span class="string">&#x27;description&#x27;</span>)) STORED,</span><br><span class="line">  published_at   TIMESTAMPTZ <span class="keyword">NOT NULL</span>,</span><br><span class="line">  review_id      <span class="type">BIGINT</span> <span class="keyword">REFERENCES</span> review_tasks(id),</span><br><span class="line">  <span class="keyword">PRIMARY KEY</span> (skill_ref, version)</span><br><span class="line">);</span><br><span class="line"><span class="keyword">CREATE</span> INDEX idx_sv_channel <span class="keyword">ON</span> skill_versions (channel) <span class="keyword">WHERE</span> channel<span class="operator">=</span><span class="string">&#x27;stable&#x27;</span>;</span><br><span class="line"><span class="keyword">CREATE</span> INDEX idx_sv_tsv     <span class="keyword">ON</span> skill_versions <span class="keyword">USING</span> GIN (description_tsv);</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE TABLE</span> plugin_versions (</span><br><span class="line">  plugin         TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  version        TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  manifest       JSONB <span class="keyword">NOT NULL</span>,               <span class="comment">-- 含 skills[] 冻结组合</span></span><br><span class="line">  routing_card   TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  signature      JSONB <span class="keyword">NOT NULL</span>,</span><br><span class="line">  channel        TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  published_at   TIMESTAMPTZ <span class="keyword">NOT NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY KEY</span> (plugin, version)</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE TABLE</span> skill_dependencies (               <span class="comment">-- 展开自 manifest, 便于反向索引</span></span><br><span class="line">  from_ref TEXT <span class="keyword">NOT NULL</span>, to_ref TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  kind TEXT <span class="keyword">NOT NULL</span> <span class="keyword">CHECK</span> (kind <span class="keyword">IN</span> (<span class="string">&#x27;requires&#x27;</span>,<span class="string">&#x27;conflicts_with&#x27;</span>)),</span><br><span class="line">  constraint_expr TEXT, reason TEXT,</span><br><span class="line">  <span class="keyword">PRIMARY KEY</span> (from_ref, to_ref, kind)</span><br><span class="line">);</span><br><span class="line"><span class="keyword">CREATE</span> INDEX idx_dep_reverse <span class="keyword">ON</span> skill_dependencies (to_ref, kind);</span><br><span class="line"><span class="comment">-- 退役反向清单(04 篇 §8.4)即: SELECT from_ref WHERE to_ref=$1</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE TABLE</span> subscriptions (</span><br><span class="line">  tenant_id      TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  plugin         TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  constraint_expr TEXT <span class="keyword">NOT NULL</span>,               <span class="comment">-- &#x27;^3.0&#x27;</span></span><br><span class="line">  channel_policy TEXT <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;stable&#x27;</span>,</span><br><span class="line">  disabled_skills TEXT[] <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;&#123;&#125;&#x27;</span>,</span><br><span class="line">  resolved_set   JSONB,                        <span class="comment">-- 最近一次冻结集(缓存)</span></span><br><span class="line">  resolved_at    TIMESTAMPTZ,</span><br><span class="line">  <span class="keyword">PRIMARY KEY</span> (tenant_id, plugin)</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE TABLE</span> review_tasks (</span><br><span class="line">  id BIGSERIAL <span class="keyword">PRIMARY KEY</span>,</span><br><span class="line">  subject_ref TEXT <span class="keyword">NOT NULL</span>, subject_version TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  risk_tier   TEXT <span class="keyword">NOT NULL</span> <span class="keyword">CHECK</span> (risk_tier <span class="keyword">IN</span> (<span class="string">&#x27;auto&#x27;</span>,<span class="string">&#x27;standard&#x27;</span>,<span class="string">&#x27;elevated&#x27;</span>)),</span><br><span class="line">  state       TEXT <span class="keyword">NOT NULL</span> <span class="keyword">CHECK</span> (state <span class="keyword">IN</span></span><br><span class="line">               (<span class="string">&#x27;lint&#x27;</span>,<span class="string">&#x27;auto_eval&#x27;</span>,<span class="string">&#x27;overlap_check&#x27;</span>,<span class="string">&#x27;human_review&#x27;</span>,</span><br><span class="line">                <span class="string">&#x27;security_review&#x27;</span>,<span class="string">&#x27;approved&#x27;</span>,<span class="string">&#x27;rejected&#x27;</span>)),</span><br><span class="line">  findings    JSONB <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;[]&#x27;</span>,</span><br><span class="line">  assignee    TEXT, decided_by TEXT, decided_at TIMESTAMPTZ</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE TABLE</span> activation_stats_daily (           <span class="comment">-- 07 篇遥测的聚合落点</span></span><br><span class="line">  <span class="keyword">day</span> <span class="type">DATE</span> <span class="keyword">NOT NULL</span>, tenant_id TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  skill_ref TEXT <span class="keyword">NOT NULL</span>, skill_version TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  injected <span class="type">BIGINT</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>,</span><br><span class="line">  activated <span class="type">BIGINT</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>,</span><br><span class="line">  exec_success <span class="type">BIGINT</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>,</span><br><span class="line">  exec_failed <span class="type">BIGINT</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>,</span><br><span class="line">  p50_activation_latency_ms <span class="type">INT</span>, tokens_l2_total <span class="type">BIGINT</span>,</span><br><span class="line">  <span class="keyword">PRIMARY KEY</span> (<span class="keyword">day</span>, tenant_id, skill_ref, skill_version)</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE TABLE</span> ratings (</span><br><span class="line">  tenant_id TEXT <span class="keyword">NOT NULL</span>, skill_ref TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">  session_id TEXT <span class="keyword">NOT NULL</span>, kind TEXT <span class="keyword">NOT NULL</span></span><br><span class="line">    <span class="keyword">CHECK</span> (kind <span class="keyword">IN</span> (<span class="string">&#x27;explicit_star&#x27;</span>,<span class="string">&#x27;implicit_redo&#x27;</span>,<span class="string">&#x27;implicit_correction&#x27;</span>,</span><br><span class="line">                    <span class="string">&#x27;implicit_adoption&#x27;</span>)),</span><br><span class="line">  <span class="keyword">value</span> <span class="type">NUMERIC</span> <span class="keyword">NOT NULL</span>, <span class="keyword">at</span> TIMESTAMPTZ <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> now(),</span><br><span class="line">  <span class="keyword">PRIMARY KEY</span> (tenant_id, skill_ref, session_id, kind)</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>值得辩护的三个决定：</p>
+<ul>
+<li><strong>manifest 整体入 JSONB + 关键字段抽列</strong>：schema 演进快的领域（routing&#x2F;capabilities 字段年年加），全列化会把每次演进变成 DDL 迁移；抽列的标准是”进 WHERE&#x2F;JOIN 的才抽”。</li>
+<li><strong>依赖关系展开成关系表</strong>而不留在 JSONB：反向查询（谁依赖我&#x2F;谁与我冲突）是退役流程与影响面分析的高频路径，JSONB 反查在千级规模可用、万级依赖边时进入慢查询区。</li>
+<li><strong>统计表按天预聚合</strong>：原始事件留在观测系统（07 篇），Registry 只收日聚合——控制面数据库不接原始遥测流量，这是 §1 边界的存储层执行。</li>
+</ul>
+<h2 id="5-版本语义：什么算-breaking"><a href="#5-版本语义：什么算-breaking" class="headerlink" title="5. 版本语义：什么算 breaking"></a>5. 版本语义：什么算 breaking</h2><p>技能不是 API，SemVer 需要重新定义兼容性维度。<strong>五维兼容性判定</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>MAJOR（破坏）</th>
+<th>MINOR（扩展）</th>
+<th>PATCH</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>description 触发域</td>
+<td>收窄或转移触发域（原有场景不再触发）</td>
+<td>扩展触发域</td>
+<td>措辞微调且评测集回归全绿</td>
+</tr>
+<tr>
+<td>输入契约</td>
+<td>不再接受原格式</td>
+<td>新增可选输入</td>
+<td>—</td>
+</tr>
+<tr>
+<td>输出契约</td>
+<td>结构化输出字段删除&#x2F;改名</td>
+<td>新增字段</td>
+<td>报告措辞</td>
+</tr>
+<tr>
+<td>工具&#x2F;权限需求</td>
+<td>新增 required_tools 或权限升级</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>依赖</td>
+<td>新增 requires &#x2F; 改 conflicts</td>
+<td>放宽版本约束</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<p>其中最反直觉的是第一行：<strong>description 的语义变更可以是 breaking</strong>——某租户的用户已习惯某类说法能触发该技能，收窄触发域等于砍掉他们的既有能力。发布流水线用”新旧 description 在旧评测集上的触发率对比”自动判级：旧集回归跌幅 &gt;10% 强制 MAJOR。工具&#x2F;权限升级判 MAJOR 的原因在租户侧：订阅解析时权限不满足的新版本不能被自动升级选中。</p>
+<h2 id="6-发布流水线与分级审批"><a href="#6-发布流水线与分级审批" class="headerlink" title="6. 发布流水线与分级审批"></a>6. 发布流水线与分级审批</h2><pre class="mermaid">flowchart LR
+    A[publish 提交&lt;br/&gt;签名产物] --&gt; B[结构 lint&lt;br/&gt;02篇附录A 全量规则]
+    B --&gt; C[自动评测&lt;br/&gt;触发回归 + 执行回归&lt;br/&gt;examples 基准]
+    C --&gt; D[重叠检测&lt;br/&gt;全库两两 + 交叉命中]
+    D --&gt; E&#123;风险分级&#125;
+    E -- auto --&gt; H[自动批准]
+    E -- standard --&gt; F[族 owner 人审&lt;br/&gt;SLA 2 工作日]
+    E -- elevated --&gt; G[族 owner + 平台安全评审&lt;br/&gt;SLA 5 工作日]
+    F --&gt; H
+    G --&gt; H
+    H --&gt; I[签名验证 + 入库&lt;br/&gt;channel 生效 + 事件广播]
+    B &amp; C &amp; D -- 任一阻断 --&gt; X[打回, findings 全量回执]</pre>
+
+
+<p>风险分级规则（可配置的初始策略）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">auto     := PATCH 级 &amp;&amp; 无 scripts 变更 &amp;&amp; 评测全绿 &amp;&amp; owner 信誉分 &gt; 阈值</span><br><span class="line">standard := MINOR 级 || scripts 变更但 sandbox_profile 不变</span><br><span class="line">elevated := MAJOR 级 || 权限/工具需求变更 || sandbox_profile 变更</span><br><span class="line">         || data_access 变更 || 新技能首发 || compliance:* 一律 elevated</span><br></pre></td></tr></table></figure>
+
+<p>分级审批是千级规模的生存必需：全量人审在每年数千次发布下必然退化为橡皮图章，反而是”把人审火力集中到 elevated”让评审真正发生。<code>owner 信誉分</code>由该族历史发布的事后质量（发布后 30 天内回滚率、SLO 破线率）滚动计算——把质量责任变成可积累的资产。</p>
+<h2 id="7-Registry-API（OpenAPI-3-1-核心路径）"><a href="#7-Registry-API（OpenAPI-3-1-核心路径）" class="headerlink" title="7. Registry API（OpenAPI 3.1 核心路径）"></a>7. Registry API（OpenAPI 3.1 核心路径）</h2><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">openapi:</span> <span class="number">3.1</span><span class="number">.0</span></span><br><span class="line"><span class="attr">info:</span> &#123; <span class="attr">title:</span> <span class="string">Skill</span> <span class="string">Registry</span> <span class="string">API</span>, <span class="attr">version:</span> <span class="number">2.1</span><span class="number">.0</span> &#125;</span><br><span class="line"><span class="attr">paths:</span></span><br><span class="line">  <span class="string">/v2/plugins/&#123;plugin&#125;/versions:</span></span><br><span class="line">    <span class="attr">post:</span></span><br><span class="line">      <span class="attr">summary:</span> <span class="string">发布</span> <span class="string">plugin</span> <span class="string">版本（进入流水线,</span> <span class="string">异步）</span></span><br><span class="line">      <span class="attr">security:</span> [ &#123; <span class="attr">publisher_token:</span> [] &#125; ]</span><br><span class="line">      <span class="attr">responses:</span></span><br><span class="line">        <span class="attr">&#x27;202&#x27;:</span> &#123; <span class="attr">description:</span> <span class="string">已受理</span>, <span class="string">返回</span> <span class="string">review_task</span> <span class="string">追踪</span> <span class="string">URL</span> &#125;</span><br><span class="line">        <span class="attr">&#x27;409&#x27;:</span> &#123; <span class="attr">description:</span> <span class="string">版本已存在（产物不可变）</span> &#125;</span><br><span class="line">  <span class="string">/v2/resolve:</span></span><br><span class="line">    <span class="attr">post:</span></span><br><span class="line">      <span class="attr">summary:</span> <span class="string">订阅解析</span> <span class="string">→</span> <span class="string">冻结集（Runtime</span> <span class="string">缓存回源</span> <span class="string">/</span> <span class="string">管理员预览）</span></span><br><span class="line">      <span class="attr">requestBody:</span></span><br><span class="line">        <span class="attr">content:</span> &#123; <span class="attr">application/json:</span> &#123; <span class="attr">schema:</span> &#123;</span><br><span class="line">          <span class="attr">type:</span> <span class="string">object</span>,</span><br><span class="line">          <span class="attr">properties:</span> &#123;</span><br><span class="line">            <span class="attr">tenant_id:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125;,</span><br><span class="line">            <span class="attr">surface:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125;,</span><br><span class="line">            <span class="attr">as_of:</span> &#123; <span class="attr">type:</span> <span class="string">string</span>, <span class="attr">format:</span> <span class="string">date-time</span>,</span><br><span class="line">                     <span class="attr">description:</span> <span class="string">时间点解析</span>, <span class="string">用于复现历史会话</span> &#125; &#125; &#125; &#125; &#125;</span><br><span class="line">      <span class="attr">responses:</span></span><br><span class="line">        <span class="attr">&#x27;200&#x27;:</span></span><br><span class="line">          <span class="attr">content:</span> &#123; <span class="attr">application/json:</span> &#123; <span class="attr">schema:</span> &#123;</span><br><span class="line">            <span class="attr">type:</span> <span class="string">object</span>,</span><br><span class="line">            <span class="attr">properties:</span> &#123;</span><br><span class="line">              <span class="attr">snapshot_id:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125;,</span><br><span class="line">              <span class="attr">pins:</span> &#123; <span class="attr">type:</span> <span class="string">object</span>, <span class="attr">additionalProperties:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125; &#125;,</span><br><span class="line">              <span class="attr">l1_render_manifest:</span> &#123; <span class="attr">type:</span> <span class="string">array</span> &#125;,</span><br><span class="line">              <span class="attr">routing_cards:</span> &#123; <span class="attr">type:</span> <span class="string">array</span> &#125;,</span><br><span class="line">              <span class="attr">expires_hint:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125; &#125; &#125; &#125; &#125;</span><br><span class="line">        <span class="attr">&#x27;422&#x27;:</span> &#123; <span class="attr">description:</span> <span class="string">解析冲突（版本无交集/禁用了被依赖技能）</span> &#125;</span><br><span class="line">  <span class="string">/v2/search:</span></span><br><span class="line">    <span class="attr">get:</span></span><br><span class="line">      <span class="attr">summary:</span> <span class="string">Marketplace</span> <span class="string">搜索（人用）</span></span><br><span class="line">      <span class="attr">parameters:</span></span><br><span class="line">        <span class="bullet">-</span> &#123; <span class="attr">name:</span> <span class="string">q</span>, <span class="attr">in:</span> <span class="string">query</span>, <span class="attr">schema:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125; &#125;</span><br><span class="line">        <span class="bullet">-</span> &#123; <span class="attr">name:</span> <span class="string">domain</span>, <span class="attr">in:</span> <span class="string">query</span>, <span class="attr">schema:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125; &#125;</span><br><span class="line">        <span class="bullet">-</span> &#123; <span class="attr">name:</span> <span class="string">maturity</span>, <span class="attr">in:</span> <span class="string">query</span>, <span class="attr">schema:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125; &#125;</span><br><span class="line">        <span class="bullet">-</span> &#123; <span class="attr">name:</span> <span class="string">sort</span>, <span class="attr">in:</span> <span class="string">query</span>, <span class="attr">schema:</span></span><br><span class="line">            &#123; <span class="attr">enum:</span> [<span class="string">relevance</span>, <span class="string">quality</span>, <span class="string">activations</span>, <span class="string">recent</span>] &#125; &#125;</span><br><span class="line">  <span class="string">/v2/skills/&#123;ref&#125;/similar:</span></span><br><span class="line">    <span class="attr">get:</span></span><br><span class="line">      <span class="attr">summary:</span> <span class="string">语义近邻（机器用：注册重叠检测</span> <span class="string">/</span> <span class="string">embedding</span> <span class="string">补充召回共用）</span></span><br><span class="line">  <span class="string">/v2/skills/&#123;ref&#125;/stats:</span></span><br><span class="line">    <span class="attr">get:</span> &#123; <span class="attr">summary:</span> <span class="string">质量与使用统计（quality</span> <span class="string">段的读路径）</span> &#125;</span><br><span class="line">  <span class="string">/v2/events/subscribe:</span></span><br><span class="line">    <span class="attr">get:</span> &#123; <span class="attr">summary:</span> <span class="string">事件流订阅（SSE）</span>, <span class="string">消费方见</span> <span class="string">§10</span> &#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>as_of</code> 时间点解析值得强调：事故复盘时”复现当时那个会话看到的技能集”是刚需，产物不可变 + 时间点解析让这件事是一次 API 调用而不是考古工程。</p>
+<h2 id="8-搜索与三索引"><a href="#8-搜索与三索引" class="headerlink" title="8. 搜索与三索引"></a>8. 搜索与三索引</h2><p>面向两类完全不同的消费者，共享底层、分开排序：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Marketplace（人）</th>
+<th>补充召回（机器, 02 篇 §5.5 副路径）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>查询形态</td>
+<td>短关键词 + 筛选器</td>
+<td>完整用户 query</td>
+</tr>
+<tr>
+<td>索引</td>
+<td>倒排（tsvector）+ tag&#x2F;category + 向量兜底</td>
+<td><strong>多向量</strong>：trigger_examples 每条独立入向量</td>
+</tr>
+<tr>
+<td>排序</td>
+<td>relevance × quality 分（下式）</td>
+<td>余弦 top-k，k≤5，只回 L1 元数据</td>
+</tr>
+<tr>
+<td>结果消费</td>
+<td>人读详情页 → 订阅决策</td>
+<td>追加注入 L1，激活权仍在模型</td>
+</tr>
+</tbody></table>
+<p>质量分（Marketplace 排序用，反 SEO 设计）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">quality = 0.35·trigger_rate_eval          # 离线评测, 发布方不可操纵</span><br><span class="line">        + 0.25·exec_success_rate          # 线上执行回归</span><br><span class="line">        + 0.20·norm(activations_30d)      # 使用量, log 归一</span><br><span class="line">        + 0.20·rating_composite           # §9</span><br><span class="line">新技能冷启动: 前 30 天以 maturity 先验分代入使用量项, 避免马太效应封杀新技能。</span><br></pre></td></tr></table></figure>
+
+<h2 id="9-统计与评分"><a href="#9-统计与评分" class="headerlink" title="9. 统计与评分"></a>9. 统计与评分</h2><p>评分的信号工程比公式重要。四类信号及其偏差：</p>
+<table>
+<thead>
+<tr>
+<th>信号</th>
+<th>采集</th>
+<th>偏差与修正</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>explicit_star</td>
+<td>会话内主动评分</td>
+<td>极化偏差（只有极端体验才评）→ 只作定性告警，不进质量分主项</td>
+</tr>
+<tr>
+<td>implicit_correction</td>
+<td>激活后 3 轮内用户显式纠正（02 篇附录 B 的护栏一）</td>
+<td>最可靠的负信号，权重最高</td>
+</tr>
+<tr>
+<td>implicit_redo</td>
+<td>同任务换说法重来</td>
+<td>与探索行为混淆 → 仅统计”重来且未再触发同技能”</td>
+</tr>
+<tr>
+<td>implicit_adoption</td>
+<td>技能产出物被下载&#x2F;转发&#x2F;进入后续工作流</td>
+<td>最可靠的正信号；需 surface 埋点支持</td>
+</tr>
+</tbody></table>
+<p><code>rating_composite = w·(1-correction_rate) + w&#39;·adoption_rate</code>，星级只画在详情页。<strong>统计管道单向流</strong>：Runtime 遥测（07 篇）→ 流式聚合 → <code>activation_stats_daily</code> &#x2F; <code>ratings</code> → quality 段回写 → 搜索排序与 SLO 看板。Registry 永不反向查询原始遥测。</p>
+<h2 id="10-租户隔离与事件体系"><a href="#10-租户隔离与事件体系" class="headerlink" title="10. 租户隔离与事件体系"></a>10. 租户隔离与事件体系</h2><p><strong>隔离三层</strong>：</p>
+<ol>
+<li>数据层：控制面表全部带 <code>tenant_id</code> + PG RLS（行级安全策略），平台运营角色走独立 BYPASS 审计通道；</li>
+<li>内容层：私有技能（租户自研）与公共技能同库不同可见域——<code>visibility: platform | tenant:&lt;id&gt; | namespace-private</code>，搜索与解析在索引层过滤而非结果层过滤（防时序侧信道枚举他租户私有技能名）；</li>
+<li>产物层：对象存储按租户前缀 + 内容寻址，公共产物单副本共享（内容哈希天然去重）。</li>
+</ol>
+<p><strong>事件主题与消费方</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">skill.version.published    → 分发同步(06) / 评测调度(10) / Marketplace 缓存失效</span><br><span class="line">skill.version.deprecated   → 订阅方通告 / 负面边界反向清单生成(04 §8.4)</span><br><span class="line">plugin.version.published   → 同上 + routing_card 触发评测入队</span><br><span class="line">subscription.changed       → 该租户 resolved_set 失效重算 / Runtime 缓存标脏</span><br><span class="line">review.state.changed       → owner 通知 / 信誉分账本</span><br><span class="line">quality.slo.breached       → 自动工单 + (连续破线) channel 自动降级提案</span><br></pre></td></tr></table></figure>
+
+<p>事件是<strong>事实广播不是指令</strong>：消费方各自幂等处理，Registry 不追踪消费进度——控制面与周边系统的耦合度由此钉在最低档。</p>
+<h2 id="11-设计选项对比：中心化-vs-联邦"><a href="#11-设计选项对比：中心化-vs-联邦" class="headerlink" title="11. 设计选项对比：中心化 vs 联邦"></a>11. 设计选项对比：中心化 vs 联邦</h2><table>
+<thead>
+<tr>
+<th></th>
+<th>单中心 Registry</th>
+<th>联邦（各 BU 自建 + 汇聚层）</th>
+<th>混合（中心 + 只读镜像）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>真理源</td>
+<td>唯一</td>
+<td>多源，汇聚层做聚合视图</td>
+<td>唯一，镜像只读</td>
+</tr>
+<tr>
+<td>跨 BU 复用</td>
+<td>天然</td>
+<td>汇聚协议复杂，版本语义易漂移</td>
+<td>天然</td>
+</tr>
+<tr>
+<td>自治程度</td>
+<td>靠 namespace 权限模型模拟</td>
+<td>完全自治</td>
+<td>同单中心</td>
+</tr>
+<tr>
+<td>一致性故障面</td>
+<td>单点（靠只读缓存兜底）</td>
+<td>汇聚层成为新单点且更复杂</td>
+<td>镜像滞后可控</td>
+</tr>
+<tr>
+<td>适用</td>
+<td>绝大多数企业</td>
+<td>强合规隔离的集团多法人</td>
+<td>多地域&#x2F;边缘（06 篇）</td>
+</tr>
+</tbody></table>
+<p>结论直白：<strong>除非法人级合规强制隔离，不要联邦</strong>。联邦的全部成本花在”重新发明单中心已有的一致性”上。多地域诉求用混合模式的只读镜像解决，写路径永远单点。</p>
+<h2 id="12-反模式"><a href="#12-反模式" class="headerlink" title="12. 反模式"></a>12. 反模式</h2><ul>
+<li><strong>AP-1 Registry 上会话关键路径</strong>：Runtime 每次会话初始化直连 resolve。正解：本地缓存 + 事件驱动标脏（06 篇）。</li>
+<li><strong>AP-2 可变版本</strong>：允许覆盖已发布版本”修个小错”。产物不可变是回滚、审计、<code>as_of</code> 复现的共同地基，一破全破。</li>
+<li><strong>AP-3 质量字段自填</strong>：见 §3 纪律 1。</li>
+<li><strong>AP-4 全量人审</strong>：见 §6，必然橡皮图章化。</li>
+<li><strong>AP-5 统计直连</strong>：控制面 DB 接原始遥测流。见 §4 第三决定。</li>
+<li><strong>AP-6 结果层租户过滤</strong>：先查全量再滤结果，私有技能名通过计数&#x2F;时延侧信道泄露。</li>
+<li><strong>AP-7 搜索单索引通吃</strong>：人机两类查询共用一套排序——机器召回被人气分污染，冷门但正确的技能永远进不了补充召回。</li>
+</ul>
+<h2 id="13-生产建议与检查清单"><a href="#13-生产建议与检查清单" class="headerlink" title="13. 生产建议与检查清单"></a>13. 生产建议与检查清单</h2><ol>
+<li>边界五做五不做（§1）写进架构 ADR，作为后续一切需求评审的准绳。</li>
+<li>Schema 三纪律 + DDL 三决定按本文实现，manifest JSONB 化保住演进速度。</li>
+<li>五维兼容性判定 + 旧评测集回归自动判级，SemVer 从约定变成机制。</li>
+<li>分级审批 + owner 信誉分，人审火力集中 elevated。</li>
+<li><code>as_of</code> 时间点解析从第一天实现——事后补需要给全部历史表加时态语义，成本十倍。</li>
+<li>事件体系用”事实广播”语义，消费方幂等，不做消费追踪。</li>
+</ol>
+<ul>
+<li><input disabled="" type="checkbox"> 发布服务为唯一写入方，写审计全覆盖</li>
+<li><input disabled="" type="checkbox"> SkillVersion 不可变（对象存储 WORM 或等价策略）</li>
+<li><input disabled="" type="checkbox"> quality 段 API 层写保护</li>
+<li><input disabled="" type="checkbox"> 依赖展开表 + 反向索引 + 退役清单自动化</li>
+<li><input disabled="" type="checkbox"> 分级审批规则可配置 + 信誉分账本</li>
+<li><input disabled="" type="checkbox"> RLS + 索引层租户过滤 + 私有产物前缀隔离</li>
+<li><input disabled="" type="checkbox"> 三索引分排序：tsvector &#x2F; tag &#x2F; 多向量各就其位</li>
+<li><input disabled="" type="checkbox"> 日聚合统计表 + 单向统计管道</li>
+<li><input disabled="" type="checkbox"> resolve 支持 as_of + 422 冲突前置到订阅时</li>
+<li><input disabled="" type="checkbox"> 事件主题清单与消费方注册表</li>
+</ul>
+<hr>
+<p><em>下一篇（06）沿着 <code>skill.version.published</code> 事件离开控制面：产物如何签名、打包、缓存、灰度、回滚，直到 air-gap 与车端边缘。</em></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/10/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-06-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB/">Skill 分发体系</a></h3>
+        <p>企业级 Skill Registry 平台工程手册 · 第 06 篇前置阅读：04 篇 §8.3（产物契约）、05 篇 §10（skill.…</p>
+        <a class="btn primary" href="/2025/10/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-06-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/06/10/agent-systems/Skill%E5%B9%B3%E5%8F%B0-04-%E5%B7%A5%E7%A8%8B%E6%8F%92%E4%BB%B6%E5%8C%96/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：工程插件化 Skill</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 14 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#05-%C2%B7-Skill-Registry-%E6%9E%B6%E6%9E%84%EF%BC%9A%E5%85%83%E6%95%B0%E6%8D%AE%E3%80%81API%E3%80%81%E5%AD%98%E5%82%A8%E4%B8%8E%E5%8F%91%E5%B8%83%E6%B2%BB%E7%90%86" data-toc-target="05-·-Skill-Registry-架构：元数据、API、存储与发布治理"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">05 · Skill Registry 架构：元数据、API、存储与发布治理</span></a><a class="toc-level-2" href="#1-%E6%A6%82%E8%BF%B0%EF%BC%9ARegistry-%E7%9A%84%E8%81%8C%E8%B4%A3%E8%BE%B9%E7%95%8C" data-toc-target="1-概述：Registry-的职责边界"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 概述：Registry 的职责边界</span></a><a class="toc-level-2" href="#2-%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84" data-toc-target="2-总体架构"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 总体架构</span></a><a class="toc-level-2" href="#3-%E5%85%83%E6%95%B0%E6%8D%AE-Schema%EF%BC%88%E6%9D%83%E5%A8%81%E7%89%88%EF%BC%89" data-toc-target="3-元数据-Schema（权威版）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 元数据 Schema（权威版）</span></a><a class="toc-level-2" href="#4-%E6%95%B0%E6%8D%AE%E5%BA%93-Schema%EF%BC%88PostgreSQL-DDL-%E6%A0%B8%E5%BF%83%EF%BC%89" data-toc-target="4-数据库-Schema（PostgreSQL-DDL-核心）"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 数据库 Schema（PostgreSQL DDL 核心）</span></a><a class="toc-level-2" href="#5-%E7%89%88%E6%9C%AC%E8%AF%AD%E4%B9%89%EF%BC%9A%E4%BB%80%E4%B9%88%E7%AE%97-breaking" data-toc-target="5-版本语义：什么算-breaking"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 版本语义：什么算 breaking</span></a><a class="toc-level-2" href="#6-%E5%8F%91%E5%B8%83%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E7%BA%A7%E5%AE%A1%E6%89%B9" data-toc-target="6-发布流水线与分级审批"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 发布流水线与分级审批</span></a><a class="toc-level-2" href="#7-Registry-API%EF%BC%88OpenAPI-3-1-%E6%A0%B8%E5%BF%83%E8%B7%AF%E5%BE%84%EF%BC%89" data-toc-target="7-Registry-API（OpenAPI-3-1-核心路径）"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. Registry API（OpenAPI 3.1 核心路径）</span></a><a class="toc-level-2" href="#8-%E6%90%9C%E7%B4%A2%E4%B8%8E%E4%B8%89%E7%B4%A2%E5%BC%95" data-toc-target="8-搜索与三索引"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 搜索与三索引</span></a><a class="toc-level-2" href="#9-%E7%BB%9F%E8%AE%A1%E4%B8%8E%E8%AF%84%E5%88%86" data-toc-target="9-统计与评分"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 统计与评分</span></a><a class="toc-level-2" href="#10-%E7%A7%9F%E6%88%B7%E9%9A%94%E7%A6%BB%E4%B8%8E%E4%BA%8B%E4%BB%B6%E4%BD%93%E7%B3%BB" data-toc-target="10-租户隔离与事件体系"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 租户隔离与事件体系</span></a><a class="toc-level-2" href="#11-%E8%AE%BE%E8%AE%A1%E9%80%89%E9%A1%B9%E5%AF%B9%E6%AF%94%EF%BC%9A%E4%B8%AD%E5%BF%83%E5%8C%96-vs-%E8%81%94%E9%82%A6" data-toc-target="11-设计选项对比：中心化-vs-联邦"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 设计选项对比：中心化 vs 联邦</span></a><a class="toc-level-2" href="#12-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="12-反模式"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">12. 反模式</span></a><a class="toc-level-2" href="#13-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E4%B8%8E%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="13-生产建议与检查清单"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">13. 生产建议与检查清单</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/skill-platform/" style="--rail: 36%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">4 / 11</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#05-%C2%B7-Skill-Registry-%E6%9E%B6%E6%9E%84%EF%BC%9A%E5%85%83%E6%95%B0%E6%8D%AE%E3%80%81API%E3%80%81%E5%AD%98%E5%82%A8%E4%B8%8E%E5%8F%91%E5%B8%83%E6%B2%BB%E7%90%86" data-toc-target="05-·-Skill-Registry-架构：元数据、API、存储与发布治理" data-title="01 · 05 · Skill Registry 架构：元数据、API、存储与发布治理" aria-label="05 · Skill Registry 架构：元数据、API、存储与发布治理"></a><a class="toc-strip__dot" href="#1-%E6%A6%82%E8%BF%B0%EF%BC%9ARegistry-%E7%9A%84%E8%81%8C%E8%B4%A3%E8%BE%B9%E7%95%8C" data-toc-target="1-概述：Registry-的职责边界" data-title="02 · 1. 概述：Registry 的职责边界" aria-label="1. 概述：Registry 的职责边界"></a><a class="toc-strip__dot" href="#2-%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84" data-toc-target="2-总体架构" data-title="03 · 2. 总体架构" aria-label="2. 总体架构"></a><a class="toc-strip__dot" href="#3-%E5%85%83%E6%95%B0%E6%8D%AE-Schema%EF%BC%88%E6%9D%83%E5%A8%81%E7%89%88%EF%BC%89" data-toc-target="3-元数据-Schema（权威版）" data-title="04 · 3. 元数据 Schema（权威版）" aria-label="3. 元数据 Schema（权威版）"></a><a class="toc-strip__dot" href="#4-%E6%95%B0%E6%8D%AE%E5%BA%93-Schema%EF%BC%88PostgreSQL-DDL-%E6%A0%B8%E5%BF%83%EF%BC%89" data-toc-target="4-数据库-Schema（PostgreSQL-DDL-核心）" data-title="05 · 4. 数据库 Schema（PostgreSQL DDL 核心）" aria-label="4. 数据库 Schema（PostgreSQL DDL 核心）"></a><a class="toc-strip__dot" href="#5-%E7%89%88%E6%9C%AC%E8%AF%AD%E4%B9%89%EF%BC%9A%E4%BB%80%E4%B9%88%E7%AE%97-breaking" data-toc-target="5-版本语义：什么算-breaking" data-title="06 · 5. 版本语义：什么算 breaking" aria-label="5. 版本语义：什么算 breaking"></a><a class="toc-strip__dot" href="#6-%E5%8F%91%E5%B8%83%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E7%BA%A7%E5%AE%A1%E6%89%B9" data-toc-target="6-发布流水线与分级审批" data-title="07 · 6. 发布流水线与分级审批" aria-label="6. 发布流水线与分级审批"></a><a class="toc-strip__dot" href="#7-Registry-API%EF%BC%88OpenAPI-3-1-%E6%A0%B8%E5%BF%83%E8%B7%AF%E5%BE%84%EF%BC%89" data-toc-target="7-Registry-API（OpenAPI-3-1-核心路径）" data-title="08 · 7. Registry API（OpenAPI 3.1 核心路径）" aria-label="7. Registry API（OpenAPI 3.1 核心路径）"></a><a class="toc-strip__dot" href="#8-%E6%90%9C%E7%B4%A2%E4%B8%8E%E4%B8%89%E7%B4%A2%E5%BC%95" data-toc-target="8-搜索与三索引" data-title="09 · 8. 搜索与三索引" aria-label="8. 搜索与三索引"></a><a class="toc-strip__dot" href="#9-%E7%BB%9F%E8%AE%A1%E4%B8%8E%E8%AF%84%E5%88%86" data-toc-target="9-统计与评分" data-title="10 · 9. 统计与评分" aria-label="9. 统计与评分"></a><a class="toc-strip__dot" href="#10-%E7%A7%9F%E6%88%B7%E9%9A%94%E7%A6%BB%E4%B8%8E%E4%BA%8B%E4%BB%B6%E4%BD%93%E7%B3%BB" data-toc-target="10-租户隔离与事件体系" data-title="11 · 10. 租户隔离与事件体系" aria-label="10. 租户隔离与事件体系"></a><a class="toc-strip__dot" href="#11-%E8%AE%BE%E8%AE%A1%E9%80%89%E9%A1%B9%E5%AF%B9%E6%AF%94%EF%BC%9A%E4%B8%AD%E5%BF%83%E5%8C%96-vs-%E8%81%94%E9%82%A6" data-toc-target="11-设计选项对比：中心化-vs-联邦" data-title="12 · 11. 设计选项对比：中心化 vs 联邦" aria-label="11. 设计选项对比：中心化 vs 联邦"></a><a class="toc-strip__dot" href="#12-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="12-反模式" data-title="13 · 12. 反模式" aria-label="12. 反模式"></a><a class="toc-strip__dot" href="#13-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E4%B8%8E%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="13-生产建议与检查清单" data-title="14 · 13. 生产建议与检查清单" aria-label="13. 生产建议与检查清单"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/Skill平台-05-注册中心","title":"Skill 注册中心架构","url":"/2025/08/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-05-%E6%B3%A8%E5%86%8C%E4%B8%AD%E5%BF%83/","path":"skill-platform","index":3,"total":11,"next":{"title":"Skill 分发体系","url":"/2025/10/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-06-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

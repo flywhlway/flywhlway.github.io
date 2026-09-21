@@ -1,0 +1,988 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端 AI Agent 模块分析 · 飞轮之道</title>
+<meta name="description" content="说明：上游 = 谁调用我；下游 = 我调用谁。— 表示无。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/08/12/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-03-%E6%A8%A1%E5%9D%97%E5%88%86%E6%9E%90/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端 AI Agent 模块分析 · 飞轮之道">
+<meta property="og:description" content="说明：上游 = 谁调用我；下游 = 我调用谁。— 表示无。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/08/12/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-03-%E6%A8%A1%E5%9D%97%E5%88%86%E6%9E%90/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">拆解系统</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 4 / 20 篇</a>
+    </div>
+    <h1>云管端 AI Agent 模块分析</h1>
+    <p class="article-deck">说明：上游 = 谁调用我；下游 = 我调用谁。— 表示无。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>23 分钟</span>
+      <span>发布于 2025.08</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="03-·-模块解析（Module-Analysis）"><a href="#03-·-模块解析（Module-Analysis）" class="headerlink" title="03 · 模块解析（Module Analysis）"></a>03 · 模块解析（Module Analysis）</h2><blockquote>
+<p>文档类型：研发交付规范 · 模块级说明书<br>分析口径：每模块输出「定位 &#x2F; 功能 &#x2F; 输入 &#x2F; 输出 &#x2F; 上下游 &#x2F; 数据流 &#x2F; 内部能力 &#x2F; 实现建议 &#x2F; 可替代方案 &#x2F; 业内最佳实践」<br>覆盖：架构图中全部 24 个模块，<strong>零遗漏</strong></p>
+</blockquote>
+<hr>
+<h2 id="0-模块清单"><a href="#0-模块清单" class="headerlink" title="0. 模块清单"></a>0. 模块清单</h2><table>
+<thead>
+<tr>
+<th>#</th>
+<th>模块</th>
+<th>层</th>
+<th>图示&#x2F;推断</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>M01</td>
+<td>音频服务</td>
+<td>L1</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M02</td>
+<td>System Agent</td>
+<td>L2</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M03</td>
+<td>User Agents</td>
+<td>L2</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M04</td>
+<td>边缘 AI 基础能力（记忆&#x2F;知识库&#x2F;能力中心）</td>
+<td>L2</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M05</td>
+<td>边缘安全系统</td>
+<td>L2</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M06</td>
+<td>端侧小模型</td>
+<td>L2</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M07</td>
+<td>语音网关</td>
+<td>L3</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M08</td>
+<td>Agent 网关</td>
+<td>L3</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M09</td>
+<td>双向认证网关</td>
+<td>L3</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M10</td>
+<td>语义理解服务</td>
+<td>L4</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M11</td>
+<td>Planner</td>
+<td>L5</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M12</td>
+<td>Cloud Agents</td>
+<td>L5</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M13</td>
+<td>埋点 SDK</td>
+<td>横切</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M14</td>
+<td>记忆中心</td>
+<td>L6</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M15</td>
+<td>知识中心 &#x2F; RAG</td>
+<td>L6</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M16</td>
+<td>能力中心（云端能力管理）</td>
+<td>L6</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M17</td>
+<td>边缘 Agent 框架</td>
+<td>L6</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M18</td>
+<td>LLM 网关</td>
+<td>L7</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M19</td>
+<td>安全围栏防护</td>
+<td>L7</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M20</td>
+<td>AI 注册中心</td>
+<td>L8</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M21</td>
+<td>第三方 MCP 生态</td>
+<td>L8</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M22</td>
+<td>存量业务平台适配</td>
+<td>L8</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M23</td>
+<td>数据平台</td>
+<td>L9</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>M24</td>
+<td>端云状态同步服务</td>
+<td>L3&#x2F;L6</td>
+<td>图示（”车云信息同步”连线）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="M01-·-音频服务（Audio-Service）"><a href="#M01-·-音频服务（Audio-Service）" class="headerlink" title="M01 · 音频服务（Audio Service）"></a>M01 · 音频服务（Audio Service）</h2><ul>
+<li><strong>定位</strong>：端侧音频前端，链路第一跳。</li>
+<li><strong>功能</strong>：唤醒词检测、VAD、AEC&#x2F;降噪&#x2F;波束成形、增益控制、音频编码、端点检测、本地流式 ASR（可选）。</li>
+<li><strong>输入</strong>：麦克风阵列 PCM、车辆状态（车速、车窗、媒体音量）。</li>
+<li><strong>输出</strong>：编码音频流（Opus&#x2F;AAC）、本地 ASR 文本与置信度、唤醒事件。</li>
+<li><strong>上游</strong>：用户 &#x2F; 麦克风硬件。<strong>下游</strong>：M02 System Agent、M07 语音网关（双通路）。</li>
+<li><strong>数据流</strong>：PCM → 前处理 → ①本地 ASR → System Agent ②编码流 → 语音网关。</li>
+<li><strong>内部能力</strong>：多麦克风融合、声源定位（分区唤醒）、车噪抑制模型、误唤醒抑制。</li>
+<li><strong>实现建议</strong>：DSP&#x2F;NPU 上跑前处理与唤醒；音频不落盘；用环形缓冲保留唤醒前 500 ms 以避免丢字。</li>
+<li><strong>可替代方案</strong>：车机 SoC 原生音频框架 &#x2F; 商用车载语音前端 SDK &#x2F; 开源 WebRTC APM（AEC3、NS）。</li>
+<li><strong>最佳实践</strong>：分区唤醒（主驾&#x2F;副驾&#x2F;后排独立会话）；播报中自动提高唤醒阈值；把误唤醒率与漏唤醒率作为一对独立 SLI 分别定 SLO，不合并成单一”准确率”。</li>
+</ul>
+<hr>
+<h2 id="M02-·-System-Agent（系统智能体）"><a href="#M02-·-System-Agent（系统智能体）" class="headerlink" title="M02 · System Agent（系统智能体）"></a>M02 · System Agent（系统智能体）</h2><ul>
+<li><strong>定位</strong>：端侧唯一总控，端内网关 + 落点决策者 + 会话所有者。</li>
+<li><strong>功能</strong>：会话生命周期管理、落点决策（端&#x2F;云&#x2F;混合）、User Agents 装载与派发、能力权限申请、端侧上下文装配、断网缓冲与续传、结果仲裁（端云双结果择优）。</li>
+<li><strong>输入</strong>：M01 音频&#x2F;文本、M17 下发的能力清单与策略、车辆状态、云端流式结果。</li>
+<li><strong>输出</strong>：端侧执行指令、上云请求、TTS 播报内容、端侧记忆写入、埋点缓冲。</li>
+<li><strong>上游</strong>：M01。<strong>下游</strong>：M03、M04、M05、M06、M08、M09。</li>
+<li><strong>数据流</strong>：星型中心。所有端侧交互必须经它，不允许旁路。</li>
+<li><strong>内部能力</strong>：状态机（见 01 文档 4.3）、预算控制器（时延&#x2F;算力）、优先级队列、幂等去重。</li>
+<li><strong>实现建议</strong>：做成常驻轻量进程，<strong>自身不含大模型</strong>，落点决策用规则 + 小分类器；所有对外调用设硬超时；崩溃后 5 s 内自恢复且能重放未完成会话。</li>
+<li><strong>可替代方案</strong>：车机既有语音总控服务扩展 &#x2F; 基于状态机框架自研 &#x2F; 轻量 Agent 运行时嵌入。</li>
+<li><strong>最佳实践</strong>：把”落点决策”独立为可热更新的策略文件（规则 DSL），使不发版即可调整端云比例；对每次决策记录 <code>decision_reason</code>，否则线上问题无法归因。</li>
+</ul>
+<hr>
+<h2 id="M03-·-User-Agents（用户智能体集群）"><a href="#M03-·-User-Agents（用户智能体集群）" class="headerlink" title="M03 · User Agents（用户智能体集群）"></a>M03 · User Agents（用户智能体集群）</h2><ul>
+<li><strong>定位</strong>：面向具体场景的应用级 Agent，端侧可动态装载。</li>
+<li><strong>功能</strong>：场景化多轮对话、场景任务执行、个性化人设、场景内工具调用。</li>
+<li><strong>输入</strong>：System Agent 派发的任务与上下文、端侧记忆切片。</li>
+<li><strong>输出</strong>：对话回复、执行动作请求（须经 System Agent 授权）、场景记忆写入。</li>
+<li><strong>上游</strong>：M02。<strong>下游</strong>：经 M02 间接访问 M04&#x2F;M06&#x2F;M08。</li>
+<li><strong>数据流</strong>：不直连云、不直连模型，全部经 System Agent 代理。</li>
+<li><strong>内部能力</strong>：人设与语气模板、场景状态、话题延续、多轮澄清。</li>
+<li><strong>实现建议</strong>：以声明式清单（manifest）定义 Agent：所需能力、所需记忆命名空间、最大轮次、预算上限；运行在受限沙箱内。</li>
+<li><strong>可替代方案</strong>：轻量插件化框架 &#x2F; 云端 Agent 的端侧镜像（同定义双运行时）。</li>
+<li><strong>最佳实践</strong>：<strong>每个 User Agent 必须声明终止条件</strong>（最大轮次、最大工具调用数、最大耗时），否则会出现无限循环消耗算力；人设与业务逻辑分离，人设可热更新。</li>
+</ul>
+<hr>
+<h2 id="M04-·-边缘-AI-基础能力（Edge-AI-Foundation）"><a href="#M04-·-边缘-AI-基础能力（Edge-AI-Foundation）" class="headerlink" title="M04 · 边缘 AI 基础能力（Edge AI Foundation）"></a>M04 · 边缘 AI 基础能力（Edge AI Foundation）</h2><ul>
+<li><strong>定位</strong>：端侧的记忆 + 知识库 + 能力中心三件套，云端基础能力层的端侧对等实现。</li>
+<li><strong>功能</strong>：端侧短期&#x2F;长期记忆存取、端侧知识检索、端侧可用能力目录查询、与云端增量同步。</li>
+<li><strong>输入</strong>：System Agent 读写、M24 端云同步下发包。</li>
+<li><strong>输出</strong>：端侧上下文包、待同步变更集。</li>
+<li><strong>上游</strong>：M02、M24。<strong>下游</strong>：本地存储（嵌入式 KV &#x2F; SQLite &#x2F; 嵌入式向量索引）。</li>
+<li><strong>内部能力</strong>：本地向量检索（小规模、量化索引）、TTL 与容量淘汰、变更日志（用于同步）、隐私分区（不可上云项）。</li>
+<li><strong>实现建议</strong>：向量维度降到 256–384 并量化（int8），索引规模控制在万级；知识包按场景切分按需下载；记忆写入走 WAL 保证掉电不丢。</li>
+<li><strong>可替代方案</strong>：SQLite + FTS5（关键词）+ 简易向量表 &#x2F; 嵌入式向量库（如 sqlite-vec、usearch、Faiss 移动版）&#x2F; 纯规则知识库（车辆手册场景足够）。</li>
+<li><strong>最佳实践</strong>：端侧知识库优先解决<strong>高频且答案稳定</strong>的问题（车辆功能说明、常用设置），这类问题占比常达 30%+ 且完全不需要上云，是成本与体验双赢点。</li>
+</ul>
+<hr>
+<h2 id="M05-·-边缘安全系统（Edge-Security-System）"><a href="#M05-·-边缘安全系统（Edge-Security-System）" class="headerlink" title="M05 · 边缘安全系统（Edge Security System）"></a>M05 · 边缘安全系统（Edge Security System）</h2><ul>
+<li><strong>定位</strong>：端侧安全策略执行点（PEP），位于 System Agent 与端侧模型&#x2F;执行能力之间。</li>
+<li><strong>功能</strong>：能力调用权限校验、沙箱隔离、本地内容策略、敏感操作二次确认、本地审计日志、模型输入输出本地过滤。</li>
+<li><strong>输入</strong>：System Agent 的能力调用请求、云端下发的安全策略。</li>
+<li><strong>输出</strong>：允许&#x2F;拒绝&#x2F;降级决策、审计记录。</li>
+<li><strong>上游</strong>：M02。<strong>下游</strong>：M06 端侧小模型、端侧执行能力（车控等）。</li>
+<li><strong>数据流</strong>：图中 <code>System Agent → 安全系统 → 车端小模型</code>，说明<strong>端侧模型调用是被强制经过安全系统的</strong>——这是防止端侧 Agent 直接驱动车辆能力的关键设计。</li>
+<li><strong>内部能力</strong>：策略引擎（本地可离线执行）、能力白名单、速率限制、危险意图识别。</li>
+<li><strong>实现建议</strong>：策略以声明式规则下发并本地缓存；离线时使用最后一次有效策略且默认收紧（fail-closed）；车控类能力必须双因子（语音 + 触屏确认）。</li>
+<li><strong>可替代方案</strong>：本地策略引擎（OPA&#x2F;Cedar 的轻量实现）&#x2F; 车机既有权限框架扩展。</li>
+<li><strong>最佳实践</strong>：<strong>安全默认拒绝</strong>（deny by default）；对”不可撤销操作”（解锁、行驶相关）与”可撤销操作”（调空调、播音乐）分级，前者永不允许纯语音一次触发。</li>
+</ul>
+<hr>
+<h2 id="M06-·-端侧小模型（Edge-SLM）"><a href="#M06-·-端侧小模型（Edge-SLM）" class="headerlink" title="M06 · 端侧小模型（Edge SLM）"></a>M06 · 端侧小模型（Edge SLM）</h2><ul>
+<li><strong>定位</strong>：端侧推理算力载体，提供离线可用与低时延能力。</li>
+<li><strong>功能</strong>：意图分类、槽位抽取、短文本生成、摘要压缩、闲聊兜底、Embedding 生成（端侧 RAG 用）、内容安全初筛。</li>
+<li><strong>输入</strong>：经安全系统校验的 Prompt 与上下文。</li>
+<li><strong>输出</strong>：分类结果 &#x2F; 生成文本 &#x2F; 向量。</li>
+<li><strong>上游</strong>：M05。<strong>下游</strong>：结果回 M02。</li>
+<li><strong>内部能力</strong>：量化推理（int4&#x2F;int8）、NPU&#x2F;GPU 加速、模型多任务复用（一个基座 + 多 LoRA）、按算力等级选档。</li>
+<li><strong>实现建议</strong>：优先用”一个小基座 + 多任务 LoRA&#x2F;适配器”而非多个独立模型，显著节省内存；把 Embedding 模型与生成模型分开（Embedding 更小更常驻）。</li>
+<li><strong>可替代方案</strong>：开源小模型量化部署（Qwen&#x2F;Llama&#x2F;Phi&#x2F;Gemma 系列小尺寸）+ 推理运行时（llama.cpp &#x2F; MNN &#x2F; NCNN &#x2F; ONNX Runtime &#x2F; TensorRT &#x2F; 厂商 NPU SDK）。</li>
+<li><strong>最佳实践</strong>：端侧模型不追求”全能”，只追求<strong>三件事做到极致</strong>：意图分类、槽位抽取、上下文压缩。这三件事恰好是延迟预算表中占比最高且最容易端侧化的环节（见 01 文档 6.1）。</li>
+</ul>
+<hr>
+<h2 id="M07-·-语音网关（Voice-Gateway）"><a href="#M07-·-语音网关（Voice-Gateway）" class="headerlink" title="M07 · 语音网关（Voice Gateway）"></a>M07 · 语音网关（Voice Gateway）</h2><ul>
+<li><strong>定位</strong>：音频流专用接入网关。</li>
+<li><strong>功能</strong>：长连接管理、音频流转发、编解码协商、会话粘性、带宽自适应、音频链路鉴权。</li>
+<li><strong>输入</strong>：端侧编码音频流。<strong>输出</strong>：转发至 M10 NLU 的音频流；ASR 结果回传通道。</li>
+<li><strong>上游</strong>：M01。<strong>下游</strong>：M10。</li>
+<li><strong>内部能力</strong>：连接池、心跳保活、丢包处理、抖动缓冲。</li>
+<li><strong>实现建议</strong>：与 Agent 网关<strong>物理隔离部署</strong>（资源模型不同）；采用 WebSocket 或专用流协议；就近接入 POP 降低 RTT。</li>
+<li><strong>可替代方案</strong>：自研流媒体网关 &#x2F; 商用 RTC 网关 &#x2F; gRPC 双向流。</li>
+<li><strong>最佳实践</strong>：把音频链路的 SLI 定为”首字识别延迟 + 断连率 + 丢包重传率”三项；不要与 API 网关共用限流配额池。</li>
+</ul>
+<hr>
+<h2 id="M08-·-Agent-网关（Agent-Gateway）"><a href="#M08-·-Agent-网关（Agent-Gateway）" class="headerlink" title="M08 · Agent 网关（Agent Gateway）"></a>M08 · Agent 网关（Agent Gateway）</h2><ul>
+<li><strong>定位</strong>：AI 流量的统一入口，原图圈注的重点建设项。</li>
+<li><strong>功能</strong>：SSE 流式回传、A2A 协议桥接、入站内容安全、认证鉴权、限流配额、请求染色、审计。</li>
+<li><strong>输入</strong>：端侧 Agent 请求（含身份、trace、上下文）。<strong>输出</strong>：内部编排请求；流式结果回端。</li>
+<li><strong>上游</strong>：M02。<strong>下游</strong>：M11 Planner。</li>
+<li><strong>内部能力</strong>：见 02 文档 4.1（内容安全 → A2A → SSE 三段顺序）。</li>
+<li><strong>实现建议</strong>：无状态化，会话状态放 Redis；SSE 支持 <code>Last-Event-ID</code> 续传；限流按「设备 + 用户 + Agent + 意图」四维；入站安全用轻量规则前置、模型检测异步。</li>
+<li><strong>可替代方案</strong>：云原生 API 网关 + AI 插件（Higress &#x2F; Kong &#x2F; APISIX &#x2F; Envoy）；自研 Go&#x2F;Rust 网关。</li>
+<li><strong>最佳实践</strong>：AI 网关与传统 API 网关的关键差异是<strong>必须理解 Token 与流式语义</strong>——限流单位应是 Token&#x2F;s 而非 QPS，超时应区分”首包超时”与”整体超时”。仅按 QPS 限流的网关在 AI 场景下几乎无效。</li>
+</ul>
+<hr>
+<h2 id="M09-·-双向认证网关（Mutual-Auth-Gateway）"><a href="#M09-·-双向认证网关（Mutual-Auth-Gateway）" class="headerlink" title="M09 · 双向认证网关（Mutual-Auth Gateway）"></a>M09 · 双向认证网关（Mutual-Auth Gateway）</h2><ul>
+<li><strong>定位</strong>：端云数据同步通道的安全边界。</li>
+<li><strong>功能</strong>：mTLS 双向认证、设备&#x2F;车辆身份校验、证书生命周期管理、防重放（nonce + 时间窗）、通道加密、同步流量限速。</li>
+<li><strong>输入</strong>：端侧同步请求（记忆变更、埋点批量、能力版本协商）。<strong>输出</strong>：云端同步响应与下发包。</li>
+<li><strong>上游</strong>：M04（经 M24）。<strong>下游</strong>：M14&#x2F;M15&#x2F;M16&#x2F;M17。</li>
+<li><strong>内部能力</strong>：证书吊销校验（CRL&#x2F;OCSP）、身份到租户的映射、批量同步的幂等处理。</li>
+<li><strong>实现建议</strong>：使用短周期证书 + 自动轮转；车辆身份由制造阶段注入的设备根证书派生，<strong>禁止业务层自报身份</strong>；同步接口全部幂等（幂等键 &#x3D; 设备 ID + 变更序号）。</li>
+<li><strong>可替代方案</strong>：SPIFFE&#x2F;SPIRE 工作负载身份体系 &#x2F; 自研 PKI + HSM &#x2F; 车规 HSM 密钥存储。</li>
+<li><strong>最佳实践</strong>：把”设备身份”与”用户身份”彻底分离（一车多用户、一人多车）；同步通道与请求通道分离，避免大批量同步挤占交互链路带宽。</li>
+</ul>
+<hr>
+<h2 id="M10-·-语义理解服务（NLU）"><a href="#M10-·-语义理解服务（NLU）" class="headerlink" title="M10 · 语义理解服务（NLU）"></a>M10 · 语义理解服务（NLU）</h2><ul>
+<li><strong>定位</strong>：声学到文本语义的转换与归一化层。</li>
+<li><strong>功能</strong>：云端流式 ASR、文本归一化、纠错、语言&#x2F;方言识别、说话人分离、热词增强、槽位预抽取。</li>
+<li><strong>输入</strong>：M07 转发音频流。<strong>输出</strong>：ASR 文本 + 置信度 + 时间戳 + 预抽取槽位 → M11。</li>
+<li><strong>上游</strong>：M07。<strong>下游</strong>：M11。</li>
+<li><strong>内部能力</strong>：领域热词动态加载、上下文偏置（结合当前场景提升识别率）、标点与数字规整。</li>
+<li><strong>实现建议</strong>：流式输出中间结果供 UI 回显，仅在端点确认后触发编排；热词表按场景（导航中&#x2F;听歌中&#x2F;车控中）动态切换。</li>
+<li><strong>可替代方案</strong>：商用 ASR 云服务 &#x2F; 开源方案（Whisper 系列、FunASR、SenseVoice、Paraformer）自建。</li>
+<li><strong>最佳实践</strong>：把 ASR 的领域适配当作<strong>持续工程</strong>而非一次性配置——用线上 Trace 中的”用户重问&#x2F;纠正”样本，每周更新热词与纠错规则，这是识别率提升最快的路径。</li>
+</ul>
+<hr>
+<h2 id="M11-·-Planner（规划器）"><a href="#M11-·-Planner（规划器）" class="headerlink" title="M11 · Planner（规划器）"></a>M11 · Planner（规划器）</h2><ul>
+<li><strong>定位</strong>：架构决策中枢，云端唯一的意图与路由权威。</li>
+<li><strong>功能</strong>：意图分类、落域路由、任务拆解、上下文装配、Agent 与工具选择、预算设定、结果校验、记忆写回触发、全链路埋点。</li>
+<li><strong>输入</strong>：M08 编排请求、M10 ASR 文本、M21&#x2F;M22 可用能力、M16 能力清单。</li>
+<li><strong>输出</strong>：任务派发（→M12）、推理请求（→M18）、记忆更新事件（→M14）、埋点（→M23）、注册查询（→M20）。</li>
+<li><strong>上游</strong>：M08、M10、M21、M22。<strong>下游</strong>：M12、M14、M15、M16、M18、M23。</li>
+<li><strong>数据流</strong>：图中 Planner 是唯一同时连接「输入源、Agent 集群、模型网关、基础能力层、注册中心、数据平台」的模块——<strong>扇出最高，因此也是最高风险单点</strong>。</li>
+<li><strong>内部能力</strong>：意图分类器（小模型&#x2F;分类模型）、落域规则引擎、上下文预算控制器、Prompt 组装器、结果校验器、埋点 SDK（M13）。</li>
+<li><strong>实现建议</strong>：无状态化 + HPA；意图分类<strong>禁止使用大模型</strong>（延迟与成本双杀），用小模型或判别式分类器；上下文并行拉取（记忆&#x2F;知识&#x2F;能力三路并发）；提供规则兜底路由用于分类器故障。</li>
+<li><strong>可替代方案</strong>：图编排框架（LangGraph &#x2F; Temporal 工作流 &#x2F; 自研 DAG 引擎）；纯规则路由 + 语义相似度检索路由。</li>
+<li><strong>最佳实践</strong>：Planner 代码库中<strong>不得出现任何业务名词</strong>（判定标准见 02 文档 6.1）；意图分类与工具选择解耦为两个可独立评测的阶段，否则效果回归时无法定位是分类错还是选工具错。</li>
+</ul>
+<hr>
+<h2 id="M12-·-Cloud-Agents（云端智能体集群）"><a href="#M12-·-Cloud-Agents（云端智能体集群）" class="headerlink" title="M12 · Cloud Agents（云端智能体集群）"></a>M12 · Cloud Agents（云端智能体集群）</h2><ul>
+<li><strong>定位</strong>：业务执行体，承载具体场景的多轮推理与工具编排。</li>
+<li><strong>功能</strong>：ReAct 多轮推理、工具调用、结果组装、场景化人设、长任务执行、流式输出。</li>
+<li><strong>输入</strong>：M11 派发的任务 + 上下文包 + 预算。<strong>输出</strong>：流式结果、执行轨迹、记忆写入、埋点。</li>
+<li><strong>上游</strong>：M11。<strong>下游</strong>：M18 LLM 网关、M21 MCP 工具、M22 存量业务、M14 记忆、M23 埋点。</li>
+<li><strong>内部能力</strong>：推理循环与终止条件、工具结果校验、失败重试与补偿、上下文裁剪、埋点 SDK。</li>
+<li><strong>实现建议</strong>：<strong>每 Agent 独立部署、独立配额、独立 SLO</strong>，避免互相影响；预算（最大轮次&#x2F;工具数&#x2F;Token&#x2F;耗时）由 Planner 下发并在 Agent 内强制执行；工具返回值视为不可信输入，必须二次校验与隔离。</li>
+<li><strong>可替代方案</strong>：Agent 框架（LangGraph &#x2F; LlamaIndex Workflows &#x2F; AutoGen &#x2F; CrewAI &#x2F; Spring AI &#x2F; 自研）。</li>
+<li><strong>最佳实践</strong>：把 Agent 的”执行轨迹”作为一等产物上报（每步的思考、工具、参数、结果、耗时），这是 AI 系统唯一有效的调试手段；对话式 Agent 与任务式 Agent 分开设计，前者优化流畅度，后者优化成功率。</li>
+</ul>
+<hr>
+<h2 id="M13-·-埋点-SDK（Telemetry-SDK）"><a href="#M13-·-埋点-SDK（Telemetry-SDK）" class="headerlink" title="M13 · 埋点 SDK（Telemetry SDK）"></a>M13 · 埋点 SDK（Telemetry SDK）</h2><ul>
+<li><strong>定位</strong>：横切可观测能力的强制接入点，原图在 Planner 与 Cloud Agents 内部各画一份并圈注。</li>
+<li><strong>功能</strong>：Trace&#x2F;Span 生成与透传、Token 计量、工具调用记录、上下文快照采样、用户反馈采集、异常上报、本地缓冲与重试。</li>
+<li><strong>输入</strong>：运行时事件。<strong>输出</strong>：结构化事件 → M23 数据平台（埋点数据回流）。</li>
+<li><strong>上游</strong>：M11、M12、M18。<strong>下游</strong>：M23。</li>
+<li><strong>内部能力</strong>：采样策略（错误全采、正常按比例）、敏感字段脱敏、批量压缩上报、背压保护。</li>
+<li><strong>实现建议</strong>：SDK 内置于运行时基础镜像，业务无需手工调用；Schema 集中管理并在 CI 校验；上下文快照按比例采样（全量存储成本不可接受）。</li>
+<li><strong>可替代方案</strong>：OpenTelemetry SDK + GenAI 语义约定；LLM 可观测平台 SDK（Langfuse &#x2F; Phoenix &#x2F; OpenLLMetry）。</li>
+<li><strong>最佳实践</strong>：<strong>Trace ID 必须从端侧生成并贯穿到训练数据</strong>。多数团队的 Trace 从云端网关才开始，导致”端侧决策为什么没上云”这类问题永远查不清。原图把埋点 SDK 画在模块内部而非旁挂，正是强调”默认埋点”（P7）。</li>
+</ul>
+<hr>
+<h2 id="M14-·-记忆中心（Memory-Center）"><a href="#M14-·-记忆中心（Memory-Center）" class="headerlink" title="M14 · 记忆中心（Memory Center）"></a>M14 · 记忆中心（Memory Center）</h2><ul>
+<li><strong>定位</strong>：跨 Agent 共享的用户上下文资产层。</li>
+<li><strong>功能</strong>：短期记忆（会话内）、长期记忆（跨会话事实）、用户画像、记忆召回、记忆写入与演化、<strong>可视化</strong>、<strong>回溯干预</strong>（原图圈注）。</li>
+<li><strong>输入</strong>：M11&#x2F;M12 的读写请求、M24 端侧同步、M23 离线画像更新。</li>
+<li><strong>输出</strong>：记忆切片（带置信度与来源）、画像切片。</li>
+<li><strong>上游</strong>：M11、M12、M24、M23。<strong>下游</strong>：Redis &#x2F; 关系库 &#x2F; 向量库。</li>
+<li><strong>内部能力</strong>：记忆抽取（从对话中提炼事实）、去重与冲突合并、置信度与时效衰减、命名空间隔离、审计与人工修正。</li>
+<li><strong>实现建议</strong>：短期记忆放 Redis（TTL &#x3D; 会话周期）；长期记忆走”事件溯源 + 物化视图”，保留原始来源以支持回溯；写入异步化避免拖慢主链路。</li>
+<li><strong>可替代方案</strong>：Mem0 &#x2F; Zep &#x2F; LangGraph Checkpointer（PostgresSaver）&#x2F; 自研（PG + pgvector + 事件表）。</li>
+<li><strong>最佳实践</strong>：<strong>记忆必须可解释与可撤销</strong>。原图专门圈注”可视化 + 回溯干预”，这是成熟度的标志：用户投诉”你为什么记错了”时，运营需要能看到这条记忆来自哪一轮对话并一键失效。详见 08 文档。</li>
+</ul>
+<hr>
+<h2 id="M15-·-知识中心-RAG（Knowledge-Center）"><a href="#M15-·-知识中心-RAG（Knowledge-Center）" class="headerlink" title="M15 · 知识中心 &#x2F; RAG（Knowledge Center）"></a>M15 · 知识中心 &#x2F; RAG（Knowledge Center）</h2><ul>
+<li><strong>定位</strong>：企业知识的统一供给与质量保障层，由「RAG 门户 + RAG 评测 + RAG 底座」三件套构成（前两项原图圈注）。</li>
+<li><strong>功能</strong>：<ul>
+<li><strong>RAG 底座</strong>：文档接入、解析、切分、Embedding、索引、混合检索、Rerank。</li>
+<li><strong>RAG 门户</strong>：知识源接入自助化、切分与检索参数配置、知识生效状态查看。</li>
+<li><strong>RAG 评测</strong>：金标问答集、召回率&#x2F;命中率&#x2F;答案正确性评测、回归对比。</li>
+</ul>
+</li>
+<li><strong>输入</strong>：知识源文档、M11&#x2F;M12 检索请求、M23 知识补全。</li>
+<li><strong>输出</strong>：检索片段 + 引用元数据 + 相关性分数。</li>
+<li><strong>上游</strong>：M11、M12、知识运营。<strong>下游</strong>：向量库、全文索引、对象存储、M18（Embedding&#x2F;Rerank 调用）。</li>
+<li><strong>内部能力</strong>：多格式解析、语义&#x2F;结构化切分、混合检索（向量 + 关键词 + 元数据过滤）、Rerank、引用溯源、知识时效标记。</li>
+<li><strong>实现建议</strong>：切分保留结构（标题路径进入 chunk 元数据）；检索必须混合（纯向量在专有名词与型号查询上表现差）；强制引用（无引用不作答）。</li>
+<li><strong>可替代方案</strong>：向量库（Milvus &#x2F; Qdrant &#x2F; Weaviate &#x2F; pgvector &#x2F; LanceDB）；RAG 框架（LlamaIndex &#x2F; Haystack &#x2F; RAGFlow &#x2F; Dify）；图增强（GraphRAG &#x2F; LightRAG）。</li>
+<li><strong>最佳实践</strong>：<strong>先建评测集再调参数</strong>。绝大多数 RAG 项目失败于”凭感觉调切分大小”。原图把”RAG 评测”与”RAG 门户”并列圈注，说明该架构已认识到 RAG 是工程问题而非算法问题。详见 09 文档。</li>
+</ul>
+<hr>
+<h2 id="M16-·-能力中心（Capability-Center）"><a href="#M16-·-能力中心（Capability-Center）" class="headerlink" title="M16 · 能力中心（Capability Center）"></a>M16 · 能力中心（Capability Center）</h2><ul>
+<li><strong>定位</strong>：能力的运行时聚合与路由适配层，注册中心的”消费面”。</li>
+<li><strong>功能</strong>：路由适配（把注册元数据翻译为可执行调用）、能力聚合（跨来源统一视图）、查询门户（能力检索与描述查看）。</li>
+<li><strong>输入</strong>：M20 注册中心的能力清单、M11 的能力查询。</li>
+<li><strong>输出</strong>：裁剪后的工具清单（tool manifest，含权限与 Schema）。</li>
+<li><strong>上游</strong>：M20、M11。<strong>下游</strong>：M21 MCP、M22 存量业务。</li>
+<li><strong>内部能力</strong>：协议适配（MCP ↔ 内部 RPC ↔ REST）、能力版本协商、权限过滤、<strong>渐进式披露</strong>（按意图只暴露相关工具）、健康探测与自动摘除。</li>
+<li><strong>实现建议</strong>：能力清单强缓存（秒级刷新）+ 变更事件推送；按意图裁剪工具集，单次不超过 10–15 个工具描述，否则模型选择准确率显著下降。</li>
+<li><strong>可替代方案</strong>：MCP Gateway &#x2F; 服务注册发现（Nacos &#x2F; Consul）+ 自研适配层。</li>
+<li><strong>最佳实践</strong>：<strong>工具集裁剪是效果杠杆而非性能优化</strong>。把 200 个工具全塞进 Prompt，模型选错工具的概率远高于只给 8 个相关工具。渐进式披露（先给类目，再按类目展开）是当前公认最佳做法。</li>
+</ul>
+<hr>
+<h2 id="M17-·-边缘-Agent-框架（Edge-Agent-Framework）"><a href="#M17-·-边缘-Agent-框架（Edge-Agent-Framework）" class="headerlink" title="M17 · 边缘 Agent 框架（Edge Agent Framework）"></a>M17 · 边缘 Agent 框架（Edge Agent Framework）</h2><ul>
+<li><strong>定位</strong>：端侧 AI 能力的<strong>云端控制面</strong>（见 02 文档 7.2 的关键解读）。</li>
+<li><strong>功能</strong>：端侧长短记忆定义与同步策略、端侧 RAG 知识包构建与下发、端侧能力中心清单编译、端侧模型路由策略下发。</li>
+<li><strong>输入</strong>：云端能力&#x2F;知识&#x2F;记忆定义、端侧算力等级与版本上报。</li>
+<li><strong>输出</strong>：端侧能力清单包、知识包、模型选择策略、同步策略。</li>
+<li><strong>上游</strong>：M14&#x2F;M15&#x2F;M16、M20。<strong>下游</strong>：经 M09&#x2F;M24 下发至 M04。</li>
+<li><strong>内部能力</strong>：按算力等级分档编译、增量差分包、版本协商与回滚、灰度下发。</li>
+<li><strong>实现建议</strong>：端云共用同一份能力定义源（Single Source of Truth），分别编译为云端运行时配置与端侧包；下发必须支持灰度与快速回滚。</li>
+<li><strong>可替代方案</strong>：OTA 配置下发通道复用 &#x2F; 远程配置平台（Feature Flag 平台）扩展。</li>
+<li><strong>最佳实践</strong>：把”端侧能力”当作<strong>可发布的制品</strong>（有版本、有变更记录、可回滚），而非硬编码在车机固件里。这是端云协同架构与”车机内置助手”的本质区别。</li>
+</ul>
+<hr>
+<h2 id="M18-·-LLM-网关（LLM-Gateway）"><a href="#M18-·-LLM-网关（LLM-Gateway）" class="headerlink" title="M18 · LLM 网关（LLM Gateway）"></a>M18 · LLM 网关（LLM Gateway）</h2><ul>
+<li><strong>定位</strong>：模型资源的统一抽象与治理层，成本与稳定性的总闸门。</li>
+<li><strong>功能</strong>：多模型切换、语义缓存、Token 流量治理（原图圈注三项）；另含限流配额、Fallback、熔断、重试、成本归因、Prompt 版本管理。</li>
+<li><strong>输入</strong>：M11&#x2F;M12&#x2F;M15 的推理请求（<code>model_intent</code> 语义化声明）。</li>
+<li><strong>输出</strong>：流式&#x2F;整体结果、Token 与成本明细（→M23）。</li>
+<li><strong>上游</strong>：M11、M12、M15。<strong>下游</strong>：模型池（自建 + 外部）、M19 Guardrail、M23。</li>
+<li><strong>内部能力</strong>：模型能力矩阵与路由策略、语义缓存（向量近似匹配）、前缀&#x2F;KV 缓存、Token 预算与配额、并发与队列、多厂商适配。</li>
+<li><strong>实现建议</strong>：请求只声明意图不指定模型（P5）；缓存键必须包含知识版本与用户维度；对时效性意图强制 <code>bypass</code> 缓存；熔断按厂商与模型两级。</li>
+<li><strong>可替代方案</strong>：LiteLLM &#x2F; Portkey &#x2F; OpenRouter &#x2F; Higress AI 插件 &#x2F; Envoy AI Gateway &#x2F; 自研。</li>
+<li><strong>最佳实践</strong>：把限流单位从 QPS 改为 <strong>Token&#x2F;s + 并发数双维度</strong>；把成本标签（业务&#x2F;Agent&#x2F;场景&#x2F;用户群）作为必填字段，否则成本治理无从下手。详见 11 文档。</li>
+</ul>
+<hr>
+<h2 id="M19-·-安全围栏防护（Safety-Guardrail）"><a href="#M19-·-安全围栏防护（Safety-Guardrail）" class="headerlink" title="M19 · 安全围栏防护（Safety Guardrail）"></a>M19 · 安全围栏防护（Safety Guardrail）</h2><ul>
+<li><strong>定位</strong>：出站方向的最后一道内容管控（图中位于 LLM 网关右侧末端）。</li>
+<li><strong>功能</strong>：有害内容检测、敏感话题拦截、PII 泄漏检测、越狱输出识别、事实一致性初筛、违规内容改写或阻断、审计留痕。</li>
+<li><strong>输入</strong>：模型生成内容（流式分段或整体）。<strong>输出</strong>：通过 &#x2F; 改写 &#x2F; 拦截 + 审计记录。</li>
+<li><strong>上游</strong>：M18。<strong>下游</strong>：回传链路、审计存储。</li>
+<li><strong>内部能力</strong>：规则 + 分类模型双层、分档策略（不同业务不同严格度）、流式分段判定、高风险截断。</li>
+<li><strong>实现建议</strong>：<strong>独立服务或 Sidecar，不做进程内库调用</strong>（升级节奏不同）；流式场景分段判定 + 尾部整体复检；本地短超时并 fail-closed（超时视为不通过）。</li>
+<li><strong>可替代方案</strong>：商用内容安全服务 &#x2F; 开源（Llama Guard、NeMo Guardrails、Guardrails AI）&#x2F; 自研规则 + 小模型。</li>
+<li><strong>最佳实践</strong>：<strong>安全组件不可降级</strong>（见 01 文档 7）。同时必须建立”误拦截”反馈通道——过度拦截造成的体验损伤同样会导致产品失败。详见 12 文档。</li>
+</ul>
+<hr>
+<h2 id="M20-·-AI-注册中心（AI-Registry-Center）"><a href="#M20-·-AI-注册中心（AI-Registry-Center）" class="headerlink" title="M20 · AI 注册中心（AI Registry Center）"></a>M20 · AI 注册中心（AI Registry Center）</h2><ul>
+<li><strong>定位</strong>：平台元数据权威源，原图最上方并被圈注，是”统一注册”的目标（图中两条”统一注册”箭头指向它）。</li>
+<li><strong>功能</strong>：MCP 管理、Agent 管理、Skills 管理；含注册审核、版本管理、权限与可见性、灰度规则、依赖与兼容校验、上下线。</li>
+<li><strong>输入</strong>：研发注册申请、M21 三方 MCP 声明、M22 存量业务能力声明、M11&#x2F;M12 的自注册。</li>
+<li><strong>输出</strong>：能力清单与元数据（→M16 → M11）、权限策略。</li>
+<li><strong>上游</strong>：研发、M21、M22、M11、M12。<strong>下游</strong>：M16、M17。</li>
+<li><strong>内部能力</strong>：Schema 校验、描述质量检查、冲突检测（意图重叠）、变更审批流、审计。</li>
+<li><strong>实现建议</strong>：低 QPS 高可用；读走强缓存 + 变更事件；注册即校验（Schema、描述完整度、示例意图数量）；提供沙箱环境先验证再上线。</li>
+<li><strong>可替代方案</strong>：服务注册中心（Nacos&#x2F;Consul）+ 自研元数据层 &#x2F; API 门户产品扩展 &#x2F; MCP Registry 规范实现。</li>
+<li><strong>最佳实践</strong>：注册中心的价值 &#x3D; <strong>强制性</strong>。若允许”未注册也能调用”，注册中心立刻退化为文档站。必须在网关与能力中心两处强制校验能力 ID。</li>
+</ul>
+<hr>
+<h2 id="M21-·-第三方-MCP-生态（Third-Party-MCP-Ecosystem）"><a href="#M21-·-第三方-MCP-生态（Third-Party-MCP-Ecosystem）" class="headerlink" title="M21 · 第三方 MCP 生态（Third-Party MCP Ecosystem）"></a>M21 · 第三方 MCP 生态（Third-Party MCP Ecosystem）</h2><ul>
+<li><strong>定位</strong>：外部能力的标准化接入面（图中位于左上，指向 Planner 并向注册中心统一注册）。</li>
+<li><strong>功能</strong>：以 MCP 协议暴露的外部工具与数据源接入。</li>
+<li><strong>输入</strong>：Planner&#x2F;Agent 的工具调用。<strong>输出</strong>：工具执行结果。</li>
+<li><strong>上游</strong>：M11、M12（经 M16 适配）。<strong>下游</strong>：外部服务。</li>
+<li><strong>内部能力</strong>：协议适配、认证凭据托管、超时与重试、结果 Schema 校验。</li>
+<li><strong>实现建议</strong>：三方 MCP 一律<strong>最小权限 + 独立凭据 + 出网白名单</strong>；结果进入上下文前必须隔离标记（视为不可信数据）；版本锁定，变更需重新审核。</li>
+<li><strong>可替代方案</strong>：OpenAPI 工具封装 &#x2F; 自研 Tool Adapter &#x2F; 函数调用网关。</li>
+<li><strong>最佳实践</strong>：<strong>工具返回值是提示注入的主要入口</strong>。必须做到：工具结果不与系统指令同区、结果内容经二次 Guard、禁止工具结果直接触发新的工具调用（需模型显式决策且计入预算）。</li>
+</ul>
+<hr>
+<h2 id="M22-·-存量业务平台适配（Legacy-Business-Platform-Adapter）"><a href="#M22-·-存量业务平台适配（Legacy-Business-Platform-Adapter）" class="headerlink" title="M22 · 存量业务平台适配（Legacy Business Platform Adapter）"></a>M22 · 存量业务平台适配（Legacy Business Platform Adapter）</h2><ul>
+<li><strong>定位</strong>：上一代业务能力（Gen-N &#x2F; Gen-N+1）的接入适配层。</li>
+<li><strong>功能</strong>：把存量 REST&#x2F;RPC 业务能力封装为平台可注册、可鉴权、可计量的能力。</li>
+<li><strong>输入</strong>：Planner&#x2F;Agent 调用。<strong>输出</strong>：业务执行结果。</li>
+<li><strong>上游</strong>：M11。<strong>下游</strong>：存量业务服务。</li>
+<li><strong>内部能力</strong>：协议转换、字段映射、错误码归一、超时与降级、能力描述生成。</li>
+<li><strong>实现建议</strong>：适配层薄且无业务逻辑；为每个存量能力补齐”AI 可用的描述”（存量 API 文档通常不足以让模型正确调用）；<strong>设定 Sunset 日期</strong>。</li>
+<li><strong>可替代方案</strong>：MCP Server 封装存量能力（推荐，统一为一种协议）&#x2F; BFF 层扩展。</li>
+<li><strong>最佳实践</strong>：不要试图一次性重写存量系统。正确路径是：适配接入 → 观察真实调用分布 → 只把高频能力原生化 → 低频能力长期保留适配。原图保留存量平台入口，体现的正是这种务实迁移策略。</li>
+</ul>
+<hr>
+<h2 id="M23-·-数据平台（Data-Platform）"><a href="#M23-·-数据平台（Data-Platform）" class="headerlink" title="M23 · 数据平台（Data Platform）"></a>M23 · 数据平台（Data Platform）</h2><ul>
+<li><strong>定位</strong>：闭环的数据底座（图中右上角，接收”埋点数据回流”）。</li>
+<li><strong>功能</strong>：埋点接入、清洗、会话与轨迹重建、指标计算、金标集管理、评测、数据集构建、训练与模型注册。</li>
+<li><strong>输入</strong>：M13 埋点事件、M18 Token 明细、用户反馈、人工标注。</li>
+<li><strong>输出</strong>：指标看板、评测报告、训练集、新模型（→M18）、画像与知识更新（→M14&#x2F;M15）。</li>
+<li><strong>上游</strong>：M13、M18。<strong>下游</strong>：M14、M15、M18。</li>
+<li><strong>内部能力</strong>：见 02 文档 10 的数据流图。</li>
+<li><strong>实现建议</strong>：埋点走消息队列解耦；数据分层（ODS&#x2F;DWD&#x2F;DWS）；金标集三分（公开&#x2F;回归&#x2F;盲测）；训练数据必须校验授权范围。</li>
+<li><strong>可替代方案</strong>：企业既有数仓&#x2F;数据湖复用 + LLM 可观测平台（Langfuse&#x2F;Phoenix）承接 Trace 层。</li>
+<li><strong>最佳实践</strong>：<strong>隐式反馈优于显式反馈</strong>。重问率、打断率、任务完成率、追问轮次这些信号密度远高于点赞点踩，是评测与训练的主信号。详见 14&#x2F;15 文档。</li>
+</ul>
+<hr>
+<h2 id="M24-·-端云状态同步服务（Edge–Cloud-State-Sync）"><a href="#M24-·-端云状态同步服务（Edge–Cloud-State-Sync）" class="headerlink" title="M24 · 端云状态同步服务（Edge–Cloud State Sync）"></a>M24 · 端云状态同步服务（Edge–Cloud State Sync）</h2><ul>
+<li><strong>定位</strong>：图中”车云信息同步”双向箭头所代表的同步能力（跨 L3&#x2F;L6）。</li>
+<li><strong>功能</strong>：记忆增量双向同步、能力清单与知识包下发、埋点批量上传、版本协商、冲突解决。</li>
+<li><strong>输入</strong>：端侧变更集、云端下发包。<strong>输出</strong>：同步结果与确认。</li>
+<li><strong>上游</strong>：M04、M17。<strong>下游</strong>：M09 双向认证网关 → M14&#x2F;M15&#x2F;M16。</li>
+<li><strong>内部能力</strong>：增量差分、变更日志与序号、幂等、冲突合并策略、断点续传、带宽与时机控制（避免行驶中大流量）。</li>
+<li><strong>实现建议</strong>：<strong>单写者原则</strong>——同一记忆域只允许一端为权威写方；采用版本向量检测冲突；同步时机避开交互高峰与弱网；大包走后台低优先级通道。</li>
+<li><strong>可替代方案</strong>：CRDT（适合可自动合并的场景）&#x2F; 事件溯源 + 单向物化 &#x2F; 复用 OTA 差分下发通道。</li>
+<li><strong>最佳实践</strong>：端云一致性问题在 Demo 阶段完全不可见、上量后必然爆发（表现为”回答自相矛盾”）。<strong>必须在阶段一就确定单写者与冲突策略</strong>，事后补救成本极高。</li>
+</ul>
+<hr>
+<h2 id="附录-A-·-模块依赖矩阵（全量）"><a href="#附录-A-·-模块依赖矩阵（全量）" class="headerlink" title="附录 A · 模块依赖矩阵（全量）"></a>附录 A · 模块依赖矩阵（全量）</h2><blockquote>
+<p>说明：上游 &#x3D; 谁调用我；下游 &#x3D; 我调用谁。<code>—</code> 表示无。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>上游</th>
+<th>下游</th>
+<th>主要输入</th>
+<th>主要输出</th>
+<th>强依赖</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>M01 音频服务</td>
+<td>用户&#x2F;硬件</td>
+<td>M02, M07</td>
+<td>PCM 音频</td>
+<td>音频流&#x2F;本地 ASR 文本</td>
+<td>音频硬件、DSP</td>
+</tr>
+<tr>
+<td>M02 System Agent</td>
+<td>M01</td>
+<td>M03,M04,M05,M08,M09</td>
+<td>文本&#x2F;音频&#x2F;策略</td>
+<td>上云请求&#x2F;端侧指令</td>
+<td>M04, M05</td>
+</tr>
+<tr>
+<td>M03 User Agents</td>
+<td>M02</td>
+<td>M02（代理）</td>
+<td>任务+上下文</td>
+<td>回复&#x2F;动作请求</td>
+<td>M02</td>
+</tr>
+<tr>
+<td>M04 边缘 AI 基础能力</td>
+<td>M02, M24</td>
+<td>本地存储</td>
+<td>读写&#x2F;同步包</td>
+<td>端侧上下文包</td>
+<td>本地存储</td>
+</tr>
+<tr>
+<td>M05 边缘安全系统</td>
+<td>M02</td>
+<td>M06, 端侧执行能力</td>
+<td>调用请求+策略</td>
+<td>允许&#x2F;拒绝+审计</td>
+<td>策略缓存</td>
+</tr>
+<tr>
+<td>M06 端侧小模型</td>
+<td>M05</td>
+<td>—</td>
+<td>Prompt+上下文</td>
+<td>分类&#x2F;文本&#x2F;向量</td>
+<td>NPU&#x2F;GPU</td>
+</tr>
+<tr>
+<td>M07 语音网关</td>
+<td>M01</td>
+<td>M10</td>
+<td>音频流</td>
+<td>转发音频流</td>
+<td>长连接资源</td>
+</tr>
+<tr>
+<td>M08 Agent 网关</td>
+<td>M02</td>
+<td>M11</td>
+<td>Agent 请求</td>
+<td>编排请求&#x2F;SSE 回传</td>
+<td>身份系统、Redis</td>
+</tr>
+<tr>
+<td>M09 双向认证网关</td>
+<td>M24</td>
+<td>M14,M15,M16,M17</td>
+<td>同步请求</td>
+<td>同步响应&#x2F;下发包</td>
+<td>PKI</td>
+</tr>
+<tr>
+<td>M10 NLU</td>
+<td>M07</td>
+<td>M11</td>
+<td>音频流</td>
+<td>ASR 文本+槽位</td>
+<td>ASR 引擎、热词</td>
+</tr>
+<tr>
+<td>M11 Planner</td>
+<td>M08, M10</td>
+<td>M12,M14,M15,M16,M18,M20,M23</td>
+<td>文本+上下文+能力清单</td>
+<td>任务&#x2F;推理请求&#x2F;埋点</td>
+<td>M16, M18, M14, M15</td>
+</tr>
+<tr>
+<td>M12 Cloud Agents</td>
+<td>M11</td>
+<td>M18,M21,M22,M14,M23</td>
+<td>任务+上下文包</td>
+<td>流式结果+轨迹</td>
+<td>M18</td>
+</tr>
+<tr>
+<td>M13 埋点 SDK</td>
+<td>M11,M12,M18</td>
+<td>M23</td>
+<td>运行时事件</td>
+<td>结构化事件</td>
+<td>消息队列</td>
+</tr>
+<tr>
+<td>M14 记忆中心</td>
+<td>M11,M12,M24,M23</td>
+<td>Redis&#x2F;PG&#x2F;向量库</td>
+<td>读写请求</td>
+<td>记忆切片</td>
+<td>存储</td>
+</tr>
+<tr>
+<td>M15 知识中心</td>
+<td>M11,M12,M23</td>
+<td>向量库&#x2F;索引&#x2F;M18</td>
+<td>检索请求&#x2F;文档</td>
+<td>片段+引用</td>
+<td>向量库、Embedding</td>
+</tr>
+<tr>
+<td>M16 能力中心</td>
+<td>M11, M20</td>
+<td>M21, M22</td>
+<td>能力查询</td>
+<td>工具清单</td>
+<td>M20</td>
+</tr>
+<tr>
+<td>M17 边缘 Agent 框架</td>
+<td>M14,M15,M16,M20</td>
+<td>M09→M04</td>
+<td>能力定义+端侧上报</td>
+<td>端侧包+策略</td>
+<td>M20</td>
+</tr>
+<tr>
+<td>M18 LLM 网关</td>
+<td>M11,M12,M15</td>
+<td>模型池, M19, M23</td>
+<td>推理请求</td>
+<td>结果+Token 明细</td>
+<td>模型池</td>
+</tr>
+<tr>
+<td>M19 安全围栏</td>
+<td>M18</td>
+<td>审计存储</td>
+<td>生成内容</td>
+<td>通过&#x2F;改写&#x2F;拦截</td>
+<td>检测模型</td>
+</tr>
+<tr>
+<td>M20 AI 注册中心</td>
+<td>研发,M21,M22,M11,M12</td>
+<td>M16, M17</td>
+<td>注册申请</td>
+<td>能力清单+策略</td>
+<td>关系库</td>
+</tr>
+<tr>
+<td>M21 三方 MCP</td>
+<td>M11, M12（经 M16）</td>
+<td>外部服务</td>
+<td>工具调用</td>
+<td>工具结果</td>
+<td>外部可用性</td>
+</tr>
+<tr>
+<td>M22 存量业务适配</td>
+<td>M11</td>
+<td>存量服务</td>
+<td>业务调用</td>
+<td>业务结果</td>
+<td>存量系统</td>
+</tr>
+<tr>
+<td>M23 数据平台</td>
+<td>M13, M18</td>
+<td>M14,M15,M18</td>
+<td>埋点+Token+反馈</td>
+<td>指标&#x2F;评测&#x2F;训练集&#x2F;模型</td>
+<td>MQ、数仓</td>
+</tr>
+<tr>
+<td>M24 端云同步</td>
+<td>M04, M17</td>
+<td>M09</td>
+<td>变更集&#x2F;下发包</td>
+<td>同步确认</td>
+<td>M09</td>
+</tr>
+</tbody></table>
+<h2 id="附录-B-·-依赖强度与故障影响"><a href="#附录-B-·-依赖强度与故障影响" class="headerlink" title="附录 B · 依赖强度与故障影响"></a>附录 B · 依赖强度与故障影响</h2><pre class="mermaid">flowchart LR
+    M11["M11 Planner&lt;br/&gt;扇出 7"] --&gt; M18["M18 LLM 网关&lt;br/&gt;扇入 3"]
+    M11 --&gt; M14["M14 记忆"] &amp; M15["M15 知识"] &amp; M16["M16 能力"] &amp; M12["M12 Cloud Agents"]
+    M16 --&gt; M20["M20 注册中心"]
+    M18 --&gt; M19["M19 围栏"]
+    M02["M02 System Agent&lt;br/&gt;端侧扇出 5"] --&gt; M08["M08 Agent 网关"] --&gt; M11</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>故障影响面</th>
+<th>是否可降级</th>
+<th>降级方案</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>M11 Planner</td>
+<td>全站云端能力</td>
+<td>部分</td>
+<td>规则兜底路由 + 端侧接管</td>
+</tr>
+<tr>
+<td>M18 LLM 网关</td>
+<td>全部模型能力</td>
+<td>部分</td>
+<td>多厂商 Fallback → 缓存 → 端侧 SLM</td>
+</tr>
+<tr>
+<td>M19 安全围栏</td>
+<td>输出合规</td>
+<td><strong>否</strong></td>
+<td>拒绝输出</td>
+</tr>
+<tr>
+<td>M20 注册中心</td>
+<td>新能力上线</td>
+<td>是</td>
+<td>本地快照只读</td>
+</tr>
+<tr>
+<td>M14 记忆中心</td>
+<td>个性化</td>
+<td>是</td>
+<td>无状态单轮</td>
+</tr>
+<tr>
+<td>M15 知识中心</td>
+<td>知识问答准确性</td>
+<td>是</td>
+<td>跳过 RAG 并声明</td>
+</tr>
+<tr>
+<td>M16 能力中心</td>
+<td>工具调用</td>
+<td>是</td>
+<td>本地工具清单快照</td>
+</tr>
+<tr>
+<td>M02 System Agent</td>
+<td>端侧全部 AI 能力</td>
+<td>否</td>
+<td>进程守护 + 快速自恢复</td>
+</tr>
+<tr>
+<td>M08 Agent 网关</td>
+<td>端到云链路</td>
+<td>否</td>
+<td>多副本 + 就近 POP 切换</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端 AI Agent 分层分析 · <strong>下一篇</strong>：云管端 AI Agent 组件分析</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/10/09/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-04-%E7%BB%84%E4%BB%B6%E5%88%86%E6%9E%90/">云管端 AI Agent 组件分析</a></h3>
+        <p>文档类型：技术白皮书 · 组件级选型说明 分析口径：每组件输出「介绍 / 原理 / 设计原因 / 业内实现方式 / 企业最佳实践 / 推荐开…</p>
+        <a class="btn primary" href="/2025/10/09/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-04-%E7%BB%84%E4%BB%B6%E5%88%86%E6%9E%90/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/06/12/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-02-%E5%88%86%E5%B1%82%E5%88%86%E6%9E%90/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端 AI Agent 分层分析</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 28 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#03-%C2%B7-%E6%A8%A1%E5%9D%97%E8%A7%A3%E6%9E%90%EF%BC%88Module-Analysis%EF%BC%89" data-toc-target="03-·-模块解析（Module-Analysis）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">03 · 模块解析（Module Analysis）</span></a><a class="toc-level-2" href="#0-%E6%A8%A1%E5%9D%97%E6%B8%85%E5%8D%95" data-toc-target="0-模块清单"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">0. 模块清单</span></a><a class="toc-level-2" href="#M01-%C2%B7-%E9%9F%B3%E9%A2%91%E6%9C%8D%E5%8A%A1%EF%BC%88Audio-Service%EF%BC%89" data-toc-target="M01-·-音频服务（Audio-Service）"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">M01 · 音频服务（Audio Service）</span></a><a class="toc-level-2" href="#M02-%C2%B7-System-Agent%EF%BC%88%E7%B3%BB%E7%BB%9F%E6%99%BA%E8%83%BD%E4%BD%93%EF%BC%89" data-toc-target="M02-·-System-Agent（系统智能体）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">M02 · System Agent（系统智能体）</span></a><a class="toc-level-2" href="#M03-%C2%B7-User-Agents%EF%BC%88%E7%94%A8%E6%88%B7%E6%99%BA%E8%83%BD%E4%BD%93%E9%9B%86%E7%BE%A4%EF%BC%89" data-toc-target="M03-·-User-Agents（用户智能体集群）"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">M03 · User Agents（用户智能体集群）</span></a><a class="toc-level-2" href="#M04-%C2%B7-%E8%BE%B9%E7%BC%98-AI-%E5%9F%BA%E7%A1%80%E8%83%BD%E5%8A%9B%EF%BC%88Edge-AI-Foundation%EF%BC%89" data-toc-target="M04-·-边缘-AI-基础能力（Edge-AI-Foundation）"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">M04 · 边缘 AI 基础能力（Edge AI Foundation）</span></a><a class="toc-level-2" href="#M05-%C2%B7-%E8%BE%B9%E7%BC%98%E5%AE%89%E5%85%A8%E7%B3%BB%E7%BB%9F%EF%BC%88Edge-Security-System%EF%BC%89" data-toc-target="M05-·-边缘安全系统（Edge-Security-System）"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">M05 · 边缘安全系统（Edge Security System）</span></a><a class="toc-level-2" href="#M06-%C2%B7-%E7%AB%AF%E4%BE%A7%E5%B0%8F%E6%A8%A1%E5%9E%8B%EF%BC%88Edge-SLM%EF%BC%89" data-toc-target="M06-·-端侧小模型（Edge-SLM）"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">M06 · 端侧小模型（Edge SLM）</span></a><a class="toc-level-2" href="#M07-%C2%B7-%E8%AF%AD%E9%9F%B3%E7%BD%91%E5%85%B3%EF%BC%88Voice-Gateway%EF%BC%89" data-toc-target="M07-·-语音网关（Voice-Gateway）"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">M07 · 语音网关（Voice Gateway）</span></a><a class="toc-level-2" href="#M08-%C2%B7-Agent-%E7%BD%91%E5%85%B3%EF%BC%88Agent-Gateway%EF%BC%89" data-toc-target="M08-·-Agent-网关（Agent-Gateway）"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">M08 · Agent 网关（Agent Gateway）</span></a><a class="toc-level-2" href="#M09-%C2%B7-%E5%8F%8C%E5%90%91%E8%AE%A4%E8%AF%81%E7%BD%91%E5%85%B3%EF%BC%88Mutual-Auth-Gateway%EF%BC%89" data-toc-target="M09-·-双向认证网关（Mutual-Auth-Gateway）"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">M09 · 双向认证网关（Mutual-Auth Gateway）</span></a><a class="toc-level-2" href="#M10-%C2%B7-%E8%AF%AD%E4%B9%89%E7%90%86%E8%A7%A3%E6%9C%8D%E5%8A%A1%EF%BC%88NLU%EF%BC%89" data-toc-target="M10-·-语义理解服务（NLU）"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">M10 · 语义理解服务（NLU）</span></a><a class="toc-level-2" href="#M11-%C2%B7-Planner%EF%BC%88%E8%A7%84%E5%88%92%E5%99%A8%EF%BC%89" data-toc-target="M11-·-Planner（规划器）"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">M11 · Planner（规划器）</span></a><a class="toc-level-2" href="#M12-%C2%B7-Cloud-Agents%EF%BC%88%E4%BA%91%E7%AB%AF%E6%99%BA%E8%83%BD%E4%BD%93%E9%9B%86%E7%BE%A4%EF%BC%89" data-toc-target="M12-·-Cloud-Agents（云端智能体集群）"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">M12 · Cloud Agents（云端智能体集群）</span></a><a class="toc-level-2" href="#M13-%C2%B7-%E5%9F%8B%E7%82%B9-SDK%EF%BC%88Telemetry-SDK%EF%BC%89" data-toc-target="M13-·-埋点-SDK（Telemetry-SDK）"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">M13 · 埋点 SDK（Telemetry SDK）</span></a><a class="toc-level-2" href="#M14-%C2%B7-%E8%AE%B0%E5%BF%86%E4%B8%AD%E5%BF%83%EF%BC%88Memory-Center%EF%BC%89" data-toc-target="M14-·-记忆中心（Memory-Center）"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">M14 · 记忆中心（Memory Center）</span></a><a class="toc-level-2" href="#M15-%C2%B7-%E7%9F%A5%E8%AF%86%E4%B8%AD%E5%BF%83-RAG%EF%BC%88Knowledge-Center%EF%BC%89" data-toc-target="M15-·-知识中心-RAG（Knowledge-Center）"><i class="toc-num" aria-hidden="true">17</i><span class="toc-text">M15 · 知识中心 / RAG（Knowledge Center）</span></a><a class="toc-level-2" href="#M16-%C2%B7-%E8%83%BD%E5%8A%9B%E4%B8%AD%E5%BF%83%EF%BC%88Capability-Center%EF%BC%89" data-toc-target="M16-·-能力中心（Capability-Center）"><i class="toc-num" aria-hidden="true">18</i><span class="toc-text">M16 · 能力中心（Capability Center）</span></a><a class="toc-level-2" href="#M17-%C2%B7-%E8%BE%B9%E7%BC%98-Agent-%E6%A1%86%E6%9E%B6%EF%BC%88Edge-Agent-Framework%EF%BC%89" data-toc-target="M17-·-边缘-Agent-框架（Edge-Agent-Framework）"><i class="toc-num" aria-hidden="true">19</i><span class="toc-text">M17 · 边缘 Agent 框架（Edge Agent Framework）</span></a><a class="toc-level-2" href="#M18-%C2%B7-LLM-%E7%BD%91%E5%85%B3%EF%BC%88LLM-Gateway%EF%BC%89" data-toc-target="M18-·-LLM-网关（LLM-Gateway）"><i class="toc-num" aria-hidden="true">20</i><span class="toc-text">M18 · LLM 网关（LLM Gateway）</span></a><a class="toc-level-2" href="#M19-%C2%B7-%E5%AE%89%E5%85%A8%E5%9B%B4%E6%A0%8F%E9%98%B2%E6%8A%A4%EF%BC%88Safety-Guardrail%EF%BC%89" data-toc-target="M19-·-安全围栏防护（Safety-Guardrail）"><i class="toc-num" aria-hidden="true">21</i><span class="toc-text">M19 · 安全围栏防护（Safety Guardrail）</span></a><a class="toc-level-2" href="#M20-%C2%B7-AI-%E6%B3%A8%E5%86%8C%E4%B8%AD%E5%BF%83%EF%BC%88AI-Registry-Center%EF%BC%89" data-toc-target="M20-·-AI-注册中心（AI-Registry-Center）"><i class="toc-num" aria-hidden="true">22</i><span class="toc-text">M20 · AI 注册中心（AI Registry Center）</span></a><a class="toc-level-2" href="#M21-%C2%B7-%E7%AC%AC%E4%B8%89%E6%96%B9-MCP-%E7%94%9F%E6%80%81%EF%BC%88Third-Party-MCP-Ecosystem%EF%BC%89" data-toc-target="M21-·-第三方-MCP-生态（Third-Party-MCP-Ecosystem）"><i class="toc-num" aria-hidden="true">23</i><span class="toc-text">M21 · 第三方 MCP 生态（Third-Party MCP Ecosystem）</span></a><a class="toc-level-2" href="#M22-%C2%B7-%E5%AD%98%E9%87%8F%E4%B8%9A%E5%8A%A1%E5%B9%B3%E5%8F%B0%E9%80%82%E9%85%8D%EF%BC%88Legacy-Business-Platform-Adapter%EF%BC%89" data-toc-target="M22-·-存量业务平台适配（Legacy-Business-Platform-Adapter）"><i class="toc-num" aria-hidden="true">24</i><span class="toc-text">M22 · 存量业务平台适配（Legacy Business Platform Adapter）</span></a><a class="toc-level-2" href="#M23-%C2%B7-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0%EF%BC%88Data-Platform%EF%BC%89" data-toc-target="M23-·-数据平台（Data-Platform）"><i class="toc-num" aria-hidden="true">25</i><span class="toc-text">M23 · 数据平台（Data Platform）</span></a><a class="toc-level-2" href="#M24-%C2%B7-%E7%AB%AF%E4%BA%91%E7%8A%B6%E6%80%81%E5%90%8C%E6%AD%A5%E6%9C%8D%E5%8A%A1%EF%BC%88Edge%E2%80%93Cloud-State-Sync%EF%BC%89" data-toc-target="M24-·-端云状态同步服务（Edge–Cloud-State-Sync）"><i class="toc-num" aria-hidden="true">26</i><span class="toc-text">M24 · 端云状态同步服务（Edge–Cloud State Sync）</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-A-%C2%B7-%E6%A8%A1%E5%9D%97%E4%BE%9D%E8%B5%96%E7%9F%A9%E9%98%B5%EF%BC%88%E5%85%A8%E9%87%8F%EF%BC%89" data-toc-target="附录-A-·-模块依赖矩阵（全量）"><i class="toc-num" aria-hidden="true">27</i><span class="toc-text">附录 A · 模块依赖矩阵（全量）</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-B-%C2%B7-%E4%BE%9D%E8%B5%96%E5%BC%BA%E5%BA%A6%E4%B8%8E%E6%95%85%E9%9A%9C%E5%BD%B1%E5%93%8D" data-toc-target="附录-B-·-依赖强度与故障影响"><i class="toc-num" aria-hidden="true">28</i><span class="toc-text">附录 B · 依赖强度与故障影响</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 20%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">4 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots toc-strip__dots--dense" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#03-%C2%B7-%E6%A8%A1%E5%9D%97%E8%A7%A3%E6%9E%90%EF%BC%88Module-Analysis%EF%BC%89" data-toc-target="03-·-模块解析（Module-Analysis）" data-title="01 · 03 · 模块解析（Module Analysis）" aria-label="03 · 模块解析（Module Analysis）"></a><a class="toc-strip__dot" href="#0-%E6%A8%A1%E5%9D%97%E6%B8%85%E5%8D%95" data-toc-target="0-模块清单" data-title="02 · 0. 模块清单" aria-label="0. 模块清单"></a><a class="toc-strip__dot" href="#M01-%C2%B7-%E9%9F%B3%E9%A2%91%E6%9C%8D%E5%8A%A1%EF%BC%88Audio-Service%EF%BC%89" data-toc-target="M01-·-音频服务（Audio-Service）" data-title="03 · M01 · 音频服务（Audio Service）" aria-label="M01 · 音频服务（Audio Service）"></a><a class="toc-strip__dot" href="#M02-%C2%B7-System-Agent%EF%BC%88%E7%B3%BB%E7%BB%9F%E6%99%BA%E8%83%BD%E4%BD%93%EF%BC%89" data-toc-target="M02-·-System-Agent（系统智能体）" data-title="04 · M02 · System Agent（系统智能体）" aria-label="M02 · System Agent（系统智能体）"></a><a class="toc-strip__dot" href="#M03-%C2%B7-User-Agents%EF%BC%88%E7%94%A8%E6%88%B7%E6%99%BA%E8%83%BD%E4%BD%93%E9%9B%86%E7%BE%A4%EF%BC%89" data-toc-target="M03-·-User-Agents（用户智能体集群）" data-title="05 · M03 · User Agents（用户智能体集群）" aria-label="M03 · User Agents（用户智能体集群）"></a><a class="toc-strip__dot" href="#M04-%C2%B7-%E8%BE%B9%E7%BC%98-AI-%E5%9F%BA%E7%A1%80%E8%83%BD%E5%8A%9B%EF%BC%88Edge-AI-Foundation%EF%BC%89" data-toc-target="M04-·-边缘-AI-基础能力（Edge-AI-Foundation）" data-title="06 · M04 · 边缘 AI 基础能力（Edge AI Foundation）" aria-label="M04 · 边缘 AI 基础能力（Edge AI Foundation）"></a><a class="toc-strip__dot" href="#M05-%C2%B7-%E8%BE%B9%E7%BC%98%E5%AE%89%E5%85%A8%E7%B3%BB%E7%BB%9F%EF%BC%88Edge-Security-System%EF%BC%89" data-toc-target="M05-·-边缘安全系统（Edge-Security-System）" data-title="07 · M05 · 边缘安全系统（Edge Security System）" aria-label="M05 · 边缘安全系统（Edge Security System）"></a><a class="toc-strip__dot" href="#M06-%C2%B7-%E7%AB%AF%E4%BE%A7%E5%B0%8F%E6%A8%A1%E5%9E%8B%EF%BC%88Edge-SLM%EF%BC%89" data-toc-target="M06-·-端侧小模型（Edge-SLM）" data-title="08 · M06 · 端侧小模型（Edge SLM）" aria-label="M06 · 端侧小模型（Edge SLM）"></a><a class="toc-strip__dot" href="#M07-%C2%B7-%E8%AF%AD%E9%9F%B3%E7%BD%91%E5%85%B3%EF%BC%88Voice-Gateway%EF%BC%89" data-toc-target="M07-·-语音网关（Voice-Gateway）" data-title="09 · M07 · 语音网关（Voice Gateway）" aria-label="M07 · 语音网关（Voice Gateway）"></a><a class="toc-strip__dot" href="#M08-%C2%B7-Agent-%E7%BD%91%E5%85%B3%EF%BC%88Agent-Gateway%EF%BC%89" data-toc-target="M08-·-Agent-网关（Agent-Gateway）" data-title="10 · M08 · Agent 网关（Agent Gateway）" aria-label="M08 · Agent 网关（Agent Gateway）"></a><a class="toc-strip__dot" href="#M09-%C2%B7-%E5%8F%8C%E5%90%91%E8%AE%A4%E8%AF%81%E7%BD%91%E5%85%B3%EF%BC%88Mutual-Auth-Gateway%EF%BC%89" data-toc-target="M09-·-双向认证网关（Mutual-Auth-Gateway）" data-title="11 · M09 · 双向认证网关（Mutual-Auth Gateway）" aria-label="M09 · 双向认证网关（Mutual-Auth Gateway）"></a><a class="toc-strip__dot" href="#M10-%C2%B7-%E8%AF%AD%E4%B9%89%E7%90%86%E8%A7%A3%E6%9C%8D%E5%8A%A1%EF%BC%88NLU%EF%BC%89" data-toc-target="M10-·-语义理解服务（NLU）" data-title="12 · M10 · 语义理解服务（NLU）" aria-label="M10 · 语义理解服务（NLU）"></a><a class="toc-strip__dot" href="#M11-%C2%B7-Planner%EF%BC%88%E8%A7%84%E5%88%92%E5%99%A8%EF%BC%89" data-toc-target="M11-·-Planner（规划器）" data-title="13 · M11 · Planner（规划器）" aria-label="M11 · Planner（规划器）"></a><a class="toc-strip__dot" href="#M12-%C2%B7-Cloud-Agents%EF%BC%88%E4%BA%91%E7%AB%AF%E6%99%BA%E8%83%BD%E4%BD%93%E9%9B%86%E7%BE%A4%EF%BC%89" data-toc-target="M12-·-Cloud-Agents（云端智能体集群）" data-title="14 · M12 · Cloud Agents（云端智能体集群）" aria-label="M12 · Cloud Agents（云端智能体集群）"></a><a class="toc-strip__dot" href="#M13-%C2%B7-%E5%9F%8B%E7%82%B9-SDK%EF%BC%88Telemetry-SDK%EF%BC%89" data-toc-target="M13-·-埋点-SDK（Telemetry-SDK）" data-title="15 · M13 · 埋点 SDK（Telemetry SDK）" aria-label="M13 · 埋点 SDK（Telemetry SDK）"></a><a class="toc-strip__dot" href="#M14-%C2%B7-%E8%AE%B0%E5%BF%86%E4%B8%AD%E5%BF%83%EF%BC%88Memory-Center%EF%BC%89" data-toc-target="M14-·-记忆中心（Memory-Center）" data-title="16 · M14 · 记忆中心（Memory Center）" aria-label="M14 · 记忆中心（Memory Center）"></a><a class="toc-strip__dot" href="#M15-%C2%B7-%E7%9F%A5%E8%AF%86%E4%B8%AD%E5%BF%83-RAG%EF%BC%88Knowledge-Center%EF%BC%89" data-toc-target="M15-·-知识中心-RAG（Knowledge-Center）" data-title="17 · M15 · 知识中心 / RAG（Knowledge Center）" aria-label="M15 · 知识中心 / RAG（Knowledge Center）"></a><a class="toc-strip__dot" href="#M16-%C2%B7-%E8%83%BD%E5%8A%9B%E4%B8%AD%E5%BF%83%EF%BC%88Capability-Center%EF%BC%89" data-toc-target="M16-·-能力中心（Capability-Center）" data-title="18 · M16 · 能力中心（Capability Center）" aria-label="M16 · 能力中心（Capability Center）"></a><a class="toc-strip__dot" href="#M17-%C2%B7-%E8%BE%B9%E7%BC%98-Agent-%E6%A1%86%E6%9E%B6%EF%BC%88Edge-Agent-Framework%EF%BC%89" data-toc-target="M17-·-边缘-Agent-框架（Edge-Agent-Framework）" data-title="19 · M17 · 边缘 Agent 框架（Edge Agent Framework）" aria-label="M17 · 边缘 Agent 框架（Edge Agent Framework）"></a><a class="toc-strip__dot" href="#M18-%C2%B7-LLM-%E7%BD%91%E5%85%B3%EF%BC%88LLM-Gateway%EF%BC%89" data-toc-target="M18-·-LLM-网关（LLM-Gateway）" data-title="20 · M18 · LLM 网关（LLM Gateway）" aria-label="M18 · LLM 网关（LLM Gateway）"></a><a class="toc-strip__dot" href="#M19-%C2%B7-%E5%AE%89%E5%85%A8%E5%9B%B4%E6%A0%8F%E9%98%B2%E6%8A%A4%EF%BC%88Safety-Guardrail%EF%BC%89" data-toc-target="M19-·-安全围栏防护（Safety-Guardrail）" data-title="21 · M19 · 安全围栏防护（Safety Guardrail）" aria-label="M19 · 安全围栏防护（Safety Guardrail）"></a><a class="toc-strip__dot" href="#M20-%C2%B7-AI-%E6%B3%A8%E5%86%8C%E4%B8%AD%E5%BF%83%EF%BC%88AI-Registry-Center%EF%BC%89" data-toc-target="M20-·-AI-注册中心（AI-Registry-Center）" data-title="22 · M20 · AI 注册中心（AI Registry Center）" aria-label="M20 · AI 注册中心（AI Registry Center）"></a><a class="toc-strip__dot" href="#M21-%C2%B7-%E7%AC%AC%E4%B8%89%E6%96%B9-MCP-%E7%94%9F%E6%80%81%EF%BC%88Third-Party-MCP-Ecosystem%EF%BC%89" data-toc-target="M21-·-第三方-MCP-生态（Third-Party-MCP-Ecosystem）" data-title="23 · M21 · 第三方 MCP 生态（Third-Party MCP Ecosystem）" aria-label="M21 · 第三方 MCP 生态（Third-Party MCP Ecosystem）"></a><a class="toc-strip__dot" href="#M22-%C2%B7-%E5%AD%98%E9%87%8F%E4%B8%9A%E5%8A%A1%E5%B9%B3%E5%8F%B0%E9%80%82%E9%85%8D%EF%BC%88Legacy-Business-Platform-Adapter%EF%BC%89" data-toc-target="M22-·-存量业务平台适配（Legacy-Business-Platform-Adapter）" data-title="24 · M22 · 存量业务平台适配（Legacy Business Platform Adapter）" aria-label="M22 · 存量业务平台适配（Legacy Business Platform Adapter）"></a><a class="toc-strip__dot" href="#M23-%C2%B7-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0%EF%BC%88Data-Platform%EF%BC%89" data-toc-target="M23-·-数据平台（Data-Platform）" data-title="25 · M23 · 数据平台（Data Platform）" aria-label="M23 · 数据平台（Data Platform）"></a><a class="toc-strip__dot" href="#M24-%C2%B7-%E7%AB%AF%E4%BA%91%E7%8A%B6%E6%80%81%E5%90%8C%E6%AD%A5%E6%9C%8D%E5%8A%A1%EF%BC%88Edge%E2%80%93Cloud-State-Sync%EF%BC%89" data-toc-target="M24-·-端云状态同步服务（Edge–Cloud-State-Sync）" data-title="26 · M24 · 端云状态同步服务（Edge–Cloud State Sync）" aria-label="M24 · 端云状态同步服务（Edge–Cloud State Sync）"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-A-%C2%B7-%E6%A8%A1%E5%9D%97%E4%BE%9D%E8%B5%96%E7%9F%A9%E9%98%B5%EF%BC%88%E5%85%A8%E9%87%8F%EF%BC%89" data-toc-target="附录-A-·-模块依赖矩阵（全量）" data-title="27 · 附录 A · 模块依赖矩阵（全量）" aria-label="附录 A · 模块依赖矩阵（全量）"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-B-%C2%B7-%E4%BE%9D%E8%B5%96%E5%BC%BA%E5%BA%A6%E4%B8%8E%E6%95%85%E9%9A%9C%E5%BD%B1%E5%93%8D" data-toc-target="附录-B-·-依赖强度与故障影响" data-title="28 · 附录 B · 依赖强度与故障影响" aria-label="附录 B · 依赖强度与故障影响"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-03-模块分析","title":"云管端 AI Agent 模块分析","url":"/2025/08/12/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-03-%E6%A8%A1%E5%9D%97%E5%88%86%E6%9E%90/","path":"cloud-pipe-edge-agent-platform","index":3,"total":20,"next":{"title":"云管端 AI Agent 组件分析","url":"/2025/10/09/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-04-%E7%BB%84%E4%BB%B6%E5%88%86%E6%9E%90/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

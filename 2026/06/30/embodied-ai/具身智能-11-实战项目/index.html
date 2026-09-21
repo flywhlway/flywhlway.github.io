@@ -1,0 +1,479 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>具身智能实战项目 · 飞轮之道</title>
+<meta name="description" content="蓝图（第十篇）落回代码。本篇把第三篇的遥测系统 v0.1 按参考架构升级为 v0.2：一个可以在你的 Mac 上 docker compose up 跑起来的最小 Embodied Cloud——补上身份鉴权、影子服务、模型 OTA 最小闭环、触发式录制回传、可观测与简易大盘。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/06/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-11-%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="具身智能实战项目 · 飞轮之道">
+<meta property="og:description" content="蓝图（第十篇）落回代码。本篇把第三篇的遥测系统 v0.1 按参考架构升级为 v0.2：一个可以在你的 Mac 上 docker compose up 跑起来的最小 Embodied Cloud——补上身份鉴权、影子服务、模型 OTA 最小闭环、触发式录制回传、可观测与简易大盘。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/06/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-11-%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518314916381-77a37c2a49ae?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-ai-engineering/">落地实战</a><a class="series-chip" href="/paths/embodied-ai-engineering/" title="查看学习路径">第 11 / 13 篇</a>
+    </div>
+    <h1>具身智能实战项目</h1>
+    <p class="article-deck">分包纪律与 10.0.2 八平面对齐：cloud/app 里一个平面一个文件——面试时打开仓库，目录即架构自述。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>发布于 2026.06</span>
+      <a class="article-meta__tag" href="/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">#具身智能</a><a class="article-meta__tag" href="/tags/AIoT/">#AIoT</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>v0.2 = 八平面的可运行缩影</li><li>六条验收即六个平面的最小闭环</li><li>影子/租约/双槽/元数据先行/分区命名——五个「玩具实现」承载了全书最重要的五个机制。</li></ol>
+      <a class="takeaways-more" href="#11-6-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93">查看全部 5 条 →</a>
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>📖 <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">返回总目录</a> ｜ 🗺️ <a href="../MOC-%E5%8F%8C%E9%93%BE%E5%AF%BC%E8%88%AA.md">MOC 导航</a></p>
+</blockquote>
+<hr>
+<h2 id="第十一篇-实战项目：Embodied-Cloud-Platform-v0-2"><a href="#第十一篇-实战项目：Embodied-Cloud-Platform-v0-2" class="headerlink" title="第十一篇 实战项目：Embodied Cloud Platform v0.2"></a>第十一篇 实战项目：Embodied Cloud Platform v0.2</h2><blockquote>
+<p>蓝图（第十篇）落回代码。本篇把第三篇的遥测系统 v0.1 按参考架构升级为 <strong>v0.2</strong>：一个可以在你的 Mac 上 <code>docker compose up</code> 跑起来的最小 Embodied Cloud——补上身份鉴权、影子服务、模型 OTA 最小闭环、触发式录制回传、可观测与简易大盘。它刻意保持「一台笔记本可运行」的体量，但<strong>每个模块都是第四~十篇对应平面的可辩护缩影</strong>——写进简历后，面试官问到任何一个框，你都能向上展开到企业级设计（引用对应篇章），向下展开到代码。</p>
+</blockquote>
+<h2 id="11-0-项目定位与验收"><a href="#11-0-项目定位与验收" class="headerlink" title="11.0 项目定位与验收"></a>11.0 项目定位与验收</h2><h3 id="11-0-1-v0-1-→-v0-2-升级清单"><a href="#11-0-1-v0-1-→-v0-2-升级清单" class="headerlink" title="11.0.1 v0.1 → v0.2 升级清单"></a>11.0.1 v0.1 → v0.2 升级清单</h3><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>v0.1（第三篇）</th>
+<th>v0.2（本篇）</th>
+<th>对应平面</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>接入</td>
+<td>匿名 MQTT</td>
+<td><strong>用户名&#x2F;密码 + 每机独立凭据</strong>（mTLS 留作 v0.3，给出配置位）</td>
+<td>接入&#x2F;安全面</td>
+</tr>
+<tr>
+<td>设备</td>
+<td>无</td>
+<td><strong>注册激活 API + 影子服务（desired&#x2F;reported&#x2F;delta）</strong></td>
+<td>设备面</td>
+</tr>
+<tr>
+<td>OTA</td>
+<td>模拟任务</td>
+<td><strong>真实模型 OTA 最小闭环</strong>：制品上传→校验和→任务下发→端侧下载验证→双槽切换→版本上报</td>
+<td>OTA 面</td>
+</tr>
+<tr>
+<td>数据</td>
+<td>最新状态 SQLite</td>
+<td><strong>遥测入 SQLite 时序表 + 触发式 bag 片段回传 MinIO</strong></td>
+<td>数据面</td>
+</tr>
+<tr>
+<td>任务</td>
+<td>RobotTask 五类</td>
+<td>保留 + <strong>任务表全生命周期 + 租约超时回收</strong></td>
+<td>任务面</td>
+</tr>
+<tr>
+<td>可观测</td>
+<td>无</td>
+<td><strong>三键结构化日志 + &#x2F;metrics + 简易大盘页</strong></td>
+<td>可观测面</td>
+</tr>
+</tbody></table>
+<h3 id="11-0-2-验收标准（项目即证书）"><a href="#11-0-2-验收标准（项目即证书）" class="headerlink" title="11.0.2 验收标准（项目即证书）"></a>11.0.2 验收标准（项目即证书）</h3><ul>
+<li><input disabled="" type="checkbox"> 一条命令拉起 6 个容器；机器人注册激活后才被接受遥测</li>
+<li><input disabled="" type="checkbox"> 影子收敛演示：云端改 desired.report_hz → 端侧 Parameter 生效 → reported 回归一致</li>
+<li><input disabled="" type="checkbox"> 模型 OTA 全链路：上传「模型文件」→ 下发 → 端侧校验和验证 → 槽位切换 → 孪生显示新版本；坏校验和 → 拒绝安装并回执失败</li>
+<li><input disabled="" type="checkbox"> 触发回传：注入 error_code → 端侧 bag 片段出现在 MinIO 对应分区</li>
+<li><input disabled="" type="checkbox"> 租约回收：kill 云桥进程 → 任务超租约被标记回收</li>
+<li><input disabled="" type="checkbox"> 大盘页可见：在线状态、电池曲线、任务列表、模型版本</li>
+</ul>
+<h2 id="11-1-仓库与目录结构"><a href="#11-1-仓库与目录结构" class="headerlink" title="11.1 仓库与目录结构"></a>11.1 仓库与目录结构</h2><h3 id="11-1-1-Git-仓库布局（monorepo，教学优先）"><a href="#11-1-1-Git-仓库布局（monorepo，教学优先）" class="headerlink" title="11.1.1 Git 仓库布局（monorepo，教学优先）"></a>11.1.1 Git 仓库布局（monorepo，教学优先）</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">embodied-cloud/</span><br><span class="line">├── docker-compose.yml            # 6 服务全家桶</span><br><span class="line">├── Dockerfile.ros                # 第三篇镜像 + 补丁</span><br><span class="line">├── Makefile                      # make up/build/demo/test 四目标</span><br><span class="line">├── mosquitto/</span><br><span class="line">│   └── mosquitto.conf            # 密码文件认证（passwd 由 make 生成）</span><br><span class="line">├── cloud/                        # 云端（FastAPI 单体，按平面分包）</span><br><span class="line">│   ├── Dockerfile</span><br><span class="line">│   └── app/</span><br><span class="line">│       ├── main.py               # 装配与路由注册</span><br><span class="line">│       ├── device.py             # 设备面：注册/激活/影子</span><br><span class="line">│       ├── ota.py                # OTA 面：制品/任务/回执</span><br><span class="line">│       ├── task.py               # 任务面：任务表/租约</span><br><span class="line">│       ├── telemetry.py          # 数据面：遥测消费入库</span><br><span class="line">│       ├── mqtt_bus.py           # MQTT 客户端与主题路由</span><br><span class="line">│       ├── db.py                 # SQLite Schema 与访问</span><br><span class="line">│       └── dashboard.py          # 简易大盘（HTML 一页）</span><br><span class="line">├── ws/src/</span><br><span class="line">│   ├── robot_interfaces/         # RobotTelemetry.msg + RobotTask.action（不变）</span><br><span class="line">│   ├── robot_telemetry/          # v0.1 四节点 + 本篇升级</span><br><span class="line">│   │   └── robot_telemetry/</span><br><span class="line">│   │       ├── robot_sim.py      # 不变（3.3.3）</span><br><span class="line">│   │       ├── telemetry_agg.py  # + error_code 参数注入（触发演示用）</span><br><span class="line">│   │       ├── task_executor.py  # + ota 任务对接 model_manager</span><br><span class="line">│   │       ├── cloud_bridge.py   # + 凭据/影子 delta 应用/租约续租</span><br><span class="line">│   │       ├── model_manager.py  # 新增：双槽模型管理（下载/校验/切换）</span><br><span class="line">│   │       └── bag_trigger.py    # 新增：环形录制 + 触发上传</span><br><span class="line">│   └── robot_bringup/launch/embodied.launch.py</span><br><span class="line">└── docs/</span><br><span class="line">    ├── adr/                      # 选型决策记录（10.3 制度落地）</span><br><span class="line">    └── runbook.md</span><br></pre></td></tr></table></figure>
+
+<p>分包纪律与 10.0.2 八平面对齐：<strong>cloud&#x2F;app 里一个平面一个文件</strong>——面试时打开仓库，目录即架构自述。</p>
+<h3 id="11-1-2-Compose-全家桶（6-服务）"><a href="#11-1-2-Compose-全家桶（6-服务）" class="headerlink" title="11.1.2 Compose 全家桶（6 服务）"></a>11.1.2 Compose 全家桶（6 服务）</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">services:</span></span><br><span class="line">  <span class="attr">robot:</span>      <span class="comment"># ROS2 域：五节点（Dockerfile.ros）</span></span><br><span class="line">  <span class="attr">mqtt:</span>       <span class="comment"># mosquitto（密码认证）</span></span><br><span class="line">  <span class="attr">cloud:</span>      <span class="comment"># FastAPI 单体（8000）</span></span><br><span class="line">  <span class="attr">minio:</span>      <span class="comment"># 对象存储：模型制品桶 + bag 片段桶（9000/9001）</span></span><br><span class="line">  <span class="attr">createbuckets:</span>  <span class="comment"># 一次性初始化桶与演示模型制品</span></span><br><span class="line">  <span class="attr">dashboard:</span>  <span class="comment"># 静态大盘（也可由 cloud 直出，容器数取 6 以内）</span></span><br></pre></td></tr></table></figure>
+
+<p>生产对照卡（每项注释指向篇章）：mosquitto→EMQX 集群（4.1）、FastAPI 单体→Spring Cloud 微服务分平面（10.3）、SQLite→PG+Redis+CH（4.1.5）、MinIO 单机→分发四级瀑布（4.3.4）。<strong>「简化点即产品化 backlog」</strong>（3.3.12）在 v0.2 延续。</p>
+<h2 id="11-2-数据库-Schema-与接口设计"><a href="#11-2-数据库-Schema-与接口设计" class="headerlink" title="11.2 数据库 Schema 与接口设计"></a>11.2 数据库 Schema 与接口设计</h2><h3 id="11-2-1-SQLite-Schema（云端唯一状态源）"><a href="#11-2-1-SQLite-Schema（云端唯一状态源）" class="headerlink" title="11.2.1 SQLite Schema（云端唯一状态源）"></a>11.2.1 SQLite Schema（云端唯一状态源）</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> robot (</span><br><span class="line">  robot_id TEXT <span class="keyword">PRIMARY KEY</span>, secret_hash TEXT, model TEXT,</span><br><span class="line">  lifecycle TEXT <span class="keyword">DEFAULT</span> <span class="string">&#x27;registered&#x27;</span>,      <span class="comment">-- registered/active/maintenance/retired（4.2.5）</span></span><br><span class="line">  activated_at DATETIME);</span><br><span class="line"><span class="keyword">CREATE TABLE</span> shadow (</span><br><span class="line">  robot_id TEXT <span class="keyword">PRIMARY KEY</span>,</span><br><span class="line">  desired TEXT <span class="keyword">DEFAULT</span> <span class="string">&#x27;&#123;&#125;&#x27;</span>, reported TEXT <span class="keyword">DEFAULT</span> <span class="string">&#x27;&#123;&#125;&#x27;</span>,</span><br><span class="line">  desired_ver <span class="type">INTEGER</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>, updated_at DATETIME);           <span class="comment">-- 4.4.2 收敛循环</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> artifact (</span><br><span class="line">  artifact_id TEXT <span class="keyword">PRIMARY KEY</span>, kind TEXT,   <span class="comment">-- model/config</span></span><br><span class="line">  version TEXT, sha256 TEXT, uri TEXT, size <span class="type">INTEGER</span>);            <span class="comment">-- 4.3.3 不可变制品</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> task (</span><br><span class="line">  task_id TEXT <span class="keyword">PRIMARY KEY</span>, robot_id TEXT, type TEXT,</span><br><span class="line">  payload TEXT, status TEXT, detail TEXT,</span><br><span class="line">  lease_until DATETIME, created_at DATETIME);                    <span class="comment">-- 4.7.2 租约</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> telemetry (</span><br><span class="line">  robot_id TEXT, ts DATETIME, battery <span class="type">REAL</span>, cpu <span class="type">REAL</span>,</span><br><span class="line">  error_code <span class="type">INTEGER</span>, body TEXT);                                <span class="comment">-- 时序表（CH 的替身）</span></span><br><span class="line"><span class="keyword">CREATE</span> INDEX idx_tel <span class="keyword">ON</span> telemetry(robot_id, ts);</span><br></pre></td></tr></table></figure>
+
+<h3 id="11-2-2-REST-接口清单（cloud-app）"><a href="#11-2-2-REST-接口清单（cloud-app）" class="headerlink" title="11.2.2 REST 接口清单（cloud&#x2F;app）"></a>11.2.2 REST 接口清单（cloud&#x2F;app）</h3><table>
+<thead>
+<tr>
+<th>方法&#x2F;路径</th>
+<th>平面</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST &#x2F;robots&#x2F;register</td>
+<td>设备</td>
+<td>录入 robot_id + 生成 MQTT 凭据（返回一次）</td>
+</tr>
+<tr>
+<td>POST &#x2F;robots&#x2F;{id}&#x2F;activate</td>
+<td>设备</td>
+<td>激活：校验凭据，lifecycle→active</td>
+</tr>
+<tr>
+<td>GET&#x2F;PATCH &#x2F;robots&#x2F;{id}&#x2F;shadow</td>
+<td>设备</td>
+<td>读影子 &#x2F; 写 desired（版本号自增）</td>
+</tr>
+<tr>
+<td>POST &#x2F;artifacts</td>
+<td>OTA</td>
+<td>上传制品（存 MinIO，登记 sha256）</td>
+</tr>
+<tr>
+<td>POST &#x2F;robots&#x2F;{id}&#x2F;tasks</td>
+<td>任务</td>
+<td>创建任务（含 ota：payload 带 artifact 指针）</td>
+</tr>
+<tr>
+<td>GET &#x2F;tasks&#x2F;{id} · GET &#x2F;robots&#x2F;{id}&#x2F;tasks</td>
+<td>任务</td>
+<td>任务查询</td>
+</tr>
+<tr>
+<td>GET &#x2F;robots&#x2F;{id}&#x2F;state · &#x2F;metrics · &#x2F;dashboard</td>
+<td>数据&#x2F;可观测</td>
+<td>最新态&#x2F;指标&#x2F;大盘</td>
+</tr>
+</tbody></table>
+<h3 id="11-2-3-MQTT-主题契约（v0-1-之上新增两族）"><a href="#11-2-3-MQTT-主题契约（v0-1-之上新增两族）" class="headerlink" title="11.2.3 MQTT 主题契约（v0.1 之上新增两族）"></a>11.2.3 MQTT 主题契约（v0.1 之上新增两族）</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">robots/&#123;id&#125;/telemetry/state          # 上行遥测（不变）</span><br><span class="line">robots/&#123;id&#125;/cmd/task                 # 下行任务（不变）</span><br><span class="line">robots/&#123;id&#125;/task/&#123;tid&#125;/event         # 任务回执（不变）</span><br><span class="line">robots/&#123;id&#125;/shadow/delta             # 新增：云→端 影子 delta 下发</span><br><span class="line">robots/&#123;id&#125;/shadow/reported          # 新增：端→云 reported 上报</span><br><span class="line">robots/&#123;id&#125;/clips/notify             # 新增：端→云 片段元数据先行（7.2.1）</span><br></pre></td></tr></table></figure>
+
+<h2 id="11-3-核心新模块代码"><a href="#11-3-核心新模块代码" class="headerlink" title="11.3 核心新模块代码"></a>11.3 核心新模块代码</h2><h3 id="11-3-1-影子服务（cloud-app-device-py-关键段）"><a href="#11-3-1-影子服务（cloud-app-device-py-关键段）" class="headerlink" title="11.3.1 影子服务（cloud&#x2F;app&#x2F;device.py 关键段）"></a>11.3.1 影子服务（cloud&#x2F;app&#x2F;device.py 关键段）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">patch_desired</span>(<span class="params">robot_id: <span class="built_in">str</span>, patch: <span class="built_in">dict</span></span>):</span><br><span class="line">    <span class="keyword">with</span> lock:</span><br><span class="line">        row = db.execute(<span class="string">&#x27;SELECT desired, desired_ver FROM shadow WHERE robot_id=?&#x27;</span>,</span><br><span class="line">                         (robot_id,)).fetchone()</span><br><span class="line">        desired = &#123;**json.loads(row[<span class="number">0</span>]), **patch&#125;</span><br><span class="line">        ver = row[<span class="number">1</span>] + <span class="number">1</span></span><br><span class="line">        db.execute(<span class="string">&#x27;UPDATE shadow SET desired=?, desired_ver=?, updated_at=CURRENT_TIMESTAMP &#x27;</span></span><br><span class="line">                   <span class="string">&#x27;WHERE robot_id=?&#x27;</span>, (json.dumps(desired), ver, robot_id))</span><br><span class="line">        db.commit()</span><br><span class="line">    bus.publish(<span class="string">f&#x27;robots/<span class="subst">&#123;robot_id&#125;</span>/shadow/delta&#x27;</span>,            <span class="comment"># delta 驱动（4.4.2）</span></span><br><span class="line">                json.dumps(&#123;<span class="string">&#x27;ver&#x27;</span>: ver, <span class="string">&#x27;desired&#x27;</span>: desired&#125;))</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">on_reported</span>(<span class="params">robot_id: <span class="built_in">str</span>, reported: <span class="built_in">dict</span></span>):               <span class="comment"># MQTT 回调入库</span></span><br><span class="line">    <span class="keyword">with</span> lock:</span><br><span class="line">        db.execute(<span class="string">&#x27;UPDATE shadow SET reported=?, updated_at=CURRENT_TIMESTAMP &#x27;</span></span><br><span class="line">                   <span class="string">&#x27;WHERE robot_id=?&#x27;</span>, (json.dumps(reported), robot_id))</span><br><span class="line">        db.commit()</span><br><span class="line">    <span class="comment"># 收敛检查：desired 与 reported 差集非空且超时 → 告警（演示打日志）</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="11-3-2-端侧模型管理器（model-manager-py，双槽最小实现）"><a href="#11-3-2-端侧模型管理器（model-manager-py，双槽最小实现）" class="headerlink" title="11.3.2 端侧模型管理器（model_manager.py，双槽最小实现）"></a>11.3.2 端侧模型管理器（model_manager.py，双槽最小实现）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;双槽模型管理：下载→校验→备槽落位→原子切换→上报（4.3.5 / 6.7 的玩具版）&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> hashlib, json, os, urllib.request</span><br><span class="line"></span><br><span class="line">SLOTS = <span class="string">&#x27;/opt/models&#x27;</span>          <span class="comment"># slots: a/ b/ + current 符号链接</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ModelManager</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">install</span>(<span class="params">self, artifact: <span class="built_in">dict</span></span>) -&gt; <span class="built_in">dict</span>:</span><br><span class="line">        <span class="string">&quot;&quot;&quot;artifact: &#123;version, uri, sha256&#125; —— 由 task_executor 的 ota 分支调用&quot;&quot;&quot;</span></span><br><span class="line">        standby = <span class="variable language_">self</span>._standby_slot()</span><br><span class="line">        path = os.path.join(SLOTS, standby, <span class="string">&#x27;model.bin&#x27;</span>)</span><br><span class="line">        os.makedirs(os.path.dirname(path), exist_ok=<span class="literal">True</span>)</span><br><span class="line">        urllib.request.urlretrieve(artifact[<span class="string">&#x27;uri&#x27;</span>], path)          <span class="comment"># 分片续传见 4.3.4</span></span><br><span class="line">        digest = hashlib.sha256(<span class="built_in">open</span>(path, <span class="string">&#x27;rb&#x27;</span>).read()).hexdigest()</span><br><span class="line">        <span class="keyword">if</span> digest != artifact[<span class="string">&#x27;sha256&#x27;</span>]:                           <span class="comment"># 验签的玩具版（9.3.3 真身）</span></span><br><span class="line">            os.remove(path)</span><br><span class="line">            <span class="keyword">return</span> &#123;<span class="string">&#x27;ok&#x27;</span>: <span class="literal">False</span>, <span class="string">&#x27;detail&#x27;</span>: <span class="string">&#x27;checksum mismatch&#x27;</span>&#125;</span><br><span class="line">        json.dump(artifact, <span class="built_in">open</span>(os.path.join(SLOTS, standby, <span class="string">&#x27;meta.json&#x27;</span>), <span class="string">&#x27;w&#x27;</span>))</span><br><span class="line">        <span class="variable language_">self</span>._health_check(path)                                   <span class="comment"># 固定样例自检（4.3.5）</span></span><br><span class="line">        <span class="variable language_">self</span>._switch_to(standby)                                   <span class="comment"># 原子改 current 符号链接</span></span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&#x27;ok&#x27;</span>: <span class="literal">True</span>, <span class="string">&#x27;version&#x27;</span>: artifact[<span class="string">&#x27;version&#x27;</span>]&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">current_version</span>(<span class="params">self</span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">        meta = os.path.join(SLOTS, <span class="string">&#x27;current&#x27;</span>, <span class="string">&#x27;meta.json&#x27;</span>)</span><br><span class="line">        <span class="keyword">return</span> json.load(<span class="built_in">open</span>(meta))[<span class="string">&#x27;version&#x27;</span>] <span class="keyword">if</span> os.path.exists(meta) <span class="keyword">else</span> <span class="string">&#x27;none&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>task_executor</code> 的 ota 分支改为调用它：download&#x2F;verify 阶段真实执行、install 即切槽、restart 阶段上报新版本进 reported——<strong>假任务变真闭环</strong>。坏校验和用「篡改 sha256 再下发」演示，拒装+失败回执即 9.3 验签闭环的可触摸版。</p>
+<h3 id="11-3-3-触发式录制（bag-trigger-py-思路段）"><a href="#11-3-3-触发式录制（bag-trigger-py-思路段）" class="headerlink" title="11.3.3 触发式录制（bag_trigger.py 思路段）"></a>11.3.3 触发式录制（bag_trigger.py 思路段）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;订阅 telemetry/state，error_code != 0 时触发：</span></span><br><span class="line"><span class="string">   1) 调 rosbag2 snapshot 服务落盘环形缓冲（2.21.4）</span></span><br><span class="line"><span class="string">   2) 元数据先行发 robots/&#123;id&#125;/clips/notify（7.2.1）</span></span><br><span class="line"><span class="string">   3) 后台把片段上传 MinIO：clips/&#123;site&#125;/&#123;robot&#125;/&#123;date&#125;/&#123;trigger&#125;/  （7.2.8 分区）&quot;&quot;&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>演示钩子：<code>telemetry_agg</code> 增加 <code>error_code</code> 参数——<code>ros2 param set /telemetry_agg error_code 42</code> 一条命令即可现场触发整条链路（影子 delta 也能改它：两条演示线交汇）。</p>
+<h3 id="11-3-4-租约回收（cloud-app-task-py-定时器）"><a href="#11-3-4-租约回收（cloud-app-task-py-定时器）" class="headerlink" title="11.3.4 租约回收（cloud&#x2F;app&#x2F;task.py 定时器）"></a>11.3.4 租约回收（cloud&#x2F;app&#x2F;task.py 定时器）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">reap_expired</span>():        <span class="comment"># 每 10s：EXECUTING 且 lease_until 过期 → RECLAIMED（4.7.2）</span></span><br><span class="line">    db.execute(<span class="string">&quot;UPDATE task SET status=&#x27;RECLAIMED&#x27;, detail=&#x27;lease expired&#x27; &quot;</span></span><br><span class="line">               <span class="string">&quot;WHERE status IN (&#x27;SENT&#x27;,&#x27;EXECUTING&#x27;) AND lease_until &lt; CURRENT_TIMESTAMP&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>云桥每次 Feedback 转发时刷新 <code>lease_until</code>（续租）——kill 云桥 30 秒后看任务被回收，租约语义眼见为实。</p>
+<h2 id="11-4-消息流时序与部署图"><a href="#11-4-消息流时序与部署图" class="headerlink" title="11.4 消息流时序与部署图"></a>11.4 消息流时序与部署图</h2><h3 id="11-4-1-模型-OTA-v0-2-全链路时序"><a href="#11-4-1-模型-OTA-v0-2-全链路时序" class="headerlink" title="11.4.1 模型 OTA v0.2 全链路时序"></a>11.4.1 模型 OTA v0.2 全链路时序</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">title v0.2 模型 OTA 最小闭环（可在笔记本上复现）</span><br><span class="line">actor 你 as U</span><br><span class="line">participant &quot;cloud API&quot; as A</span><br><span class="line">participant &quot;MinIO&quot; as M</span><br><span class="line">participant &quot;MQTT&quot; as Q</span><br><span class="line">participant &quot;cloud_bridge&quot; as B</span><br><span class="line">participant &quot;task_executor&quot; as E</span><br><span class="line">participant &quot;model_manager&quot; as MM</span><br><span class="line">U -&gt; A : POST /artifacts (model.bin, v2)</span><br><span class="line">A -&gt; M : 存桶 + 登记 sha256</span><br><span class="line">U -&gt; A : POST /robots/007/tasks &#123;ota, artifact_id&#125;</span><br><span class="line">A -&gt; Q : cmd/task &#123;task_id, uri, sha256&#125;</span><br><span class="line">Q -&gt; B : 下行</span><br><span class="line">B -&gt; E : RobotTask(ota) Goal</span><br><span class="line">E -&gt; MM : install(artifact)</span><br><span class="line">MM -&gt; M : 下载 model.bin</span><br><span class="line">MM -&gt; MM : sha256 校验 + 自检 + 切槽</span><br><span class="line">E --&gt; B : Feedback(download/verify/install/restart)</span><br><span class="line">B -&gt; Q : task 事件 + reported.model_ver=v2</span><br><span class="line">Q -&gt; A : 任务 SUCCEEDED + 影子更新</span><br><span class="line">U -&gt; A : GET /robots/007/shadow → reported.model_ver = v2 ✅</span><br><span class="line">@enduml</span><br></pre></td></tr></table></figure>
+
+<h3 id="11-4-2-v0-2-部署图"><a href="#11-4-2-v0-2-部署图" class="headerlink" title="11.4.2 v0.2 部署图"></a>11.4.2 v0.2 部署图</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">title Embodied Cloud v0.2 部署图（单机 Compose）</span><br><span class="line">node &quot;你的 Mac (OrbStack)&quot; &#123;</span><br><span class="line">  node &quot;robot 容器&quot; &#123;</span><br><span class="line">    component &quot;五节点 ROS2 域\n(sim/agg/executor/bridge/model_mgr+trigger)&quot; as R</span><br><span class="line">  &#125;</span><br><span class="line">  node &quot;mqtt 容器&quot; as MQ</span><br><span class="line">  node &quot;cloud 容器&quot; &#123;</span><br><span class="line">    component &quot;FastAPI 按平面分包&quot; as C</span><br><span class="line">    database &quot;SQLite&quot; as DB</span><br><span class="line">  &#125;</span><br><span class="line">  node &quot;minio 容器&quot; &#123;</span><br><span class="line">    database &quot;artifacts 桶 / clips 桶&quot; as MI</span><br><span class="line">  &#125;</span><br><span class="line">  node &quot;dashboard&quot; as DS</span><br><span class="line">&#125;</span><br><span class="line">R &lt;--&gt; MQ</span><br><span class="line">MQ &lt;--&gt; C</span><br><span class="line">C --&gt; DB</span><br><span class="line">R --&gt; MI : 下载制品 / 上传片段</span><br><span class="line">C --&gt; MI : 制品登记</span><br><span class="line">DS --&gt; C : /state /tasks /metrics</span><br><span class="line">@enduml</span><br></pre></td></tr></table></figure>
+
+<h2 id="11-5-开发计划与演进-Roadmap"><a href="#11-5-开发计划与演进-Roadmap" class="headerlink" title="11.5 开发计划与演进 Roadmap"></a>11.5 开发计划与演进 Roadmap</h2><h3 id="11-5-1-两周开发计划（学习计划第-12-周的主体，逐日见第十四篇）"><a href="#11-5-1-两周开发计划（学习计划第-12-周的主体，逐日见第十四篇）" class="headerlink" title="11.5.1 两周开发计划（学习计划第 12 周的主体，逐日见第十四篇）"></a>11.5.1 两周开发计划（学习计划第 12 周的主体，逐日见第十四篇）</h3><table>
+<thead>
+<tr>
+<th>天</th>
+<th>交付</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>D1-2</td>
+<td>仓库骨架 + Schema + 注册激活 + 凭据接入</td>
+</tr>
+<tr>
+<td>D3-4</td>
+<td>影子服务 + 端侧 delta 应用（改 report_hz 演示）</td>
+</tr>
+<tr>
+<td>D5-7</td>
+<td>模型 OTA 闭环（制品上传→双槽切换→版本上报→坏校验和演示）</td>
+</tr>
+<tr>
+<td>D8-9</td>
+<td>触发式录制回传 + MinIO 分区 + 元数据先行</td>
+</tr>
+<tr>
+<td>D10</td>
+<td>租约回收 + 三键日志 + &#x2F;metrics + 大盘页</td>
+</tr>
+<tr>
+<td>D11-12</td>
+<td>验收清单过一遍 + 故障注入三连（3.3.10 复刻）+ runbook</td>
+</tr>
+<tr>
+<td>D13-14</td>
+<td>ADR 补写 + README 演示脚本 + 录一段 3 分钟 demo 视频（面试神器）</td>
+</tr>
+</tbody></table>
+<h3 id="11-5-2-演进-Roadmap（v0-3-→-v1-0，即求职后的入职作战图）"><a href="#11-5-2-演进-Roadmap（v0-3-→-v1-0，即求职后的入职作战图）" class="headerlink" title="11.5.2 演进 Roadmap（v0.3 → v1.0，即求职后的入职作战图）"></a>11.5.2 演进 Roadmap（v0.3 → v1.0，即求职后的入职作战图）</h3><table>
+<thead>
+<tr>
+<th>版本</th>
+<th>升级</th>
+<th>对应篇章</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>v0.3</td>
+<td>mTLS + SROS2 测试 CA、制品真验签、Temporal 替换任务表轮询</td>
+<td>9.2&#x2F;9.3、4.7.3</td>
+</tr>
+<tr>
+<td>v0.4</td>
+<td>PG+Redis+CH 替换 SQLite、Kafka 入链、Grafana 大盘</td>
+<td>4.1.5、4.8</td>
+</tr>
+<tr>
+<td>v0.5</td>
+<td>Gazebo 仿真机器人替身进 CI、开环回放最小版</td>
+<td>8.2.2、7.7.5</td>
+</tr>
+<tr>
+<td>v0.8</td>
+<td>多机器人 + 站点边缘容器（缓存+GitOps）</td>
+<td>4.9</td>
+</tr>
+<tr>
+<td>v1.0</td>
+<td>LangGraph Agent 面（自然语言下任务）+ 灰度引擎雏形</td>
+<td>4.10、4.3.7</td>
+</tr>
+</tbody></table>
+<h3 id="11-5-3-简历与面试用法"><a href="#11-5-3-简历与面试用法" class="headerlink" title="11.5.3 简历与面试用法"></a>11.5.3 简历与面试用法</h3><p>简历一句话：「设计并实现 Embodied Cloud Platform：机器人接入&#x2F;影子&#x2F;模型 OTA&#x2F;触发回传&#x2F;任务租约的最小闭环，架构对标企业级八平面参考架构（可现场演示）」。面试展开路径：大盘演示 2 分钟 → 被问任一模块 → 打开对应 <code>docs/adr/</code> 与本书对应篇章的设计 → 讲「玩具版 vs 生产版」差异（每个简化点都有产品化答案）——<strong>作品的价值不在代码量，在每一行都可向上辩护</strong>。</p>
+<h2 id="11-6-本篇总结"><a href="#11-6-本篇总结" class="headerlink" title="11.6 本篇总结"></a>11.6 本篇总结</h2><h3 id="11-6-1-核心结论"><a href="#11-6-1-核心结论" class="headerlink" title="11.6.1 核心结论"></a>11.6.1 核心结论</h3><ol>
+<li>v0.2 &#x3D; 八平面的可运行缩影：目录即架构，简化点即 backlog，每个模块可向上辩护到企业设计。</li>
+<li>六条验收即六个平面的最小闭环：激活准入、影子收敛、OTA 双槽、触发回传、租约回收、可观测。</li>
+<li>影子&#x2F;租约&#x2F;双槽&#x2F;元数据先行&#x2F;分区命名——五个「玩具实现」承载了全书最重要的五个机制。</li>
+<li>两周开发计划 + 五版 Roadmap：项目同时是学习验收物、简历作品与入职作战图。</li>
+<li>3 分钟 demo 视频 + ADR 目录是面试的两件套：演示证明能做，ADR 证明会想。</li>
+</ol>
+<h3 id="11-6-2-本篇卡片索引"><a href="#11-6-2-本篇卡片索引" class="headerlink" title="11.6.2 本篇卡片索引"></a>11.6.2 本篇卡片索引</h3><p>目录即架构 · 六条验收六个平面 · 五个玩具机制 · 每行代码可向上辩护 · demo 视频加 ADR 两件套</p>
+<h3 id="11-6-3-第十二篇预告"><a href="#11-6-3-第十二篇预告" class="headerlink" title="11.6.3 第十二篇预告"></a>11.6.3 第十二篇预告</h3><p>作品在手，进入考场。第十二篇《面试宝典》按岗位族组织高频题与标准答案：机器人平台架构师、AI 平台架构师、RobotOps&#x2F;FleetOps、ROS2 系统、VLA 工程、边缘 AI、数据平台、Agent 平台——每题给「要点式标准答案 + 本书出处 + 加分项」，并附自我介绍与项目讲述模板。</p>
+<hr>
+<hr>
+<p><a href="./10-%E4%BC%81%E4%B8%9A%E7%BA%A7%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84.md">⬅️ 上一篇</a> ｜ <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">🔝 返回总目录</a> ｜ <a href="./12-%E9%9D%A2%E8%AF%95%E5%AE%9D%E5%85%B8.md">下一篇 ➡️</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/07/14/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-13-%E7%9F%A5%E8%AF%86%E8%BF%81%E7%A7%BB%E5%9C%B0%E5%9B%BE/">具身智能知识迁移地图</a></h3>
+        <p>全书承诺的核心资产。320 项四列映射（产业物联网 | 机器人 | 迁移方式 | 需补齐），按 15 个领域分组编号（M001~M320）。</p>
+        <a class="btn primary" href="/2026/07/14/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-13-%E7%9F%A5%E8%AF%86%E8%BF%81%E7%A7%BB%E5%9C%B0%E5%9B%BE/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/06/04/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-10-%E4%BC%81%E4%B8%9A%E7%BA%A7%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：具身智能企业级参考架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AF%87-%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE%EF%BC%9AEmbodied-Cloud-Platform-v0-2" data-toc-target="第十一篇-实战项目：Embodied-Cloud-Platform-v0-2"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第十一篇实战项目：Embodied Cloud Platform v0.2</span></a><a class="toc-level-2" href="#11-0-%E9%A1%B9%E7%9B%AE%E5%AE%9A%E4%BD%8D%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="11-0-项目定位与验收"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">11.0 项目定位与验收</span></a><a class="toc-level-3" href="#11-0-1-v0-1-%E2%86%92-v0-2-%E5%8D%87%E7%BA%A7%E6%B8%85%E5%8D%95" data-toc-target="11-0-1-v0-1-→-v0-2-升级清单"><span class="toc-text">11.0.1 v0.1 → v0.2 升级清单</span></a><a class="toc-level-3" href="#11-0-2-%E9%AA%8C%E6%94%B6%E6%A0%87%E5%87%86%EF%BC%88%E9%A1%B9%E7%9B%AE%E5%8D%B3%E8%AF%81%E4%B9%A6%EF%BC%89" data-toc-target="11-0-2-验收标准（项目即证书）"><span class="toc-text">11.0.2 验收标准（项目即证书）</span></a><a class="toc-level-2" href="#11-1-%E4%BB%93%E5%BA%93%E4%B8%8E%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84" data-toc-target="11-1-仓库与目录结构"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">11.1 仓库与目录结构</span></a><a class="toc-level-3" href="#11-1-1-Git-%E4%BB%93%E5%BA%93%E5%B8%83%E5%B1%80%EF%BC%88monorepo%EF%BC%8C%E6%95%99%E5%AD%A6%E4%BC%98%E5%85%88%EF%BC%89" data-toc-target="11-1-1-Git-仓库布局（monorepo，教学优先）"><span class="toc-text">11.1.1 Git 仓库布局（monorepo，教学优先）</span></a><a class="toc-level-3" href="#11-1-2-Compose-%E5%85%A8%E5%AE%B6%E6%A1%B6%EF%BC%886-%E6%9C%8D%E5%8A%A1%EF%BC%89" data-toc-target="11-1-2-Compose-全家桶（6-服务）"><span class="toc-text">11.1.2 Compose 全家桶（6 服务）</span></a><a class="toc-level-2" href="#11-2-%E6%95%B0%E6%8D%AE%E5%BA%93-Schema-%E4%B8%8E%E6%8E%A5%E5%8F%A3%E8%AE%BE%E8%AE%A1" data-toc-target="11-2-数据库-Schema-与接口设计"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">11.2 数据库 Schema 与接口设计</span></a><a class="toc-level-3" href="#11-2-1-SQLite-Schema%EF%BC%88%E4%BA%91%E7%AB%AF%E5%94%AF%E4%B8%80%E7%8A%B6%E6%80%81%E6%BA%90%EF%BC%89" data-toc-target="11-2-1-SQLite-Schema（云端唯一状态源）"><span class="toc-text">11.2.1 SQLite Schema（云端唯一状态源）</span></a><a class="toc-level-3" href="#11-2-2-REST-%E6%8E%A5%E5%8F%A3%E6%B8%85%E5%8D%95%EF%BC%88cloud-app%EF%BC%89" data-toc-target="11-2-2-REST-接口清单（cloud-app）"><span class="toc-text">11.2.2 REST 接口清单（cloud/app）</span></a><a class="toc-level-3" href="#11-2-3-MQTT-%E4%B8%BB%E9%A2%98%E5%A5%91%E7%BA%A6%EF%BC%88v0-1-%E4%B9%8B%E4%B8%8A%E6%96%B0%E5%A2%9E%E4%B8%A4%E6%97%8F%EF%BC%89" data-toc-target="11-2-3-MQTT-主题契约（v0-1-之上新增两族）"><span class="toc-text">11.2.3 MQTT 主题契约（v0.1 之上新增两族）</span></a><a class="toc-level-2" href="#11-3-%E6%A0%B8%E5%BF%83%E6%96%B0%E6%A8%A1%E5%9D%97%E4%BB%A3%E7%A0%81" data-toc-target="11-3-核心新模块代码"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">11.3 核心新模块代码</span></a><a class="toc-level-3" href="#11-3-1-%E5%BD%B1%E5%AD%90%E6%9C%8D%E5%8A%A1%EF%BC%88cloud-app-device-py-%E5%85%B3%E9%94%AE%E6%AE%B5%EF%BC%89" data-toc-target="11-3-1-影子服务（cloud-app-device-py-关键段）"><span class="toc-text">11.3.1 影子服务（cloud/app/device.py 关键段）</span></a><a class="toc-level-3" href="#11-3-2-%E7%AB%AF%E4%BE%A7%E6%A8%A1%E5%9E%8B%E7%AE%A1%E7%90%86%E5%99%A8%EF%BC%88model-manager-py%EF%BC%8C%E5%8F%8C%E6%A7%BD%E6%9C%80%E5%B0%8F%E5%AE%9E%E7%8E%B0%EF%BC%89" data-toc-target="11-3-2-端侧模型管理器（model-manager-py，双槽最小实现）"><span class="toc-text">11.3.2 端侧模型管理器（model_manager.py，双槽最小实现）</span></a><a class="toc-level-3" href="#11-3-3-%E8%A7%A6%E5%8F%91%E5%BC%8F%E5%BD%95%E5%88%B6%EF%BC%88bag-trigger-py-%E6%80%9D%E8%B7%AF%E6%AE%B5%EF%BC%89" data-toc-target="11-3-3-触发式录制（bag-trigger-py-思路段）"><span class="toc-text">11.3.3 触发式录制（bag_trigger.py 思路段）</span></a><a class="toc-level-3" href="#11-3-4-%E7%A7%9F%E7%BA%A6%E5%9B%9E%E6%94%B6%EF%BC%88cloud-app-task-py-%E5%AE%9A%E6%97%B6%E5%99%A8%EF%BC%89" data-toc-target="11-3-4-租约回收（cloud-app-task-py-定时器）"><span class="toc-text">11.3.4 租约回收（cloud/app/task.py 定时器）</span></a><a class="toc-level-2" href="#11-4-%E6%B6%88%E6%81%AF%E6%B5%81%E6%97%B6%E5%BA%8F%E4%B8%8E%E9%83%A8%E7%BD%B2%E5%9B%BE" data-toc-target="11-4-消息流时序与部署图"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">11.4 消息流时序与部署图</span></a><a class="toc-level-3" href="#11-4-1-%E6%A8%A1%E5%9E%8B-OTA-v0-2-%E5%85%A8%E9%93%BE%E8%B7%AF%E6%97%B6%E5%BA%8F" data-toc-target="11-4-1-模型-OTA-v0-2-全链路时序"><span class="toc-text">11.4.1 模型 OTA v0.2 全链路时序</span></a><a class="toc-level-3" href="#11-4-2-v0-2-%E9%83%A8%E7%BD%B2%E5%9B%BE" data-toc-target="11-4-2-v0-2-部署图"><span class="toc-text">11.4.2 v0.2 部署图</span></a><a class="toc-level-2" href="#11-5-%E5%BC%80%E5%8F%91%E8%AE%A1%E5%88%92%E4%B8%8E%E6%BC%94%E8%BF%9B-Roadmap" data-toc-target="11-5-开发计划与演进-Roadmap"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">11.5 开发计划与演进 Roadmap</span></a><a class="toc-level-3" href="#11-5-1-%E4%B8%A4%E5%91%A8%E5%BC%80%E5%8F%91%E8%AE%A1%E5%88%92%EF%BC%88%E5%AD%A6%E4%B9%A0%E8%AE%A1%E5%88%92%E7%AC%AC-12-%E5%91%A8%E7%9A%84%E4%B8%BB%E4%BD%93%EF%BC%8C%E9%80%90%E6%97%A5%E8%A7%81%E7%AC%AC%E5%8D%81%E5%9B%9B%E7%AF%87%EF%BC%89" data-toc-target="11-5-1-两周开发计划（学习计划第-12-周的主体，逐日见第十四篇）"><span class="toc-text">11.5.1 两周开发计划（学习计划第 12 周的主体，逐日见第十四篇）</span></a><a class="toc-level-3" href="#11-5-2-%E6%BC%94%E8%BF%9B-Roadmap%EF%BC%88v0-3-%E2%86%92-v1-0%EF%BC%8C%E5%8D%B3%E6%B1%82%E8%81%8C%E5%90%8E%E7%9A%84%E5%85%A5%E8%81%8C%E4%BD%9C%E6%88%98%E5%9B%BE%EF%BC%89" data-toc-target="11-5-2-演进-Roadmap（v0-3-→-v1-0，即求职后的入职作战图）"><span class="toc-text">11.5.2 演进 Roadmap（v0.3 → v1.0，即求职后的入职作战图）</span></a><a class="toc-level-3" href="#11-5-3-%E7%AE%80%E5%8E%86%E4%B8%8E%E9%9D%A2%E8%AF%95%E7%94%A8%E6%B3%95" data-toc-target="11-5-3-简历与面试用法"><span class="toc-text">11.5.3 简历与面试用法</span></a><a class="toc-level-2" href="#11-6-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="11-6-本篇总结"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">11.6 本篇总结</span></a><a class="toc-level-3" href="#11-6-1-%E6%A0%B8%E5%BF%83%E7%BB%93%E8%AE%BA" data-toc-target="11-6-1-核心结论"><span class="toc-text">11.6.1 核心结论</span></a><a class="toc-level-3" href="#11-6-2-%E6%9C%AC%E7%AF%87%E5%8D%A1%E7%89%87%E7%B4%A2%E5%BC%95" data-toc-target="11-6-2-本篇卡片索引"><span class="toc-text">11.6.2 本篇卡片索引</span></a><a class="toc-level-3" href="#11-6-3-%E7%AC%AC%E5%8D%81%E4%BA%8C%E7%AF%87%E9%A2%84%E5%91%8A" data-toc-target="11-6-3-第十二篇预告"><span class="toc-text">11.6.3 第十二篇预告</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-ai-engineering/" style="--rail: 85%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">11 / 13</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AF%87-%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE%EF%BC%9AEmbodied-Cloud-Platform-v0-2" data-toc-target="第十一篇-实战项目：Embodied-Cloud-Platform-v0-2" data-title="01 · 第十一篇实战项目：Embodied Cloud Platform v0.2" aria-label="第十一篇实战项目：Embodied Cloud Platform v0.2"></a><a class="toc-strip__dot" href="#11-0-%E9%A1%B9%E7%9B%AE%E5%AE%9A%E4%BD%8D%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="11-0-项目定位与验收" data-title="02 · 11.0 项目定位与验收" aria-label="11.0 项目定位与验收"></a><a class="toc-strip__dot" href="#11-1-%E4%BB%93%E5%BA%93%E4%B8%8E%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84" data-toc-target="11-1-仓库与目录结构" data-title="03 · 11.1 仓库与目录结构" aria-label="11.1 仓库与目录结构"></a><a class="toc-strip__dot" href="#11-2-%E6%95%B0%E6%8D%AE%E5%BA%93-Schema-%E4%B8%8E%E6%8E%A5%E5%8F%A3%E8%AE%BE%E8%AE%A1" data-toc-target="11-2-数据库-Schema-与接口设计" data-title="04 · 11.2 数据库 Schema 与接口设计" aria-label="11.2 数据库 Schema 与接口设计"></a><a class="toc-strip__dot" href="#11-3-%E6%A0%B8%E5%BF%83%E6%96%B0%E6%A8%A1%E5%9D%97%E4%BB%A3%E7%A0%81" data-toc-target="11-3-核心新模块代码" data-title="05 · 11.3 核心新模块代码" aria-label="11.3 核心新模块代码"></a><a class="toc-strip__dot" href="#11-4-%E6%B6%88%E6%81%AF%E6%B5%81%E6%97%B6%E5%BA%8F%E4%B8%8E%E9%83%A8%E7%BD%B2%E5%9B%BE" data-toc-target="11-4-消息流时序与部署图" data-title="06 · 11.4 消息流时序与部署图" aria-label="11.4 消息流时序与部署图"></a><a class="toc-strip__dot" href="#11-5-%E5%BC%80%E5%8F%91%E8%AE%A1%E5%88%92%E4%B8%8E%E6%BC%94%E8%BF%9B-Roadmap" data-toc-target="11-5-开发计划与演进-Roadmap" data-title="07 · 11.5 开发计划与演进 Roadmap" aria-label="11.5 开发计划与演进 Roadmap"></a><a class="toc-strip__dot" href="#11-6-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="11-6-本篇总结" data-title="08 · 11.6 本篇总结" aria-label="11.6 本篇总结"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身智能-11-实战项目","title":"具身智能实战项目","url":"/2026/06/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-11-%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE/","path":"embodied-ai-engineering","index":10,"total":13,"next":{"title":"具身智能知识迁移地图","url":"/2026/07/14/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-13-%E7%9F%A5%E8%AF%86%E8%BF%81%E7%A7%BB%E5%9C%B0%E5%9B%BE/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

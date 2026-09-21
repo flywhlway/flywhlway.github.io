@@ -1,0 +1,714 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Skill 运行时 · 飞轮之道</title>
+<meta name="description" content="企业级 Skill Registry 平台工程手册 · 第 07 篇前置阅读：01 篇（状态机 + Runtime 四职责：注入路由表、存储寻址、沙箱、遥测）、06 篇（会话快照的来源）本篇回答：技能在执行现场的完整生命周期——Loaded / Activated / Executed / Obse…">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/11/25/agent-systems/Skill%E5%B9%B3%E5%8F%B0-07-%E8%BF%90%E8%A1%8C%E6%97%B6/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Skill 运行时 · 飞轮之道">
+<meta property="og:description" content="企业级 Skill Registry 平台工程手册 · 第 07 篇前置阅读：01 篇（状态机 + Runtime 四职责：注入路由表、存储寻址、沙箱、遥测）、06 篇（会话快照的来源）本篇回答：技能在执行现场的完整生命周期——Loaded / Activated / Executed / Obse…">
+<meta property="og:url" content="https://flywhlway.github.io/2025/11/25/agent-systems/Skill%E5%B9%B3%E5%8F%B0-07-%E8%BF%90%E8%A1%8C%E6%97%B6/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/skill-platform/">平台工程</a><a class="series-chip" href="/paths/skill-platform/" title="查看学习路径">第 6 / 11 篇</a>
+    </div>
+    <h1>Skill 运行时</h1>
+    <p class="article-deck">企业级 Skill Registry 平台工程手册 · 第 07 篇前置阅读：01 篇（状态机 + Runtime 四职责：注入路由表、存储寻址、沙箱、遥测）、06 篇（会话快照的…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>15 分钟</span>
+      <span>发布于 2025.11</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/Skill/">#Skill</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="07-·-Skill-Runtime：加载、隔离、恢复与全链路观测"><a href="#07-·-Skill-Runtime：加载、隔离、恢复与全链路观测" class="headerlink" title="07 · Skill Runtime：加载、隔离、恢复与全链路观测"></a>07 · Skill Runtime：加载、隔离、恢复与全链路观测</h2><blockquote>
+<p>企业级 Skill Registry 平台工程手册 · 第 07 篇<br>前置阅读：01 篇（状态机 + Runtime 四职责：注入路由表、存储寻址、沙箱、遥测）、06 篇（会话快照的来源）<br>本篇回答：<strong>技能在执行现场的完整生命周期——Loaded &#x2F; Activated &#x2F; Executed &#x2F; Observed &#x2F; Cancelled &#x2F; Retried &#x2F; Recovered &#x2F; Measured——每个动词背后的机制与失败模式。</strong></p>
+</blockquote>
+<hr>
+<h2 id="1-概述：Runtime-的克制"><a href="#1-概述：Runtime-的克制" class="headerlink" title="1. 概述：Runtime 的克制"></a>1. 概述：Runtime 的克制</h2><p>01 篇已立宪：激活权在模型，Runtime 只做四件事。本篇是这四件事的实现细节，但先重申克制原则，因为 Runtime 是最容易”好心办坏事”的组件——每一个”帮模型一把”的旁路逻辑（自动注入、自动重试语义化、输出自动修复）都在侵蚀体系的可预测性。Runtime 的美德是<strong>忠实</strong>：忠实地提供环境、忠实地记录发生的一切、忠实地不做决策。</p>
+<h2 id="2-运行时架构"><a href="#2-运行时架构" class="headerlink" title="2. 运行时架构"></a>2. 运行时架构</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">┌────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                        Session Manager                          │</span><br><span class="line">│  · 会话生命周期 · 快照绑定(snapshot_id) · 取消令牌树              │</span><br><span class="line">├────────────────────────────────────────────────────────────────┤</span><br><span class="line">│  Context Assembler          │  Tool Gateway                     │</span><br><span class="line">│  · L1 渲染(冻结集→路由表)     │  · 工具调用统一入口                 │</span><br><span class="line">│  · 轮次上下文组装             │  · onSkillRead 鉴权钩子(01附录B)    │</span><br><span class="line">│  · 上下文预算核算             │  · 调用级审计 + trace 注入          │</span><br><span class="line">├─────────────────────────────┴───────────────────────────────────┤</span><br><span class="line">│  Sandbox Pool                                                    │</span><br><span class="line">│  · profile 化隔离环境 · 预热池 · 资源配额 · 文件系统布局            │</span><br><span class="line">├──────────────────────────────────────────────────────────────────┤</span><br><span class="line">│  Telemetry Pipeline                                               │</span><br><span class="line">│  · OTel trace/metrics/logs · 尽力而为, 永不阻塞主路径              │</span><br><span class="line">└──────────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-Loaded：加载与上下文组装"><a href="#3-Loaded：加载与上下文组装" class="headerlink" title="3. Loaded：加载与上下文组装"></a>3. Loaded：加载与上下文组装</h2><p>会话初始化的组装顺序（顺序即优先级，进平台规范）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">1. 平台系统指令(含安全底线)         ← 不可被下游覆盖</span><br><span class="line">2. surface 适配指令</span><br><span class="line">3. L1 路由表(冻结集渲染, 域卡片 + 域内排序策略见 02 附录 B.2)</span><br><span class="line">4. 租户级定制(语气/格式偏好)</span><br><span class="line">5. 会话记忆/用户上下文(§8)</span><br><span class="line">6. 对话历史</span><br></pre></td></tr></table></figure>
+
+<p>预算核算在第 3 步实施硬闸：L1 总量超预算（01 篇 5% 线）时<strong>降级为两级路由而不是截断列表</strong>——静默截断意味着部分技能随机消失，是最难排查的一类”为什么没触发”。降级动作本身发遥测事件，运营可见。</p>
+<h2 id="4-Activated：激活观测与二次鉴权"><a href="#4-Activated：激活观测与二次鉴权" class="headerlink" title="4. Activated：激活观测与二次鉴权"></a>4. Activated：激活观测与二次鉴权</h2><p>Tool Gateway 对技能路径读取的拦截逻辑：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">on_tool_call</span>(<span class="params">session, call</span>):</span><br><span class="line">    <span class="keyword">if</span> call.tool <span class="keyword">in</span> (<span class="string">&quot;view&quot;</span>, <span class="string">&quot;cat&quot;</span>) <span class="keyword">and</span> is_skill_path(call.path):</span><br><span class="line">        ref, ver = resolve_from_snapshot(session.snapshot, call.path)</span><br><span class="line">        decision = authz.check_activation(session.principal, ref)   <span class="comment"># 二次鉴权</span></span><br><span class="line">        <span class="keyword">if</span> decision == PENDING_APPROVAL:          <span class="comment"># 04 篇 activation_approval</span></span><br><span class="line">            emit(<span class="string">&quot;skill_activation_blocked&quot;</span>, ref, reason=<span class="string">&quot;approval_required&quot;</span>)</span><br><span class="line">            <span class="keyword">return</span> ToolError(<span class="string">&quot;该技能激活需 &#123;&#125; 审批, 已创建审批单 &#123;&#125;&quot;</span>.<span class="built_in">format</span>(</span><br><span class="line">                decision.approver_role, decision.ticket))</span><br><span class="line">        emit(<span class="string">&quot;skill_activated&quot;</span>, ref, ver, l1_position=..., turn=...)</span><br><span class="line">    <span class="keyword">return</span> proceed(call)</span><br></pre></td></tr></table></figure>
+
+<p>两个细节：审批阻断返回的是<strong>结构化工具错误而非静默失败</strong>——模型能读懂并向用户解释审批流程（04 篇 §7 的体验设计在此落地）；<code>resolve_from_snapshot</code> 保证读到的永远是快照版本，即使磁盘上已有新版缓存。</p>
+<h2 id="5-Executed：沙箱与脚本执行"><a href="#5-Executed：沙箱与脚本执行" class="headerlink" title="5. Executed：沙箱与脚本执行"></a>5. Executed：沙箱与脚本执行</h2><h3 id="5-1-沙箱-profile-体系"><a href="#5-1-沙箱-profile-体系" class="headerlink" title="5.1 沙箱 profile 体系"></a>5.1 沙箱 profile 体系</h3><p>技能 manifest 声明 <code>sandbox_profile</code>，Runtime 按 profile 实例化隔离环境：</p>
+<table>
+<thead>
+<tr>
+<th>profile</th>
+<th>网络</th>
+<th>文件系统</th>
+<th>典型技能</th>
+<th>隔离技术建议</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>offline-analysis</code></td>
+<td>无</td>
+<td>skill 只读 + uploads 只读 + workspace 读写</td>
+<td>03 篇两技能</td>
+<td>容器 + seccomp 默认档</td>
+</tr>
+<tr>
+<td><code>net-restricted</code></td>
+<td>域名白名单（经 egress 代理）</td>
+<td>同上</td>
+<td>需拉包&#x2F;查内网 API 的技能</td>
+<td>容器 + egress 代理</td>
+</tr>
+<tr>
+<td><code>privileged-build</code></td>
+<td>白名单</td>
+<td>同上 + 构建缓存卷</td>
+<td>前端构建类</td>
+<td>gVisor&#x2F;Kata（不可信代码强隔离）</td>
+</tr>
+</tbody></table>
+<p>隔离技术选型的判据一句话：<strong>执行的代码是谁写的</strong>。技能 scripts 经过发布评审属”半可信”，容器级隔离够用；技能执行中<strong>模型现场生成的代码</strong>（临时脚本）不可信度更高，值得上用户态内核（gVisor）或轻量虚机（Kata）——同一沙箱池按 profile 混部两档。</p>
+<h3 id="5-2-文件系统布局（沙箱内视角）"><a href="#5-2-文件系统布局（沙箱内视角）" class="headerlink" title="5.2 文件系统布局（沙箱内视角）"></a>5.2 文件系统布局（沙箱内视角）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">/skills/&lt;snapshot&gt;/…      只读, 挂载自节点缓存的会话快照</span><br><span class="line">/uploads/                 只读, 用户本次上传</span><br><span class="line">/workspace/               读写, 会话私有, 会话结束按保留策略处理</span><br><span class="line">/outputs/                 读写, 交付物落点(present 给用户的唯一来源)</span><br></pre></td></tr></table></figure>
+
+<p><code>/skills</code> 只读是供应链防线的运行时一环：任何”执行中技能被改写”都物理不可能，脚本自我修改、交叉污染两类攻击面直接闭合。</p>
+<h3 id="5-3-执行协议：超时、流式与输出纪律"><a href="#5-3-执行协议：超时、流式与输出纪律" class="headerlink" title="5.3 执行协议：超时、流式与输出纪律"></a>5.3 执行协议：超时、流式与输出纪律</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">超时三层:  单工具调用 ≤120s(profile 可调) → 单轮 ≤10min → 会话空闲 ≤2h</span><br><span class="line">           脚本自身应在 SKILL.md 声明预期时长, 超预期×2 即调用级超时</span><br><span class="line"></span><br><span class="line">流式输出:  长脚本 stdout 流式回传模型可见缓冲, 但按「稳定块」切分——</span><br><span class="line">           半行/进度条刷屏不进上下文(\r 折叠), 防 token 泄洪</span><br><span class="line"></span><br><span class="line">输出纪律:  stdout 硬顶(默认 32KB), 超顶截断策略 = 头 8K + 尾 8K + 截断标记</span><br><span class="line">           与行数统计。脚本规范(08 篇 S 系列)要求大结果落文件、</span><br><span class="line">           stdout 只打摘要与文件路径——03 篇脚本全部遵守此协议。</span><br><span class="line">exit code: 0 成功 / 1 业务失败(证据不足等, 模型可读 stderr 决策)</span><br><span class="line">           / 2 用法错误 / 124 超时(Runtime 注入) / 137 OOM</span><br></pre></td></tr></table></figure>
+
+<p>exit code 语义约定看似琐碎，实为<strong>模型错误恢复能力的地基</strong>：模型看到 <code>1 + stderr 说明</code>会走 SKILL.md 的 fallback 分支；看到 <code>137</code> 会改用分片策略。没有约定，一切非零退出对模型都是同一团迷雾。</p>
+<h2 id="6-Cancelled-Retried：取消与重试"><a href="#6-Cancelled-Retried：取消与重试" class="headerlink" title="6. Cancelled &#x2F; Retried：取消与重试"></a>6. Cancelled &#x2F; Retried：取消与重试</h2><p><strong>取消</strong>是树形传播：用户停止 → 会话取消令牌 → 当轮所有子令牌（进行中工具调用、沙箱进程组 SIGTERM→宽限 5s→SIGKILL）。两条纪律：</p>
+<ol>
+<li>取消后沙箱 <code>/workspace</code> <strong>保留</strong>——用户”停一下”往往接着”换个方式继续”，半成品证据文件是恢复的资本（§7）；</li>
+<li>取消事件进遥测并标注取消时的活动技能——高取消率技能是”执行过程让用户失去耐心”的直接信号，进 05 篇质量分的负项候选。</li>
+</ol>
+<p><strong>重试</strong>的责任分层（谁的失败谁重试）:</p>
+<table>
+<thead>
+<tr>
+<th>失败层</th>
+<th>重试方</th>
+<th>策略</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>基础设施瞬态（沙箱起容器失败、缓存 miss 回源超时）</td>
+<td>Runtime 自动</td>
+<td>指数退避 ≤2 次，对模型透明</td>
+</tr>
+<tr>
+<td>脚本业务失败（exit 1）</td>
+<td>模型决策</td>
+<td>按 SKILL.md fallback，Runtime 不自作主张</td>
+</tr>
+<tr>
+<td>模型行为失败（激活了却没按流程走）</td>
+<td>不重试</td>
+<td>属评测问题，记录进 10 篇的执行评测样本</td>
+</tr>
+</tbody></table>
+<p>Runtime 自动重试的边界要收紧到”结果必然幂等”的层面——脚本执行不在其中（脚本可能已写了半个输出文件），这正是 08 篇脚本规范要求幂等写（临时文件 + 原子 rename）的原因：幂等的脚本让模型层重试变得安全。</p>
+<h2 id="7-Recovered：Checkpoint-与恢复"><a href="#7-Recovered：Checkpoint-与恢复" class="headerlink" title="7. Recovered：Checkpoint 与恢复"></a>7. Recovered：Checkpoint 与恢复</h2><p>技能体系的 checkpoint 与工作流引擎不同——<strong>没有引擎状态可存，状态就是文件与对话</strong>。恢复设计因此轻量而务实：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">checkpoint 的实体 = /workspace 中的中间产物(parsed.json / classified.json …)</span><br><span class="line">                  + 对话历史(模型自身的推理轨迹)</span><br><span class="line"></span><br><span class="line">恢复协议(写进 SKILL.md 规范而非引擎):</span><br><span class="line">  长流程技能的每个昂贵步骤必须落中间文件, 且 SKILL.md 开头指令包含</span><br><span class="line">  &quot;若 workspace 已存在 parsed.json 且其 meta 与输入匹配, 跳过第 1 步&quot;</span><br></pre></td></tr></table></figure>
+
+<p>03 篇 Skill A 的三段脚本管道天然构成三个 checkpoint。会话中断恢复（新会话续做）依赖两件事：<code>/workspace</code> 按租户策略保留（默认 24h）+ 会话可携带前会话 workspace 引用。<strong>刻意不做</strong>：透明的引擎级断点续跑——那要求把模型推理状态图灵完备地外化，成本巨大且与”状态就是文件”的简约模型冲突。多智能体平台若已有 LangGraph 级 checkpoint 引擎，二者边界划在：引擎管 Agent 图状态，技能管自己的证据文件，互不越界。</p>
+<h2 id="8-Memory：技能与记忆的关系"><a href="#8-Memory：技能与记忆的关系" class="headerlink" title="8. Memory：技能与记忆的关系"></a>8. Memory：技能与记忆的关系</h2><p>原则一条：<strong>技能是无状态的流程知识，记忆是有状态的用户事实，二者单向可读</strong>。</p>
+<ul>
+<li>技能执行<strong>可读</strong>会话记忆（模型本来就看得见），用于个性化执行；</li>
+<li>技能<strong>不得指令性写入</strong>长期记忆（SKILL.md 里不允许出现”将 X 写入用户记忆”）——记忆写入是平台级行为，有自己的隐私过滤管道，技能作为分发内容不得携带绕过该管道的指令。发布流水线的指令扫描（06 篇 §10）包含此模式;</li>
+<li>技能自身的”经验积累”（例如码表补充）走<strong>发版</strong>而不是运行时自改——03 篇 classify_failure 对未映射码的处理是”提示维护者回填规则”而非自写规则，就是这条原则的实例。</li>
+</ul>
+<h2 id="9-Observed-Measured：遥测、Tracing-与指标"><a href="#9-Observed-Measured：遥测、Tracing-与指标" class="headerlink" title="9. Observed &#x2F; Measured：遥测、Tracing 与指标"></a>9. Observed &#x2F; Measured：遥测、Tracing 与指标</h2><h3 id="9-1-OTel-Trace-模型"><a href="#9-1-OTel-Trace-模型" class="headerlink" title="9.1 OTel Trace 模型"></a>9.1 OTel Trace 模型</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">span 层级:</span><br><span class="line">session (root)</span><br><span class="line"> └─ turn[n]</span><br><span class="line">     ├─ context_assembly            attrs: l1_tokens, skills_injected, snapshot_id</span><br><span class="line">     ├─ model_inference[k]          attrs: tokens_in/out</span><br><span class="line">     ├─ skill_activation            attrs: skill_ref, version, l1_position,</span><br><span class="line">     │                                     approval_state</span><br><span class="line">     └─ tool_call[j]</span><br><span class="line">         └─ sandbox_execution       attrs: profile, script_path(role=script 校验),</span><br><span class="line">                                          exit_code, duration, stdout_bytes,</span><br><span class="line">                                          truncated, cpu_ms, mem_peak</span><br></pre></td></tr></table></figure>
+
+<p>属性约定的两个非显然项：<code>snapshot_id</code> 打在每个 turn（配合 05 篇 <code>as_of</code> 构成完整复现能力）；<code>script_path</code> 与 manifest <code>file_tree</code> 的 role 做<strong>运行时一致性校验</strong>——执行了一个 role≠script 的文件路径立即告警，这是”声明与行为偏差检测”（04 篇 §6）的落地点。</p>
+<h3 id="9-2-指标体系（按消费方组织）"><a href="#9-2-指标体系（按消费方组织）" class="headerlink" title="9.2 指标体系（按消费方组织）"></a>9.2 指标体系（按消费方组织）</h3><table>
+<thead>
+<tr>
+<th>消费方</th>
+<th>指标</th>
+<th>口径要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>族 owner</td>
+<td>激活率、执行成功率、fallback 进入率、P95 激活时延、单次执行 token 成本</td>
+<td>全部按 skill_ref×version 分维，灰度对比即两 version 并排</td>
+</tr>
+<tr>
+<td>平台 SRE</td>
+<td>沙箱池饱和度、冷启动 P95、缓存命中率、L3 回源时延、遥测丢弃率</td>
+<td>沙箱预热池水位是首要容量信号</td>
+</tr>
+<tr>
+<td>质量体系(10 篇)</td>
+<td>correction 率、取消率、重试率、examples 线上抽检通过率</td>
+<td>喂给 05 篇质量分与 SLO 看板</td>
+</tr>
+<tr>
+<td>财务&#x2F;容量</td>
+<td>token 成本按租户×族聚合、沙箱 CPU 秒</td>
+<td>技能中心的成本分摊依据</td>
+</tr>
+</tbody></table>
+<p>遥测纪律重申：<strong>尽力而为，永不阻塞</strong>（06 篇 AP-7 的运行时同款）。丢遥测降质量可观测性，阻塞主路径降服务本身——前者可容忍可补救。</p>
+<h2 id="10-失败模式目录"><a href="#10-失败模式目录" class="headerlink" title="10. 失败模式目录"></a>10. 失败模式目录</h2><table>
+<thead>
+<tr>
+<th>#</th>
+<th>失败点</th>
+<th>症状</th>
+<th>检测</th>
+<th>处置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>F1</td>
+<td>L1 预算超限静默截断</td>
+<td>部分技能”随机”不可见</td>
+<td>组装期预算核算事件</td>
+<td>§3：降级两级路由，禁止截断</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>快照与缓存不一致</td>
+<td>激活读到新版内容</td>
+<td>digest 校验失败告警</td>
+<td>只读挂载 + digest 校验，会话报错重建</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>沙箱冷启动风暴</td>
+<td>首工具调用 P95 恶化</td>
+<td>预热池水位</td>
+<td>池容量弹性 + profile 混部配额</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>stdout 泄洪</td>
+<td>单轮 token 暴涨</td>
+<td>truncated + stdout_bytes</td>
+<td>§5.3 硬顶；违规脚本进 08 篇 lint 黑名单</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>僵尸执行</td>
+<td>取消后沙箱进程残留</td>
+<td>进程组审计</td>
+<td>令牌树 + SIGKILL 兜底 + 池回收器</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>审批阻断死循环</td>
+<td>模型反复尝试读被阻技能</td>
+<td>同 ref 连续 blocked 事件</td>
+<td>结构化错误含”不要重试”指引；3 次后 Gateway 硬闸</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>脚本读快照外路径</td>
+<td>越权读</td>
+<td>seccomp&#x2F;挂载白名单拒绝 + 告警</td>
+<td>安全事件流程（11 篇）</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>遥测管道反压</td>
+<td>主路径时延抖动</td>
+<td>管道队列水位</td>
+<td>丢弃降级，永不背压</td>
+</tr>
+</tbody></table>
+<h2 id="11-反模式"><a href="#11-反模式" class="headerlink" title="11. 反模式"></a>11. 反模式</h2><ul>
+<li><strong>AP-1 Runtime 语义化重试</strong>：模型说”再试一次”之外 Runtime 自作主张重跑脚本（§6 分层的破坏）。</li>
+<li><strong>AP-2 输出自动修复</strong>：脚本输出 JSON 微损，Gateway “好心”修复后回给模型——模型据此建立的格式信念与脚本真实行为脱钩，下次没修复就崩。忠实回传 + 让模型走 fallback。</li>
+<li><strong>AP-3 无差别强隔离</strong>：全部脚本上 Kata&#x2F;gVisor，冷启动与内存税吃掉沙箱池容量。按代码可信度分档（§5.1）。</li>
+<li><strong>AP-4 workspace 即弃</strong>：取消&#x2F;失败即清理工作区，销毁恢复资本（§6 纪律 1）。</li>
+<li><strong>AP-5 引擎级透明续跑</strong>：见 §7 “刻意不做”。</li>
+<li><strong>AP-6 遥测同步落库</strong>：见 F8。</li>
+<li><strong>AP-7 技能指令写记忆</strong>：见 §8，发布扫描 + 运行时双防。</li>
+</ul>
+<h2 id="12-生产建议与检查清单"><a href="#12-生产建议与检查清单" class="headerlink" title="12. 生产建议与检查清单"></a>12. 生产建议与检查清单</h2><ol>
+<li>组装顺序与预算硬闸进规范；降级路径有遥测事件。</li>
+<li>exit code 协议 + stdout 纪律作为脚本规范强制项，Runtime 与 08 篇 lint 双端执法。</li>
+<li>沙箱按”代码可信度”分档而非一刀切；预热池水位进容量告警。</li>
+<li>取消令牌树 + workspace 保留 + 高取消率进质量负项。</li>
+<li>checkpoint &#x3D; 中间文件协议，写进长流程技能的 SKILL.md 模板。</li>
+<li>OTel 属性约定全平台统一，snapshot_id 全链贯穿。</li>
+</ol>
+<ul>
+<li><input disabled="" type="checkbox"> onSkillRead 鉴权钩子 + 结构化审批阻断错误</li>
+<li><input disabled="" type="checkbox"> resolve_from_snapshot：激活永远读快照版本</li>
+<li><input disabled="" type="checkbox"> 三档 sandbox profile + egress 代理 + &#x2F;skills 只读</li>
+<li><input disabled="" type="checkbox"> 超时三层 + \r 折叠流式 + 32KB 硬顶截断协议</li>
+<li><input disabled="" type="checkbox"> exit code 语义表进平台规范与技能模板</li>
+<li><input disabled="" type="checkbox"> Runtime 自动重试仅限幂等基础设施层</li>
+<li><input disabled="" type="checkbox"> workspace 24h 保留 + 跨会话引用</li>
+<li><input disabled="" type="checkbox"> trace 模型五级 span + role 一致性校验</li>
+<li><input disabled="" type="checkbox"> 指标四消费方视图 + 遥测永不阻塞</li>
+<li><input disabled="" type="checkbox"> 失败模式目录 F1~F8 各有检测与处置演练</li>
+</ul>
+<hr>
+<p><em>下一篇（08）把 01~07 篇散落的规范收拢为一册可执行的工程规范总集：命名、目录、脚本、发布、测试的全套 Convention 与反模式总目录。</em></p>
+<hr>
+<h2 id="附录-A：沙箱池实现细节"><a href="#附录-A：沙箱池实现细节" class="headerlink" title="附录 A：沙箱池实现细节"></a>附录 A：沙箱池实现细节</h2><h3 id="A-1-预热池状态机与容量模型"><a href="#A-1-预热池状态机与容量模型" class="headerlink" title="A.1 预热池状态机与容量模型"></a>A.1 预热池状态机与容量模型</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">        ┌─────────┐  领取(绑定会话+profile 校验)  ┌─────────┐</span><br><span class="line">补池 ──▶│  WARM   │ ───────────────────────────▶│ ASSIGNED │</span><br><span class="line">        └────┬────┘                              └────┬─────┘</span><br><span class="line">             │ 预热超龄(&gt;30min)回收                    │ 执行完成</span><br><span class="line">             ▼                                        ▼</span><br><span class="line">        ┌─────────┐        ◀── 快速复位(同会话复用) ┌──────────┐</span><br><span class="line">        │RECYCLED │ ◀──────  完全销毁(跨会话禁复用)  │ DRAINING │</span><br><span class="line">        └─────────┘                                └──────────┘</span><br><span class="line"></span><br><span class="line">容量律: warm_target(profile) = 到达率λ(profile) × 冷启动时长 × 安全系数(1.5)</span><br><span class="line">混部律: privileged-build(gVisor/Kata)与普通容器分池计数——</span><br><span class="line">        重隔离档冷启动是普通档的 5~15 倍, 混一起算水位必然误判</span><br></pre></td></tr></table></figure>
+
+<p><strong>跨会话禁复用</strong>是硬规则：沙箱内核态残留（&#x2F;tmp、共享内存、环境变量）构成会话间信息泄露通道，复位成本再低也只允许同会话内复用。</p>
+<h3 id="A-2-资源配额基线（profile-默认档）"><a href="#A-2-资源配额基线（profile-默认档）" class="headerlink" title="A.2 资源配额基线（profile 默认档）"></a>A.2 资源配额基线（profile 默认档）</h3><table>
+<thead>
+<tr>
+<th>资源</th>
+<th>offline-analysis</th>
+<th>net-restricted</th>
+<th>privileged-build</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CPU</td>
+<td>2 核 &#x2F; cgroup cpu.max</td>
+<td>2 核</td>
+<td>4 核</td>
+</tr>
+<tr>
+<td>内存</td>
+<td>4GB（含 tmpfs）</td>
+<td>4GB</td>
+<td>8GB</td>
+</tr>
+<tr>
+<td>&#x2F;workspace 磁盘</td>
+<td>10GB</td>
+<td>10GB</td>
+<td>30GB</td>
+</tr>
+<tr>
+<td>进程数</td>
+<td>256</td>
+<td>256</td>
+<td>1024</td>
+</tr>
+<tr>
+<td>单调用墙钟</td>
+<td>120s</td>
+<td>120s</td>
+<td>600s</td>
+</tr>
+<tr>
+<td>egress</td>
+<td>无</td>
+<td>白名单代理, 10MB&#x2F;s</td>
+<td>白名单代理</td>
+</tr>
+</tbody></table>
+<p>配额突破的上报语义：OOM(137)&#x2F;超时(124) 属<strong>正常业务信号</strong>（模型据此换策略），只有”同技能同类突破率异常升高”才升级为技能质量事件——阈值告警建在聚合层而非单次事件。</p>
+<h2 id="附录-B：Tool-Gateway-审计记录-Schema"><a href="#附录-B：Tool-Gateway-审计记录-Schema" class="headerlink" title="附录 B：Tool Gateway 审计记录 Schema"></a>附录 B：Tool Gateway 审计记录 Schema</h2><p>每次工具调用一条审计记录（与 trace span 一一对应，trace 面向排障，审计面向合规）：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;audit_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;aud_01J...&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;trace_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;4bf9...&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;session_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sess_9f2c&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;tenant_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;zeekr-diag&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;principal&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;user&quot;</span><span class="punctuation">:</span> <span class="string">&quot;u_318&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;roles&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;diag-engineer&quot;</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;tool&quot;</span><span class="punctuation">:</span> <span class="string">&quot;bash&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;skill_context&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;active_skills&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;vehicle.diag:ota-log-diagnosis@2.3.1&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;snapshot_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;snap_77ab&quot;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;request_digest&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sha256:…&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;authz&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;decision&quot;</span><span class="punctuation">:</span> <span class="string">&quot;allow&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;policy_version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;authz-v41&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;sandbox&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;profile&quot;</span><span class="punctuation">:</span> <span class="string">&quot;offline-analysis&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;instance&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sbx-1102&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;outcome&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;exit_code&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span> <span class="attr">&quot;duration_ms&quot;</span><span class="punctuation">:</span> <span class="number">8412</span><span class="punctuation">,</span></span><br><span class="line">               <span class="attr">&quot;stdout_bytes&quot;</span><span class="punctuation">:</span> <span class="number">612</span><span class="punctuation">,</span> <span class="attr">&quot;truncated&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">false</span></span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data_touched&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;read&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;uploads/ota_0716.log&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">                    <span class="attr">&quot;wrote&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;workspace/parsed.json&quot;</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>request_digest</code> 存摘要不存原文——审计需要”可证明发生过什么”而非”可重读一切内容”，命令原文进受限访问的取证存储，双库分级满足合规最小化原则。<code>data_touched</code> 由沙箱层 fanotify&#x2F;审计钩子采集，是 capability 偏差检测（M-3）的数据源。</p>
+<h2 id="附录-C：OTel-属性字典（规范表）"><a href="#附录-C：OTel-属性字典（规范表）" class="headerlink" title="附录 C：OTel 属性字典（规范表）"></a>附录 C：OTel 属性字典（规范表）</h2><table>
+<thead>
+<tr>
+<th>属性</th>
+<th>级别</th>
+<th>类型</th>
+<th>取值约定</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>skill.ref</code></td>
+<td>activation&#x2F;execution</td>
+<td>string</td>
+<td>完整 namespace:name</td>
+</tr>
+<tr>
+<td><code>skill.version</code></td>
+<td>同上</td>
+<td>string</td>
+<td>SemVer 冻结值</td>
+</tr>
+<tr>
+<td><code>skill.snapshot_id</code></td>
+<td>turn 起全链</td>
+<td>string</td>
+<td>06 篇层 3</td>
+</tr>
+<tr>
+<td><code>skill.l1_position</code> &#x2F; <code>skill.l1_total</code></td>
+<td>activation</td>
+<td>int</td>
+<td>位置效应分析（02 附 B.2）</td>
+</tr>
+<tr>
+<td><code>skill.co_activated</code></td>
+<td>activation</td>
+<td>string[]</td>
+<td>本轮同场激活集</td>
+</tr>
+<tr>
+<td><code>skill.approval_state</code></td>
+<td>activation</td>
+<td>enum</td>
+<td>none&#x2F;required&#x2F;granted&#x2F;blocked</td>
+</tr>
+<tr>
+<td><code>sandbox.profile</code></td>
+<td>execution</td>
+<td>enum</td>
+<td>三档之一</td>
+</tr>
+<tr>
+<td><code>script.path</code> &#x2F; <code>script.role_ok</code></td>
+<td>execution</td>
+<td>string&#x2F;bool</td>
+<td>role 一致性校验结果</td>
+</tr>
+<tr>
+<td><code>exec.exit_code</code> &#x2F; <code>exec.truncated</code></td>
+<td>execution</td>
+<td>int&#x2F;bool</td>
+<td>§5.3 协议</td>
+</tr>
+<tr>
+<td><code>exec.cpu_ms</code> &#x2F; <code>exec.mem_peak_mb</code></td>
+<td>execution</td>
+<td>int</td>
+<td>cgroup 采样</td>
+</tr>
+<tr>
+<td><code>fallback.entered</code></td>
+<td>turn</td>
+<td>bool</td>
+<td>SKILL.md fallback 分支进入标记（模型侧埋点：执行 fallback 指令时的标准短语被 Gateway 识别，或脚本 exit 1 后继续执行即判定）</td>
+</tr>
+</tbody></table>
+<p>示例 trace（裁剪）：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span> <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;skill_activation&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;trace_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;4bf9…&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;span_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;a1…&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;parent&quot;</span><span class="punctuation">:</span> <span class="string">&quot;turn-4&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;start&quot;</span><span class="punctuation">:</span> <span class="string">&quot;…T06:42:13.190Z&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;end&quot;</span><span class="punctuation">:</span> <span class="string">&quot;…T06:42:13.204Z&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;attributes&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;skill.ref&quot;</span><span class="punctuation">:</span> <span class="string">&quot;vehicle.diag:ota-log-diagnosis&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;skill.version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2.3.1&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;skill.l1_position&quot;</span><span class="punctuation">:</span> <span class="number">17</span><span class="punctuation">,</span> <span class="attr">&quot;skill.l1_total&quot;</span><span class="punctuation">:</span> <span class="number">212</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;skill.snapshot_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;snap_77ab&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;skill.approval_state&quot;</span><span class="punctuation">:</span> <span class="string">&quot;none&quot;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="附录-D：取消令牌树参考实现"><a href="#附录-D：取消令牌树参考实现" class="headerlink" title="附录 D：取消令牌树参考实现"></a>附录 D：取消令牌树参考实现</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">CancelToken</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, parent=<span class="literal">None</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>._cancelled = <span class="literal">False</span></span><br><span class="line">        <span class="variable language_">self</span>._children: <span class="built_in">list</span>[<span class="string">&quot;CancelToken&quot;</span>] = []</span><br><span class="line">        <span class="variable language_">self</span>._cleanups: <span class="built_in">list</span>[<span class="type">Callable</span>] = []</span><br><span class="line">        <span class="keyword">if</span> parent:</span><br><span class="line">            parent._children.append(<span class="variable language_">self</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">cancel</span>(<span class="params">self, reason: <span class="built_in">str</span></span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>._cancelled:</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        <span class="variable language_">self</span>._cancelled = <span class="literal">True</span></span><br><span class="line">        <span class="keyword">for</span> child <span class="keyword">in</span> <span class="variable language_">self</span>._children:          <span class="comment"># 先深后浅: 叶子资源先释放</span></span><br><span class="line">            child.cancel(reason)</span><br><span class="line">        <span class="keyword">for</span> fn <span class="keyword">in</span> <span class="built_in">reversed</span>(<span class="variable language_">self</span>._cleanups):   <span class="comment"># 注册序逆序执行</span></span><br><span class="line">            <span class="keyword">try</span>:</span><br><span class="line">                fn(reason)</span><br><span class="line">            <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">                telemetry.emit(<span class="string">&quot;cancel_cleanup_error&quot;</span>, err=<span class="built_in">str</span>(e))</span><br><span class="line">        telemetry.emit(<span class="string">&quot;cancelled&quot;</span>, reason=reason)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 挂接点:</span></span><br><span class="line"><span class="comment"># session_token = CancelToken()</span></span><br><span class="line"><span class="comment"># turn_token    = CancelToken(session_token)</span></span><br><span class="line"><span class="comment"># exec_token    = CancelToken(turn_token)</span></span><br><span class="line"><span class="comment"># exec_token.on_cleanup(lambda r: sandbox.signal_group(&quot;SIGTERM&quot;))</span></span><br><span class="line"><span class="comment"># exec_token.on_cleanup(lambda r: sandbox.kill_after(grace=5))</span></span><br><span class="line"><span class="comment"># 注意: workspace 保留策略意味着 cleanup 列表里没有 rm -rf workspace</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="附录-E：指标定义与查询示例"><a href="#附录-E：指标定义与查询示例" class="headerlink" title="附录 E：指标定义与查询示例"></a>附录 E：指标定义与查询示例</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"># 激活率(周) —— 05 篇质量分输入</span><br><span class="line">sum(rate(skill_activated_total&#123;skill_ref=&quot;$ref&quot;&#125;[7d]))</span><br><span class="line">/ sum(rate(skill_injected_total&#123;skill_ref=&quot;$ref&quot;&#125;[7d]))</span><br><span class="line"></span><br><span class="line"># 执行成功率(exit 0 且未 fallback)</span><br><span class="line">sum(rate(exec_total&#123;skill_ref=&quot;$ref&quot;,exit_code=&quot;0&quot;,fallback=&quot;false&quot;&#125;[7d]))</span><br><span class="line">/ sum(rate(exec_total&#123;skill_ref=&quot;$ref&quot;&#125;[7d]))</span><br><span class="line"></span><br><span class="line"># 沙箱冷启动 P95 按 profile</span><br><span class="line">histogram_quantile(0.95,</span><br><span class="line">  sum(rate(sandbox_cold_start_seconds_bucket[5m])) by (le, profile))</span><br><span class="line"></span><br><span class="line"># 单技能 token 成本(L2 注入 + 执行轮次输出)按租户日聚合</span><br><span class="line">sum(increase(skill_tokens_total&#123;kind=~&quot;l2|exec&quot;&#125;[1d])) by (tenant, skill_ref)</span><br><span class="line"></span><br><span class="line"># 灰度对比: 同 ref 两 version 并排 correction 率</span><br><span class="line">sum(rate(implicit_correction_total[1d])) by (skill_version)</span><br><span class="line">/ sum(rate(skill_activated_total[1d])) by (skill_version)</span><br></pre></td></tr></table></figure>
+
+<p>告警分级建议：质量类（correction&#x2F;激活率）按周窗打给族 owner；容量类（池水位&#x2F;命中率）按分钟窗打给平台 SRE；安全类（F7 越权、role_ok&#x3D;false）实时打给安全响应——三类路由不同，混在一个告警通道等于全部失效。</p>
+<ul>
+<li><input disabled="" type="checkbox"> 附录 A~E 与正文清单合并验收；沙箱跨会话禁复用与双库审计为审计红线项</li>
+</ul>
+<h2 id="附录-F：失败演练手册（Game-Day-场景）"><a href="#附录-F：失败演练手册（Game-Day-场景）" class="headerlink" title="附录 F：失败演练手册（Game Day 场景）"></a>附录 F：失败演练手册（Game Day 场景）</h2><p>§10 目录中的 F1~F8 每季度至少演练四项，注入方式与通过判据：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>注入方式</th>
+<th>通过判据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>F1 预算超限</td>
+<td>测试租户订阅膨胀至预算 120%</td>
+<td>自动降级两级路由 + 降级事件可见, 无技能静默消失</td>
+</tr>
+<tr>
+<td>F2 快照不一致</td>
+<td>节点缓存人为篡改一个文件字节</td>
+<td>digest 校验拦截 + 会话侧结构化错误 + 告警 &lt;1min</td>
+</tr>
+<tr>
+<td>F3 冷启动风暴</td>
+<td>预热池缩容至 0 后打入并发</td>
+<td>池弹性恢复 P95 &lt;5min, 期间调用排队而非失败</td>
+</tr>
+<tr>
+<td>F5 僵尸执行</td>
+<td>取消后阻断 SIGTERM 处理</td>
+<td>SIGKILL 兜底生效, 池回收器 &lt;60s 清理</td>
+</tr>
+<tr>
+<td>F6 审批死循环</td>
+<td>模拟模型连续读被阻技能</td>
+<td>第 3 次起 Gateway 硬闸 + 单会话单审批单(不重复开单)</td>
+</tr>
+<tr>
+<td>F7 越权读</td>
+<td>演练技能脚本读 &#x2F;etc&#x2F;passwd</td>
+<td>沙箱拒绝 + 安全事件实时告警 + 该技能自动挂起提案</td>
+</tr>
+<tr>
+<td>F8 遥测反压</td>
+<td>遥测后端限流 90%</td>
+<td>主路径 P95 无劣化, 丢弃计数可见</td>
+</tr>
+</tbody></table>
+<p>演练产物统一归档到平台可靠性台账，与 SLO 周报同评审——没有演练记录的失败模式视为未覆盖，不得在成熟度自评（08 篇 §15）中勾选。</p>
+<h2 id="附录-G：本篇与全手册的接口对照"><a href="#附录-G：本篇与全手册的接口对照" class="headerlink" title="附录 G：本篇与全手册的接口对照"></a>附录 G：本篇与全手册的接口对照</h2><table>
+<thead>
+<tr>
+<th>本篇机制</th>
+<th>上游依赖</th>
+<th>下游消费</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>快照绑定加载（§3）</td>
+<td>06 篇层 3 版本锁</td>
+<td>05 篇 as_of 复现</td>
+</tr>
+<tr>
+<td>onSkillRead 鉴权（§4）</td>
+<td>04 篇 activation_approval</td>
+<td>11 篇审计链</td>
+</tr>
+<tr>
+<td>沙箱 profile（§5）</td>
+<td>03 篇 manifest 声明 &#x2F; 08 篇 M-6</td>
+<td>财务成本分摊（§9.2）</td>
+</tr>
+<tr>
+<td>exit code 协议（§5.3）</td>
+<td>08 篇 S-2 作者侧</td>
+<td>模型 fallback 决策</td>
+</tr>
+<tr>
+<td>checkpoint 文件协议（§7）</td>
+<td>08 篇 Doc 系列模板</td>
+<td>长任务恢复体验</td>
+</tr>
+<tr>
+<td>遥测三件套扩展（§9）</td>
+<td>01 篇附录 C 最小集</td>
+<td>05 篇统计管道 &#x2F; 10 篇评测</td>
+</tr>
+</tbody></table>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/01/14/agent-systems/Skill%E5%B9%B3%E5%8F%B0-08-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">Skill 平台最佳实践</a></h3>
+        <p>01~07 篇散落规范的收拢与补全，形成可直接进 lint / 评审模板 / 流水线配置的一册。</p>
+        <a class="btn primary" href="/2026/01/14/agent-systems/Skill%E5%B9%B3%E5%8F%B0-08-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/10/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-06-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Skill 分发体系</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 20 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#07-%C2%B7-Skill-Runtime%EF%BC%9A%E5%8A%A0%E8%BD%BD%E3%80%81%E9%9A%94%E7%A6%BB%E3%80%81%E6%81%A2%E5%A4%8D%E4%B8%8E%E5%85%A8%E9%93%BE%E8%B7%AF%E8%A7%82%E6%B5%8B" data-toc-target="07-·-Skill-Runtime：加载、隔离、恢复与全链路观测"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">07 · Skill Runtime：加载、隔离、恢复与全链路观测</span></a><a class="toc-level-2" href="#1-%E6%A6%82%E8%BF%B0%EF%BC%9ARuntime-%E7%9A%84%E5%85%8B%E5%88%B6" data-toc-target="1-概述：Runtime-的克制"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 概述：Runtime 的克制</span></a><a class="toc-level-2" href="#2-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9E%B6%E6%9E%84" data-toc-target="2-运行时架构"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 运行时架构</span></a><a class="toc-level-2" href="#3-Loaded%EF%BC%9A%E5%8A%A0%E8%BD%BD%E4%B8%8E%E4%B8%8A%E4%B8%8B%E6%96%87%E7%BB%84%E8%A3%85" data-toc-target="3-Loaded：加载与上下文组装"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. Loaded：加载与上下文组装</span></a><a class="toc-level-2" href="#4-Activated%EF%BC%9A%E6%BF%80%E6%B4%BB%E8%A7%82%E6%B5%8B%E4%B8%8E%E4%BA%8C%E6%AC%A1%E9%89%B4%E6%9D%83" data-toc-target="4-Activated：激活观测与二次鉴权"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. Activated：激活观测与二次鉴权</span></a><a class="toc-level-2" href="#5-Executed%EF%BC%9A%E6%B2%99%E7%AE%B1%E4%B8%8E%E8%84%9A%E6%9C%AC%E6%89%A7%E8%A1%8C" data-toc-target="5-Executed：沙箱与脚本执行"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. Executed：沙箱与脚本执行</span></a><a class="toc-level-3" href="#5-1-%E6%B2%99%E7%AE%B1-profile-%E4%BD%93%E7%B3%BB" data-toc-target="5-1-沙箱-profile-体系"><span class="toc-text">5.1 沙箱 profile 体系</span></a><a class="toc-level-3" href="#5-2-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%B8%83%E5%B1%80%EF%BC%88%E6%B2%99%E7%AE%B1%E5%86%85%E8%A7%86%E8%A7%92%EF%BC%89" data-toc-target="5-2-文件系统布局（沙箱内视角）"><span class="toc-text">5.2 文件系统布局（沙箱内视角）</span></a><a class="toc-level-3" href="#5-3-%E6%89%A7%E8%A1%8C%E5%8D%8F%E8%AE%AE%EF%BC%9A%E8%B6%85%E6%97%B6%E3%80%81%E6%B5%81%E5%BC%8F%E4%B8%8E%E8%BE%93%E5%87%BA%E7%BA%AA%E5%BE%8B" data-toc-target="5-3-执行协议：超时、流式与输出纪律"><span class="toc-text">5.3 执行协议：超时、流式与输出纪律</span></a><a class="toc-level-2" href="#6-Cancelled-Retried%EF%BC%9A%E5%8F%96%E6%B6%88%E4%B8%8E%E9%87%8D%E8%AF%95" data-toc-target="6-Cancelled-Retried：取消与重试"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. Cancelled / Retried：取消与重试</span></a><a class="toc-level-2" href="#7-Recovered%EF%BC%9ACheckpoint-%E4%B8%8E%E6%81%A2%E5%A4%8D" data-toc-target="7-Recovered：Checkpoint-与恢复"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. Recovered：Checkpoint 与恢复</span></a><a class="toc-level-2" href="#8-Memory%EF%BC%9A%E6%8A%80%E8%83%BD%E4%B8%8E%E8%AE%B0%E5%BF%86%E7%9A%84%E5%85%B3%E7%B3%BB" data-toc-target="8-Memory：技能与记忆的关系"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. Memory：技能与记忆的关系</span></a><a class="toc-level-2" href="#9-Observed-Measured%EF%BC%9A%E9%81%A5%E6%B5%8B%E3%80%81Tracing-%E4%B8%8E%E6%8C%87%E6%A0%87" data-toc-target="9-Observed-Measured：遥测、Tracing-与指标"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. Observed / Measured：遥测、Tracing 与指标</span></a><a class="toc-level-3" href="#9-1-OTel-Trace-%E6%A8%A1%E5%9E%8B" data-toc-target="9-1-OTel-Trace-模型"><span class="toc-text">9.1 OTel Trace 模型</span></a><a class="toc-level-3" href="#9-2-%E6%8C%87%E6%A0%87%E4%BD%93%E7%B3%BB%EF%BC%88%E6%8C%89%E6%B6%88%E8%B4%B9%E6%96%B9%E7%BB%84%E7%BB%87%EF%BC%89" data-toc-target="9-2-指标体系（按消费方组织）"><span class="toc-text">9.2 指标体系（按消费方组织）</span></a><a class="toc-level-2" href="#10-%E5%A4%B1%E8%B4%A5%E6%A8%A1%E5%BC%8F%E7%9B%AE%E5%BD%95" data-toc-target="10-失败模式目录"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 失败模式目录</span></a><a class="toc-level-2" href="#11-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="11-反模式"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 反模式</span></a><a class="toc-level-2" href="#12-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E4%B8%8E%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="12-生产建议与检查清单"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">12. 生产建议与检查清单</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-A%EF%BC%9A%E6%B2%99%E7%AE%B1%E6%B1%A0%E5%AE%9E%E7%8E%B0%E7%BB%86%E8%8A%82" data-toc-target="附录-A：沙箱池实现细节"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">附录 A：沙箱池实现细节</span></a><a class="toc-level-3" href="#A-1-%E9%A2%84%E7%83%AD%E6%B1%A0%E7%8A%B6%E6%80%81%E6%9C%BA%E4%B8%8E%E5%AE%B9%E9%87%8F%E6%A8%A1%E5%9E%8B" data-toc-target="A-1-预热池状态机与容量模型"><span class="toc-text">A.1 预热池状态机与容量模型</span></a><a class="toc-level-3" href="#A-2-%E8%B5%84%E6%BA%90%E9%85%8D%E9%A2%9D%E5%9F%BA%E7%BA%BF%EF%BC%88profile-%E9%BB%98%E8%AE%A4%E6%A1%A3%EF%BC%89" data-toc-target="A-2-资源配额基线（profile-默认档）"><span class="toc-text">A.2 资源配额基线（profile 默认档）</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-B%EF%BC%9ATool-Gateway-%E5%AE%A1%E8%AE%A1%E8%AE%B0%E5%BD%95-Schema" data-toc-target="附录-B：Tool-Gateway-审计记录-Schema"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">附录 B：Tool Gateway 审计记录 Schema</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-C%EF%BC%9AOTel-%E5%B1%9E%E6%80%A7%E5%AD%97%E5%85%B8%EF%BC%88%E8%A7%84%E8%8C%83%E8%A1%A8%EF%BC%89" data-toc-target="附录-C：OTel-属性字典（规范表）"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">附录 C：OTel 属性字典（规范表）</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-D%EF%BC%9A%E5%8F%96%E6%B6%88%E4%BB%A4%E7%89%8C%E6%A0%91%E5%8F%82%E8%80%83%E5%AE%9E%E7%8E%B0" data-toc-target="附录-D：取消令牌树参考实现"><i class="toc-num" aria-hidden="true">17</i><span class="toc-text">附录 D：取消令牌树参考实现</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-E%EF%BC%9A%E6%8C%87%E6%A0%87%E5%AE%9A%E4%B9%89%E4%B8%8E%E6%9F%A5%E8%AF%A2%E7%A4%BA%E4%BE%8B" data-toc-target="附录-E：指标定义与查询示例"><i class="toc-num" aria-hidden="true">18</i><span class="toc-text">附录 E：指标定义与查询示例</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-F%EF%BC%9A%E5%A4%B1%E8%B4%A5%E6%BC%94%E7%BB%83%E6%89%8B%E5%86%8C%EF%BC%88Game-Day-%E5%9C%BA%E6%99%AF%EF%BC%89" data-toc-target="附录-F：失败演练手册（Game-Day-场景）"><i class="toc-num" aria-hidden="true">19</i><span class="toc-text">附录 F：失败演练手册（Game Day 场景）</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-G%EF%BC%9A%E6%9C%AC%E7%AF%87%E4%B8%8E%E5%85%A8%E6%89%8B%E5%86%8C%E7%9A%84%E6%8E%A5%E5%8F%A3%E5%AF%B9%E7%85%A7" data-toc-target="附录-G：本篇与全手册的接口对照"><i class="toc-num" aria-hidden="true">20</i><span class="toc-text">附录 G：本篇与全手册的接口对照</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/skill-platform/" style="--rail: 55%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 11</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots toc-strip__dots--dense" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#07-%C2%B7-Skill-Runtime%EF%BC%9A%E5%8A%A0%E8%BD%BD%E3%80%81%E9%9A%94%E7%A6%BB%E3%80%81%E6%81%A2%E5%A4%8D%E4%B8%8E%E5%85%A8%E9%93%BE%E8%B7%AF%E8%A7%82%E6%B5%8B" data-toc-target="07-·-Skill-Runtime：加载、隔离、恢复与全链路观测" data-title="01 · 07 · Skill Runtime：加载、隔离、恢复与全链路观测" aria-label="07 · Skill Runtime：加载、隔离、恢复与全链路观测"></a><a class="toc-strip__dot" href="#1-%E6%A6%82%E8%BF%B0%EF%BC%9ARuntime-%E7%9A%84%E5%85%8B%E5%88%B6" data-toc-target="1-概述：Runtime-的克制" data-title="02 · 1. 概述：Runtime 的克制" aria-label="1. 概述：Runtime 的克制"></a><a class="toc-strip__dot" href="#2-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9E%B6%E6%9E%84" data-toc-target="2-运行时架构" data-title="03 · 2. 运行时架构" aria-label="2. 运行时架构"></a><a class="toc-strip__dot" href="#3-Loaded%EF%BC%9A%E5%8A%A0%E8%BD%BD%E4%B8%8E%E4%B8%8A%E4%B8%8B%E6%96%87%E7%BB%84%E8%A3%85" data-toc-target="3-Loaded：加载与上下文组装" data-title="04 · 3. Loaded：加载与上下文组装" aria-label="3. Loaded：加载与上下文组装"></a><a class="toc-strip__dot" href="#4-Activated%EF%BC%9A%E6%BF%80%E6%B4%BB%E8%A7%82%E6%B5%8B%E4%B8%8E%E4%BA%8C%E6%AC%A1%E9%89%B4%E6%9D%83" data-toc-target="4-Activated：激活观测与二次鉴权" data-title="05 · 4. Activated：激活观测与二次鉴权" aria-label="4. Activated：激活观测与二次鉴权"></a><a class="toc-strip__dot" href="#5-Executed%EF%BC%9A%E6%B2%99%E7%AE%B1%E4%B8%8E%E8%84%9A%E6%9C%AC%E6%89%A7%E8%A1%8C" data-toc-target="5-Executed：沙箱与脚本执行" data-title="06 · 5. Executed：沙箱与脚本执行" aria-label="5. Executed：沙箱与脚本执行"></a><a class="toc-strip__dot" href="#6-Cancelled-Retried%EF%BC%9A%E5%8F%96%E6%B6%88%E4%B8%8E%E9%87%8D%E8%AF%95" data-toc-target="6-Cancelled-Retried：取消与重试" data-title="07 · 6. Cancelled / Retried：取消与重试" aria-label="6. Cancelled / Retried：取消与重试"></a><a class="toc-strip__dot" href="#7-Recovered%EF%BC%9ACheckpoint-%E4%B8%8E%E6%81%A2%E5%A4%8D" data-toc-target="7-Recovered：Checkpoint-与恢复" data-title="08 · 7. Recovered：Checkpoint 与恢复" aria-label="7. Recovered：Checkpoint 与恢复"></a><a class="toc-strip__dot" href="#8-Memory%EF%BC%9A%E6%8A%80%E8%83%BD%E4%B8%8E%E8%AE%B0%E5%BF%86%E7%9A%84%E5%85%B3%E7%B3%BB" data-toc-target="8-Memory：技能与记忆的关系" data-title="09 · 8. Memory：技能与记忆的关系" aria-label="8. Memory：技能与记忆的关系"></a><a class="toc-strip__dot" href="#9-Observed-Measured%EF%BC%9A%E9%81%A5%E6%B5%8B%E3%80%81Tracing-%E4%B8%8E%E6%8C%87%E6%A0%87" data-toc-target="9-Observed-Measured：遥测、Tracing-与指标" data-title="10 · 9. Observed / Measured：遥测、Tracing 与指标" aria-label="9. Observed / Measured：遥测、Tracing 与指标"></a><a class="toc-strip__dot" href="#10-%E5%A4%B1%E8%B4%A5%E6%A8%A1%E5%BC%8F%E7%9B%AE%E5%BD%95" data-toc-target="10-失败模式目录" data-title="11 · 10. 失败模式目录" aria-label="10. 失败模式目录"></a><a class="toc-strip__dot" href="#11-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="11-反模式" data-title="12 · 11. 反模式" aria-label="11. 反模式"></a><a class="toc-strip__dot" href="#12-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E4%B8%8E%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="12-生产建议与检查清单" data-title="13 · 12. 生产建议与检查清单" aria-label="12. 生产建议与检查清单"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-A%EF%BC%9A%E6%B2%99%E7%AE%B1%E6%B1%A0%E5%AE%9E%E7%8E%B0%E7%BB%86%E8%8A%82" data-toc-target="附录-A：沙箱池实现细节" data-title="14 · 附录 A：沙箱池实现细节" aria-label="附录 A：沙箱池实现细节"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-B%EF%BC%9ATool-Gateway-%E5%AE%A1%E8%AE%A1%E8%AE%B0%E5%BD%95-Schema" data-toc-target="附录-B：Tool-Gateway-审计记录-Schema" data-title="15 · 附录 B：Tool Gateway 审计记录 Schema" aria-label="附录 B：Tool Gateway 审计记录 Schema"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-C%EF%BC%9AOTel-%E5%B1%9E%E6%80%A7%E5%AD%97%E5%85%B8%EF%BC%88%E8%A7%84%E8%8C%83%E8%A1%A8%EF%BC%89" data-toc-target="附录-C：OTel-属性字典（规范表）" data-title="16 · 附录 C：OTel 属性字典（规范表）" aria-label="附录 C：OTel 属性字典（规范表）"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-D%EF%BC%9A%E5%8F%96%E6%B6%88%E4%BB%A4%E7%89%8C%E6%A0%91%E5%8F%82%E8%80%83%E5%AE%9E%E7%8E%B0" data-toc-target="附录-D：取消令牌树参考实现" data-title="17 · 附录 D：取消令牌树参考实现" aria-label="附录 D：取消令牌树参考实现"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-E%EF%BC%9A%E6%8C%87%E6%A0%87%E5%AE%9A%E4%B9%89%E4%B8%8E%E6%9F%A5%E8%AF%A2%E7%A4%BA%E4%BE%8B" data-toc-target="附录-E：指标定义与查询示例" data-title="18 · 附录 E：指标定义与查询示例" aria-label="附录 E：指标定义与查询示例"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-F%EF%BC%9A%E5%A4%B1%E8%B4%A5%E6%BC%94%E7%BB%83%E6%89%8B%E5%86%8C%EF%BC%88Game-Day-%E5%9C%BA%E6%99%AF%EF%BC%89" data-toc-target="附录-F：失败演练手册（Game-Day-场景）" data-title="19 · 附录 F：失败演练手册（Game Day 场景）" aria-label="附录 F：失败演练手册（Game Day 场景）"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-G%EF%BC%9A%E6%9C%AC%E7%AF%87%E4%B8%8E%E5%85%A8%E6%89%8B%E5%86%8C%E7%9A%84%E6%8E%A5%E5%8F%A3%E5%AF%B9%E7%85%A7" data-toc-target="附录-G：本篇与全手册的接口对照" data-title="20 · 附录 G：本篇与全手册的接口对照" aria-label="附录 G：本篇与全手册的接口对照"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/Skill平台-07-运行时","title":"Skill 运行时","url":"/2025/11/25/agent-systems/Skill%E5%B9%B3%E5%8F%B0-07-%E8%BF%90%E8%A1%8C%E6%97%B6/","path":"skill-platform","index":5,"total":11,"next":{"title":"Skill 平台最佳实践","url":"/2026/01/14/agent-systems/Skill%E5%B9%B3%E5%8F%B0-08-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

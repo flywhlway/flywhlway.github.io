@@ -1,0 +1,441 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>GenAI 语义约定与 AI 可观测标准 · 飞轮之道</title>
+<meta name="description" content="genai. 语义约定是整个 AI 可观测体系的数据契约：SDK 按它埋点，Collector 按它路由脱敏，Tempo/Langfuse/Grafana 按它检索与算成本。本篇给出 2026-07 时点的权威属性清单、Span 建模方式与版本迁移策略。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/05/08/observability/OTel-02-GenAI%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="GenAI 语义约定与 AI 可观测标准 · 飞轮之道">
+<meta property="og:description" content="genai. 语义约定是整个 AI 可观测体系的数据契约：SDK 按它埋点，Collector 按它路由脱敏，Tempo/Langfuse/Grafana 按它检索与算成本。本篇给出 2026-07 时点的权威属性清单、Span 建模方式与版本迁移策略。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/05/08/observability/OTel-02-GenAI%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">统一语义</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 2 / 12 篇</a>
+    </div>
+    <h1>GenAI 语义约定与 AI 可观测标准</h1>
+    <p class="article-deck">genai. 语义约定是整个 AI 可观测体系的数据契约：SDK 按它埋点，Collector 按它路由脱敏，Tempo/Langfuse/Grafana 按它检索与算成本。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>5 分钟</span>
+      <span>发布于 2025.05</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>工程建议：平台内部统一锁定一个版本（建议直接 opt-in 最新版）…</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="02-·-GenAI-语义约定与-AI-可观测标准"><a href="#02-·-GenAI-语义约定与-AI-可观测标准" class="headerlink" title="02 · GenAI 语义约定与 AI 可观测标准"></a>02 · GenAI 语义约定与 AI 可观测标准</h2><blockquote>
+<p><code>gen_ai.*</code> 语义约定是整个 AI 可观测体系的数据契约：SDK 按它埋点，Collector 按它路由脱敏，Tempo&#x2F;Langfuse&#x2F;Grafana 按它检索与算成本。本篇给出 2026-07 时点的权威属性清单、Span 建模方式与版本迁移策略。</p>
+</blockquote>
+<hr>
+<h2 id="1-现状与版本策略（务必先读）"><a href="#1-现状与版本策略（务必先读）" class="headerlink" title="1. 现状与版本策略（务必先读）"></a>1. 现状与版本策略（务必先读）</h2><ul>
+<li>GenAI 语义约定由 GenAI SIG 维护，2026 年起迁移至<strong>独立仓库 <code>open-telemetry/semantic-conventions-genai</code></strong>，覆盖 GenAI 客户端 Span&#x2F;Metrics&#x2F;Events、MCP、以及 OpenAI 等 Provider 特定约定。</li>
+<li>截至 2026-05，GenAI 与 MCP 约定<strong>仍处于 Development（实验）状态</strong>，属性名仍可能调整；但客户端 Span 与 Token 指标在实践中已高度稳定，Datadog&#x2F;Honeycomb&#x2F;Grafana&#x2F;Langfuse 均已原生消费。</li>
+<li><strong>v1.36.0 是迁移基线</strong>：既有埋点库默认继续输出旧版属性；通过环境变量切换到最新版：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 让埋点库输出最新版 GenAI 约定（而非 v1.36 及之前的旧属性）</span></span><br><span class="line"><span class="built_in">export</span> OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental</span><br></pre></td></tr></table></figure>
+
+<p>新旧属性对照（工程中最常踩坑的三组）：</p>
+<table>
+<thead>
+<tr>
+<th>旧（≤ v1.36 &#x2F; 社区惯用）</th>
+<th>新（latest experimental）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gen_ai.system</code></td>
+<td><code>gen_ai.provider.name</code></td>
+</tr>
+<tr>
+<td><code>gen_ai.usage.prompt_tokens</code> &#x2F; <code>completion_tokens</code></td>
+<td><code>gen_ai.usage.input_tokens</code> &#x2F; <code>output_tokens</code></td>
+</tr>
+<tr>
+<td><code>gen_ai.prompt</code> &#x2F; <code>gen_ai.completion</code>（事件）</td>
+<td><code>gen_ai.input.messages</code> &#x2F; <code>gen_ai.output.messages</code>（结构化）</td>
+</tr>
+</tbody></table>
+<p><strong>工程建议</strong>：平台内部统一锁定一个版本（建议直接 opt-in 最新版），并在 Collector 用 transform 处理器做旧→新映射兜底（见文档 03 §5），避免多语言 SDK 版本漂移导致同一含义两套属性名。</p>
+<h2 id="2-Span-建模：AI-链路的六类-Span"><a href="#2-Span-建模：AI-链路的六类-Span" class="headerlink" title="2. Span 建模：AI 链路的六类 Span"></a>2. Span 建模：AI 链路的六类 Span</h2><h3 id="2-1-推理-Span（Inference）"><a href="#2-1-推理-Span（Inference）" class="headerlink" title="2.1 推理 Span（Inference）"></a>2.1 推理 Span（Inference）</h3><p>每次 LLM 调用生成一个 Span，命名规则 <code>{gen_ai.operation.name} {gen_ai.request.model}</code>，如 <code>chat deepseek-chat</code>；SpanKind 为 <code>CLIENT</code>（远程模型）或 <code>INTERNAL</code>（进程内模型）。</p>
+<p>核心属性：</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>示例</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gen_ai.operation.name</code></td>
+<td><code>chat</code> &#x2F; <code>text_completion</code> &#x2F; <code>generate_content</code> &#x2F; <code>embeddings</code></td>
+<td>操作类型判别器</td>
+</tr>
+<tr>
+<td><code>gen_ai.provider.name</code></td>
+<td><code>deepseek</code> &#x2F; <code>openai</code> &#x2F; <code>anthropic</code></td>
+<td>Provider 判别器，决定伴随哪些厂商特定属性</td>
+</tr>
+<tr>
+<td><code>gen_ai.request.model</code></td>
+<td><code>deepseek-chat</code></td>
+<td>请求的模型</td>
+</tr>
+<tr>
+<td><code>gen_ai.response.model</code></td>
+<td><code>deepseek-chat-20260601</code></td>
+<td>实际响应的模型（灰度&#x2F;路由后可能不同）</td>
+</tr>
+<tr>
+<td><code>gen_ai.usage.input_tokens</code></td>
+<td><code>1834</code></td>
+<td>输入 Token</td>
+</tr>
+<tr>
+<td><code>gen_ai.usage.output_tokens</code></td>
+<td><code>412</code></td>
+<td>输出 Token</td>
+</tr>
+<tr>
+<td><code>gen_ai.response.finish_reasons</code></td>
+<td><code>[&quot;stop&quot;]</code> &#x2F; <code>[&quot;tool_calls&quot;]</code></td>
+<td>停止原因，排查截断&#x2F;循环的关键</td>
+</tr>
+<tr>
+<td><code>gen_ai.request.temperature</code> 等</td>
+<td><code>0.2</code></td>
+<td>采样参数族 <code>gen_ai.request.*</code></td>
+</tr>
+<tr>
+<td><code>error.type</code></td>
+<td><code>429</code> &#x2F; <code>TimeoutError</code></td>
+<td>低基数错误标识</td>
+</tr>
+</tbody></table>
+<h3 id="2-2-Embedding-与检索-Span"><a href="#2-2-Embedding-与检索-Span" class="headerlink" title="2.2 Embedding 与检索 Span"></a>2.2 Embedding 与检索 Span</h3><ul>
+<li>Embedding：<code>gen_ai.operation.name=embeddings</code>，附 <code>gen_ai.request.encoding_formats</code>；</li>
+<li>RAG 检索：<code>gen_ai.data_source.id</code> 标识数据源（Milvus collection、文档库等），<code>gen_ai.retrieval.documents</code> 以结构化形式记录召回文档（必须遵循官方 JSON schema）。</li>
+</ul>
+<h3 id="2-3-工具执行-Span（execute-tool）"><a href="#2-3-工具执行-Span（execute-tool）" class="headerlink" title="2.3 工具执行 Span（execute_tool）"></a>2.3 工具执行 Span（execute_tool）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">属性：gen_ai.operation.name = execute_tool</span><br><span class="line">     gen_ai.tool.name      = query_dtc_knowledge</span><br><span class="line">     gen_ai.tool.call.id   = call_abc123</span><br></pre></td></tr></table></figure>
+
+<p>注意：工具内部的真实动作（HTTP 调用、SQL、向量检索）应作为<strong>子 Span</strong> 由常规埋点产生，而不是塞进工具 Span 属性里——这样服务拓扑图才能反映工具的真实依赖。</p>
+<h3 id="2-4-Agent-Span（invoke-agent-编排层）"><a href="#2-4-Agent-Span（invoke-agent-编排层）" class="headerlink" title="2.4 Agent Span（invoke_agent &#x2F; 编排层）"></a>2.4 Agent Span（invoke_agent &#x2F; 编排层）</h3><table>
+<thead>
+<tr>
+<th>属性</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gen_ai.agent.name</code> &#x2F; <code>gen_ai.agent.id</code></td>
+<td>Agent 标识（如 <code>vehicle-diag-agent</code>）</td>
+</tr>
+<tr>
+<td><code>gen_ai.agent.description</code></td>
+<td>自由文本描述</td>
+</tr>
+<tr>
+<td><code>gen_ai.conversation.id</code></td>
+<td>会话标识，跨请求聚合多轮对话</td>
+</tr>
+</tbody></table>
+<p>LangGraph 一次图执行的典型结构：<code>invoke_agent</code> 根 Span → 每个 node 一个子 Span → node 内的 LLM&#x2F;tool 调用再下一层。这是<strong>多数生产 Agent 排障的主战场</strong>——只埋 LLM Span 会漏掉规划、节点间路由、子 Agent 交接等真正的耗时点。</p>
+<h3 id="2-5-MCP-Span"><a href="#2-5-MCP-Span" class="headerlink" title="2.5 MCP Span"></a>2.5 MCP Span</h3><p>MCP 约定与 GenAI 约定同仓维护：工具发现、<code>tools/call</code> 调用、参数与结果均有标准属性，Higress&#x2F;agentgateway 等网关已可代理并自动产出 MCP Span。当前同样处于 Development 状态，命名以独立仓库为准。</p>
+<h3 id="2-6-评测（Evaluation）"><a href="#2-6-评测（Evaluation）" class="headerlink" title="2.6 评测（Evaluation）"></a>2.6 评测（Evaluation）</h3><p><code>gen_ai.evaluation.name</code> &#x2F; <code>gen_ai.evaluation.score.value</code> &#x2F; <code>gen_ai.evaluation.score.label</code> 用于把 LLM-as-Judge 或人工评分回写到链路。实践中评测通常在 Langfuse 侧完成（见文档 08），OTel 侧约定用于跨平台交换。</p>
+<h2 id="3-标准指标（Metrics）"><a href="#3-标准指标（Metrics）" class="headerlink" title="3. 标准指标（Metrics）"></a>3. 标准指标（Metrics）</h2><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>类型</th>
+<th>关键维度</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gen_ai.client.token.usage</code></td>
+<td>Histogram</td>
+<td><code>gen_ai.token.type</code>(input&#x2F;output)、<code>gen_ai.request.model</code>、<code>gen_ai.provider.name</code></td>
+<td>Token 用量与成本归因</td>
+</tr>
+<tr>
+<td><code>gen_ai.client.operation.duration</code></td>
+<td>Histogram</td>
+<td>同上 + <code>error.type</code></td>
+<td>LLM 调用时延分布&#x2F;错误率</td>
+</tr>
+<tr>
+<td><code>gen_ai.server.time_to_first_token</code></td>
+<td>Histogram</td>
+<td>模型服务端（vLLM 等）暴露</td>
+<td>TTFT</td>
+</tr>
+</tbody></table>
+<p>配套自定义指标建议（平台私有命名空间，避免与未来官方属性冲突）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">aits.agent.loop.count        # Agent 循环次数（防失控）</span><br><span class="line">aits.tool.failure.total      # 工具失败计数</span><br><span class="line">aits.token.cost.cny          # 按价格表折算的成本（Counter）</span><br></pre></td></tr></table></figure>
+
+<h2 id="4-内容捕获（Prompt-Completion）与隐私"><a href="#4-内容捕获（Prompt-Completion）与隐私" class="headerlink" title="4. 内容捕获（Prompt&#x2F;Completion）与隐私"></a>4. 内容捕获（Prompt&#x2F;Completion）与隐私</h2><p>默认<strong>不捕获</strong>消息内容，只记录元数据（模型、Token、耗时）。按需开启：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 各官方埋点库通用开关（true 后 gen_ai.input.messages / gen_ai.output.messages 落到 Span）</span></span><br><span class="line"><span class="built_in">export</span> OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=<span class="literal">true</span></span><br></pre></td></tr></table></figure>
+
+<p>内容捕获的三种落地形态（约定均支持）：</p>
+<ol>
+<li><strong>属性内联</strong>：内容作为 Span 属性（JSON 字符串或结构化），适合 POC 与低敏场景；</li>
+<li><strong>事件（Events&#x2F;Logs）</strong>：内容作为与 Span 关联的 Log Record，便于单独设置留存与访问控制；</li>
+<li><strong>外部存储引用</strong>：Span 只存对象存储 URI，适合大内容&#x2F;强合规场景。</li>
+</ol>
+<p><strong>纵深防御三层（生产必做，详见文档 10）</strong>：</p>
+<ul>
+<li>SDK 层：非必要不开启内容捕获；</li>
+<li>Collector 层：<code>redaction</code> 处理器做白名单属性保留 + <code>transform</code> 处理器 OTTL 正则脱敏（手机号&#x2F;VIN&#x2F;身份证）；</li>
+<li>后端层：Tempo&#x2F;Langfuse 访问控制，缩小泄露爆炸半径。</li>
+</ul>
+<h2 id="5-与本平台技术栈的属性映射约定"><a href="#5-与本平台技术栈的属性映射约定" class="headerlink" title="5. 与本平台技术栈的属性映射约定"></a>5. 与本平台技术栈的属性映射约定</h2><p>结合 示例业务平台&#x2F;AIDO 类设备诊断平台，推荐统一 Resource 与业务属性规范：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Resource 属性（进程级，一次配置）</span></span><br><span class="line"><span class="attr">service.name:</span> <span class="string">diag-agent</span>            <span class="comment"># 必填，服务拓扑的主键</span></span><br><span class="line"><span class="attr">service.version:</span> <span class="number">1.4</span><span class="number">.0</span></span><br><span class="line"><span class="attr">service.namespace:</span> <span class="string">aits</span>             <span class="comment"># 平台/产品线</span></span><br><span class="line"><span class="attr">deployment.environment.name:</span> <span class="string">poc</span>    <span class="comment"># poc / staging / prod</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 业务属性（Span 级，经 Baggage 传播，详见文档 08）</span></span><br><span class="line"><span class="attr">user.id:</span> <span class="string">&lt;脱敏后的用户标识&gt;</span></span><br><span class="line"><span class="attr">session.id:</span> <span class="string">&lt;会话</span> <span class="string">ID，对齐</span> <span class="string">gen_ai.conversation.id&gt;</span></span><br><span class="line"><span class="attr">aits.vehicle.vin.hash:</span> <span class="string">&lt;VIN</span> <span class="string">哈希，禁止明文&gt;</span></span><br><span class="line"><span class="attr">aits.triage.channel:</span> <span class="string">realtime|nearline|offline</span>   <span class="comment"># 三通道分诊策略标签</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="6-本章小结与自查清单"><a href="#6-本章小结与自查清单" class="headerlink" title="6. 本章小结与自查清单"></a>6. 本章小结与自查清单</h2><ul>
+<li><input disabled="" type="checkbox"> 全平台锁定 GenAI 约定版本（建议 <code>OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental</code>）；</li>
+<li><input disabled="" type="checkbox"> 六类 Span（推理&#x2F;Embedding&#x2F;检索&#x2F;工具&#x2F;Agent&#x2F;MCP）均有归属，Agent 编排层不缺埋点；</li>
+<li><input disabled="" type="checkbox"> Token 指标进入 Prometheus，成本可按 模型 × 租户 × 路由 归因；</li>
+<li><input disabled="" type="checkbox"> 内容捕获默认关闭，开启场景有脱敏与访问控制方案；</li>
+<li><input disabled="" type="checkbox"> 私有属性使用 <code>aits.*</code> 前缀，不占用 <code>gen_ai.*</code> 命名空间。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/07/10/observability/OTel-03-OTLP%E4%B8%8ECollector/">OTLP 协议与 Collector 实战</a></h3>
+        <p>OTLP 是统一遥测协议，Collector 是统一遥测枢纽。本篇聚焦工程实操：协议怎么选、流水线怎么配、数据怎么加工、采样怎么做。</p>
+        <a class="btn primary" href="/2025/07/10/observability/OTel-03-OTLP%E4%B8%8ECollector/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/02/13/observability/OTel-01-%E4%BD%93%E7%B3%BB%E6%80%BB%E8%A7%88/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：可观测性与 OpenTelemetry 体系总览</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 7 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#02-%C2%B7-GenAI-%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A%E4%B8%8E-AI-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%A0%87%E5%87%86" data-toc-target="02-·-GenAI-语义约定与-AI-可观测标准"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">02 · GenAI 语义约定与 AI 可观测标准</span></a><a class="toc-level-2" href="#1-%E7%8E%B0%E7%8A%B6%E4%B8%8E%E7%89%88%E6%9C%AC%E7%AD%96%E7%95%A5%EF%BC%88%E5%8A%A1%E5%BF%85%E5%85%88%E8%AF%BB%EF%BC%89" data-toc-target="1-现状与版本策略（务必先读）"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 现状与版本策略（务必先读）</span></a><a class="toc-level-2" href="#2-Span-%E5%BB%BA%E6%A8%A1%EF%BC%9AAI-%E9%93%BE%E8%B7%AF%E7%9A%84%E5%85%AD%E7%B1%BB-Span" data-toc-target="2-Span-建模：AI-链路的六类-Span"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. Span 建模：AI 链路的六类 Span</span></a><a class="toc-level-3" href="#2-1-%E6%8E%A8%E7%90%86-Span%EF%BC%88Inference%EF%BC%89" data-toc-target="2-1-推理-Span（Inference）"><span class="toc-text">2.1 推理 Span（Inference）</span></a><a class="toc-level-3" href="#2-2-Embedding-%E4%B8%8E%E6%A3%80%E7%B4%A2-Span" data-toc-target="2-2-Embedding-与检索-Span"><span class="toc-text">2.2 Embedding 与检索 Span</span></a><a class="toc-level-3" href="#2-3-%E5%B7%A5%E5%85%B7%E6%89%A7%E8%A1%8C-Span%EF%BC%88execute-tool%EF%BC%89" data-toc-target="2-3-工具执行-Span（execute-tool）"><span class="toc-text">2.3 工具执行 Span（execute_tool）</span></a><a class="toc-level-3" href="#2-4-Agent-Span%EF%BC%88invoke-agent-%E7%BC%96%E6%8E%92%E5%B1%82%EF%BC%89" data-toc-target="2-4-Agent-Span（invoke-agent-编排层）"><span class="toc-text">2.4 Agent Span（invoke_agent / 编排层）</span></a><a class="toc-level-3" href="#2-5-MCP-Span" data-toc-target="2-5-MCP-Span"><span class="toc-text">2.5 MCP Span</span></a><a class="toc-level-3" href="#2-6-%E8%AF%84%E6%B5%8B%EF%BC%88Evaluation%EF%BC%89" data-toc-target="2-6-评测（Evaluation）"><span class="toc-text">2.6 评测（Evaluation）</span></a><a class="toc-level-2" href="#3-%E6%A0%87%E5%87%86%E6%8C%87%E6%A0%87%EF%BC%88Metrics%EF%BC%89" data-toc-target="3-标准指标（Metrics）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 标准指标（Metrics）</span></a><a class="toc-level-2" href="#4-%E5%86%85%E5%AE%B9%E6%8D%95%E8%8E%B7%EF%BC%88Prompt-Completion%EF%BC%89%E4%B8%8E%E9%9A%90%E7%A7%81" data-toc-target="4-内容捕获（Prompt-Completion）与隐私"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 内容捕获（Prompt/Completion）与隐私</span></a><a class="toc-level-2" href="#5-%E4%B8%8E%E6%9C%AC%E5%B9%B3%E5%8F%B0%E6%8A%80%E6%9C%AF%E6%A0%88%E7%9A%84%E5%B1%9E%E6%80%A7%E6%98%A0%E5%B0%84%E7%BA%A6%E5%AE%9A" data-toc-target="5-与本平台技术栈的属性映射约定"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 与本平台技术栈的属性映射约定</span></a><a class="toc-level-2" href="#6-%E6%9C%AC%E7%AB%A0%E5%B0%8F%E7%BB%93%E4%B8%8E%E8%87%AA%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="6-本章小结与自查清单"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 本章小结与自查清单</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 17%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">2 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#02-%C2%B7-GenAI-%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A%E4%B8%8E-AI-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%A0%87%E5%87%86" data-toc-target="02-·-GenAI-语义约定与-AI-可观测标准" data-title="01 · 02 · GenAI 语义约定与 AI 可观测标准" aria-label="02 · GenAI 语义约定与 AI 可观测标准"></a><a class="toc-strip__dot" href="#1-%E7%8E%B0%E7%8A%B6%E4%B8%8E%E7%89%88%E6%9C%AC%E7%AD%96%E7%95%A5%EF%BC%88%E5%8A%A1%E5%BF%85%E5%85%88%E8%AF%BB%EF%BC%89" data-toc-target="1-现状与版本策略（务必先读）" data-title="02 · 1. 现状与版本策略（务必先读）" aria-label="1. 现状与版本策略（务必先读）"></a><a class="toc-strip__dot" href="#2-Span-%E5%BB%BA%E6%A8%A1%EF%BC%9AAI-%E9%93%BE%E8%B7%AF%E7%9A%84%E5%85%AD%E7%B1%BB-Span" data-toc-target="2-Span-建模：AI-链路的六类-Span" data-title="03 · 2. Span 建模：AI 链路的六类 Span" aria-label="2. Span 建模：AI 链路的六类 Span"></a><a class="toc-strip__dot" href="#3-%E6%A0%87%E5%87%86%E6%8C%87%E6%A0%87%EF%BC%88Metrics%EF%BC%89" data-toc-target="3-标准指标（Metrics）" data-title="04 · 3. 标准指标（Metrics）" aria-label="3. 标准指标（Metrics）"></a><a class="toc-strip__dot" href="#4-%E5%86%85%E5%AE%B9%E6%8D%95%E8%8E%B7%EF%BC%88Prompt-Completion%EF%BC%89%E4%B8%8E%E9%9A%90%E7%A7%81" data-toc-target="4-内容捕获（Prompt-Completion）与隐私" data-title="05 · 4. 内容捕获（Prompt/Completion）与隐私" aria-label="4. 内容捕获（Prompt/Completion）与隐私"></a><a class="toc-strip__dot" href="#5-%E4%B8%8E%E6%9C%AC%E5%B9%B3%E5%8F%B0%E6%8A%80%E6%9C%AF%E6%A0%88%E7%9A%84%E5%B1%9E%E6%80%A7%E6%98%A0%E5%B0%84%E7%BA%A6%E5%AE%9A" data-toc-target="5-与本平台技术栈的属性映射约定" data-title="06 · 5. 与本平台技术栈的属性映射约定" aria-label="5. 与本平台技术栈的属性映射约定"></a><a class="toc-strip__dot" href="#6-%E6%9C%AC%E7%AB%A0%E5%B0%8F%E7%BB%93%E4%B8%8E%E8%87%AA%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="6-本章小结与自查清单" data-title="07 · 6. 本章小结与自查清单" aria-label="6. 本章小结与自查清单"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-02-GenAI语义约定","title":"GenAI 语义约定与 AI 可观测标准","url":"/2025/05/08/observability/OTel-02-GenAI%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A/","path":"agent-observability","index":1,"total":12,"next":{"title":"OTLP 协议与 Collector 实战","url":"/2025/07/10/observability/OTel-03-OTLP%E4%B8%8ECollector/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

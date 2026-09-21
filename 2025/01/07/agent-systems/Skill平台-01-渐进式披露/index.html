@@ -1,0 +1,667 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Skill 渐进式披露设计 · 飞轮之道</title>
+<meta name="description" content="企业级 Skill Registry 平台工程手册 · 第 01 篇读者：AI 平台工程师 / Agent Runtime 架构师本篇回答一个问题：为什么 Skill 系统能在挂载数千个技能的同时，保持基线上下文开销 O(N·ε) 而非 O(N·全量)，并且这个机制在你的平台上应该怎么实现。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/01/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-01-%E6%B8%90%E8%BF%9B%E5%BC%8F%E6%8A%AB%E9%9C%B2/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Skill 渐进式披露设计 · 飞轮之道">
+<meta property="og:description" content="企业级 Skill Registry 平台工程手册 · 第 01 篇读者：AI 平台工程师 / Agent Runtime 架构师本篇回答一个问题：为什么 Skill 系统能在挂载数千个技能的同时，保持基线上下文开销 O(N·ε) 而非 O(N·全量)，并且这个机制在你的平台上应该怎么实现。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/01/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-01-%E6%B8%90%E8%BF%9B%E5%BC%8F%E6%8A%AB%E9%9C%B2/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/skill-platform/">设计原则</a><a class="series-chip" href="/paths/skill-platform/" title="查看学习路径">第 1 / 11 篇</a>
+    </div>
+    <h1>Skill 渐进式披露设计</h1>
+    <p class="article-deck">企业级 Skill Registry 平台工程手册 · 第 01 篇读者：AI 平台工程师 / Agent Runtime 架构师本篇回答一个问题：为什么 Skill 系统能在挂载…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>16 分钟</span>
+      <span>发布于 2025.01</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/Skill/">#Skill</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="01-·-渐进式披露：Discovery-Activation-Execution-三段式运行时"><a href="#01-·-渐进式披露：Discovery-Activation-Execution-三段式运行时" class="headerlink" title="01 · 渐进式披露：Discovery &#x2F; Activation &#x2F; Execution 三段式运行时"></a>01 · 渐进式披露：Discovery &#x2F; Activation &#x2F; Execution 三段式运行时</h2><blockquote>
+<p>企业级 Skill Registry 平台工程手册 · 第 01 篇<br>读者：AI 平台工程师 &#x2F; Agent Runtime 架构师<br>本篇回答一个问题：<strong>为什么 Skill 系统能在挂载数千个技能的同时，保持基线上下文开销 O(N·ε) 而非 O(N·全量)，并且这个机制在你的平台上应该怎么实现。</strong></p>
+</blockquote>
+<hr>
+<h2 id="1-概述"><a href="#1-概述" class="headerlink" title="1. 概述"></a>1. 概述</h2><p>渐进式披露（Progressive Disclosure）是 Agent Skills 体系的核心运行时契约。它规定：<strong>技能内容按”需要知道”的粒度分三级进入模型上下文</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>内容</th>
+<th>进入上下文的时机</th>
+<th>典型体量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L1 元数据</td>
+<td><code>name</code> + <code>description</code></td>
+<td>会话启动时，全量注入</td>
+<td>60~150 token &#x2F; skill</td>
+</tr>
+<tr>
+<td>L2 主体</td>
+<td>SKILL.md 正文</td>
+<td>任务与 description 匹配时</td>
+<td>1k~5k token</td>
+</tr>
+<tr>
+<td>L3 资源</td>
+<td>references &#x2F; scripts &#x2F; assets</td>
+<td>执行中按需</td>
+<td>无上限（scripts 可执行而不加载）</td>
+</tr>
+</tbody></table>
+<p>这不是 prompt 组织技巧，而是一个<strong>运行时协议</strong>：它定义了 Agent Runtime、文件系统（或 Registry）、模型三方之间的加载状态机。企业平台照搬”把所有技能文档塞进系统提示”的做法，在 50 个技能规模上就会崩溃；理解三段式协议后，同一套机制可以支撑数千技能。</p>
+<h2 id="2-问题模型：上下文经济学"><a href="#2-问题模型：上下文经济学" class="headerlink" title="2. 问题模型：上下文经济学"></a>2. 问题模型：上下文经济学</h2><h3 id="2-1-成本数学"><a href="#2-1-成本数学" class="headerlink" title="2.1 成本数学"></a>2.1 成本数学</h3><p>设平台有 N 个技能，单技能全文平均 T_full ≈ 4,000 token，元数据 T_meta ≈ 100 token。</p>
+<p><strong>方案 A（全量注入）</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">基线成本 = N × T_full</span><br><span class="line">N = 50   → 200k token（已超出多数模型有效工作窗口）</span><br><span class="line">N = 500  → 2M token（物理不可行）</span><br></pre></td></tr></table></figure>
+
+<p><strong>方案 B（三级披露）</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">基线成本 = N × T_meta + k × T_full + m × T_ref</span><br><span class="line">其中 k = 本次任务实际激活的技能数（通常 1~3）</span><br><span class="line">     m = 实际读取的 reference 文件数（通常 0~2）</span><br><span class="line">N = 500 → 基线 50k token + 激活增量 ~10k token</span><br></pre></td></tr></table></figure>
+
+<p>关键洞察：<strong>激活增量与 N 无关，只与任务复杂度相关</strong>。这是整个体系可扩展性的来源。</p>
+<h3 id="2-2-注意力稀释：比-token-上限更早到来的失效"><a href="#2-2-注意力稀释：比-token-上限更早到来的失效" class="headerlink" title="2.2 注意力稀释：比 token 上限更早到来的失效"></a>2.2 注意力稀释：比 token 上限更早到来的失效</h3><p>即使窗口装得下，长上下文中指令遵循质量随无关内容占比上升而下降（lost-in-the-middle 效应、指令间相互干扰）。一个未被任务需要的 4k token 技能文档不是”无害的冗余”，而是：</p>
+<ul>
+<li>稀释了真正相关指令的注意力权重；</li>
+<li>引入了跨技能指令冲突的可能（两个技能对同一格式给出不同规定）;</li>
+<li>增加了模型”错误地遵循了不该激活的技能”的概率——这在生产上表现为<strong>幽灵触发</strong>（ghost activation），比漏触发更难排查。</li>
+</ul>
+<p>因此 L1 元数据的设计目标不是”压缩摘要”，而是<strong>路由表条目</strong>：给模型刚好够做出”要不要打开”决策的信息，一个字不多。（description 的设计科学见第 02 篇。）</p>
+<h3 id="2-3-与传统插件架构的本质区别"><a href="#2-3-与传统插件架构的本质区别" class="headerlink" title="2.3 与传统插件架构的本质区别"></a>2.3 与传统插件架构的本质区别</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>传统插件（函数调用式）</th>
+<th>Skill 三段式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>能力形态</td>
+<td>结构化 API（schema 固定）</td>
+<td>程序性知识（自然语言 + 脚本）</td>
+</tr>
+<tr>
+<td>路由方</td>
+<td>调用方显式指定 &#x2F; function-calling 强制选择</td>
+<td>模型基于 description 自主判断</td>
+</tr>
+<tr>
+<td>加载成本</td>
+<td>schema 全量常驻</td>
+<td>元数据常驻，正文懒加载</td>
+</tr>
+<tr>
+<td>组合方式</td>
+<td>编排引擎硬编码</td>
+<td>模型在上下文内自由组合多个已激活技能</td>
+</tr>
+<tr>
+<td>失败模式</td>
+<td>调用错函数</td>
+<td>漏触发 &#x2F; 误触发 &#x2F; 幽灵触发</td>
+</tr>
+</tbody></table>
+<p>Skill 不是”更松散的 function”，而是把<strong>流程知识</strong>（怎么做、按什么顺序、注意什么坑）变成可分发的一等公民。你的平台如果只做了”markdown 文件的 CRUD”，等于只实现了 L2 的存储，三段式协议的价值一分没拿到。</p>
+<h2 id="3-三阶段详解"><a href="#3-三阶段详解" class="headerlink" title="3. 三阶段详解"></a>3. 三阶段详解</h2><h3 id="3-1-Discovery（发现）"><a href="#3-1-Discovery（发现）" class="headerlink" title="3.1 Discovery（发现）"></a>3.1 Discovery（发现）</h3><p><strong>发生时机</strong>：会话&#x2F;任务初始化。<br><strong>动作</strong>：Runtime 将所有可见技能的 L1 元数据渲染进系统提示（或等价的常驻上下文区）。<br><strong>产物</strong>：模型获得一张”能力路由表”。</p>
+<p>生产实现要点：</p>
+<ol>
+<li><strong>可见性过滤先于渲染</strong>。多租户平台上，Discovery 阶段注入的列表 &#x3D; <code>全量技能 ∩ 租户授权 ∩ 用户角色授权 ∩ 当前 surface 支持</code>。权限判定放在这里而不是激活时，能同时省 token 和堵住”模型知道了不该知道的技能存在”这个信息泄露面。</li>
+<li><strong>渲染格式稳定</strong>。模型对路由表的解析质量依赖格式一致性。建议固定为：</li>
+</ol>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">available_skills</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">skill</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">name</span>&gt;</span>ota-log-diagnosis<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">description</span>&gt;</span>解析车辆 OTA 升级日志并定位失败根因。当用户提到 OTA 失败、</span><br><span class="line">    升级卡滞、刷写中断、差分包校验错误时使用本技能……<span class="tag">&lt;/<span class="name">description</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">location</span>&gt;</span>/mnt/skills/vehicle/ota-log-diagnosis/SKILL.md<span class="tag">&lt;/<span class="name">location</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">skill</span>&gt;</span></span><br><span class="line">  ...</span><br><span class="line"><span class="tag">&lt;/<span class="name">available_skills</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<ol start="3">
+<li><strong>location 必须是可寻址的</strong>。Discovery 只给指针不给内容——这个指针（文件路径 &#x2F; registry URI）是 Activation 阶段的入口。指针失效 &#x3D; 技能事实上不存在。</li>
+</ol>
+<h3 id="3-2-Activation（激活）"><a href="#3-2-Activation（激活）" class="headerlink" title="3.2 Activation（激活）"></a>3.2 Activation（激活）</h3><p><strong>发生时机</strong>：模型判断当前任务与某个 description 匹配。<br><strong>动作</strong>：模型通过文件读取工具（<code>view</code> &#x2F; <code>cat</code>）加载 SKILL.md 全文进上下文。<br><strong>产物</strong>：该技能的完整流程知识对本轮及后续推理可见。</p>
+<p>三个必须理解的运行时事实：</p>
+<ol>
+<li><strong>激活是模型的自主工具调用，不是框架注入</strong>。Runtime 不做”检测到关键词→注入正文”的旁路逻辑（那是 Cursor Rules 的 glob 模式，见 §7）。激活决策发生在模型的推理内部，依据只有 description。这意味着：<em>激活质量 &#x3D; description 质量</em>，没有第二个杠杆。</li>
+<li><strong>激活有”复杂度门槛”</strong>。可观测的行为规律：模型只在”靠自身能力不能轻松完成”的任务上查阅技能。单步简单请求（”读一下这个 PDF”）即使 description 完全匹配也常常不触发——模型直接用基础工具做了。这不是 bug：技能是为”多步、专业、有坑”的流程准备的。设计评测集时必须用有实质复杂度的 query（详见第 10 篇）。</li>
+<li><strong>激活是幂等的、可叠加的</strong>。一次任务可以激活多个技能（如 <code>docx</code> + <code>brand-guidelines</code>），先后加载的正文在上下文里共存。平台侧要保证多技能间指令不冲突——这是 08 篇”规范”和 05 篇”评审流程”要管的事。</li>
+</ol>
+<h3 id="3-3-Execution（执行）"><a href="#3-3-Execution（执行）" class="headerlink" title="3.3 Execution（执行）"></a>3.3 Execution（执行）</h3><p><strong>发生时机</strong>：技能正文已加载，模型按其指令行动。<br><strong>动作</strong>：按需读取 references&#x2F;，通过沙箱执行 scripts&#x2F;，使用 assets&#x2F; 产出交付物。<br><strong>产物</strong>：任务结果 + 遥测数据。</p>
+<p>L3 的两条黄金路径：</p>
+<ul>
+<li><strong>references&#x2F; 走”读取”路径</strong>：内容进入上下文，供模型推理使用。所以 reference 文件要为”被模型读”优化：带目录、按域拆分（<code>aws.md</code>&#x2F;<code>gcp.md</code>&#x2F;<code>azure.md</code> 各自独立，只读命中的那个）、超过 300 行加 TOC。</li>
+<li><strong>scripts&#x2F; 走”执行”路径</strong>：代码<strong>不进入上下文</strong>，只有 stdout&#x2F;stderr 进。一个 2,000 行的日志解析脚本，上下文成本 ≈ 一次 bash 调用 + 几百 token 输出。<strong>凡是确定性、重复性的操作，一律下沉为脚本</strong>——这是 token 成本优化中杠杆最大的一条。</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">上下文成本对比（同一个&quot;解析 500MB OTA 日志&quot;任务）：</span><br><span class="line"></span><br><span class="line">模型内联处理:  日志分片读入 ≈ 不可行 / 数十万 token</span><br><span class="line">脚本执行:      bash 调用(50 tok) + 脚本 stdout 摘要(800 tok) ≈ 850 token</span><br></pre></td></tr></table></figure>
+
+<h2 id="4-运行时状态机"><a href="#4-运行时状态机" class="headerlink" title="4. 运行时状态机"></a>4. 运行时状态机</h2><p>单个技能在一次会话中的生命周期：</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; REGISTERED: 平台侧发布
+    REGISTERED --&gt; DISCOVERABLE: 会话初始化&lt;br/&gt;权限过滤通过, L1 注入
+    DISCOVERABLE --&gt; CANDIDATE: 模型推理中&lt;br/&gt;判定 description 匹配
+    CANDIDATE --&gt; ACTIVATED: 读取 SKILL.md 成功&lt;br/&gt;(L2 进入上下文)
+    CANDIDATE --&gt; DISCOVERABLE: 匹配置信不足, 放弃
+    ACTIVATED --&gt; EXECUTING: 开始按指令行动
+    EXECUTING --&gt; RESOURCE_LOADING: 按需读 references (L3)
+    RESOURCE_LOADING --&gt; EXECUTING
+    EXECUTING --&gt; SCRIPT_RUNNING: 沙箱执行 scripts
+    SCRIPT_RUNNING --&gt; EXECUTING: stdout 回流
+    SCRIPT_RUNNING --&gt; FAILED: 超时 / 非零退出且不可恢复
+    EXECUTING --&gt; COMPLETED: 任务达成
+    EXECUTING --&gt; FAILED: 指令不可执行 / 前置条件缺失
+    FAILED --&gt; EXECUTING: fallback 路径 / 重试
+    COMPLETED --&gt; [*]: 会话内保持已加载&lt;br/&gt;(上下文不回收)
+    FAILED --&gt; [*]</pre>
+
+
+<p>转移条件表（平台可观测&#x2F;可干预点标注）：</p>
+<table>
+<thead>
+<tr>
+<th>转移</th>
+<th>触发条件</th>
+<th>平台可观测?</th>
+<th>平台可干预?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>REGISTERED→DISCOVERABLE</td>
+<td>会话初始化 + ACL 通过</td>
+<td>✅ 注入日志</td>
+<td>✅ 权限&#x2F;灰度开关</td>
+</tr>
+<tr>
+<td>DISCOVERABLE→CANDIDATE</td>
+<td>模型内部判定</td>
+<td>❌（黑盒）</td>
+<td>⚠️ 仅通过 description 间接影响</td>
+</tr>
+<tr>
+<td>CANDIDATE→ACTIVATED</td>
+<td>文件读取工具调用</td>
+<td>✅ 工具调用日志</td>
+<td>✅ 读取时二次鉴权&#x2F;审计</td>
+</tr>
+<tr>
+<td>EXECUTING→SCRIPT_RUNNING</td>
+<td>bash&#x2F;沙箱调用</td>
+<td>✅</td>
+<td>✅ 沙箱策略、超时、资源限额</td>
+</tr>
+<tr>
+<td>→COMPLETED &#x2F; FAILED</td>
+<td>任务级判定</td>
+<td>⚠️ 需显式埋点</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<p><strong>关键结论</strong>：DISCOVERABLE→CANDIDATE 这一跳是全链路唯一的黑盒，也是唯一无法用工程手段兜底的环节。所以企业平台的可靠性投资顺序应该是：description 评测闭环（10 篇）&gt; 激活审计（07 篇）&gt; 其它一切。</p>
+<h3 id="4-1-上下文驻留策略"><a href="#4-1-上下文驻留策略" class="headerlink" title="4.1 上下文驻留策略"></a>4.1 上下文驻留策略</h3><p>注意状态机里 COMPLETED 后<strong>上下文不回收</strong>：已加载的 SKILL.md 在本会话剩余轮次持续可见。这带来两个工程含义：</p>
+<ol>
+<li><strong>同会话第二次使用零成本</strong>——这是好事；</li>
+<li><strong>长会话中已激活技能的指令持续生效</strong>，可能干扰后续无关任务——这是”技能串味”问题。缓解手段：SKILL.md 正文中的指令一律写成任务条件式（”当处理 X 时…”），而非无条件命令式（”总是…”）；平台评审时把无条件命令式指令列为阻断项（见 08 篇反模式 AP-7）。</li>
+</ol>
+<h2 id="5-端到端序列图"><a href="#5-端到端序列图" class="headerlink" title="5. 端到端序列图"></a>5. 端到端序列图</h2><p>以”用户上传 OTA 日志并要求诊断”为例：</p>
+<pre class="mermaid">sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant RT as Agent Runtime
+    participant M as 模型
+    participant FS as Skill 存储&lt;br/&gt;(本地挂载/缓存)
+    participant SB as 沙箱
+
+    Note over RT: 会话初始化
+    RT-&gt;&gt;RT: ACL 过滤可见技能集
+    RT-&gt;&gt;M: 系统提示注入 L1 路由表&lt;br/&gt;(N 个 name+description)
+
+    U-&gt;&gt;M: "这是今早的 OTA 日志, 帮我看为什么 3 台车升级失败"
+    Note over M: Discovery 命中:&lt;br/&gt;ota-log-diagnosis 的 description&lt;br/&gt;包含"OTA 失败"触发场景
+    M-&gt;&gt;FS: view /skills/vehicle/ota-log-diagnosis/SKILL.md
+    FS--&gt;&gt;M: SKILL.md 全文 (L2, ~3k token)
+    Note over M: Activation 完成,&lt;br/&gt;获得诊断流程知识
+
+    M-&gt;&gt;SB: bash: python scripts/parse_logs.py uploads/ota_0716.log
+    SB--&gt;&gt;M: 结构化解析结果 (stdout, ~600 token)
+    M-&gt;&gt;FS: view references/ecu_fault_codes.md (仅命中 VIN 对应平台的段落)
+    FS--&gt;&gt;M: ECU 故障码映射表片段 (L3)
+    M-&gt;&gt;SB: bash: python scripts/generate_summary.py --format=report
+    SB--&gt;&gt;M: 诊断报告草稿
+
+    M-&gt;&gt;U: 根因分析 + 3 台车分别的失败环节 + 建议
+    M-&gt;&gt;RT: (遥测) 激活事件 + 脚本执行指标 + 耗时</pre>
+
+
+<p>注意第 3~4 步与第 5 步之间没有任何框架介入——激活完全由模型驱动。Runtime 的职责边界：<strong>注入路由表、提供存储寻址、提供沙箱、收遥测</strong>，仅此四件。把路由逻辑做进 Runtime（比如关键词匹配自动注入正文）是最常见的架构错误，见 §8 方案对比。</p>
+<h2 id="6-Token-与延迟的最小化机制"><a href="#6-Token-与延迟的最小化机制" class="headerlink" title="6. Token 与延迟的最小化机制"></a>6. Token 与延迟的最小化机制</h2><h3 id="6-1-Token-侧：分层预算"><a href="#6-1-Token-侧：分层预算" class="headerlink" title="6.1 Token 侧：分层预算"></a>6.1 Token 侧：分层预算</h3><p>给平台定一个可执行的预算规范：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>预算上限</th>
+<th>超限处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L1 单技能</td>
+<td>150 token（约 500 汉字 description 上限）</td>
+<td>注册时 lint 阻断</td>
+</tr>
+<tr>
+<td>L1 总量</td>
+<td>上下文窗口的 3%~5%</td>
+<td>超过则启用两级路由（§8 方案 C）</td>
+</tr>
+<tr>
+<td>L2 单技能</td>
+<td>500 行 &#x2F; ~5k token</td>
+<td>强制拆 references + 层级导航</td>
+</tr>
+<tr>
+<td>L3 单 reference</td>
+<td>无硬限，&gt;300 行必须带 TOC</td>
+<td>评审提示</td>
+</tr>
+</tbody></table>
+<p><strong>500 行规则的原理</strong>：SKILL.md 是”指令”，reference 是”资料”。指令必须整体进入注意力焦点，资料只需片段命中。混在一起会让指令被资料稀释。判据：<em>模型每次激活都需要的内容留在 SKILL.md，只有特定分支才需要的内容下沉 references。</em></p>
+<h3 id="6-2-延迟侧：存储拓扑"><a href="#6-2-延迟侧：存储拓扑" class="headerlink" title="6.2 延迟侧：存储拓扑"></a>6.2 延迟侧：存储拓扑</h3><p>激活延迟 &#x3D; 路由表寻址 + SKILL.md 读取。三种拓扑：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">拓扑 A: 本地文件系统挂载 (Claude Code / Claude.ai 容器模式)</span><br><span class="line">  Registry ──同步──▶ 只读挂载卷 ──view──▶ 模型</span><br><span class="line">  激活延迟: &lt;10ms   一致性: 会话启动时快照</span><br><span class="line"></span><br><span class="line">拓扑 B: Runtime 代理拉取 (中心化 Registry 直连)</span><br><span class="line">  模型 ──tool──▶ Runtime ──HTTP──▶ Registry ──▶ 回流</span><br><span class="line">  激活延迟: 50~300ms   一致性: 实时   故障面: Registry 可用性进入会话关键路径</span><br><span class="line"></span><br><span class="line">拓扑 C: 本地缓存 + 懒回源 (推荐生产形态)</span><br><span class="line">  模型 ──view──▶ 本地缓存 ──miss──▶ Registry 回源 + 签名校验</span><br><span class="line">  激活延迟: 命中 &lt;10ms / 回源一次性 ~200ms</span><br><span class="line">  一致性: 版本锁 (lockfile) 控制, 详见 06 篇</span><br></pre></td></tr></table></figure>
+
+<p><strong>生产建议：拓扑 C + 会话级版本快照</strong>。会话中途技能内容变更是灾难性的（模型前后看到两个版本的指令），所以缓存失效粒度必须是”会话”而不是”TTL”。</p>
+<h3 id="6-3-避免不必要加载的四道闸"><a href="#6-3-避免不必要加载的四道闸" class="headerlink" title="6.3 避免不必要加载的四道闸"></a>6.3 避免不必要加载的四道闸</h3><ol>
+<li><strong>Description 即闸门</strong>（第一道，最重要）：负面边界写进 description——“Do NOT use for X” 直接降低误激活。</li>
+<li><strong>复杂度门槛</strong>（模型内生）：简单任务不查技能，天然省了大部分无效激活。</li>
+<li><strong>域内变体拆分</strong>：<code>cloud-deploy</code> 主 SKILL.md 只含选型逻辑，<code>references/aws.md</code> 等按命中加载——避免”激活一个技能 &#x3D; 加载它支持的所有变体”。</li>
+<li><strong>脚本化下沉</strong>：任何模型不需要”理解其实现”的逻辑都进 scripts&#x2F;，执行而非阅读。</li>
+</ol>
+<h2 id="7-跨生态机制对比"><a href="#7-跨生态机制对比" class="headerlink" title="7. 跨生态机制对比"></a>7. 跨生态机制对比</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>Claude Skills</th>
+<th>Cursor Rules</th>
+<th>Windsurf Rules</th>
+<th>OpenAI Codex (AGENTS.md&#x2F;任务式)</th>
+<th>传统插件&#x2F;Function</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>路由主体</td>
+<td>模型（读 description 自主决策）</td>
+<td>框架（glob 匹配 &#x2F; alwaysApply）+ 模型（agent-requested 型）</td>
+<td>框架（文件模式&#x2F;手动）</td>
+<td>显式：任务或 AGENTS.md 常驻</td>
+<td>调用方 &#x2F; 强制 schema 选择</td>
+</tr>
+<tr>
+<td>懒加载</td>
+<td>三级完整支持</td>
+<td>部分（规则命中即全文注入）</td>
+<td>部分</td>
+<td>弱（AGENTS.md 常驻全量）</td>
+<td>schema 常驻</td>
+</tr>
+<tr>
+<td>可执行资源</td>
+<td>scripts&#x2F; 一等公民</td>
+<td>无（纯指令）</td>
+<td>无</td>
+<td>有（仓库内脚本，但无捆绑约定）</td>
+<td>函数本体</td>
+</tr>
+<tr>
+<td>规模上限</td>
+<td>数千（受 L1 预算约束）</td>
+<td>数十（规则互相冲突很快出现）</td>
+<td>数十</td>
+<td>单文件长度约束</td>
+<td>数百（schema token 成本）</td>
+</tr>
+<tr>
+<td>失配模式</td>
+<td>漏触发为主</td>
+<td>过度注入（glob 命中≠语义相关）</td>
+<td>同左</td>
+<td>无路由问题但无按需性</td>
+<td>选错函数</td>
+</tr>
+<tr>
+<td>分发形态</td>
+<td>文件夹（可签名打包 .skill）</td>
+<td>.mdc 文件</td>
+<td>规则文件</td>
+<td>仓库内约定</td>
+<td>服务端点</td>
+</tr>
+</tbody></table>
+<p><strong>架构启示</strong>：这五者不是竞争关系，而是<strong>同一 IR 的不同投影</strong>。你的统一技能中心正确的抽象是：内部维护一个规范化技能 IR（元数据 + 指令体 + 资源清单 + 能力声明），向外编译出各生态的原生格式（SKILL.md &#x2F; .mdc &#x2F; AGENTS.md 片段 &#x2F; MCP tool manifest）。这是第 12 篇的主题，这里先立住结论：<strong>不要把某一个生态的文件格式当作平台的内部真理源。</strong></p>
+<h2 id="8-企业平台的-Discovery-层设计选型"><a href="#8-企业平台的-Discovery-层设计选型" class="headerlink" title="8. 企业平台的 Discovery 层设计选型"></a>8. 企业平台的 Discovery 层设计选型</h2><p>当技能数超过 L1 预算（经验值：300~800 个，取决于 description 平均长度），单级全量注入失效。三个演进方案：</p>
+<h3 id="方案-A：单级全量注入（基线）"><a href="#方案-A：单级全量注入（基线）" class="headerlink" title="方案 A：单级全量注入（基线）"></a>方案 A：单级全量注入（基线）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[全部技能 L1] ──▶ 系统提示</span><br></pre></td></tr></table></figure>
+<ul>
+<li>优点：零路由基础设施、模型看到全貌、组合能力最强。</li>
+<li>缺点：规模上限硬；跨域技能混杂加剧幽灵触发。</li>
+<li>适用：≤300 技能，或单域平台。</li>
+</ul>
+<h3 id="方案-B：Embedding-检索式注入"><a href="#方案-B：Embedding-检索式注入" class="headerlink" title="方案 B：Embedding 检索式注入"></a>方案 B：Embedding 检索式注入</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">用户 query ──▶ 向量检索 top-k 技能 ──▶ 仅 k 条 L1 注入</span><br></pre></td></tr></table></figure>
+<ul>
+<li>优点：规模无上限。</li>
+<li>缺点：<strong>路由决策从模型内挪到了检索器</strong>——检索器不懂任务规划，只懂语义相似。多步任务中第 3 步才需要的技能，第 1 步的 query 根本检索不到。召回失败 &#x3D; 技能对本次会话彻底不存在，且无法被模型的推理弥补。</li>
+<li>适用：单轮问答式产品。<strong>多步 Agent 平台慎用作唯一机制。</strong></li>
+</ul>
+<h3 id="方案-C：两级路由（类目摘要-域内全量）——推荐"><a href="#方案-C：两级路由（类目摘要-域内全量）——推荐" class="headerlink" title="方案 C：两级路由（类目摘要 + 域内全量）——推荐"></a>方案 C：两级路由（类目摘要 + 域内全量）——推荐</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">L0: 域/类目卡片 (10~30 张, 每张≈一个&quot;元技能&quot;的 description)</span><br><span class="line">      │  模型判定任务属于哪个域</span><br><span class="line">      ▼</span><br><span class="line">L1: 该域全量技能元数据 (通过一次工具调用拉取注入)</span><br><span class="line">      │  之后与标准流程一致</span><br><span class="line">      ▼</span><br><span class="line">L2/L3: 正常激活与执行</span><br></pre></td></tr></table></figure>
+<ul>
+<li>本质：把渐进式披露向上再递归一层，<strong>路由决策仍留在模型内</strong>，只是路由表本身也懒加载了。</li>
+<li>成本：多一跳工具调用（+一轮延迟）；域划分质量成为新的失败面。</li>
+<li>配套：域卡片 description 的写法 &#x3D; 该域所有技能触发场景的并集摘要，同样需要进 10 篇的评测闭环。</li>
+<li>可与方案 B 混合：embedding 检索作为域卡片的<strong>补充召回</strong>而非替代（belt-and-suspenders）。</li>
+</ul>
+<p>决策矩阵：</p>
+<table>
+<thead>
+<tr>
+<th>技能规模</th>
+<th>任务形态</th>
+<th>推荐</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&lt;300</td>
+<td>任意</td>
+<td>A</td>
+</tr>
+<tr>
+<td>300~3000</td>
+<td>多步 Agent</td>
+<td>C</td>
+</tr>
+<tr>
+<td>300~3000</td>
+<td>单轮问答</td>
+<td>B 或 C</td>
+</tr>
+<tr>
+<td>&gt;3000</td>
+<td>多步 Agent</td>
+<td>C + B 混合</td>
+</tr>
+</tbody></table>
+<h2 id="9-反模式"><a href="#9-反模式" class="headerlink" title="9. 反模式"></a>9. 反模式</h2><ul>
+<li><strong>AP-1 巨型 SKILL.md</strong>：把 references 内容内联进正文。症状：激活一次吃掉 20k token，且指令遵循质量下降。治理：500 行 lint + 评审阻断。</li>
+<li><strong>AP-2 框架旁路路由</strong>：Runtime 用关键词&#x2F;正则检测用户输入自动注入技能正文。症状：glob 命中≠语义相关，误注入率高且模型无法”决定不用”。三段式协议的路由权必须留在模型。</li>
+<li><strong>AP-3 预载 references</strong>：激活时连带把所有 reference 读入”以防要用”。直接违背 L3 按需契约。</li>
+<li><strong>AP-4 Description 里写实现</strong>：把”怎么做”塞进 description 试图省一次激活。结果：L1 预算爆炸 + 模型跳过正文按残缺指令行动。</li>
+<li><strong>AP-5 技能间隐式依赖</strong>：SKILL.md 里写”参见 xxx 技能的做法”。激活不传递，另一个技能可能根本不在可见集。依赖必须显式声明进元数据（05 篇），由 Runtime 保证共同可见或内联必要内容。</li>
+<li><strong>AP-6 用技能承载易变数据</strong>：把每周更新的价目表&#x2F;接口地址写进 reference。技能是流程知识，易变数据走工具实时获取。判据：<em>变更频率高于技能发版频率的内容不属于技能。</em></li>
+<li><strong>AP-7 无条件命令式指令</strong>：正文写”所有输出必须为 JSON”。长会话中该技能完成后指令仍驻留，污染后续任务。一律改条件式。</li>
+</ul>
+<h2 id="10-生产建议清单"><a href="#10-生产建议清单" class="headerlink" title="10. 生产建议清单"></a>10. 生产建议清单</h2><ol>
+<li>Discovery 注入格式全平台统一，进 CI 校验（schema + token 预算 lint）。</li>
+<li>激活链路埋点三件套：<code>skill_injected</code>（L1）、<code>skill_activated</code>（L2 读取）、<code>resource_loaded</code>（L3），全部带 skill_id + version + session_id。没有这三个事件，10 篇的评测体系无从谈起。</li>
+<li>版本一致性以<strong>会话</strong>为快照边界；会话中途禁止技能热替换（热更新语义见 06 篇：只影响新会话）。</li>
+<li>scripts&#x2F; 全部经沙箱执行，默认无网络、只读挂载技能目录、可写仅工作区（07 篇展开）。</li>
+<li>平台早期就实施 500 行 &#x2F; 150 token 两条预算红线——存量技能越多，事后治理越贵。</li>
+<li>两级路由（方案 C）的域划分对齐组织的能力域而非技术栈：<code>vehicle-diagnosis</code> 是好的域，<code>python-skills</code> 不是。</li>
+<li>把本篇状态机直接映射为 Registry 侧技能实例的观测模型：每个会话每个技能一条状态轨迹，是排查”为什么没触发”的唯一事实来源。</li>
+</ol>
+<hr>
+<p><em>下一篇（02）将深入本篇标记为”唯一黑盒”的那一跳：description 如何决定 DISCOVERABLE→CANDIDATE 的转移概率，以及 50+ 个生产级 description 的写法与反例。</em></p>
+<hr>
+<h2 id="附录-A：全栈架构总览（ASCII）"><a href="#附录-A：全栈架构总览（ASCII）" class="headerlink" title="附录 A：全栈架构总览（ASCII）"></a>附录 A：全栈架构总览（ASCII）</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                         Agent Runtime (会话侧)                        │</span><br><span class="line">│                                                                     │</span><br><span class="line">│  ┌───────────────┐   ┌──────────────────────────────────────────┐  │</span><br><span class="line">│  │ Session Init  │   │              模型上下文                    │  │</span><br><span class="line">│  │  ─ ACL 过滤   │──▶│  ┌────────────────────────────────────┐  │  │</span><br><span class="line">│  │  ─ L1 渲染    │   │  │ L1 路由表 (常驻, N×~100tok)          │  │  │</span><br><span class="line">│  │  ─ 版本快照   │   │  ├────────────────────────────────────┤  │  │</span><br><span class="line">│  └──────┬────────┘   │  │ L2 已激活 SKILL.md (0..k 个)         │  │  │</span><br><span class="line">│         │            │  ├────────────────────────────────────┤  │  │</span><br><span class="line">│         │            │  │ L3 已读 references 片段              │  │  │</span><br><span class="line">│         │            │  └────────────────────────────────────┘  │  │</span><br><span class="line">│         │            └───────────┬──────────────┬───────────────┘  │</span><br><span class="line">│         │                 view/cat 工具    bash 工具                │</span><br><span class="line">│         ▼                        │              │                   │</span><br><span class="line">│  ┌───────────────┐               ▼              ▼                   │</span><br><span class="line">│  │ 遥测采集器     │      ┌──────────────┐  ┌──────────────┐         │</span><br><span class="line">│  │ injected/     │◀─────│ 技能只读挂载  │  │  脚本沙箱     │         │</span><br><span class="line">│  │ activated/    │      │ (会话级快照)  │  │  ─ 无网络默认 │         │</span><br><span class="line">│  │ loaded 事件   │      └──────┬───────┘  │  ─ 资源限额   │         │</span><br><span class="line">│  └──────┬────────┘             │ miss 回源 │  ─ 超时       │         │</span><br><span class="line">└─────────┼──────────────────────┼──────────┴──────┬────────────────┘</span><br><span class="line">          │                      │                 │ stdout/exit code</span><br><span class="line">          ▼                      ▼                 ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                      Skill Registry (平台侧)                          │</span><br><span class="line">│   发布流水线 → 签名 → 版本库 → 分发/CDN → 评测服务 → 观测聚合            │</span><br><span class="line">│   (05 篇)     (06)    (05)     (06)      (10)       (07/10)          │</span><br><span class="line">└─────────────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h2 id="附录-B：Runtime-侧参考接口"><a href="#附录-B：Runtime-侧参考接口" class="headerlink" title="附录 B：Runtime 侧参考接口"></a>附录 B：Runtime 侧参考接口</h2><p>状态机在 Runtime 中的最小接口（语言无关伪码，Java&#x2F;Spring 控制面可直译为领域服务）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">interface</span> <span class="title class_">SkillLifecycle</span> &#123;</span><br><span class="line">    <span class="comment">// Discovery: 会话初始化时调用一次</span></span><br><span class="line">    <span class="comment">// 返回渲染好的 L1 块 + 会话级版本快照句柄</span></span><br><span class="line">    DiscoverySnapshot <span class="title function_">discover</span><span class="params">(SessionCtx ctx, Principal p)</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Activation 观测: Runtime 不做激活决策, 只在检测到</span></span><br><span class="line">    <span class="comment">// 对技能路径的读取时打点并做二次鉴权</span></span><br><span class="line">    <span class="keyword">void</span> <span class="title function_">onSkillRead</span><span class="params">(SessionCtx ctx, SkillRef ref)</span> <span class="keyword">throws</span> AccessDenied;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Execution 观测: 沙箱执行回调</span></span><br><span class="line">    ScriptResult <span class="title function_">onScriptExec</span><span class="params">(SessionCtx ctx, SkillRef ref, ExecSpec spec)</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 会话结束: 状态轨迹落库</span></span><br><span class="line">    <span class="keyword">void</span> <span class="title function_">seal</span><span class="params">(SessionCtx ctx)</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">record</span> <span class="title class_">DiscoverySnapshot</span><span class="params">(</span></span><br><span class="line"><span class="params">    String renderedL1Block,      // 注入用 XML/结构化文本</span></span><br><span class="line"><span class="params">    Map&lt;SkillId, Version&gt; pins,  // 本会话版本锁</span></span><br><span class="line"><span class="params">    TokenBudgetReport budget     // 预算核算, 超限时降级为两级路由</span></span><br><span class="line"><span class="params">)</span> &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>设计要点：</p>
+<ol>
+<li><code>discover()</code> 返回的 <code>pins</code> 是会话一致性的实现载体——后续所有 <code>onSkillRead</code> 按 pin 解析路径，Registry 侧发新版不影响进行中会话。</li>
+<li><code>onSkillRead</code> 是二次鉴权点：L1 可见 ≠ L2 可读（某些敏感技能可以”可发现但激活需审批”，用于高危操作类技能的人审闸门）。</li>
+<li>接口刻意没有 <code>activate()</code> 方法——再强调一次，激活不是 Runtime 的动作，Runtime 只有观测回调。</li>
+</ol>
+<h2 id="附录-C：遥测事件-Schema"><a href="#附录-C：遥测事件-Schema" class="headerlink" title="附录 C：遥测事件 Schema"></a>附录 C：遥测事件 Schema</h2><p>三件套事件的最小字段（07 篇展开完整 tracing 体系）：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;event&quot;</span><span class="punctuation">:</span> <span class="string">&quot;skill_activated&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;ts&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2026-07-16T06:42:13.201Z&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;session_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sess_9f2c...&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;tenant_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;zeekr-diag&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;skill_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;ota-log-diagnosis&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;skill_version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2.3.1&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;turn_index&quot;</span><span class="punctuation">:</span> <span class="number">4</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;trigger_context&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;l1_position&quot;</span><span class="punctuation">:</span> <span class="number">17</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;l1_total&quot;</span><span class="punctuation">:</span> <span class="number">212</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;co_activated&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;can-trace-analysis&quot;</span><span class="punctuation">]</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;latency_ms&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;storage_read&quot;</span><span class="punctuation">:</span> <span class="number">6</span> <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>l1_position</code> 单独说明：技能在路由表中的渲染位置。收集它是为了离线分析<strong>位置效应</strong>——列表首尾的技能是否有系统性触发率优势。若有（长列表下常见），两级路由的域内排序就应该按”专职优先 + 轮换”策略消偏，而不是固定字母序。</p>
+<h2 id="附录-D：本篇检查清单（平台落地自查）"><a href="#附录-D：本篇检查清单（平台落地自查）" class="headerlink" title="附录 D：本篇检查清单（平台落地自查）"></a>附录 D：本篇检查清单（平台落地自查）</h2><ul>
+<li><input disabled="" type="checkbox"> L1 渲染格式有 schema，进 CI</li>
+<li><input disabled="" type="checkbox"> 单技能 150 token &#x2F; 总量 5% 双预算 lint</li>
+<li><input disabled="" type="checkbox"> SKILL.md 500 行红线 + references TOC 检查</li>
+<li><input disabled="" type="checkbox"> 存储拓扑为本地缓存 + 懒回源，会话级版本快照</li>
+<li><input disabled="" type="checkbox"> 激活权 100% 在模型，Runtime 无任何正文旁路注入逻辑</li>
+<li><input disabled="" type="checkbox"> 三件套遥测事件上线，含 l1_position</li>
+<li><input disabled="" type="checkbox"> 技能可见性 &#x3D; 租户 ∩ 角色 ∩ surface 三重过滤</li>
+<li><input disabled="" type="checkbox"> 状态机各转移的观测点与干预点已映射到具体组件</li>
+<li><input disabled="" type="checkbox"> 两级路由的域划分方案已评审（按能力域，非技术栈）</li>
+<li><input disabled="" type="checkbox"> 无条件命令式指令列入评审阻断项</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/04/02/agent-systems/Skill%E5%B9%B3%E5%8F%B0-02-%E6%8F%8F%E8%BF%B0%E8%AE%BE%E8%AE%A1/">Skill 描述设计</a></h3>
+        <p>企业级 Skill Registry 平台工程手册 · 第 02 篇 前置阅读：01 篇 §4（状态机中 DISCOVERABLE→CAND…</p>
+        <a class="btn primary" href="/2025/04/02/agent-systems/Skill%E5%B9%B3%E5%8F%B0-02-%E6%8F%8F%E8%BF%B0%E8%AE%BE%E8%AE%A1/">继续阅读</a>
+      </div>
+      
+      
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 15 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#01-%C2%B7-%E6%B8%90%E8%BF%9B%E5%BC%8F%E6%8A%AB%E9%9C%B2%EF%BC%9ADiscovery-Activation-Execution-%E4%B8%89%E6%AE%B5%E5%BC%8F%E8%BF%90%E8%A1%8C%E6%97%B6" data-toc-target="01-·-渐进式披露：Discovery-Activation-Execution-三段式运行时"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">01 · 渐进式披露：Discovery / Activation / Execution 三段式运行时</span></a><a class="toc-level-2" href="#1-%E6%A6%82%E8%BF%B0" data-toc-target="1-概述"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 概述</span></a><a class="toc-level-2" href="#2-%E9%97%AE%E9%A2%98%E6%A8%A1%E5%9E%8B%EF%BC%9A%E4%B8%8A%E4%B8%8B%E6%96%87%E7%BB%8F%E6%B5%8E%E5%AD%A6" data-toc-target="2-问题模型：上下文经济学"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 问题模型：上下文经济学</span></a><a class="toc-level-3" href="#2-1-%E6%88%90%E6%9C%AC%E6%95%B0%E5%AD%A6" data-toc-target="2-1-成本数学"><span class="toc-text">2.1 成本数学</span></a><a class="toc-level-3" href="#2-2-%E6%B3%A8%E6%84%8F%E5%8A%9B%E7%A8%80%E9%87%8A%EF%BC%9A%E6%AF%94-token-%E4%B8%8A%E9%99%90%E6%9B%B4%E6%97%A9%E5%88%B0%E6%9D%A5%E7%9A%84%E5%A4%B1%E6%95%88" data-toc-target="2-2-注意力稀释：比-token-上限更早到来的失效"><span class="toc-text">2.2 注意力稀释：比 token 上限更早到来的失效</span></a><a class="toc-level-3" href="#2-3-%E4%B8%8E%E4%BC%A0%E7%BB%9F%E6%8F%92%E4%BB%B6%E6%9E%B6%E6%9E%84%E7%9A%84%E6%9C%AC%E8%B4%A8%E5%8C%BA%E5%88%AB" data-toc-target="2-3-与传统插件架构的本质区别"><span class="toc-text">2.3 与传统插件架构的本质区别</span></a><a class="toc-level-2" href="#3-%E4%B8%89%E9%98%B6%E6%AE%B5%E8%AF%A6%E8%A7%A3" data-toc-target="3-三阶段详解"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 三阶段详解</span></a><a class="toc-level-3" href="#3-1-Discovery%EF%BC%88%E5%8F%91%E7%8E%B0%EF%BC%89" data-toc-target="3-1-Discovery（发现）"><span class="toc-text">3.1 Discovery（发现）</span></a><a class="toc-level-3" href="#3-2-Activation%EF%BC%88%E6%BF%80%E6%B4%BB%EF%BC%89" data-toc-target="3-2-Activation（激活）"><span class="toc-text">3.2 Activation（激活）</span></a><a class="toc-level-3" href="#3-3-Execution%EF%BC%88%E6%89%A7%E8%A1%8C%EF%BC%89" data-toc-target="3-3-Execution（执行）"><span class="toc-text">3.3 Execution（执行）</span></a><a class="toc-level-2" href="#4-%E8%BF%90%E8%A1%8C%E6%97%B6%E7%8A%B6%E6%80%81%E6%9C%BA" data-toc-target="4-运行时状态机"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 运行时状态机</span></a><a class="toc-level-3" href="#4-1-%E4%B8%8A%E4%B8%8B%E6%96%87%E9%A9%BB%E7%95%99%E7%AD%96%E7%95%A5" data-toc-target="4-1-上下文驻留策略"><span class="toc-text">4.1 上下文驻留策略</span></a><a class="toc-level-2" href="#5-%E7%AB%AF%E5%88%B0%E7%AB%AF%E5%BA%8F%E5%88%97%E5%9B%BE" data-toc-target="5-端到端序列图"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 端到端序列图</span></a><a class="toc-level-2" href="#6-Token-%E4%B8%8E%E5%BB%B6%E8%BF%9F%E7%9A%84%E6%9C%80%E5%B0%8F%E5%8C%96%E6%9C%BA%E5%88%B6" data-toc-target="6-Token-与延迟的最小化机制"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. Token 与延迟的最小化机制</span></a><a class="toc-level-3" href="#6-1-Token-%E4%BE%A7%EF%BC%9A%E5%88%86%E5%B1%82%E9%A2%84%E7%AE%97" data-toc-target="6-1-Token-侧：分层预算"><span class="toc-text">6.1 Token 侧：分层预算</span></a><a class="toc-level-3" href="#6-2-%E5%BB%B6%E8%BF%9F%E4%BE%A7%EF%BC%9A%E5%AD%98%E5%82%A8%E6%8B%93%E6%89%91" data-toc-target="6-2-延迟侧：存储拓扑"><span class="toc-text">6.2 延迟侧：存储拓扑</span></a><a class="toc-level-3" href="#6-3-%E9%81%BF%E5%85%8D%E4%B8%8D%E5%BF%85%E8%A6%81%E5%8A%A0%E8%BD%BD%E7%9A%84%E5%9B%9B%E9%81%93%E9%97%B8" data-toc-target="6-3-避免不必要加载的四道闸"><span class="toc-text">6.3 避免不必要加载的四道闸</span></a><a class="toc-level-2" href="#7-%E8%B7%A8%E7%94%9F%E6%80%81%E6%9C%BA%E5%88%B6%E5%AF%B9%E6%AF%94" data-toc-target="7-跨生态机制对比"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 跨生态机制对比</span></a><a class="toc-level-2" href="#8-%E4%BC%81%E4%B8%9A%E5%B9%B3%E5%8F%B0%E7%9A%84-Discovery-%E5%B1%82%E8%AE%BE%E8%AE%A1%E9%80%89%E5%9E%8B" data-toc-target="8-企业平台的-Discovery-层设计选型"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 企业平台的 Discovery 层设计选型</span></a><a class="toc-level-3" href="#%E6%96%B9%E6%A1%88-A%EF%BC%9A%E5%8D%95%E7%BA%A7%E5%85%A8%E9%87%8F%E6%B3%A8%E5%85%A5%EF%BC%88%E5%9F%BA%E7%BA%BF%EF%BC%89" data-toc-target="方案-A：单级全量注入（基线）"><span class="toc-text">方案 A：单级全量注入（基线）</span></a><a class="toc-level-3" href="#%E6%96%B9%E6%A1%88-B%EF%BC%9AEmbedding-%E6%A3%80%E7%B4%A2%E5%BC%8F%E6%B3%A8%E5%85%A5" data-toc-target="方案-B：Embedding-检索式注入"><span class="toc-text">方案 B：Embedding 检索式注入</span></a><a class="toc-level-3" href="#%E6%96%B9%E6%A1%88-C%EF%BC%9A%E4%B8%A4%E7%BA%A7%E8%B7%AF%E7%94%B1%EF%BC%88%E7%B1%BB%E7%9B%AE%E6%91%98%E8%A6%81-%E5%9F%9F%E5%86%85%E5%85%A8%E9%87%8F%EF%BC%89%E2%80%94%E2%80%94%E6%8E%A8%E8%8D%90" data-toc-target="方案-C：两级路由（类目摘要-域内全量）——推荐"><span class="toc-text">方案 C：两级路由（类目摘要 + 域内全量）——推荐</span></a><a class="toc-level-2" href="#9-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="9-反模式"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 反模式</span></a><a class="toc-level-2" href="#10-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E6%B8%85%E5%8D%95" data-toc-target="10-生产建议清单"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 生产建议清单</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-A%EF%BC%9A%E5%85%A8%E6%A0%88%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88%EF%BC%88ASCII%EF%BC%89" data-toc-target="附录-A：全栈架构总览（ASCII）"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">附录 A：全栈架构总览（ASCII）</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-B%EF%BC%9ARuntime-%E4%BE%A7%E5%8F%82%E8%80%83%E6%8E%A5%E5%8F%A3" data-toc-target="附录-B：Runtime-侧参考接口"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">附录 B：Runtime 侧参考接口</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-C%EF%BC%9A%E9%81%A5%E6%B5%8B%E4%BA%8B%E4%BB%B6-Schema" data-toc-target="附录-C：遥测事件-Schema"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">附录 C：遥测事件 Schema</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-D%EF%BC%9A%E6%9C%AC%E7%AF%87%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95%EF%BC%88%E5%B9%B3%E5%8F%B0%E8%90%BD%E5%9C%B0%E8%87%AA%E6%9F%A5%EF%BC%89" data-toc-target="附录-D：本篇检查清单（平台落地自查）"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">附录 D：本篇检查清单（平台落地自查）</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/skill-platform/" style="--rail: 9%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">1 / 11</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#01-%C2%B7-%E6%B8%90%E8%BF%9B%E5%BC%8F%E6%8A%AB%E9%9C%B2%EF%BC%9ADiscovery-Activation-Execution-%E4%B8%89%E6%AE%B5%E5%BC%8F%E8%BF%90%E8%A1%8C%E6%97%B6" data-toc-target="01-·-渐进式披露：Discovery-Activation-Execution-三段式运行时" data-title="01 · 01 · 渐进式披露：Discovery / Activation / Execution 三段式运行时" aria-label="01 · 渐进式披露：Discovery / Activation / Execution 三段式运行时"></a><a class="toc-strip__dot" href="#1-%E6%A6%82%E8%BF%B0" data-toc-target="1-概述" data-title="02 · 1. 概述" aria-label="1. 概述"></a><a class="toc-strip__dot" href="#2-%E9%97%AE%E9%A2%98%E6%A8%A1%E5%9E%8B%EF%BC%9A%E4%B8%8A%E4%B8%8B%E6%96%87%E7%BB%8F%E6%B5%8E%E5%AD%A6" data-toc-target="2-问题模型：上下文经济学" data-title="03 · 2. 问题模型：上下文经济学" aria-label="2. 问题模型：上下文经济学"></a><a class="toc-strip__dot" href="#3-%E4%B8%89%E9%98%B6%E6%AE%B5%E8%AF%A6%E8%A7%A3" data-toc-target="3-三阶段详解" data-title="04 · 3. 三阶段详解" aria-label="3. 三阶段详解"></a><a class="toc-strip__dot" href="#4-%E8%BF%90%E8%A1%8C%E6%97%B6%E7%8A%B6%E6%80%81%E6%9C%BA" data-toc-target="4-运行时状态机" data-title="05 · 4. 运行时状态机" aria-label="4. 运行时状态机"></a><a class="toc-strip__dot" href="#5-%E7%AB%AF%E5%88%B0%E7%AB%AF%E5%BA%8F%E5%88%97%E5%9B%BE" data-toc-target="5-端到端序列图" data-title="06 · 5. 端到端序列图" aria-label="5. 端到端序列图"></a><a class="toc-strip__dot" href="#6-Token-%E4%B8%8E%E5%BB%B6%E8%BF%9F%E7%9A%84%E6%9C%80%E5%B0%8F%E5%8C%96%E6%9C%BA%E5%88%B6" data-toc-target="6-Token-与延迟的最小化机制" data-title="07 · 6. Token 与延迟的最小化机制" aria-label="6. Token 与延迟的最小化机制"></a><a class="toc-strip__dot" href="#7-%E8%B7%A8%E7%94%9F%E6%80%81%E6%9C%BA%E5%88%B6%E5%AF%B9%E6%AF%94" data-toc-target="7-跨生态机制对比" data-title="08 · 7. 跨生态机制对比" aria-label="7. 跨生态机制对比"></a><a class="toc-strip__dot" href="#8-%E4%BC%81%E4%B8%9A%E5%B9%B3%E5%8F%B0%E7%9A%84-Discovery-%E5%B1%82%E8%AE%BE%E8%AE%A1%E9%80%89%E5%9E%8B" data-toc-target="8-企业平台的-Discovery-层设计选型" data-title="09 · 8. 企业平台的 Discovery 层设计选型" aria-label="8. 企业平台的 Discovery 层设计选型"></a><a class="toc-strip__dot" href="#9-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="9-反模式" data-title="10 · 9. 反模式" aria-label="9. 反模式"></a><a class="toc-strip__dot" href="#10-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E6%B8%85%E5%8D%95" data-toc-target="10-生产建议清单" data-title="11 · 10. 生产建议清单" aria-label="10. 生产建议清单"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-A%EF%BC%9A%E5%85%A8%E6%A0%88%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88%EF%BC%88ASCII%EF%BC%89" data-toc-target="附录-A：全栈架构总览（ASCII）" data-title="12 · 附录 A：全栈架构总览（ASCII）" aria-label="附录 A：全栈架构总览（ASCII）"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-B%EF%BC%9ARuntime-%E4%BE%A7%E5%8F%82%E8%80%83%E6%8E%A5%E5%8F%A3" data-toc-target="附录-B：Runtime-侧参考接口" data-title="13 · 附录 B：Runtime 侧参考接口" aria-label="附录 B：Runtime 侧参考接口"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-C%EF%BC%9A%E9%81%A5%E6%B5%8B%E4%BA%8B%E4%BB%B6-Schema" data-toc-target="附录-C：遥测事件-Schema" data-title="14 · 附录 C：遥测事件 Schema" aria-label="附录 C：遥测事件 Schema"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-D%EF%BC%9A%E6%9C%AC%E7%AF%87%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95%EF%BC%88%E5%B9%B3%E5%8F%B0%E8%90%BD%E5%9C%B0%E8%87%AA%E6%9F%A5%EF%BC%89" data-toc-target="附录-D：本篇检查清单（平台落地自查）" data-title="15 · 附录 D：本篇检查清单（平台落地自查）" aria-label="附录 D：本篇检查清单（平台落地自查）"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/Skill平台-01-渐进式披露","title":"Skill 渐进式披露设计","url":"/2025/01/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-01-%E6%B8%90%E8%BF%9B%E5%BC%8F%E6%8A%AB%E9%9C%B2/","path":"skill-platform","index":0,"total":11,"next":{"title":"Skill 描述设计","url":"/2025/04/02/agent-systems/Skill%E5%B9%B3%E5%8F%B0-02-%E6%8F%8F%E8%BF%B0%E8%AE%BE%E8%AE%A1/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

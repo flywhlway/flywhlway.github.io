@@ -1,0 +1,570 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Skill 分发体系 · 飞轮之道</title>
+<meta name="description" content="企业级 Skill Registry 平台工程手册 · 第 06 篇前置阅读：04 篇 §8.3（产物契约）、05 篇 §10（skill.version.published 事件）、01 篇 §6.2（存储拓扑 C）本篇回答：产物长什么样、信任链怎么建、缓存拓扑怎么铺、版本锁与热更新的语义边界、以…">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/10/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-06-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Skill 分发体系 · 飞轮之道">
+<meta property="og:description" content="企业级 Skill Registry 平台工程手册 · 第 06 篇前置阅读：04 篇 §8.3（产物契约）、05 篇 §10（skill.version.published 事件）、01 篇 §6.2（存储拓扑 C）本篇回答：产物长什么样、信任链怎么建、缓存拓扑怎么铺、版本锁与热更新的语义边界、以…">
+<meta property="og:url" content="https://flywhlway.github.io/2025/10/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-06-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/skill-platform/">平台工程</a><a class="series-chip" href="/paths/skill-platform/" title="查看学习路径">第 5 / 11 篇</a>
+    </div>
+    <h1>Skill 分发体系</h1>
+    <p class="article-deck">企业级 Skill Registry 平台工程手册 · 第 06 篇前置阅读：04 篇 §8.3（产物契约）、05 篇 §10（skill.version.published 事件…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>15 分钟</span>
+      <span>发布于 2025.10</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/Skill/">#Skill</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="06-·-Skill-分发体系：从签名产物到-Air-gap-与车端边缘"><a href="#06-·-Skill-分发体系：从签名产物到-Air-gap-与车端边缘" class="headerlink" title="06 · Skill 分发体系：从签名产物到 Air-gap 与车端边缘"></a>06 · Skill 分发体系：从签名产物到 Air-gap 与车端边缘</h2><blockquote>
+<p>企业级 Skill Registry 平台工程手册 · 第 06 篇<br>前置阅读：04 篇 §8.3（产物契约）、05 篇 §10（<code>skill.version.published</code> 事件）、01 篇 §6.2（存储拓扑 C）<br>本篇回答：<strong>产物长什么样、信任链怎么建、缓存拓扑怎么铺、版本锁与热更新的语义边界、以及离线&#x2F;边缘这两个产业物联网平台绕不开的极端环境。</strong></p>
+</blockquote>
+<hr>
+<h2 id="1-概述：分发层的设计不变量"><a href="#1-概述：分发层的设计不变量" class="headerlink" title="1. 概述：分发层的设计不变量"></a>1. 概述：分发层的设计不变量</h2><p>分发层的一切设计围绕四条不变量展开，先立后论：</p>
+<ol>
+<li><strong>产物不可变</strong>（05 篇 AP-2 的分发侧承接）：同一 <code>ref@version</code> 的字节序列永恒唯一，一切缓存因此可以无限期、无协商地生效；</li>
+<li><strong>内容寻址</strong>：产物与其内部文件全部以 sha256 寻址，”验证”与”去重”由同一机制免费提供；</li>
+<li><strong>信任离线可判</strong>：任何持有平台公钥集的节点，无需回连即可验证任意产物——这一条是 air-gap 与车端场景的生死线；</li>
+<li><strong>分发只影响新会话</strong>：进行中会话锚定其启动时的快照（01 篇会话级版本快照），分发层永不”推送变更进会话”。</li>
+</ol>
+<h2 id="2-打包格式：-skill-plugin-bundle"><a href="#2-打包格式：-skill-plugin-bundle" class="headerlink" title="2. 打包格式：.skill &#x2F; .plugin bundle"></a>2. 打包格式：.skill &#x2F; .plugin bundle</h2><h3 id="2-1-结构"><a href="#2-1-结构" class="headerlink" title="2.1 结构"></a>2.1 结构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">engineering-3.2.0.plugin            # zip 容器, 扩展名标注语义</span><br><span class="line">├── manifest.json                   # plugin manifest, 含 file_tree 哈希树</span><br><span class="line">├── manifest.sig                    # ed25519(sha256(manifest.json))</span><br><span class="line">├── shared/</span><br><span class="line">│   └── references/severity-matrix.md</span><br><span class="line">└── skills/</span><br><span class="line">    ├── code-review/</span><br><span class="line">    │   ├── SKILL.md</span><br><span class="line">    │   ├── manifest.json           # 技能级 manifest（05 篇 §3 Schema）</span><br><span class="line">    │   ├── scripts/…</span><br><span class="line">    │   └── references/…</span><br><span class="line">    └── …</span><br></pre></td></tr></table></figure>
+
+<p>信任结构是<strong>两级哈希树</strong>：<code>manifest.sig</code> 只签 manifest；manifest 的 <code>file_tree</code> 列出每个文件的 digest。验证任意单文件 &#x3D; 验签 manifest（一次）+ 比对该文件哈希（一次），无需解出整包——这是 §5 懒拉取的密码学前提。</p>
+<h3 id="2-2-与-OCI-Artifact-的对比决策"><a href="#2-2-与-OCI-Artifact-的对比决策" class="headerlink" title="2.2 与 OCI Artifact 的对比决策"></a>2.2 与 OCI Artifact 的对比决策</h3><table>
+<thead>
+<tr>
+<th></th>
+<th>自定义 zip bundle</th>
+<th>OCI Artifact（复用镜像仓库）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>基建复用</td>
+<td>需自建存储与 GC</td>
+<td>Harbor&#x2F;ECR 等现成，含复制&#x2F;GC&#x2F;扫描</td>
+</tr>
+<tr>
+<td>单文件懒拉取</td>
+<td>哈希树原生支持</td>
+<td>layer 粒度，需按 role 切 layer 模拟</td>
+</tr>
+<tr>
+<td>签名生态</td>
+<td>自管密钥 + ed25519</td>
+<td>cosign&#x2F;notation 现成，与镜像同一信任链</td>
+</tr>
+<tr>
+<td>边缘&#x2F;车端解包</td>
+<td>zip 任何环境可解</td>
+<td>需 OCI 客户端，嵌入式环境偏重</td>
+</tr>
+<tr>
+<td>结论</td>
+<td><strong>车端&#x2F;嵌入式分发链路用</strong></td>
+<td><strong>云侧仓库与区域复制用</strong></td>
+</tr>
+</tbody></table>
+<p>推荐<strong>双格式同源</strong>：发布流水线产 zip bundle 为真理源，云侧自动转写 OCI Artifact 入镜像仓库（referrers 挂签名与 SBOM）享受现成复制能力；边缘链路直接分发 zip。两格式的 manifest digest 一致，跨格式可互验。</p>
+<h2 id="3-签名与信任链"><a href="#3-签名与信任链" class="headerlink" title="3. 签名与信任链"></a>3. 签名与信任链</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">密钥层级:</span><br><span class="line">  Root Key (离线, HSM, 年轮换)</span><br><span class="line">    └─ 签发 → Platform Signing Key (在线 KMS, 季轮换, keyid 进产物)</span><br><span class="line">                └─ 签 → 每个发布产物的 manifest</span><br><span class="line">    └─ 签发 → Revocation List Key</span><br><span class="line">                └─ 签 → 吊销清单(被撤下的 version digest 列表, 带时间戳)</span><br><span class="line"></span><br><span class="line">验证方所需: root 公钥(出厂内置/首次配置) + 定期拉取的密钥链与吊销清单</span><br></pre></td></tr></table></figure>
+
+<p>三个借鉴 TUF（The Update Framework）的关键设计，各自防一类真实攻击：</p>
+<ol>
+<li><strong>密钥分层 + 在线密钥可轮换</strong>：在线签名密钥泄露时，轮换密钥并吊销窗口期产物，root 不动，全网信任不重建。</li>
+<li><strong>吊销清单带签名时间戳 + 最大陈旧度</strong>：验证方要求清单新鲜度 ≤7 天（可配），防”冻结攻击”——攻击者阻断更新让节点永远用带洞旧版。air-gap 环境的陈旧度策略单独放宽并补偿以人工流程（§8）。</li>
+<li><strong>降版保护</strong>：节点记录已见过的每个 ref 的最高版本号，拒绝安装更低版本——除非回滚指令本身带平台签名（区分”攻击性降版”与”运营回滚”）。</li>
+</ol>
+<p>激活时是否再验一次？分层回答：云侧沙箱容器内产物来自只读挂载、挂载源已验，激活免验；<strong>车端&#x2F;边缘激活前必验</strong>（本地存储的物理接触面不可信）。</p>
+<h2 id="4-分发拓扑"><a href="#4-分发拓扑" class="headerlink" title="4. 分发拓扑"></a>4. 分发拓扑</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">               ┌───────────────┐</span><br><span class="line">               │  对象存储(源)   │  ← 发布流水线写入(唯一写入点)</span><br><span class="line">               └──────┬────────┘</span><br><span class="line">            事件驱动同步 │  skill.version.published</span><br><span class="line">      ┌────────────────┼─────────────────┐</span><br><span class="line">      ▼                ▼                 ▼</span><br><span class="line">┌───────────┐   ┌───────────┐    ┌────────────┐</span><br><span class="line">│区域缓存 A   │   │区域缓存 B  │    │ OCI 仓库复制 │</span><br><span class="line">└────┬──────┘   └────┬──────┘    └─────┬──────┘</span><br><span class="line">     ▼               ▼                  ▼</span><br><span class="line">Runtime 节点缓存  Runtime 节点缓存    边缘网关缓存 ──▶ 车端/厂端 Agent</span><br><span class="line">(会话快照挂载)    (会话快照挂载)      (§9)</span><br></pre></td></tr></table></figure>
+
+<p>同步语义按内容分两档，<strong>与渐进式披露同构</strong>（这是本篇最优雅的对称性）：</p>
+<table>
+<thead>
+<tr>
+<th>内容</th>
+<th>同步策略</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>manifest + SKILL.md（L1&#x2F;L2 对应物）</td>
+<td>事件驱动<strong>推式</strong>全量同步到区域缓存</td>
+<td>体积小（KB 级）；resolve 与激活的关键路径不允许 miss 回源穿透</td>
+</tr>
+<tr>
+<td>references &#x2F; scripts &#x2F; assets &#x2F; examples（L3 对应物）</td>
+<td><strong>懒拉取</strong> + LFU 保留</td>
+<td>大文件；单文件哈希可独立验证（§2.1），miss 一次性回源代价可接受</td>
+</tr>
+</tbody></table>
+<p>预热例外：<code>compliance:*</code> 与租户 Top-N 激活技能的 L3 随 L2 一起推——热点的 miss 惩罚发生在用户等待中，预热成本发生在后台，划算。</p>
+<h2 id="5-版本锁：三层-lock-语义"><a href="#5-版本锁：三层-lock-语义" class="headerlink" title="5. 版本锁：三层 lock 语义"></a>5. 版本锁：三层 lock 语义</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">层 1  租户订阅约束      &quot;engineering&quot;: &quot;^3.0&quot;        管理员声明, 意图层</span><br><span class="line">层 2  租户 resolved_set  engineering@3.2.0 + pins    解析冻结, 部署层</span><br><span class="line">层 3  会话快照           snapshot_id → 全部 digest    运行时, 不可变层</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>层 1→2 的转换时机 &#x3D; <strong>订阅变更或收到 published&#x2F;deprecated 事件</strong>，且默认<strong>不自动前滚</strong>大版本（<code>^3.0</code> 内的 minor&#x2F;patch 自动，MAJOR 必须管理员显式动作——五维兼容性判定第 4&#x2F;5 维正是为这个闸门服务的）。</li>
+<li>层 2→3 每会话一次，snapshot_id 落遥测（07 篇），配合 05 篇 <code>as_of</code> 实现任意会话的技能集复现。</li>
+<li>lockfile 实体化：<code>resolved_set</code> JSONB 即 lockfile，可导出为文件供 air-gap 打包（§8）与 CI 环境固定（10 篇评测环境必须锁版本，否则评测结果不可比）。</li>
+</ul>
+<h2 id="6-热更新：语义边界与灰度"><a href="#6-热更新：语义边界与灰度" class="headerlink" title="6. 热更新：语义边界与灰度"></a>6. 热更新：语义边界与灰度</h2><p>“热更新”在本体系中的<strong>唯一合法语义</strong>：新会话解析到新版本。任何”进行中会话换内容”的实现（缓存文件原地覆盖）都会制造模型前后看到两份指令的精神分裂态，是分发层的头号禁令。</p>
+<p>灰度维度与推进策略：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">按租户环:  内部租户 → 灯塔租户(自愿早鸟) → 全量        # 默认路径</span><br><span class="line">按流量:    同租户内 5% 新会话 → 50% → 100%             # 大租户内部再分层</span><br><span class="line">按 surface: chat 先行, code/cowork 后随                # 技能对 surface 敏感时</span><br><span class="line"></span><br><span class="line">自动推进条件(每环停留 ≥24h):</span><br><span class="line">  激活率 环比跌幅 &lt;10%</span><br><span class="line">  &amp;&amp; implicit_correction 率不升</span><br><span class="line">  &amp;&amp; 执行回归(examples 基准)全绿</span><br><span class="line">破线动作: 冻结推进 + 告警; 连续破线 → 自动回滚提案(需人确认, 不自动执行)</span><br></pre></td></tr></table></figure>
+
+<p>灰度的实现落点在<strong>层 2</strong>：resolved_set 支持同租户多版本按比例分桶（session_id 哈希取模），Runtime 无感——它只忠实使用拿到的快照。</p>
+<h2 id="7-回滚"><a href="#7-回滚" class="headerlink" title="7. 回滚"></a>7. 回滚</h2><p>产物不可变让回滚退化为<strong>指针操作</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">回滚 = 将租户 resolved_set 中 ref 的 pin 改回旧 digest + 广播 subscription.changed</span><br><span class="line">生效面 = 新会话（与热更新同一语义边界, 进行中会话不动）</span><br><span class="line">耗时 = 事件传播 + 缓存标脏, 秒级</span><br></pre></td></tr></table></figure>
+
+<p>配套三件事比机制本身重要：</p>
+<ol>
+<li><strong>回滚触发器目录</strong>先于事故定义（08 篇发布规范承接）：SLO 破线自动提案、correction 率激增、安全吊销——每类触发器对应回滚半径（单技能 pin &#x2F; 整 plugin &#x2F; 全租户）；</li>
+<li><strong>回滚也是发布</strong>：走签名（§3 的运营回滚签名，防降版保护误杀）、进审计、发事件；</li>
+<li><strong>数据面回滚不存在</strong>：技能无状态（状态在会话与用户数据里），这是技能体系相对服务回滚的巨大简化——守住”技能不落持久状态”（07 篇 §8）就守住了这个简化。</li>
+</ol>
+<h2 id="8-Air-gapped-环境"><a href="#8-Air-gapped-环境" class="headerlink" title="8. Air-gapped 环境"></a>8. Air-gapped 环境</h2><p>制造&#x2F;军工&#x2F;涉密网车厂场景，完整流程：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[在线侧]                                    [离线侧]</span><br><span class="line">导出器: 按 lockfile 闭包收集 bundle 集        导入器: 验 root 链 → 验每个 bundle</span><br><span class="line">  + 密钥链快照 + 吊销清单(带时间戳)              → 降版检查 → 入本地 Registry 镜像</span><br><span class="line">  + 评测基准(examples) ──物理介质/网闸──▶        → 跑 examples 执行回归(离线自检)</span><br><span class="line">                                              → 本地 resolve 服务供离线 Runtime</span><br></pre></td></tr></table></figure>
+
+<p>四个离线特有问题的解法：</p>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>解法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>吊销清单陈旧度无法满足 ≤7 天</td>
+<td>策略降级为”≤上次导入时刻” + 每次导入强制携带最新清单 + 导入频率写进安全合规承诺（技术松一格，流程补一格）</td>
+</tr>
+<tr>
+<td>时钟不可信导致签名时间验证失效</td>
+<td>验证改用单调序：清单序号必须递增，不依赖墙钟</td>
+</tr>
+<tr>
+<td>离线侧无法回传遥测</td>
+<td>遥测本地落盘 + 随下次物理交换回传；质量分对该租户标注”数据滞后”</td>
+</tr>
+<tr>
+<td>离线侧自研私有技能</td>
+<td>离线本地签名密钥（root 签发的分支 key），产物永不回流公共库——单向阀</td>
+</tr>
+</tbody></table>
+<h2 id="9-边缘与车端部署"><a href="#9-边缘与车端部署" class="headerlink" title="9. 边缘与车端部署"></a>9. 边缘与车端部署</h2><p>产业物联网平台的特有命题：诊断 Agent 不一定跑在云上——厂端工位机、4S 店诊断仪、乃至车端座舱域控都可能承载轻量 Agent。分发链路的末端设计：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">区域缓存 ──▶ 边缘网关(厂端/店端服务器)</span><br><span class="line">                ├─ 全量: 订阅域的 L1/L2 (KB~MB 级)</span><br><span class="line">                ├─ 懒拉: L3, 带 LFU + 磁盘配额</span><br><span class="line">                └─ 断网降级: 本地快照继续服务, 陈旧度标注进会话遥测</span><br><span class="line">                      │</span><br><span class="line">                      ▼  车端专用通道(复用 OTA 差分下发基建!)</span><br><span class="line">              车端 Agent (座舱域控)</span><br><span class="line">                ├─ 技能子集: 车端白名单族(离线自诊/引导取证类)</span><br><span class="line">                ├─ 差分更新: bundle 间 bsdiff, 走既有 OTA 校验链</span><br><span class="line">                └─ 激活前必验(§3), 存储配额硬顶, 超配额按 LRU 驱逐非白名单项</span><br></pre></td></tr></table></figure>
+
+<p>两个决策值得展开：</p>
+<ol>
+<li><strong>复用 OTA 基建下发技能包</strong>：车端已有安全下发通道（签名、差分、断点、分区校验），技能 bundle 作为一种新 payload 类型接入，而不是另建通道——你的平台在这里有天然主场优势，技能分发的车端可靠性直接继承整车 OTA 的成熟度。反向约束也随之而来：车端技能发版节奏受 OTA 窗口约束，lockfile 按车型×软件版本基线管理，这要求 Registry 的租户模型支持”车型基线”作为一种订阅主体。</li>
+<li><strong>车端技能白名单族</strong>：车端算力与存储决定只承载”离线自诊、取证引导、降级话术”类轻技能；重分析（本手册 03 篇两技能）始终云侧执行，车端技能的职责是把证据可靠地送上云。族级 capability 的 <code>surfaces</code> 字段（04 篇 §6）在此成为分发过滤器——<code>surfaces</code> 不含 <code>vehicle-edge</code> 的技能根本不进车端通道。</li>
+</ol>
+<h2 id="10-Marketplace-同步与供应链"><a href="#10-Marketplace-同步与供应链" class="headerlink" title="10. Marketplace 同步与供应链"></a>10. Marketplace 同步与供应链</h2><p>企业 Registry 镜像上游公共市场（如公共 skills 仓库生态）时，同步不是 rsync 而是<strong>准入流水线</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">上游 watch → 变更清单 → 许可证与来源审查 → 恶意内容扫描</span><br><span class="line">  (指令注入模式扫描: SKILL.md 中的越权指令、外呼诱导、</span><br><span class="line">   base64 块、&quot;ignore previous&quot;类模式)</span><br><span class="line">→ 沙箱试执行(scripts 全量跑一遍 examples)</span><br><span class="line">→ 重签名(平台 key, 保留上游签名为 provenance 链)</span><br><span class="line">→ 入库为 vendored 命名空间: vendor.&lt;origin&gt;:&lt;name&gt;</span><br><span class="line">→ 上游更新不自动前滚, 进标准发布流水线重审</span><br></pre></td></tr></table></figure>
+
+<p>关键立场：<strong>外来技能一经引入即视为自有资产管理</strong>——vendored 命名空间有 owner（引入团队）、有 SLO、有退役流程。”上游改了我们自动跟”等于把上游维护者纳入你的信任计算基座，供应链事故的标准起点。指令注入扫描的模式库与 11 篇的运行时防线互为补充：扫描防已知模式，沙箱与权限收敛防未知模式。</p>
+<h2 id="11-生态借鉴速查"><a href="#11-生态借鉴速查" class="headerlink" title="11. 生态借鉴速查"></a>11. 生态借鉴速查</h2><table>
+<thead>
+<tr>
+<th>生态</th>
+<th>借什么</th>
+<th>不借什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>npm</td>
+<td>lockfile 语义、语义化版本约束表达式</td>
+<td>install 时执行任意脚本（postinstall 是供应链事故温床，技能 scripts 只在沙箱内按需执行）</td>
+</tr>
+<tr>
+<td>OCI&#x2F;镜像</td>
+<td>内容寻址、referrers 挂签名&#x2F;SBOM、区域复制</td>
+<td>可变 tag（latest 漂移；本体系 channel 指针在 Registry 层，产物层无 tag）</td>
+</tr>
+<tr>
+<td>TUF</td>
+<td>密钥分层、吊销新鲜度、降版保护</td>
+<td>全套角色模型（threshold 签名等，企业单一发布方场景过重）</td>
+</tr>
+<tr>
+<td>apt&#x2F;系统包</td>
+<td>依赖闭包解析、发行版&#x3D;经验证组合（对应 plugin 版本）</td>
+<td>全局单版本共存约束（技能多版本天然可并存）</td>
+</tr>
+</tbody></table>
+<h2 id="12-反模式"><a href="#12-反模式" class="headerlink" title="12. 反模式"></a>12. 反模式</h2><ul>
+<li><strong>AP-1 可变 latest 指针进产物层</strong>：channel 解析只在 Registry&#x2F;resolved_set 层发生，缓存与磁盘上只有 digest。</li>
+<li><strong>AP-2 缓存原地覆盖实现”热更新”</strong>：见 §6 禁令。</li>
+<li><strong>AP-3 TTL 式缓存失效</strong>：会话中途失效重取 &#x3D; 同一会话两个版本。失效单位是会话（01 篇），标脏靠事件不靠时钟。</li>
+<li><strong>AP-4 边缘全量同步</strong>：把万级技能库全量推到厂端磁盘。订阅域过滤 + L3 懒拉是边缘的生存方式。</li>
+<li><strong>AP-5 上游自动跟版</strong>：见 §10。</li>
+<li><strong>AP-6 回滚绕过发布流水线</strong>：”紧急”手工改指针不签名不留痕——恰恰在事故最需要审计的时刻销毁了审计。回滚快是因为机制轻，不是因为跳过流程。</li>
+<li><strong>AP-7 遥测阻塞分发</strong>：边缘节点”必须回传成功才继续服务”。遥测尽力而为，服务永远优先。</li>
+</ul>
+<h2 id="13-生产建议与检查清单"><a href="#13-生产建议与检查清单" class="headerlink" title="13. 生产建议与检查清单"></a>13. 生产建议与检查清单</h2><ol>
+<li>四条不变量（§1）进平台 ADR，与 05 篇边界 ADR 并列为分发层宪法。</li>
+<li>双格式同源：zip 真理源 + OCI 云侧复制，manifest digest 跨格式一致。</li>
+<li>TUF 三件套（密钥分层&#x2F;吊销新鲜度&#x2F;降版保护）从第一天实现——事后加装等于全网重建信任。</li>
+<li>同步策略与渐进披露同构：L1&#x2F;L2 推、L3 懒 + 热点预热。</li>
+<li>车端走 OTA 基建复用 + 白名单族 + surfaces 过滤，lockfile 按车型基线。</li>
+<li>灰度自动推进 + 破线冻结 + 回滚提案人确认，三段式发布安全网。</li>
+</ol>
+<ul>
+<li><input disabled="" type="checkbox"> 产物不可变（存储层 WORM）+ 全链内容寻址</li>
+<li><input disabled="" type="checkbox"> 两级哈希树：单文件可独立验证</li>
+<li><input disabled="" type="checkbox"> 密钥分层 + 吊销清单新鲜度策略（在线 ≤7d &#x2F; 离线按导入）</li>
+<li><input disabled="" type="checkbox"> 降版保护 + 运营回滚签名通道</li>
+<li><input disabled="" type="checkbox"> 三层版本锁 + snapshot_id 进遥测</li>
+<li><input disabled="" type="checkbox"> 灰度分桶在 resolved_set 层实现，Runtime 无感</li>
+<li><input disabled="" type="checkbox"> 回滚触发器目录 + 半径矩阵先于事故定义</li>
+<li><input disabled="" type="checkbox"> air-gap 导出器&#x2F;导入器 + 单调序验证 + 遥测延迟回传</li>
+<li><input disabled="" type="checkbox"> 边缘 LFU 配额 + 断网降级陈旧度标注</li>
+<li><input disabled="" type="checkbox"> vendored 命名空间准入流水线（许可&#x2F;扫描&#x2F;试执行&#x2F;重签名）</li>
+</ul>
+<hr>
+<p><em>下一篇（07）进入执行现场：Runtime 如何加载、观测、隔离、取消、恢复与度量技能的每一次心跳。</em></p>
+<hr>
+<h2 id="附录-A：缓存节点同步协议"><a href="#附录-A：缓存节点同步协议" class="headerlink" title="附录 A：缓存节点同步协议"></a>附录 A：缓存节点同步协议</h2><h3 id="A-1-节点状态机"><a href="#A-1-节点状态机" class="headerlink" title="A.1 节点状态机"></a>A.1 节点状态机</h3><pre class="mermaid">stateDiagram-v2
+    [*] --&gt; BOOTSTRAP: 节点启动
+    BOOTSTRAP --&gt; SYNCING: 拉取密钥链+吊销清单+订阅域清单
+    SYNCING --&gt; READY: L1/L2 全量同步完成
+    READY --&gt; READY: 事件驱动增量(published/deprecated)
+    READY --&gt; DEGRADED: 事件流断连 &gt; 阈值
+    DEGRADED --&gt; READY: 重连 + 差量对账(digest 清单比对)
+    DEGRADED --&gt; STALE_SERVING: 断连超陈旧度上限
+    STALE_SERVING --&gt; SYNCING: 恢复连接, 全量对账
+    note right of STALE_SERVING: 继续服务但每个快照
+      标注 staleness, 进会话遥测</pre>
+
+
+<p>DEGRADED 与 STALE_SERVING 的区分是运营语义：前者静默自愈，后者需要告警但<strong>不停止服务</strong>——分发层的可用性优先级高于新鲜度（新会话拿到略旧的稳定版本远好于拿不到）。</p>
+<h3 id="A-2-同步与懒拉取-API"><a href="#A-2-同步与懒拉取-API" class="headerlink" title="A.2 同步与懒拉取 API"></a>A.2 同步与懒拉取 API</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">paths:</span></span><br><span class="line">  <span class="string">/v1/sync/inventory:</span></span><br><span class="line">    <span class="attr">get:</span></span><br><span class="line">      <span class="attr">summary:</span> <span class="string">节点对账清单（订阅域内全部</span> <span class="string">ref@ver</span> <span class="string">→</span> <span class="string">digest</span> <span class="string">映射）</span></span><br><span class="line">      <span class="attr">parameters:</span></span><br><span class="line">        <span class="bullet">-</span> &#123; <span class="attr">name:</span> <span class="string">domains</span>, <span class="attr">in:</span> <span class="string">query</span>, <span class="attr">schema:</span> &#123; <span class="attr">type:</span> <span class="string">array</span> &#125; &#125;</span><br><span class="line">        <span class="bullet">-</span> &#123; <span class="attr">name:</span> <span class="string">since_cursor</span>, <span class="attr">in:</span> <span class="string">query</span>, <span class="attr">schema:</span> &#123; <span class="attr">type:</span> <span class="string">string</span> &#125; &#125;</span><br><span class="line">      <span class="attr">responses:</span></span><br><span class="line">        <span class="attr">&#x27;200&#x27;:</span> &#123; <span class="attr">description:</span> <span class="string">变更集</span> <span class="string">+</span> <span class="string">新</span> <span class="string">cursor</span>, <span class="string">幂等可重放</span> &#125;</span><br><span class="line">  <span class="string">/v1/artifacts/&#123;digest&#125;:</span></span><br><span class="line">    <span class="attr">get:</span></span><br><span class="line">      <span class="attr">summary:</span> <span class="string">内容寻址取产物（整包）</span></span><br><span class="line">      <span class="attr">responses:</span></span><br><span class="line">        <span class="attr">&#x27;200&#x27;:</span> &#123; <span class="attr">description:</span> <span class="string">bundle</span> <span class="string">字节流</span>, <span class="string">ETag=digest</span>, <span class="string">无限期缓存</span> &#125;</span><br><span class="line">  <span class="string">/v1/artifacts/&#123;digest&#125;/files/&#123;path&#125;:</span></span><br><span class="line">    <span class="attr">get:</span></span><br><span class="line">      <span class="attr">summary:</span> <span class="string">单文件懒拉取（L3</span> <span class="string">路径）</span></span><br><span class="line">      <span class="attr">description:</span> <span class="string">服务端按</span> <span class="string">manifest</span> <span class="string">file_tree</span> <span class="string">校验</span> <span class="string">path</span> <span class="string">合法性;</span></span><br><span class="line">                   <span class="string">客户端收到后本地比对文件</span> <span class="string">digest（两级哈希树,</span> <span class="string">§2.1）</span></span><br><span class="line">      <span class="attr">responses:</span></span><br><span class="line">        <span class="attr">&#x27;200&#x27;:</span> &#123; <span class="attr">description:</span> <span class="string">文件字节流</span> &#125;</span><br><span class="line">        <span class="attr">&#x27;404&#x27;:</span> &#123; <span class="attr">description:</span> <span class="string">path</span> <span class="string">不在该产物</span> <span class="string">file_tree</span> <span class="string">中</span> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>内容寻址带来的免费礼物在此兑现：<code>ETag = digest</code> + 无限期缓存头，CDN&#x2F;代理层零配置正确。</p>
+<h3 id="A-3-懒拉取时序（L3-miss-路径）"><a href="#A-3-懒拉取时序（L3-miss-路径）" class="headerlink" title="A.3 懒拉取时序（L3 miss 路径）"></a>A.3 懒拉取时序（L3 miss 路径）</h3><pre class="mermaid">sequenceDiagram
+    participant M as 模型
+    participant RT as Runtime(节点)
+    participant NC as 节点缓存
+    participant RC as 区域缓存
+
+    M-&gt;&gt;RT: view …/references/error_code_mapping.md
+    RT-&gt;&gt;NC: 读文件(快照内路径)
+    NC--&gt;&gt;RT: MISS
+    RT-&gt;&gt;RC: GET /artifacts/&#123;digest&#125;/files/references/error_code_mapping.md
+    RC--&gt;&gt;RT: 文件流
+    RT-&gt;&gt;RT: sha256 比对 file_tree 声明 → 通过
+    RT-&gt;&gt;NC: 写入(LFU 记账)
+    RT--&gt;&gt;M: 文件内容 (整体 P95 目标 &lt;300ms)
+    Note over RT: 比对失败 → 丢弃+告警+从源重取一次, 再失败即工具错误</pre>
+
+
+<h2 id="附录-B：bundle-验证器参考实现"><a href="#附录-B：bundle-验证器参考实现" class="headerlink" title="附录 B：bundle 验证器参考实现"></a>附录 B：bundle 验证器参考实现</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python3</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;bundle 验证器：签名 → 哈希树 → 策略三段验证。</span></span><br><span class="line"><span class="string">导入器(air-gap)、边缘网关、车端 Agent 共用同一实现的移植版。&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> hashlib, json, zipfile</span><br><span class="line"><span class="keyword">from</span> dataclasses <span class="keyword">import</span> dataclass</span><br><span class="line"></span><br><span class="line"><span class="meta">@dataclass</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">TrustStore</span>:</span><br><span class="line">    root_keys: <span class="built_in">dict</span>          <span class="comment"># keyid -&gt; 公钥</span></span><br><span class="line">    key_chain: <span class="built_in">dict</span>          <span class="comment"># signing keyid -&gt; root 签发证明</span></span><br><span class="line">    revoked: <span class="built_in">set</span>             <span class="comment"># 被吊销的产物 digest</span></span><br><span class="line">    revocation_seq: <span class="built_in">int</span>      <span class="comment"># 单调序号(§8 离线时钟对策)</span></span><br><span class="line">    max_staleness_ok: <span class="built_in">bool</span>   <span class="comment"># 新鲜度策略判定结果(在线/离线不同)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">VerifyError</span>(<span class="title class_ inherited__">Exception</span>): ...</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">verify_bundle</span>(<span class="params">path: <span class="built_in">str</span>, ts: TrustStore, seen_versions: <span class="built_in">dict</span></span>) -&gt; <span class="built_in">dict</span>:</span><br><span class="line">    z = zipfile.ZipFile(path)</span><br><span class="line">    manifest_raw = z.read(<span class="string">&quot;manifest.json&quot;</span>)</span><br><span class="line">    manifest = json.loads(manifest_raw)</span><br><span class="line">    sig = json.loads(z.read(<span class="string">&quot;manifest.sig&quot;</span>))</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 1. 签名链: signing key 必须由 root 签发且未过期</span></span><br><span class="line">    <span class="keyword">if</span> sig[<span class="string">&quot;keyid&quot;</span>] <span class="keyword">not</span> <span class="keyword">in</span> ts.key_chain:</span><br><span class="line">        <span class="keyword">raise</span> VerifyError(<span class="string">f&quot;未知签名密钥 <span class="subst">&#123;sig[<span class="string">&#x27;keyid&#x27;</span>]&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> ed25519_verify(ts.key_chain[sig[<span class="string">&quot;keyid&quot;</span>]].pubkey,</span><br><span class="line">                          hashlib.sha256(manifest_raw).digest(), sig[<span class="string">&quot;sig&quot;</span>]):</span><br><span class="line">        <span class="keyword">raise</span> VerifyError(<span class="string">&quot;manifest 签名不通过&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 2. 新鲜度与吊销</span></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> ts.max_staleness_ok:</span><br><span class="line">        <span class="keyword">raise</span> VerifyError(<span class="string">&quot;吊销清单陈旧度超限, 拒绝安装(防冻结攻击)&quot;</span>)</span><br><span class="line">    bundle_digest = manifest[<span class="string">&quot;content&quot;</span>][<span class="string">&quot;artifact_digest&quot;</span>]</span><br><span class="line">    <span class="keyword">if</span> bundle_digest <span class="keyword">in</span> ts.revoked:</span><br><span class="line">        <span class="keyword">raise</span> VerifyError(<span class="string">&quot;产物已被吊销&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 3. 降版保护(带运营回滚豁免)</span></span><br><span class="line">    ref, ver = manifest[<span class="string">&quot;plugin&quot;</span>], manifest[<span class="string">&quot;version&quot;</span>]</span><br><span class="line">    <span class="keyword">if</span> semver_lt(ver, seen_versions.get(ref, <span class="string">&quot;0.0.0&quot;</span>)) \</span><br><span class="line">       <span class="keyword">and</span> <span class="keyword">not</span> valid_rollback_token(manifest, ts):</span><br><span class="line">        <span class="keyword">raise</span> VerifyError(<span class="string">f&quot;降版被拒 <span class="subst">&#123;ref&#125;</span>: <span class="subst">&#123;ver&#125;</span> &lt; <span class="subst">&#123;seen_versions[ref]&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 4. 哈希树: 逐文件比对(流式, 大 bundle 内存 O(1))</span></span><br><span class="line">    declared = &#123;f[<span class="string">&quot;path&quot;</span>]: f[<span class="string">&quot;digest&quot;</span>] <span class="keyword">for</span> s <span class="keyword">in</span> manifest[<span class="string">&quot;skills&quot;</span>]</span><br><span class="line">                <span class="keyword">for</span> f <span class="keyword">in</span> s[<span class="string">&quot;file_tree&quot;</span>]&#125;</span><br><span class="line">    <span class="keyword">for</span> info <span class="keyword">in</span> z.infolist():</span><br><span class="line">        <span class="keyword">if</span> info.filename <span class="keyword">in</span> (<span class="string">&quot;manifest.json&quot;</span>, <span class="string">&quot;manifest.sig&quot;</span>):</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        <span class="keyword">if</span> info.filename <span class="keyword">not</span> <span class="keyword">in</span> declared:</span><br><span class="line">            <span class="keyword">raise</span> VerifyError(<span class="string">f&quot;未声明文件 <span class="subst">&#123;info.filename&#125;</span>&quot;</span>)   <span class="comment"># 夹带检测</span></span><br><span class="line">        h = hashlib.sha256()</span><br><span class="line">        <span class="keyword">with</span> z.<span class="built_in">open</span>(info) <span class="keyword">as</span> fh:</span><br><span class="line">            <span class="keyword">for</span> chunk <span class="keyword">in</span> <span class="built_in">iter</span>(<span class="keyword">lambda</span>: fh.read(<span class="number">1</span> &lt;&lt; <span class="number">20</span>), <span class="string">b&quot;&quot;</span>):</span><br><span class="line">                h.update(chunk)</span><br><span class="line">        <span class="keyword">if</span> h.hexdigest() != declared.pop(info.filename):</span><br><span class="line">            <span class="keyword">raise</span> VerifyError(<span class="string">f&quot;哈希不符 <span class="subst">&#123;info.filename&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="keyword">if</span> declared:</span><br><span class="line">        <span class="keyword">raise</span> VerifyError(<span class="string">f&quot;声明文件缺失 <span class="subst">&#123;<span class="built_in">sorted</span>(declared)[:<span class="number">5</span>]&#125;</span>&quot;</span>)   <span class="comment"># 缺件检测</span></span><br><span class="line">    <span class="keyword">return</span> manifest</span><br><span class="line"></span><br><span class="line"><span class="comment"># 夹带(未声明文件)与缺件(声明未含)双向检测是第 4 段的要点——</span></span><br><span class="line"><span class="comment"># 只验&quot;存在的文件哈希对&quot;会漏掉注入了额外文件的篡改包。</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="附录-C：车端差分与配额策略"><a href="#附录-C：车端差分与配额策略" class="headerlink" title="附录 C：车端差分与配额策略"></a>附录 C：车端差分与配额策略</h2><table>
+<thead>
+<tr>
+<th>项</th>
+<th>策略</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>差分基线</td>
+<td>bundle 级 bsdiff，基线 &#x3D; 车端当前已装版本</td>
+<td>复用整车 OTA 差分器；跨 2 个以上版本直接全量（差分链回放风险不值得省流量）</td>
+</tr>
+<tr>
+<td>差分校验</td>
+<td>补丁应用后比对目标 bundle digest，再走附录 B 全量验证</td>
+<td>差分只是传输优化，信任判定永远对完整产物</td>
+</tr>
+<tr>
+<td>存储配额</td>
+<td>白名单族保留 + 非白名单 LRU；单车技能存储硬顶（建议 ≤64MB）</td>
+<td>配额压力事件上报云端，作为白名单收敛依据</td>
+</tr>
+<tr>
+<td>更新窗口</td>
+<td>跟随整车 OTA 静默窗口（熄火驻车 + 电量阈值）</td>
+<td>技能包与固件包同窗不同事务，互不阻塞</td>
+</tr>
+<tr>
+<td>失败回退</td>
+<td>AB 双目录（current&#x2F;next 指针切换），激活失败自动回指</td>
+<td>与 ota_flow 的分区切换同构，车端团队零新概念</td>
+</tr>
+</tbody></table>
+<h2 id="附录-D：分发层-SLO-基准"><a href="#附录-D：分发层-SLO-基准" class="headerlink" title="附录 D：分发层 SLO 基准"></a>附录 D：分发层 SLO 基准</h2><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>目标</th>
+<th>破线动作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>发布→区域缓存可见 P95</td>
+<td>&lt;60s</td>
+<td>事件管道积压告警</td>
+</tr>
+<tr>
+<td>节点 L1&#x2F;L2 命中率</td>
+<td>&gt;99.9%</td>
+<td>命中率跌 &#x3D; 同步协议故障，非扩容问题</td>
+</tr>
+<tr>
+<td>L3 懒拉取 P95（含验证）</td>
+<td>&lt;300ms</td>
+<td>热点预热清单扩容</td>
+</tr>
+<tr>
+<td>STALE_SERVING 时长占比</td>
+<td>&lt;0.1%</td>
+<td>网络&#x2F;事件流专项</td>
+</tr>
+<tr>
+<td>车端更新成功率</td>
+<td>对齐整车 OTA 成功率基线</td>
+<td>走 OTA 既有质量体系</td>
+</tr>
+</tbody></table>
+<ul>
+<li><input disabled="" type="checkbox"> 附录 A~D 全部落地后，06 篇正文清单方可勾”完成”</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/11/25/agent-systems/Skill%E5%B9%B3%E5%8F%B0-07-%E8%BF%90%E8%A1%8C%E6%97%B6/">Skill 运行时</a></h3>
+        <p>企业级 Skill Registry 平台工程手册 · 第 07 篇前置阅读：01 篇（状态机 + Runtime 四职责：注入路由表、存储…</p>
+        <a class="btn primary" href="/2025/11/25/agent-systems/Skill%E5%B9%B3%E5%8F%B0-07-%E8%BF%90%E8%A1%8C%E6%97%B6/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/08/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-05-%E6%B3%A8%E5%86%8C%E4%B8%AD%E5%BF%83/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Skill 注册中心架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 18 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#06-%C2%B7-Skill-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB%EF%BC%9A%E4%BB%8E%E7%AD%BE%E5%90%8D%E4%BA%A7%E7%89%A9%E5%88%B0-Air-gap-%E4%B8%8E%E8%BD%A6%E7%AB%AF%E8%BE%B9%E7%BC%98" data-toc-target="06-·-Skill-分发体系：从签名产物到-Air-gap-与车端边缘"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">06 · Skill 分发体系：从签名产物到 Air-gap 与车端边缘</span></a><a class="toc-level-2" href="#1-%E6%A6%82%E8%BF%B0%EF%BC%9A%E5%88%86%E5%8F%91%E5%B1%82%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8D%E5%8F%98%E9%87%8F" data-toc-target="1-概述：分发层的设计不变量"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 概述：分发层的设计不变量</span></a><a class="toc-level-2" href="#2-%E6%89%93%E5%8C%85%E6%A0%BC%E5%BC%8F%EF%BC%9A-skill-plugin-bundle" data-toc-target="2-打包格式：-skill-plugin-bundle"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 打包格式：.skill / .plugin bundle</span></a><a class="toc-level-3" href="#2-1-%E7%BB%93%E6%9E%84" data-toc-target="2-1-结构"><span class="toc-text">2.1 结构</span></a><a class="toc-level-3" href="#2-2-%E4%B8%8E-OCI-Artifact-%E7%9A%84%E5%AF%B9%E6%AF%94%E5%86%B3%E7%AD%96" data-toc-target="2-2-与-OCI-Artifact-的对比决策"><span class="toc-text">2.2 与 OCI Artifact 的对比决策</span></a><a class="toc-level-2" href="#3-%E7%AD%BE%E5%90%8D%E4%B8%8E%E4%BF%A1%E4%BB%BB%E9%93%BE" data-toc-target="3-签名与信任链"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 签名与信任链</span></a><a class="toc-level-2" href="#4-%E5%88%86%E5%8F%91%E6%8B%93%E6%89%91" data-toc-target="4-分发拓扑"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 分发拓扑</span></a><a class="toc-level-2" href="#5-%E7%89%88%E6%9C%AC%E9%94%81%EF%BC%9A%E4%B8%89%E5%B1%82-lock-%E8%AF%AD%E4%B9%89" data-toc-target="5-版本锁：三层-lock-语义"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 版本锁：三层 lock 语义</span></a><a class="toc-level-2" href="#6-%E7%83%AD%E6%9B%B4%E6%96%B0%EF%BC%9A%E8%AF%AD%E4%B9%89%E8%BE%B9%E7%95%8C%E4%B8%8E%E7%81%B0%E5%BA%A6" data-toc-target="6-热更新：语义边界与灰度"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 热更新：语义边界与灰度</span></a><a class="toc-level-2" href="#7-%E5%9B%9E%E6%BB%9A" data-toc-target="7-回滚"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 回滚</span></a><a class="toc-level-2" href="#8-Air-gapped-%E7%8E%AF%E5%A2%83" data-toc-target="8-Air-gapped-环境"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. Air-gapped 环境</span></a><a class="toc-level-2" href="#9-%E8%BE%B9%E7%BC%98%E4%B8%8E%E8%BD%A6%E7%AB%AF%E9%83%A8%E7%BD%B2" data-toc-target="9-边缘与车端部署"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 边缘与车端部署</span></a><a class="toc-level-2" href="#10-Marketplace-%E5%90%8C%E6%AD%A5%E4%B8%8E%E4%BE%9B%E5%BA%94%E9%93%BE" data-toc-target="10-Marketplace-同步与供应链"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. Marketplace 同步与供应链</span></a><a class="toc-level-2" href="#11-%E7%94%9F%E6%80%81%E5%80%9F%E9%89%B4%E9%80%9F%E6%9F%A5" data-toc-target="11-生态借鉴速查"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 生态借鉴速查</span></a><a class="toc-level-2" href="#12-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="12-反模式"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">12. 反模式</span></a><a class="toc-level-2" href="#13-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E4%B8%8E%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="13-生产建议与检查清单"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">13. 生产建议与检查清单</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-A%EF%BC%9A%E7%BC%93%E5%AD%98%E8%8A%82%E7%82%B9%E5%90%8C%E6%AD%A5%E5%8D%8F%E8%AE%AE" data-toc-target="附录-A：缓存节点同步协议"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">附录 A：缓存节点同步协议</span></a><a class="toc-level-3" href="#A-1-%E8%8A%82%E7%82%B9%E7%8A%B6%E6%80%81%E6%9C%BA" data-toc-target="A-1-节点状态机"><span class="toc-text">A.1 节点状态机</span></a><a class="toc-level-3" href="#A-2-%E5%90%8C%E6%AD%A5%E4%B8%8E%E6%87%92%E6%8B%89%E5%8F%96-API" data-toc-target="A-2-同步与懒拉取-API"><span class="toc-text">A.2 同步与懒拉取 API</span></a><a class="toc-level-3" href="#A-3-%E6%87%92%E6%8B%89%E5%8F%96%E6%97%B6%E5%BA%8F%EF%BC%88L3-miss-%E8%B7%AF%E5%BE%84%EF%BC%89" data-toc-target="A-3-懒拉取时序（L3-miss-路径）"><span class="toc-text">A.3 懒拉取时序（L3 miss 路径）</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-B%EF%BC%9Abundle-%E9%AA%8C%E8%AF%81%E5%99%A8%E5%8F%82%E8%80%83%E5%AE%9E%E7%8E%B0" data-toc-target="附录-B：bundle-验证器参考实现"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">附录 B：bundle 验证器参考实现</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-C%EF%BC%9A%E8%BD%A6%E7%AB%AF%E5%B7%AE%E5%88%86%E4%B8%8E%E9%85%8D%E9%A2%9D%E7%AD%96%E7%95%A5" data-toc-target="附录-C：车端差分与配额策略"><i class="toc-num" aria-hidden="true">17</i><span class="toc-text">附录 C：车端差分与配额策略</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-D%EF%BC%9A%E5%88%86%E5%8F%91%E5%B1%82-SLO-%E5%9F%BA%E5%87%86" data-toc-target="附录-D：分发层-SLO-基准"><i class="toc-num" aria-hidden="true">18</i><span class="toc-text">附录 D：分发层 SLO 基准</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/skill-platform/" style="--rail: 45%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 11</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#06-%C2%B7-Skill-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB%EF%BC%9A%E4%BB%8E%E7%AD%BE%E5%90%8D%E4%BA%A7%E7%89%A9%E5%88%B0-Air-gap-%E4%B8%8E%E8%BD%A6%E7%AB%AF%E8%BE%B9%E7%BC%98" data-toc-target="06-·-Skill-分发体系：从签名产物到-Air-gap-与车端边缘" data-title="01 · 06 · Skill 分发体系：从签名产物到 Air-gap 与车端边缘" aria-label="06 · Skill 分发体系：从签名产物到 Air-gap 与车端边缘"></a><a class="toc-strip__dot" href="#1-%E6%A6%82%E8%BF%B0%EF%BC%9A%E5%88%86%E5%8F%91%E5%B1%82%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8D%E5%8F%98%E9%87%8F" data-toc-target="1-概述：分发层的设计不变量" data-title="02 · 1. 概述：分发层的设计不变量" aria-label="1. 概述：分发层的设计不变量"></a><a class="toc-strip__dot" href="#2-%E6%89%93%E5%8C%85%E6%A0%BC%E5%BC%8F%EF%BC%9A-skill-plugin-bundle" data-toc-target="2-打包格式：-skill-plugin-bundle" data-title="03 · 2. 打包格式：.skill / .plugin bundle" aria-label="2. 打包格式：.skill / .plugin bundle"></a><a class="toc-strip__dot" href="#3-%E7%AD%BE%E5%90%8D%E4%B8%8E%E4%BF%A1%E4%BB%BB%E9%93%BE" data-toc-target="3-签名与信任链" data-title="04 · 3. 签名与信任链" aria-label="3. 签名与信任链"></a><a class="toc-strip__dot" href="#4-%E5%88%86%E5%8F%91%E6%8B%93%E6%89%91" data-toc-target="4-分发拓扑" data-title="05 · 4. 分发拓扑" aria-label="4. 分发拓扑"></a><a class="toc-strip__dot" href="#5-%E7%89%88%E6%9C%AC%E9%94%81%EF%BC%9A%E4%B8%89%E5%B1%82-lock-%E8%AF%AD%E4%B9%89" data-toc-target="5-版本锁：三层-lock-语义" data-title="06 · 5. 版本锁：三层 lock 语义" aria-label="5. 版本锁：三层 lock 语义"></a><a class="toc-strip__dot" href="#6-%E7%83%AD%E6%9B%B4%E6%96%B0%EF%BC%9A%E8%AF%AD%E4%B9%89%E8%BE%B9%E7%95%8C%E4%B8%8E%E7%81%B0%E5%BA%A6" data-toc-target="6-热更新：语义边界与灰度" data-title="07 · 6. 热更新：语义边界与灰度" aria-label="6. 热更新：语义边界与灰度"></a><a class="toc-strip__dot" href="#7-%E5%9B%9E%E6%BB%9A" data-toc-target="7-回滚" data-title="08 · 7. 回滚" aria-label="7. 回滚"></a><a class="toc-strip__dot" href="#8-Air-gapped-%E7%8E%AF%E5%A2%83" data-toc-target="8-Air-gapped-环境" data-title="09 · 8. Air-gapped 环境" aria-label="8. Air-gapped 环境"></a><a class="toc-strip__dot" href="#9-%E8%BE%B9%E7%BC%98%E4%B8%8E%E8%BD%A6%E7%AB%AF%E9%83%A8%E7%BD%B2" data-toc-target="9-边缘与车端部署" data-title="10 · 9. 边缘与车端部署" aria-label="9. 边缘与车端部署"></a><a class="toc-strip__dot" href="#10-Marketplace-%E5%90%8C%E6%AD%A5%E4%B8%8E%E4%BE%9B%E5%BA%94%E9%93%BE" data-toc-target="10-Marketplace-同步与供应链" data-title="11 · 10. Marketplace 同步与供应链" aria-label="10. Marketplace 同步与供应链"></a><a class="toc-strip__dot" href="#11-%E7%94%9F%E6%80%81%E5%80%9F%E9%89%B4%E9%80%9F%E6%9F%A5" data-toc-target="11-生态借鉴速查" data-title="12 · 11. 生态借鉴速查" aria-label="11. 生态借鉴速查"></a><a class="toc-strip__dot" href="#12-%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="12-反模式" data-title="13 · 12. 反模式" aria-label="12. 反模式"></a><a class="toc-strip__dot" href="#13-%E7%94%9F%E4%BA%A7%E5%BB%BA%E8%AE%AE%E4%B8%8E%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="13-生产建议与检查清单" data-title="14 · 13. 生产建议与检查清单" aria-label="13. 生产建议与检查清单"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-A%EF%BC%9A%E7%BC%93%E5%AD%98%E8%8A%82%E7%82%B9%E5%90%8C%E6%AD%A5%E5%8D%8F%E8%AE%AE" data-toc-target="附录-A：缓存节点同步协议" data-title="15 · 附录 A：缓存节点同步协议" aria-label="附录 A：缓存节点同步协议"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-B%EF%BC%9Abundle-%E9%AA%8C%E8%AF%81%E5%99%A8%E5%8F%82%E8%80%83%E5%AE%9E%E7%8E%B0" data-toc-target="附录-B：bundle-验证器参考实现" data-title="16 · 附录 B：bundle 验证器参考实现" aria-label="附录 B：bundle 验证器参考实现"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-C%EF%BC%9A%E8%BD%A6%E7%AB%AF%E5%B7%AE%E5%88%86%E4%B8%8E%E9%85%8D%E9%A2%9D%E7%AD%96%E7%95%A5" data-toc-target="附录-C：车端差分与配额策略" data-title="17 · 附录 C：车端差分与配额策略" aria-label="附录 C：车端差分与配额策略"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-D%EF%BC%9A%E5%88%86%E5%8F%91%E5%B1%82-SLO-%E5%9F%BA%E5%87%86" data-toc-target="附录-D：分发层-SLO-基准" data-title="18 · 附录 D：分发层 SLO 基准" aria-label="附录 D：分发层 SLO 基准"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/Skill平台-06-分发体系","title":"Skill 分发体系","url":"/2025/10/07/agent-systems/Skill%E5%B9%B3%E5%8F%B0-06-%E5%88%86%E5%8F%91%E4%BD%93%E7%B3%BB/","path":"skill-platform","index":4,"total":11,"next":{"title":"Skill 运行时","url":"/2025/11/25/agent-systems/Skill%E5%B9%B3%E5%8F%B0-07-%E8%BF%90%E8%A1%8C%E6%97%B6/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

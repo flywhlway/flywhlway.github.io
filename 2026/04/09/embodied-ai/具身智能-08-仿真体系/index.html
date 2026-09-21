@@ -1,0 +1,742 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>机器人仿真体系 · 飞轮之道</title>
+<meta name="description" content="第七篇的飞轮两次写着「交给仿真」。本篇正面回答：仿真器怎么选、Sim2Real 鸿沟怎么跨、合成数据与域随机化怎么工作、仿真如何作为「平台的一等公民」接入你的数据引擎与评测体系。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/04/09/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-08-%E4%BB%BF%E7%9C%9F%E4%BD%93%E7%B3%BB/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="机器人仿真体系 · 飞轮之道">
+<meta property="og:description" content="第七篇的飞轮两次写着「交给仿真」。本篇正面回答：仿真器怎么选、Sim2Real 鸿沟怎么跨、合成数据与域随机化怎么工作、仿真如何作为「平台的一等公民」接入你的数据引擎与评测体系。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/04/09/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-08-%E4%BB%BF%E7%9C%9F%E4%BD%93%E7%B3%BB/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518314916381-77a37c2a49ae?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-ai-engineering/">数据与仿真</a><a class="series-chip" href="/paths/embodied-ai-engineering/" title="查看学习路径">第 8 / 13 篇</a>
+    </div>
+    <h1>机器人仿真体系</h1>
+    <p class="article-deck">第七篇的飞轮两次写着「交给仿真」。本篇正面回答：仿真器怎么选、Sim2Real 鸿沟怎么跨、合成数据与域随机化怎么工作、仿真如何作为「平台的一等公民」接入你的数据引擎与评测体系。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>14 分钟</span>
+      <span>发布于 2026.04</span>
+      <a class="article-meta__tag" href="/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">#具身智能</a><a class="article-meta__tag" href="/tags/AIoT/">#AIoT</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>仿真的三个身份</li><li>Sim2Real 四条沟</li><li>「真机可得观测」纪律</li></ol>
+      <a class="takeaways-more" href="#8-6-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93">查看全部 10 条 →</a>
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>📖 <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">返回总目录</a> ｜ 🗺️ <a href="../MOC-%E5%8F%8C%E9%93%BE%E5%AF%BC%E8%88%AA.md">MOC 导航</a></p>
+</blockquote>
+<hr>
+<h2 id="第八篇-Simulation"><a href="#第八篇-Simulation" class="headerlink" title="第八篇 Simulation"></a>第八篇 Simulation</h2><blockquote>
+<p>第七篇的飞轮两次写着「交给仿真」。本篇正面回答：仿真器怎么选、Sim2Real 鸿沟怎么跨、合成数据与域随机化怎么工作、仿真如何作为「平台的一等公民」接入你的数据引擎与评测体系。平台架构师的定位再次明确：<strong>不求会建场景与调物理参数，但求能把仿真做成平台服务</strong>——就像你不写 Flink 算子的每一行，但你定义了数据平台。</p>
+</blockquote>
+<h2 id="8-0-本篇导读"><a href="#8-0-本篇导读" class="headerlink" title="8.0 本篇导读"></a>8.0 本篇导读</h2><h3 id="8-0-1-仿真在平台里的三个身份"><a href="#8-0-1-仿真在平台里的三个身份" class="headerlink" title="8.0.1 仿真在平台里的三个身份"></a>8.0.1 仿真在平台里的三个身份</h3><p><strong>身份一：数据工厂</strong>（合成训练数据，5.4.1 三源之一）；<strong>身份二：考场</strong>（评测基准与闭环重放，7.7 的闭环缺口由此补上）；<strong>身份三：孪生沙盘</strong>（4.4.1 的 L3 仿真孪生：新策略&#x2F;新布局先在数字副本上推演）。三个身份对应三条平台接口——数据出口、评测入口、孪生同步——本篇围绕它们展开。</p>
+<h3 id="8-0-2-学完本篇你能回答的十个问题"><a href="#8-0-2-学完本篇你能回答的十个问题" class="headerlink" title="8.0.2 学完本篇你能回答的十个问题"></a>8.0.2 学完本篇你能回答的十个问题</h3><ol>
+<li>为什么必须 Sim2Real？鸿沟具体「沟」在哪四处？</li>
+<li>Isaac Sim &#x2F; Isaac Lab &#x2F; Genesis &#x2F; Gazebo &#x2F; MuJoCo &#x2F; Webots 各自定位与选型判据？</li>
+<li>物理引擎、渲染器、场景描述（USD&#x2F;URDF&#x2F;MJCF）三者什么关系？</li>
+<li>Domain Randomization 的原理与「随机化什么」清单？</li>
+<li>合成数据管道如何接入第七篇的湖仓与数据集体系？</li>
+<li>仿真评测基准怎么建？「仿真分」与「真机分」的相关性如何校准？</li>
+<li>仿真孪生与 4.4 的影子&#x2F;孪生如何同步？</li>
+<li>仿真farm（批量并行仿真）的基础设施怎么搭？和你的 K8s&#x2F;GPU 经验什么关系？</li>
+<li>RL 训练与模仿学习对仿真的要求有何不同？</li>
+<li>平台架构师的仿真学习路线是什么？</li>
+</ol>
+<h3 id="8-0-3-本篇知识地图"><a href="#8-0-3-本篇知识地图" class="headerlink" title="8.0.3 本篇知识地图"></a>8.0.3 本篇知识地图</h3><pre class="mermaid">mindmap
+  root((第八篇 Simulation))
+    为什么仿真
+      三个身份
+      Sim2Real 四条沟
+    仿真器选型
+      Isaac 系
+      Genesis
+      MuJoCo Gazebo Webots
+      选型决策表
+    三层解剖
+      物理引擎
+      渲染器
+      场景描述 USD URDF MJCF
+    Sim2Real 工具箱
+      域随机化
+      系统辨识
+      真实到仿真重建
+    合成数据
+      管道接湖仓
+      标注免费
+      配比纪律
+    仿真评测
+      基准场景包
+      相关性校准
+      CI 化
+    仿真孪生
+      站点重建
+      推演沙盘
+    仿真基础设施
+      仿真 farm
+      K8s GPU 调度
+    学习路线</pre>
+
+
+<hr>
+<h2 id="8-1-为什么必须-Sim2Real：四条沟"><a href="#8-1-为什么必须-Sim2Real：四条沟" class="headerlink" title="8.1 为什么必须 Sim2Real：四条沟"></a>8.1 为什么必须 Sim2Real：四条沟</h2><h3 id="8-1-1-仿真的经济学（一分钟说服任何人）"><a href="#8-1-1-仿真的经济学（一分钟说服任何人）" class="headerlink" title="8.1.1 仿真的经济学（一分钟说服任何人）"></a>8.1.1 仿真的经济学（一分钟说服任何人）</h3><p>真机数据按人时计价（5.4.1），且危险场景（跌倒、碰撞、极限负载）在真机上<strong>不可采</strong>；仿真数据按 GPU 时计价，可并行万份、可随机万变、危险免费。结论不是「仿真替代真机」，而是 5.4.1 的配方：<strong>仿真给覆盖、真机给对齐</strong>——仿真把真机数据的边际价值放大。</p>
+<h3 id="8-1-2-Sim2Real-鸿沟的四条沟"><a href="#8-1-2-Sim2Real-鸿沟的四条沟" class="headerlink" title="8.1.2 Sim2Real 鸿沟的四条沟"></a>8.1.2 Sim2Real 鸿沟的四条沟</h3><table>
+<thead>
+<tr>
+<th>沟</th>
+<th>内容</th>
+<th>主要解法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>物理沟</td>
+<td>摩擦&#x2F;接触&#x2F;柔性体&#x2F;电机响应建模不准</td>
+<td>系统辨识 + 物理参数随机化</td>
+</tr>
+<tr>
+<td>视觉沟</td>
+<td>渲染与真实相机的光照&#x2F;噪声&#x2F;畸变差异</td>
+<td>高保真渲染 + 视觉随机化 + 真实纹理注入</td>
+</tr>
+<tr>
+<td>状态沟</td>
+<td>仿真里有上帝视角真值，真机只有带噪估计</td>
+<td>训练时只用真机可得的观测（纪律！）</td>
+</tr>
+<tr>
+<td>时延沟</td>
+<td>仿真常是理想同步，真机有传感&#x2F;推理&#x2F;执行延迟</td>
+<td>在仿真里注入延迟模型（第五篇延迟预算的仿真化）</td>
+</tr>
+</tbody></table>
+<p>第四条最常被忽略也最致命：仿真里 0 延迟闭环训出的策略，上真机遇到 100ms 推理延迟直接失稳——<strong>把 5.5.1 的延迟预算注入仿真是平台该立的规矩</strong>。</p>
+<h3 id="8-1-3-与产业物联网平台的映射"><a href="#8-1-3-与产业物联网平台的映射" class="headerlink" title="8.1.3 与产业物联网平台的映射"></a>8.1.3 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>Sim2Real</th>
+<th>智驾仿真</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>四条沟</td>
+<td>传感器仿真&#x2F;车辆动力学&#x2F;时延建模</td>
+<td>同款课题</td>
+</tr>
+<tr>
+<td>仿真给覆盖真机给对齐</td>
+<td>仿真里程 vs 路测里程</td>
+<td>同一经济学</td>
+</tr>
+<tr>
+<td>危险场景免费</td>
+<td>事故场景仿真重建</td>
+<td>同款价值</td>
+</tr>
+</tbody></table>
+<h3 id="8-1-4-企业实践建议"><a href="#8-1-4-企业实践建议" class="headerlink" title="8.1.4 企业实践建议"></a>8.1.4 企业实践建议</h3><p>立一条「<strong>真机可得观测</strong>」纪律并做进训练框架校验：策略网络的输入清单必须是真机观测契约（5.3.1）的子集，仿真真值（物体真实位姿等）只允许用于奖励与评测计算——这条纪律能挡掉最隐蔽的一类 Sim2Real 失败（模型偷看了上帝视角）。</p>
+<h3 id="8-1-5-面试可能问什么"><a href="#8-1-5-面试可能问什么" class="headerlink" title="8.1.5 面试可能问什么"></a>8.1.5 面试可能问什么</h3><ol>
+<li>Sim2Real 沟在哪？（要点：物理&#x2F;视觉&#x2F;状态&#x2F;时延四条 + 各自解法 + 时延沟最易漏）</li>
+<li>仿真与真机数据怎么配合？（要点：覆盖 vs 对齐 + 危险场景与经济学）</li>
+</ol>
+<h3 id="8-1-6-最佳实践"><a href="#8-1-6-最佳实践" class="headerlink" title="8.1.6 最佳实践"></a>8.1.6 最佳实践</h3><ul>
+<li>仿真环境里注入「真机延迟模型 + 观测噪声模型」，参数来自真机遥测统计（4.8 的数据反哺仿真）。</li>
+</ul>
+<h3 id="8-1-7-常见误区"><a href="#8-1-7-常见误区" class="headerlink" title="8.1.7 常见误区"></a>8.1.7 常见误区</h3><ul>
+<li>❌ 追求「仿真无限逼真」——保真度按用途定（数据工厂要视觉真、控制训练要物理真），全面逼真是无底洞。</li>
+</ul>
+<h3 id="8-1-8-Obsidian-永久笔记"><a href="#8-1-8-Obsidian-永久笔记" class="headerlink" title="8.1.8 Obsidian 永久笔记"></a>8.1.8 Obsidian 永久笔记</h3><ul>
+<li>Sim2Real 四条沟：物理&#x2F;视觉&#x2F;状态&#x2F;时延，时延沟最易漏。</li>
+<li>仿真给覆盖真机给对齐：仿真放大真机数据的边际价值。</li>
+<li>真机可得观测纪律：真值只用于奖励与评测，不进策略输入。</li>
+</ul>
+<hr>
+<h2 id="8-2-仿真器全景与选型"><a href="#8-2-仿真器全景与选型" class="headerlink" title="8.2 仿真器全景与选型"></a>8.2 仿真器全景与选型</h2><h3 id="8-2-1-六大仿真器速查（截至本手册撰写时）"><a href="#8-2-1-六大仿真器速查（截至本手册撰写时）" class="headerlink" title="8.2.1 六大仿真器速查（截至本手册撰写时）"></a>8.2.1 六大仿真器速查（截至本手册撰写时）</h3><table>
+<thead>
+<tr>
+<th>仿真器</th>
+<th>定位</th>
+<th>物理</th>
+<th>渲染</th>
+<th>生态绑定</th>
+<th>平台视角</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Isaac Sim</strong></td>
+<td>工业级全能：高保真渲染+物理，USD 场景</td>
+<td>PhysX（GPU）</td>
+<td>RTX 光追（最强）</td>
+<td>NVIDIA&#x2F;Omniverse</td>
+<td>数据工厂与孪生沙盘首选，重（GPU 门槛高）</td>
+</tr>
+<tr>
+<td><strong>Isaac Lab</strong></td>
+<td>Isaac Sim 之上的<strong>机器人学习框架</strong>：RL&#x2F;IL 训练、并行环境</td>
+<td>同上</td>
+<td>同上</td>
+<td>NVIDIA&#x2F;GR00T 生态</td>
+<td>训练管线首选，与 Jetson 部署链同厂闭环</td>
+</tr>
+<tr>
+<td><strong>Genesis</strong></td>
+<td>新一代开源：生成式场景+超高速并行物理</td>
+<td>自研（GPU，宣称极高吞吐）</td>
+<td>中高</td>
+<td>开源社区</td>
+<td>值得跟踪的搅局者，验证其成熟度后用于大规模并行</td>
+</tr>
+<tr>
+<td><strong>MuJoCo</strong></td>
+<td>轻量精确的接触物理，学术标准</td>
+<td>自研（CPU&#x2F;GPU MJX）</td>
+<td>基础</td>
+<td>DeepMind&#x2F;开源</td>
+<td>控制类研究与快速实验，DP&#x2F;ACT 论文常用</td>
+</tr>
+<tr>
+<td><strong>Gazebo（新版）</strong></td>
+<td>ROS 生态原生仿真</td>
+<td>多引擎可换</td>
+<td>中</td>
+<td><strong>ROS2 深度集成</strong></td>
+<td>ROS 集成测试与 CI 首选（与第三篇环境同構）</td>
+</tr>
+<tr>
+<td><strong>Webots</strong></td>
+<td>教育与原型友好</td>
+<td>ODE 系</td>
+<td>中</td>
+<td>独立</td>
+<td>教学与轻量原型</td>
+</tr>
+</tbody></table>
+<h3 id="8-2-2-选型决策表（按用途，不按名气）"><a href="#8-2-2-选型决策表（按用途，不按名气）" class="headerlink" title="8.2.2 选型决策表（按用途，不按名气）"></a>8.2.2 选型决策表（按用途，不按名气）</h3><table>
+<thead>
+<tr>
+<th>用途</th>
+<th>首选</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>合成视觉数据（数据工厂）</td>
+<td>Isaac Sim</td>
+<td>渲染保真 + 域随机化工具链 + 免费真值标注</td>
+</tr>
+<tr>
+<td>策略训练（RL&#x2F;大规模 IL）</td>
+<td>Isaac Lab &#x2F; Genesis &#x2F; MuJoCo(MJX)</td>
+<td>并行吞吐是王道</td>
+</tr>
+<tr>
+<td>ROS2 集成测试与 CI</td>
+<td>Gazebo</td>
+<td>与 ROS Graph 原生互通，跑在第三篇容器里</td>
+</tr>
+<tr>
+<td>仿真孪生沙盘</td>
+<td>Isaac Sim（USD）</td>
+<td>USD 场景与孪生数据模型天然亲和</td>
+</tr>
+<tr>
+<td>控制算法研究</td>
+<td>MuJoCo</td>
+<td>接触物理精确、迭代快</td>
+</tr>
+</tbody></table>
+<p><strong>平台结论</strong>：不是选一个，而是<strong>按用途养 2~3 个</strong>，用统一的场景资产与评测接口把它们抽象掉（8.5）——正如你不会用一个数据库打天下。</p>
+<h3 id="8-2-3-三层解剖：物理引擎-渲染器-场景描述"><a href="#8-2-3-三层解剖：物理引擎-渲染器-场景描述" class="headerlink" title="8.2.3 三层解剖：物理引擎 &#x2F; 渲染器 &#x2F; 场景描述"></a>8.2.3 三层解剖：物理引擎 &#x2F; 渲染器 &#x2F; 场景描述</h3><p>任何仿真器 &#x3D; 物理引擎（PhysX&#x2F;MuJoCo&#x2F;ODE&#x2F;自研：解接触与动力学）+ 渲染器（光栅&#x2F;光追：造图像）+ 场景描述（<strong>USD</strong>：Isaac 系的通用场景描述，工业协作标准；<strong>URDF</strong>：机器人结构，2.19.4 的老朋友，各仿真器都能导入；<strong>MJCF</strong>：MuJoCo 格式）。平台要管的是<strong>场景资产</strong>这一层：URDF&#x2F;USD 版本化进制品库（4.4.2 的静态资产延伸）——机器人结构一处定义，真机 TF、仿真、孪生三处消费。</p>
+<h3 id="8-2-4-与产业物联网平台的映射"><a href="#8-2-4-与产业物联网平台的映射" class="headerlink" title="8.2.4 与产业物联网平台的映射"></a>8.2.4 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>仿真选型</th>
+<th>智驾仿真</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>按用途养多个</td>
+<td>场景仿真&#x2F;动力学仿真&#x2F;HIL 分立</td>
+<td>同款格局</td>
+</tr>
+<tr>
+<td>USD&#x2F;URDF 资产化</td>
+<td>场景库与车辆模型库</td>
+<td>制品治理</td>
+</tr>
+<tr>
+<td>Gazebo 进 CI</td>
+<td>SIL 测试</td>
+<td>同位</td>
+</tr>
+</tbody></table>
+<h3 id="8-2-5-企业实践建议"><a href="#8-2-5-企业实践建议" class="headerlink" title="8.2.5 企业实践建议"></a>8.2.5 企业实践建议</h3><p>先上 Gazebo 进 CI（成本最低、与 ROS 无缝），再上 Isaac 建数据工厂与评测基准——与 7.7.5「先开环后闭环」同一节奏：<strong>每一步都独立产生价值，不做「大仿真平台」一次性豪赌</strong>。</p>
+<h3 id="8-2-6-面试可能问什么"><a href="#8-2-6-面试可能问什么" class="headerlink" title="8.2.6 面试可能问什么"></a>8.2.6 面试可能问什么</h3><ol>
+<li>仿真器怎么选？（要点：按用途决策表 + 养 2~3 个 + 统一资产与接口抽象）</li>
+<li>USD&#x2F;URDF&#x2F;MJCF 什么关系？（要点：场景描述层；URDF 一处定义三处消费）</li>
+</ol>
+<h3 id="8-2-7-最佳实践"><a href="#8-2-7-最佳实践" class="headerlink" title="8.2.7 最佳实践"></a>8.2.7 最佳实践</h3><ul>
+<li>场景资产库（URDF&#x2F;USD&#x2F;物体模型&#x2F;站点布局）独立成仓并版本化——它是仿真三个身份共用的地基。</li>
+</ul>
+<h3 id="8-2-8-常见误区"><a href="#8-2-8-常见误区" class="headerlink" title="8.2.8 常见误区"></a>8.2.8 常见误区</h3><ul>
+<li>❌ 用「哪个最逼真」做唯一选型标准——训练要吞吐、CI 要轻快、孪生要 USD，三个用途三把尺。</li>
+</ul>
+<h3 id="8-2-9-Obsidian-永久笔记"><a href="#8-2-9-Obsidian-永久笔记" class="headerlink" title="8.2.9 Obsidian 永久笔记"></a>8.2.9 Obsidian 永久笔记</h3><ul>
+<li>按用途养仿真器：数据工厂 Isaac、训练 Lab&#x2F;Genesis&#x2F;MuJoCo、CI Gazebo。</li>
+<li>场景资产是地基：URDF&#x2F;USD 版本化，一处定义三处消费。</li>
+</ul>
+<hr>
+<h2 id="8-3-Sim2Real-工具箱：域随机化、系统辨识与-Real2Sim"><a href="#8-3-Sim2Real-工具箱：域随机化、系统辨识与-Real2Sim" class="headerlink" title="8.3 Sim2Real 工具箱：域随机化、系统辨识与 Real2Sim"></a>8.3 Sim2Real 工具箱：域随机化、系统辨识与 Real2Sim</h2><h3 id="8-3-1-Domain-Randomization：原理与清单"><a href="#8-3-1-Domain-Randomization：原理与清单" class="headerlink" title="8.3.1 Domain Randomization：原理与清单"></a>8.3.1 Domain Randomization：原理与清单</h3><p>原理一句话：<strong>与其把仿真调得像真实，不如把仿真调得足够多样，让真实成为「多样性中的一个样本」</strong>——策略学到的是对变化不敏感的本质特征。随机化清单（平台把它做成配置模板）：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>随机化项</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>视觉</td>
+<td>光照方向&#x2F;强度&#x2F;色温、纹理、相机位姿抖动、噪声&#x2F;模糊&#x2F;曝光</td>
+</tr>
+<tr>
+<td>物理</td>
+<td>摩擦系数、质量&#x2F;质心、电机增益&#x2F;延迟、关节阻尼</td>
+</tr>
+<tr>
+<td>几何</td>
+<td>物体尺寸&#x2F;形状扰动、摆放位姿、杂物干扰</td>
+</tr>
+<tr>
+<td>时序</td>
+<td>观测延迟、执行延迟、掉帧（8.1.2 时延沟解法）</td>
+</tr>
+</tbody></table>
+<p>工程要点：随机化范围本身要<strong>版本化并与评测结果关联</strong>（范围太窄&#x3D;白做，太宽&#x3D;训不动）——它是「数据处理逻辑也是制品」（7.3.7）的又一实例。</p>
+<h3 id="8-3-2-系统辨识：把真机参数喂回仿真"><a href="#8-3-2-系统辨识：把真机参数喂回仿真" class="headerlink" title="8.3.2 系统辨识：把真机参数喂回仿真"></a>8.3.2 系统辨识：把真机参数喂回仿真</h3><p>对物理沟的正攻：用真机数据反推物理参数（电机响应曲线、摩擦、惯量），更新仿真模型。平台视角：<strong>辨识数据就是一类特殊的采集任务</strong>（4.7 Fleet 下发「标定&#x2F;辨识动作」，数据入湖，辨识作业产出参数包，参数包作为制品随机型基线分发）——不需要新系统，全走现有轨道。</p>
+<h3 id="8-3-3-Real2Sim：把现场搬进仿真"><a href="#8-3-3-Real2Sim：把现场搬进仿真" class="headerlink" title="8.3.3 Real2Sim：把现场搬进仿真"></a>8.3.3 Real2Sim：把现场搬进仿真</h3><p>三条路线按成本递增：<strong>布局重建</strong>（站点 CAD&#x2F;激光扫描 → USD 场景，孪生沙盘的地基）；<strong>物体资产化</strong>（新 SKU 三维重建&#x2F;扫描入库，冷启动定向采集的仿真侧配套，7.5.2）；<strong>事故场景重建</strong>（从 bag 片段重建初始条件进仿真闭环重放——7.7.1 第三种 Replay 的实现路径，成本最高、价值也最高）。</p>
+<h3 id="8-3-4-与产业物联网平台的映射"><a href="#8-3-4-与产业物联网平台的映射" class="headerlink" title="8.3.4 与产业物联网平台的映射"></a>8.3.4 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>工具箱</th>
+<th>智驾</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>域随机化</td>
+<td>传感器&#x2F;天气&#x2F;光照随机化</td>
+<td>同款</td>
+</tr>
+<tr>
+<td>系统辨识</td>
+<td>车辆动力学标定</td>
+<td>走采集任务轨道</td>
+</tr>
+<tr>
+<td>事故重建</td>
+<td>路测事故场景重建回放</td>
+<td>同款高价值</td>
+</tr>
+</tbody></table>
+<h3 id="8-3-5-企业实践建议"><a href="#8-3-5-企业实践建议" class="headerlink" title="8.3.5 企业实践建议"></a>8.3.5 企业实践建议</h3><p>把「随机化配置模板 + 辨识参数包 + 场景资产」三样都纳入制品库与血缘（7.6.2 血缘图上给仿真加节点）——仿真产物与真机产物同一套治理，是「仿真成为一等公民」的实际含义。</p>
+<h3 id="8-3-6-面试可能问什么"><a href="#8-3-6-面试可能问什么" class="headerlink" title="8.3.6 面试可能问什么"></a>8.3.6 面试可能问什么</h3><ol>
+<li>域随机化为什么有效？随机化什么？（要点：多样性淹没真实 + 四维清单 + 范围版本化）</li>
+<li>Real2Sim 有哪些路线？（要点：布局&#x2F;物体&#x2F;事故三条，按成本递增按价值排序）</li>
+</ol>
+<h3 id="8-3-7-最佳实践"><a href="#8-3-7-最佳实践" class="headerlink" title="8.3.7 最佳实践"></a>8.3.7 最佳实践</h3><ul>
+<li>每个真机失败家族（7.4.3）配一个仿真重建任务——「真机发现、仿真放大、数据回补」成为标准动作。</li>
+</ul>
+<h3 id="8-3-8-常见误区"><a href="#8-3-8-常见误区" class="headerlink" title="8.3.8 常见误区"></a>8.3.8 常见误区</h3><ul>
+<li>❌ 随机化当万能药——物理参数错一个数量级，随机化救不了，先辨识后随机化。</li>
+</ul>
+<h3 id="8-3-9-Obsidian-永久笔记"><a href="#8-3-9-Obsidian-永久笔记" class="headerlink" title="8.3.9 Obsidian 永久笔记"></a>8.3.9 Obsidian 永久笔记</h3><ul>
+<li>域随机化即多样性淹没真实：四维清单，范围版本化。</li>
+<li>辨识走采集任务轨道：Fleet 下发、数据入湖、参数包成制品。</li>
+<li>Real2Sim 三条路线：布局&#x2F;物体&#x2F;事故，成本递增价值递增。</li>
+</ul>
+<hr>
+<h2 id="8-4-合成数据与仿真评测：两条平台接口"><a href="#8-4-合成数据与仿真评测：两条平台接口" class="headerlink" title="8.4 合成数据与仿真评测：两条平台接口"></a>8.4 合成数据与仿真评测：两条平台接口</h2><h3 id="8-4-1-合成数据管道（接第七篇湖仓）"><a href="#8-4-1-合成数据管道（接第七篇湖仓）" class="headerlink" title="8.4.1 合成数据管道（接第七篇湖仓）"></a>8.4.1 合成数据管道（接第七篇湖仓）</h3><pre class="mermaid">flowchart LR
+  SA["场景资产库（URDF/USD/物体）"] --&gt; GEN["批量生成：场景组合 × 域随机化配置"]
+  GEN --&gt; SIM["仿真farm 并行执行（8.5）"]
+  SIM --&gt; OUT["产出：多模态观测 + 免费真值标注（位姿/分割/深度/动作）"]
+  OUT --&gt; QC["质检（复用 7.5 漏斗的机械/内容级）"]
+  QC --&gt; DS["入 L4：dataset_manifest 标记 source=synthetic"]
+  DS --&gt; MIX["与真机数据按配比混合训练（5.4.1）"]</pre>
+
+
+<p>两条纪律：<strong>合成数据永远打 <code>source=synthetic</code> 标</strong>（配比是训练超参，血缘必须能分开统计——「这个模型吃了多少仿真数据」是评审必答题）；<strong>合成数据也过质检漏斗</strong>（渲染穿模、物理爆炸的坏样本比真机废数据更隐蔽）。合成数据的最大红利是<strong>标注免费</strong>——分割&#x2F;深度&#x2F;位姿真值随渲染产出，这是它对感知类模型近乎降维打击的原因。</p>
+<h3 id="8-4-2-仿真评测基准：把「考场」建成平台服务"><a href="#8-4-2-仿真评测基准：把「考场」建成平台服务" class="headerlink" title="8.4.2 仿真评测基准：把「考场」建成平台服务"></a>8.4.2 仿真评测基准：把「考场」建成平台服务</h3><p>基准 &#x3D; <strong>场景包</strong>（版本化的场景 × 任务 × 初始条件集合，按任务族分族，7.7.2）+ <strong>执行器</strong>（拉起仿真、加载被测模型、跑 N 次出统计）+ <strong>报告</strong>（成功率&#x2F;干预代理指标&#x2F;动作平滑度，对齐 5.6.3 指标口径）。CI 化后接进 7.7.3 评测流水线的第二级。<strong>难例入集</strong>在仿真侧的形态：每个真机失败重建场景（8.3.3）进入对应任务族的场景包——考卷随现实进化。</p>
+<h3 id="8-4-3-相关性校准：仿真分能不能信"><a href="#8-4-3-相关性校准：仿真分能不能信" class="headerlink" title="8.4.3 相关性校准：仿真分能不能信"></a>8.4.3 相关性校准：仿真分能不能信</h3><p>仿真分的唯一价值锚点是<strong>与真机分的相关性</strong>。做法：定期用同一批模型在「仿真基准 vs 真机小批评测」上出分，回归相关系数并分任务族公布——相关性高的任务族，仿真分可作门禁；相关性低的，仿真只作烟测（smoke test）不作裁决。<strong>把相关性系数本身做成平台指标</strong>，仿真团队的 KPI 从「场景多逼真」变成「预测多准」——这一转变是仿真投入不失控的关键。</p>
+<h3 id="8-4-4-与产业物联网平台的映射"><a href="#8-4-4-与产业物联网平台的映射" class="headerlink" title="8.4.4 与产业物联网平台的映射"></a>8.4.4 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>仿真接口</th>
+<th>智驾</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>合成数据打标进湖</td>
+<td>仿真数据管理</td>
+<td>source 标签与配比</td>
+</tr>
+<tr>
+<td>场景包基准</td>
+<td>智驾仿真场景库+回归</td>
+<td>同款</td>
+</tr>
+<tr>
+<td>相关性校准</td>
+<td>仿真置信度评估</td>
+<td>KPI 从逼真到预测准</td>
+</tr>
+</tbody></table>
+<h3 id="8-4-5-企业实践建议"><a href="#8-4-5-企业实践建议" class="headerlink" title="8.4.5 企业实践建议"></a>8.4.5 企业实践建议</h3><p>仿真评测报告与真机评测报告<strong>共用同一 Schema 与指标口径</strong>（5.6.3）——「一套报告两个考场」让模型对比天然可拼接，也逼着仿真侧对齐真机指标定义。</p>
+<h3 id="8-4-6-面试可能问什么"><a href="#8-4-6-面试可能问什么" class="headerlink" title="8.4.6 面试可能问什么"></a>8.4.6 面试可能问什么</h3><ol>
+<li>合成数据怎么管？（要点：打标、过漏斗、配比入血缘、标注免费的红利）</li>
+<li>仿真分怎么用才科学？（要点：相关性校准分任务族、高相关作门禁低相关作烟测）</li>
+</ol>
+<h3 id="8-4-7-最佳实践"><a href="#8-4-7-最佳实践" class="headerlink" title="8.4.7 最佳实践"></a>8.4.7 最佳实践</h3><ul>
+<li>场景包发布节奏与模型发布解耦（月度场景包 vs 周度模型）——考卷稳定期内的分数才可比。</li>
+</ul>
+<h3 id="8-4-8-常见误区"><a href="#8-4-8-常见误区" class="headerlink" title="8.4.8 常见误区"></a>8.4.8 常见误区</h3><ul>
+<li>❌ 拿未校准的仿真分做上线门禁——相关性未知的分数是安慰剂。</li>
+<li>❌ 合成与真机数据混训不记配比——模型行为漂移时无从归因。</li>
+</ul>
+<h3 id="8-4-9-Obsidian-永久笔记"><a href="#8-4-9-Obsidian-永久笔记" class="headerlink" title="8.4.9 Obsidian 永久笔记"></a>8.4.9 Obsidian 永久笔记</h3><ul>
+<li>合成数据两纪律：source 打标 + 过质检漏斗；红利是标注免费。</li>
+<li>相关性是仿真分的锚：分任务族校准，高相关作门禁低相关作烟测。</li>
+<li>一套报告两个考场：仿真与真机共用指标 Schema。</li>
+</ul>
+<hr>
+<h2 id="8-5-仿真基础设施与孪生沙盘"><a href="#8-5-仿真基础设施与孪生沙盘" class="headerlink" title="8.5 仿真基础设施与孪生沙盘"></a>8.5 仿真基础设施与孪生沙盘</h2><h3 id="8-5-1-仿真-farm：你的-K8s-GPU-老本行"><a href="#8-5-1-仿真-farm：你的-K8s-GPU-老本行" class="headerlink" title="8.5.1 仿真 farm：你的 K8s&#x2F;GPU 老本行"></a>8.5.1 仿真 farm：你的 K8s&#x2F;GPU 老本行</h3><p>大规模合成数据与评测需要<strong>并行仿真集群</strong>：K8s 上调度 GPU 仿真 Pod（Isaac 容器化运行）、任务队列（一个场景×随机化种子&#x3D;一个作业）、产物直写 MinIO、失败重试与配额——<strong>这就是一个批处理 GPU 平台</strong>，你的 GPU 平台工程经验（AI Infra Bible 的主场）在此全额复用。两个仿真特有点：渲染型作业要 RTX 级 GPU（与训练卡分池）；物理并行型（Isaac Lab&#x2F;Genesis 的万环境并行）单卡吃满、按吞吐计费思维排产。</p>
+<h3 id="8-5-2-仿真孪生沙盘（兑现-4-4-1-的-L3）"><a href="#8-5-2-仿真孪生沙盘（兑现-4-4-1-的-L3）" class="headerlink" title="8.5.2 仿真孪生沙盘（兑现 4.4.1 的 L3）"></a>8.5.2 仿真孪生沙盘（兑现 4.4.1 的 L3）</h3><p>站点 USD 场景（8.3.3 布局重建）+ 孪生实时状态（4.4 的 reported 投影进仿真）&#x3D; <strong>可推演的站点副本</strong>。三个用途：新站点布局与机器人数量的容量推演（卖给运营的功能）；新版模型&#x2F;新任务流程上线前的沙盘预演（灰度环的第 0 环）；培训与演示。同步机制：孪生服务 → 沙盘的单向投影（只读），沙盘里的推演结论以报告回流——<strong>沙盘永远不反向写生产</strong>（影子三要义的延伸）。</p>
+<h3 id="8-5-3-平台架构师的仿真学习路线（四步，共-2-3-周）"><a href="#8-5-3-平台架构师的仿真学习路线（四步，共-2-3-周）" class="headerlink" title="8.5.3 平台架构师的仿真学习路线（四步，共 2~3 周）"></a>8.5.3 平台架构师的仿真学习路线（四步，共 2~3 周）</h3><table>
+<thead>
+<tr>
+<th>步</th>
+<th>动作</th>
+<th>产出</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Gazebo 跑通：第三篇容器里给遥测系统加一个 Gazebo 仿真机器人替身</td>
+<td>ROS2↔仿真互通体感</td>
+</tr>
+<tr>
+<td>2</td>
+<td>MuJoCo 官方示例 + 看懂一个 MJCF</td>
+<td>物理引擎最小认知</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Isaac Sim 教程：导入 URDF、跑一个域随机化示例</td>
+<td>USD 与随机化体感</td>
+</tr>
+<tr>
+<td>4</td>
+<td>设计（不实现）你司的「场景资产库 + 仿真 farm + 基准服务」三页架构图</td>
+<td>平台接口设计能力（本篇验收物）</td>
+</tr>
+</tbody></table>
+<h3 id="8-5-4-与产业物联网平台的映射"><a href="#8-5-4-与产业物联网平台的映射" class="headerlink" title="8.5.4 与产业物联网平台的映射"></a>8.5.4 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>仿真基建</th>
+<th>你的存量</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>仿真 farm</td>
+<td>K8s GPU 批处理平台</td>
+<td>原班人马</td>
+</tr>
+<tr>
+<td>沙盘推演</td>
+<td>智驾云仿真&#x2F;数字孪生园区</td>
+<td>单向投影纪律</td>
+</tr>
+<tr>
+<td>学习路线</td>
+<td>自顶向下方法论（1.9.3）</td>
+<td>同款</td>
+</tr>
+</tbody></table>
+<h3 id="8-5-5-企业实践建议"><a href="#8-5-5-企业实践建议" class="headerlink" title="8.5.5 企业实践建议"></a>8.5.5 企业实践建议</h3><p>仿真 farm 与训练集群<strong>共池不共队列</strong>：同一 K8s GPU 池、独立队列与配额（渲染卡&#x2F;训练卡分类打标调度）——池化省钱、队列保 SLA，这是你 GPU 平台的标准答案，直接搬。</p>
+<h3 id="8-5-6-面试可能问什么"><a href="#8-5-6-面试可能问什么" class="headerlink" title="8.5.6 面试可能问什么"></a>8.5.6 面试可能问什么</h3><ol>
+<li>仿真基础设施怎么建？（要点：批处理 GPU 平台 + 渲染&#x2F;物理两类作业 + 共池不共队列）</li>
+<li>仿真孪生怎么用、怎么同步？（要点：三个用途 + 单向投影不反向写生产）</li>
+</ol>
+<h3 id="8-5-7-最佳实践"><a href="#8-5-7-最佳实践" class="headerlink" title="8.5.7 最佳实践"></a>8.5.7 最佳实践</h3><ul>
+<li>每次大规模生成前先小批「渲染质检抽样」——farm 跑一夜产出百万坏图的事故，抽样十分钟就能避免。</li>
+</ul>
+<h3 id="8-5-8-常见误区"><a href="#8-5-8-常见误区" class="headerlink" title="8.5.8 常见误区"></a>8.5.8 常见误区</h3><ul>
+<li>❌ 给仿真单独买集群——与训练共池分队列，利用率与成本立省一截。</li>
+</ul>
+<h3 id="8-5-9-Obsidian-永久笔记"><a href="#8-5-9-Obsidian-永久笔记" class="headerlink" title="8.5.9 Obsidian 永久笔记"></a>8.5.9 Obsidian 永久笔记</h3><ul>
+<li>仿真 farm 是批处理 GPU 平台：渲染&#x2F;物理两类作业，共池不共队列。</li>
+<li>沙盘单向投影：孪生→沙盘只读，推演结论以报告回流。</li>
+<li>仿真四步学习路线：Gazebo→MuJoCo→Isaac→三页架构图。</li>
+</ul>
+<hr>
+<h2 id="8-6-本篇总结"><a href="#8-6-本篇总结" class="headerlink" title="8.6 本篇总结"></a>8.6 本篇总结</h2><h3 id="8-6-1-十条核心结论"><a href="#8-6-1-十条核心结论" class="headerlink" title="8.6.1 十条核心结论"></a>8.6.1 十条核心结论</h3><ol>
+<li>仿真的三个身份：数据工厂、考场、孪生沙盘——对应数据出口、评测入口、孪生同步三条平台接口。</li>
+<li>Sim2Real 四条沟：物理&#x2F;视觉&#x2F;状态&#x2F;时延；时延沟最易漏，把真机延迟模型注入仿真。</li>
+<li>「真机可得观测」纪律：真值只用于奖励与评测，绝不进策略输入。</li>
+<li>按用途养 2~3 个仿真器：数据工厂 Isaac、训练 Lab&#x2F;Genesis&#x2F;MuJoCo、CI Gazebo。</li>
+<li>场景资产（URDF&#x2F;USD）版本化入制品库：一处定义，真机 TF、仿真、孪生三处消费。</li>
+<li>域随机化 &#x3D; 多样性淹没真实；范围版本化并与评测结果关联。</li>
+<li>系统辨识与事故重建都走现有轨道：Fleet 采集任务 + 湖仓 + 制品血缘。</li>
+<li>合成数据两纪律：source 打标 + 过质检漏斗；红利是标注免费。</li>
+<li>仿真分的锚是与真机分的相关性——仿真团队的 KPI 是「预测准」不是「逼真」。</li>
+<li>仿真 farm 就是批处理 GPU 平台：共池不共队列；沙盘对生产只读。</li>
+</ol>
+<h3 id="8-6-2-本篇卡片索引"><a href="#8-6-2-本篇卡片索引" class="headerlink" title="8.6.2 本篇卡片索引"></a>8.6.2 本篇卡片索引</h3><p>Sim2Real 四条沟 · 仿真给覆盖真机给对齐 · 真机可得观测纪律 · 按用途养仿真器 · 场景资产是地基 · 域随机化即多样性淹没真实 · 辨识走采集任务轨道 · Real2Sim 三条路线 · 合成数据两纪律 · 相关性是仿真分的锚 · 一套报告两个考场 · 仿真 farm 是批处理 GPU 平台 · 沙盘单向投影 · 仿真四步学习路线</p>
+<h3 id="8-6-3-第九篇预告"><a href="#8-6-3-第九篇预告" class="headerlink" title="8.6.3 第九篇预告"></a>8.6.3 第九篇预告</h3><p>平台的能力面已经齐了，最后补上贯穿一切的底座。第九篇《Robot Security》以你的安全平台经验为地基：机器人身份与 PKI 深化、mTLS 与 DDS-Security&#x2F;SROS2、OTA 签名与 Secure Boot 信任链、TEE&#x2F;TPM、SBOM 与供应链安全、Secrets 管理、模型与 Agent 安全（Prompt Injection、工具沙箱）、云边端 Zero Trust——输出机器人平台的完整威胁模型与安全架构。</p>
+<hr>
+<hr>
+<p><a href="./07-Robot-Data-Engine.md">⬅️ 上一篇</a> ｜ <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">🔝 返回总目录</a> ｜ <a href="./09-Robot-Security.md">下一篇 ➡️</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/05/14/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-09-%E5%AE%89%E5%85%A8%E6%9E%B6%E6%9E%84/">机器人安全架构</a></h3>
+        <p>平台的能力面已齐，最后补上贯穿一切的底座。</p>
+        <a class="btn primary" href="/2026/05/14/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-09-%E5%AE%89%E5%85%A8%E6%9E%B6%E6%9E%84/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/02/24/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-07-%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：机器人数据引擎</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E5%85%AB%E7%AF%87-Simulation" data-toc-target="第八篇-Simulation"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第八篇 Simulation</span></a><a class="toc-level-2" href="#8-0-%E6%9C%AC%E7%AF%87%E5%AF%BC%E8%AF%BB" data-toc-target="8-0-本篇导读"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">8.0 本篇导读</span></a><a class="toc-level-3" href="#8-0-1-%E4%BB%BF%E7%9C%9F%E5%9C%A8%E5%B9%B3%E5%8F%B0%E9%87%8C%E7%9A%84%E4%B8%89%E4%B8%AA%E8%BA%AB%E4%BB%BD" data-toc-target="8-0-1-仿真在平台里的三个身份"><span class="toc-text">8.0.1 仿真在平台里的三个身份</span></a><a class="toc-level-3" href="#8-0-2-%E5%AD%A6%E5%AE%8C%E6%9C%AC%E7%AF%87%E4%BD%A0%E8%83%BD%E5%9B%9E%E7%AD%94%E7%9A%84%E5%8D%81%E4%B8%AA%E9%97%AE%E9%A2%98" data-toc-target="8-0-2-学完本篇你能回答的十个问题"><span class="toc-text">8.0.2 学完本篇你能回答的十个问题</span></a><a class="toc-level-3" href="#8-0-3-%E6%9C%AC%E7%AF%87%E7%9F%A5%E8%AF%86%E5%9C%B0%E5%9B%BE" data-toc-target="8-0-3-本篇知识地图"><span class="toc-text">8.0.3 本篇知识地图</span></a><a class="toc-level-2" href="#8-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%85%E9%A1%BB-Sim2Real%EF%BC%9A%E5%9B%9B%E6%9D%A1%E6%B2%9F" data-toc-target="8-1-为什么必须-Sim2Real：四条沟"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">8.1 为什么必须 Sim2Real：四条沟</span></a><a class="toc-level-3" href="#8-1-1-%E4%BB%BF%E7%9C%9F%E7%9A%84%E7%BB%8F%E6%B5%8E%E5%AD%A6%EF%BC%88%E4%B8%80%E5%88%86%E9%92%9F%E8%AF%B4%E6%9C%8D%E4%BB%BB%E4%BD%95%E4%BA%BA%EF%BC%89" data-toc-target="8-1-1-仿真的经济学（一分钟说服任何人）"><span class="toc-text">8.1.1 仿真的经济学（一分钟说服任何人）</span></a><a class="toc-level-3" href="#8-1-2-Sim2Real-%E9%B8%BF%E6%B2%9F%E7%9A%84%E5%9B%9B%E6%9D%A1%E6%B2%9F" data-toc-target="8-1-2-Sim2Real-鸿沟的四条沟"><span class="toc-text">8.1.2 Sim2Real 鸿沟的四条沟</span></a><a class="toc-level-3" href="#8-1-3-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="8-1-3-与产业物联网平台的映射"><span class="toc-text">8.1.3 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#8-1-4-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="8-1-4-企业实践建议"><span class="toc-text">8.1.4 企业实践建议</span></a><a class="toc-level-3" href="#8-1-5-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="8-1-5-面试可能问什么"><span class="toc-text">8.1.5 面试可能问什么</span></a><a class="toc-level-3" href="#8-1-6-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="8-1-6-最佳实践"><span class="toc-text">8.1.6 最佳实践</span></a><a class="toc-level-3" href="#8-1-7-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="8-1-7-常见误区"><span class="toc-text">8.1.7 常见误区</span></a><a class="toc-level-3" href="#8-1-8-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="8-1-8-Obsidian-永久笔记"><span class="toc-text">8.1.8 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#8-2-%E4%BB%BF%E7%9C%9F%E5%99%A8%E5%85%A8%E6%99%AF%E4%B8%8E%E9%80%89%E5%9E%8B" data-toc-target="8-2-仿真器全景与选型"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">8.2 仿真器全景与选型</span></a><a class="toc-level-3" href="#8-2-1-%E5%85%AD%E5%A4%A7%E4%BB%BF%E7%9C%9F%E5%99%A8%E9%80%9F%E6%9F%A5%EF%BC%88%E6%88%AA%E8%87%B3%E6%9C%AC%E6%89%8B%E5%86%8C%E6%92%B0%E5%86%99%E6%97%B6%EF%BC%89" data-toc-target="8-2-1-六大仿真器速查（截至本手册撰写时）"><span class="toc-text">8.2.1 六大仿真器速查（截至本手册撰写时）</span></a><a class="toc-level-3" href="#8-2-2-%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96%E8%A1%A8%EF%BC%88%E6%8C%89%E7%94%A8%E9%80%94%EF%BC%8C%E4%B8%8D%E6%8C%89%E5%90%8D%E6%B0%94%EF%BC%89" data-toc-target="8-2-2-选型决策表（按用途，不按名气）"><span class="toc-text">8.2.2 选型决策表（按用途，不按名气）</span></a><a class="toc-level-3" href="#8-2-3-%E4%B8%89%E5%B1%82%E8%A7%A3%E5%89%96%EF%BC%9A%E7%89%A9%E7%90%86%E5%BC%95%E6%93%8E-%E6%B8%B2%E6%9F%93%E5%99%A8-%E5%9C%BA%E6%99%AF%E6%8F%8F%E8%BF%B0" data-toc-target="8-2-3-三层解剖：物理引擎-渲染器-场景描述"><span class="toc-text">8.2.3 三层解剖：物理引擎 / 渲染器 / 场景描述</span></a><a class="toc-level-3" href="#8-2-4-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="8-2-4-与产业物联网平台的映射"><span class="toc-text">8.2.4 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#8-2-5-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="8-2-5-企业实践建议"><span class="toc-text">8.2.5 企业实践建议</span></a><a class="toc-level-3" href="#8-2-6-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="8-2-6-面试可能问什么"><span class="toc-text">8.2.6 面试可能问什么</span></a><a class="toc-level-3" href="#8-2-7-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="8-2-7-最佳实践"><span class="toc-text">8.2.7 最佳实践</span></a><a class="toc-level-3" href="#8-2-8-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="8-2-8-常见误区"><span class="toc-text">8.2.8 常见误区</span></a><a class="toc-level-3" href="#8-2-9-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="8-2-9-Obsidian-永久笔记"><span class="toc-text">8.2.9 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#8-3-Sim2Real-%E5%B7%A5%E5%85%B7%E7%AE%B1%EF%BC%9A%E5%9F%9F%E9%9A%8F%E6%9C%BA%E5%8C%96%E3%80%81%E7%B3%BB%E7%BB%9F%E8%BE%A8%E8%AF%86%E4%B8%8E-Real2Sim" data-toc-target="8-3-Sim2Real-工具箱：域随机化、系统辨识与-Real2Sim"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">8.3 Sim2Real 工具箱：域随机化、系统辨识与 Real2Sim</span></a><a class="toc-level-3" href="#8-3-1-Domain-Randomization%EF%BC%9A%E5%8E%9F%E7%90%86%E4%B8%8E%E6%B8%85%E5%8D%95" data-toc-target="8-3-1-Domain-Randomization：原理与清单"><span class="toc-text">8.3.1 Domain Randomization：原理与清单</span></a><a class="toc-level-3" href="#8-3-2-%E7%B3%BB%E7%BB%9F%E8%BE%A8%E8%AF%86%EF%BC%9A%E6%8A%8A%E7%9C%9F%E6%9C%BA%E5%8F%82%E6%95%B0%E5%96%82%E5%9B%9E%E4%BB%BF%E7%9C%9F" data-toc-target="8-3-2-系统辨识：把真机参数喂回仿真"><span class="toc-text">8.3.2 系统辨识：把真机参数喂回仿真</span></a><a class="toc-level-3" href="#8-3-3-Real2Sim%EF%BC%9A%E6%8A%8A%E7%8E%B0%E5%9C%BA%E6%90%AC%E8%BF%9B%E4%BB%BF%E7%9C%9F" data-toc-target="8-3-3-Real2Sim：把现场搬进仿真"><span class="toc-text">8.3.3 Real2Sim：把现场搬进仿真</span></a><a class="toc-level-3" href="#8-3-4-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="8-3-4-与产业物联网平台的映射"><span class="toc-text">8.3.4 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#8-3-5-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="8-3-5-企业实践建议"><span class="toc-text">8.3.5 企业实践建议</span></a><a class="toc-level-3" href="#8-3-6-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="8-3-6-面试可能问什么"><span class="toc-text">8.3.6 面试可能问什么</span></a><a class="toc-level-3" href="#8-3-7-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="8-3-7-最佳实践"><span class="toc-text">8.3.7 最佳实践</span></a><a class="toc-level-3" href="#8-3-8-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="8-3-8-常见误区"><span class="toc-text">8.3.8 常见误区</span></a><a class="toc-level-3" href="#8-3-9-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="8-3-9-Obsidian-永久笔记"><span class="toc-text">8.3.9 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#8-4-%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE%E4%B8%8E%E4%BB%BF%E7%9C%9F%E8%AF%84%E6%B5%8B%EF%BC%9A%E4%B8%A4%E6%9D%A1%E5%B9%B3%E5%8F%B0%E6%8E%A5%E5%8F%A3" data-toc-target="8-4-合成数据与仿真评测：两条平台接口"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">8.4 合成数据与仿真评测：两条平台接口</span></a><a class="toc-level-3" href="#8-4-1-%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE%E7%AE%A1%E9%81%93%EF%BC%88%E6%8E%A5%E7%AC%AC%E4%B8%83%E7%AF%87%E6%B9%96%E4%BB%93%EF%BC%89" data-toc-target="8-4-1-合成数据管道（接第七篇湖仓）"><span class="toc-text">8.4.1 合成数据管道（接第七篇湖仓）</span></a><a class="toc-level-3" href="#8-4-2-%E4%BB%BF%E7%9C%9F%E8%AF%84%E6%B5%8B%E5%9F%BA%E5%87%86%EF%BC%9A%E6%8A%8A%E3%80%8C%E8%80%83%E5%9C%BA%E3%80%8D%E5%BB%BA%E6%88%90%E5%B9%B3%E5%8F%B0%E6%9C%8D%E5%8A%A1" data-toc-target="8-4-2-仿真评测基准：把「考场」建成平台服务"><span class="toc-text">8.4.2 仿真评测基准：把「考场」建成平台服务</span></a><a class="toc-level-3" href="#8-4-3-%E7%9B%B8%E5%85%B3%E6%80%A7%E6%A0%A1%E5%87%86%EF%BC%9A%E4%BB%BF%E7%9C%9F%E5%88%86%E8%83%BD%E4%B8%8D%E8%83%BD%E4%BF%A1" data-toc-target="8-4-3-相关性校准：仿真分能不能信"><span class="toc-text">8.4.3 相关性校准：仿真分能不能信</span></a><a class="toc-level-3" href="#8-4-4-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="8-4-4-与产业物联网平台的映射"><span class="toc-text">8.4.4 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#8-4-5-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="8-4-5-企业实践建议"><span class="toc-text">8.4.5 企业实践建议</span></a><a class="toc-level-3" href="#8-4-6-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="8-4-6-面试可能问什么"><span class="toc-text">8.4.6 面试可能问什么</span></a><a class="toc-level-3" href="#8-4-7-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="8-4-7-最佳实践"><span class="toc-text">8.4.7 最佳实践</span></a><a class="toc-level-3" href="#8-4-8-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="8-4-8-常见误区"><span class="toc-text">8.4.8 常见误区</span></a><a class="toc-level-3" href="#8-4-9-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="8-4-9-Obsidian-永久笔记"><span class="toc-text">8.4.9 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#8-5-%E4%BB%BF%E7%9C%9F%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AD%AA%E7%94%9F%E6%B2%99%E7%9B%98" data-toc-target="8-5-仿真基础设施与孪生沙盘"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">8.5 仿真基础设施与孪生沙盘</span></a><a class="toc-level-3" href="#8-5-1-%E4%BB%BF%E7%9C%9F-farm%EF%BC%9A%E4%BD%A0%E7%9A%84-K8s-GPU-%E8%80%81%E6%9C%AC%E8%A1%8C" data-toc-target="8-5-1-仿真-farm：你的-K8s-GPU-老本行"><span class="toc-text">8.5.1 仿真 farm：你的 K8s/GPU 老本行</span></a><a class="toc-level-3" href="#8-5-2-%E4%BB%BF%E7%9C%9F%E5%AD%AA%E7%94%9F%E6%B2%99%E7%9B%98%EF%BC%88%E5%85%91%E7%8E%B0-4-4-1-%E7%9A%84-L3%EF%BC%89" data-toc-target="8-5-2-仿真孪生沙盘（兑现-4-4-1-的-L3）"><span class="toc-text">8.5.2 仿真孪生沙盘（兑现 4.4.1 的 L3）</span></a><a class="toc-level-3" href="#8-5-3-%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E5%B8%88%E7%9A%84%E4%BB%BF%E7%9C%9F%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF%EF%BC%88%E5%9B%9B%E6%AD%A5%EF%BC%8C%E5%85%B1-2-3-%E5%91%A8%EF%BC%89" data-toc-target="8-5-3-平台架构师的仿真学习路线（四步，共-2-3-周）"><span class="toc-text">8.5.3 平台架构师的仿真学习路线（四步，共 2~3 周）</span></a><a class="toc-level-3" href="#8-5-4-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="8-5-4-与产业物联网平台的映射"><span class="toc-text">8.5.4 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#8-5-5-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="8-5-5-企业实践建议"><span class="toc-text">8.5.5 企业实践建议</span></a><a class="toc-level-3" href="#8-5-6-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="8-5-6-面试可能问什么"><span class="toc-text">8.5.6 面试可能问什么</span></a><a class="toc-level-3" href="#8-5-7-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="8-5-7-最佳实践"><span class="toc-text">8.5.7 最佳实践</span></a><a class="toc-level-3" href="#8-5-8-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="8-5-8-常见误区"><span class="toc-text">8.5.8 常见误区</span></a><a class="toc-level-3" href="#8-5-9-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="8-5-9-Obsidian-永久笔记"><span class="toc-text">8.5.9 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#8-6-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="8-6-本篇总结"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">8.6 本篇总结</span></a><a class="toc-level-3" href="#8-6-1-%E5%8D%81%E6%9D%A1%E6%A0%B8%E5%BF%83%E7%BB%93%E8%AE%BA" data-toc-target="8-6-1-十条核心结论"><span class="toc-text">8.6.1 十条核心结论</span></a><a class="toc-level-3" href="#8-6-2-%E6%9C%AC%E7%AF%87%E5%8D%A1%E7%89%87%E7%B4%A2%E5%BC%95" data-toc-target="8-6-2-本篇卡片索引"><span class="toc-text">8.6.2 本篇卡片索引</span></a><a class="toc-level-3" href="#8-6-3-%E7%AC%AC%E4%B9%9D%E7%AF%87%E9%A2%84%E5%91%8A" data-toc-target="8-6-3-第九篇预告"><span class="toc-text">8.6.3 第九篇预告</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-ai-engineering/" style="--rail: 62%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">8 / 13</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E5%85%AB%E7%AF%87-Simulation" data-toc-target="第八篇-Simulation" data-title="01 · 第八篇 Simulation" aria-label="第八篇 Simulation"></a><a class="toc-strip__dot" href="#8-0-%E6%9C%AC%E7%AF%87%E5%AF%BC%E8%AF%BB" data-toc-target="8-0-本篇导读" data-title="02 · 8.0 本篇导读" aria-label="8.0 本篇导读"></a><a class="toc-strip__dot" href="#8-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%85%E9%A1%BB-Sim2Real%EF%BC%9A%E5%9B%9B%E6%9D%A1%E6%B2%9F" data-toc-target="8-1-为什么必须-Sim2Real：四条沟" data-title="03 · 8.1 为什么必须 Sim2Real：四条沟" aria-label="8.1 为什么必须 Sim2Real：四条沟"></a><a class="toc-strip__dot" href="#8-2-%E4%BB%BF%E7%9C%9F%E5%99%A8%E5%85%A8%E6%99%AF%E4%B8%8E%E9%80%89%E5%9E%8B" data-toc-target="8-2-仿真器全景与选型" data-title="04 · 8.2 仿真器全景与选型" aria-label="8.2 仿真器全景与选型"></a><a class="toc-strip__dot" href="#8-3-Sim2Real-%E5%B7%A5%E5%85%B7%E7%AE%B1%EF%BC%9A%E5%9F%9F%E9%9A%8F%E6%9C%BA%E5%8C%96%E3%80%81%E7%B3%BB%E7%BB%9F%E8%BE%A8%E8%AF%86%E4%B8%8E-Real2Sim" data-toc-target="8-3-Sim2Real-工具箱：域随机化、系统辨识与-Real2Sim" data-title="05 · 8.3 Sim2Real 工具箱：域随机化、系统辨识与 Real2Sim" aria-label="8.3 Sim2Real 工具箱：域随机化、系统辨识与 Real2Sim"></a><a class="toc-strip__dot" href="#8-4-%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE%E4%B8%8E%E4%BB%BF%E7%9C%9F%E8%AF%84%E6%B5%8B%EF%BC%9A%E4%B8%A4%E6%9D%A1%E5%B9%B3%E5%8F%B0%E6%8E%A5%E5%8F%A3" data-toc-target="8-4-合成数据与仿真评测：两条平台接口" data-title="06 · 8.4 合成数据与仿真评测：两条平台接口" aria-label="8.4 合成数据与仿真评测：两条平台接口"></a><a class="toc-strip__dot" href="#8-5-%E4%BB%BF%E7%9C%9F%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AD%AA%E7%94%9F%E6%B2%99%E7%9B%98" data-toc-target="8-5-仿真基础设施与孪生沙盘" data-title="07 · 8.5 仿真基础设施与孪生沙盘" aria-label="8.5 仿真基础设施与孪生沙盘"></a><a class="toc-strip__dot" href="#8-6-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="8-6-本篇总结" data-title="08 · 8.6 本篇总结" aria-label="8.6 本篇总结"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身智能-08-仿真体系","title":"机器人仿真体系","url":"/2026/04/09/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-08-%E4%BB%BF%E7%9C%9F%E4%BD%93%E7%B3%BB/","path":"embodied-ai-engineering","index":7,"total":13,"next":{"title":"机器人安全架构","url":"/2026/05/14/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-09-%E5%AE%89%E5%85%A8%E6%9E%B6%E6%9E%84/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

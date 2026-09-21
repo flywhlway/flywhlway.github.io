@@ -1,0 +1,1210 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端训练体系架构 · 飞轮之道</title>
+<meta name="description" content="多数企业的正确判断是：不做 RLHF。投入产出比远低于把 RAG 与上下文质量做好。原图把「大数据平台」画为埋点回流终点而未画出复杂训练链路，这一克制的表达本身就是合理的架构判断。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/08/06/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-14-%E8%AE%AD%E7%BB%83%E4%BD%93%E7%B3%BB/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端训练体系架构 · 飞轮之道">
+<meta property="og:description" content="多数企业的正确判断是：不做 RLHF。投入产出比远低于把 RAG 与上下文质量做好。原图把「大数据平台」画为埋点回流终点而未画出复杂训练链路，这一克制的表达本身就是合理的架构判断。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/08/06/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-14-%E8%AE%AD%E7%BB%83%E4%BD%93%E7%B3%BB/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">形成闭环</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 15 / 20 篇</a>
+    </div>
+    <h1>云管端训练体系架构</h1>
+    <p class="article-deck">多数企业的正确判断是：不做 RLHF。投入产出比远低于把 RAG 与上下文质量做好。原图把「大数据平台」画为埋点回流终点而未画出复杂训练链路，这一克制的表达本身就是合理的架构判断。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>发布于 2026.08</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="14-·-训练与评测闭环（Training-System）"><a href="#14-·-训练与评测闭环（Training-System）" class="headerlink" title="14 · 训练与评测闭环（Training System）"></a>14 · 训练与评测闭环（Training System）</h2><blockquote>
+<p>文档类型：技术白皮书 · 训练闭环专章<br>对应图示：埋点数据回流 → 大数据平台 → （推断设计）评测 → 训练 → 模型上线<br>核心判断：<strong>训练不是这个闭环里最重要的环节</strong>。对企业 AI 平台而言，闭环价值排序是：知识补全 &gt; 提示词与检索调优 &gt; 数据集与评测 &gt; 微调 &gt; RLHF</p>
+</blockquote>
+<hr>
+<h2 id="1-闭环全景与价值排序"><a href="#1-闭环全景与价值排序" class="headerlink" title="1. 闭环全景与价值排序"></a>1. 闭环全景与价值排序</h2><pre class="mermaid">flowchart TB
+    RUN["线上运行"] --&gt; OBS["可观测数据&lt;br/&gt;Trace + 反馈 + Token"]
+    OBS --&gt; A["① 知识补全闭环&lt;br/&gt;空召回 → 补知识"]
+    OBS --&gt; B["② 检索与提示词调优&lt;br/&gt;失败案例 → 参数/模板"]
+    OBS --&gt; C["③ 评测集演进&lt;br/&gt;负反馈 → 金标集"]
+    OBS --&gt; D["④ 数据集构建&lt;br/&gt;SFT 对 / 偏好对"]
+    D --&gt; E["⑤ 微调 SFT / DPO"]
+    E --&gt; F["⑥ 模型注册与发布"]
+    C --&gt; G["⑦ 回归门禁"]
+    A &amp; B &amp; F --&gt; RUN
+    G --&gt; F
+
+    A -.-&gt;|"ROI ⭐⭐⭐⭐⭐&lt;br/&gt;周级见效"| V1[" "]
+    B -.-&gt;|"ROI ⭐⭐⭐⭐⭐&lt;br/&gt;天级见效"| V2[" "]
+    C -.-&gt;|"ROI ⭐⭐⭐⭐&lt;br/&gt;基础设施"| V3[" "]
+    E -.-&gt;|"ROI ⭐⭐⭐&lt;br/&gt;月级见效"| V4[" "]</pre>
+
+
+<h3 id="1-1-为什么训练排在后面"><a href="#1-1-为什么训练排在后面" class="headerlink" title="1.1 为什么训练排在后面"></a>1.1 为什么训练排在后面</h3><table>
+<thead>
+<tr>
+<th>改进手段</th>
+<th>见效周期</th>
+<th>单次成本</th>
+<th>典型效果提升</th>
+<th>可回滚性</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>知识补全</td>
+<td>天~周</td>
+<td>极低</td>
+<td>直接消除某类失败</td>
+<td>立即</td>
+</tr>
+<tr>
+<td>检索参数调优</td>
+<td>天</td>
+<td>极低</td>
+<td>召回率 +10~30%</td>
+<td>立即</td>
+</tr>
+<tr>
+<td>提示词优化</td>
+<td>小时</td>
+<td>极低</td>
+<td>格式&#x2F;风格问题直接解决</td>
+<td>立即</td>
+</tr>
+<tr>
+<td>上下文压缩与预算</td>
+<td>天</td>
+<td>低</td>
+<td>成本 -20~40%</td>
+<td>立即</td>
+</tr>
+<tr>
+<td>SFT 微调</td>
+<td>周~月</td>
+<td>中</td>
+<td>风格与术语对齐</td>
+<td>需重新部署</td>
+</tr>
+<tr>
+<td>DPO</td>
+<td>月</td>
+<td>中高</td>
+<td>偏好对齐</td>
+<td>需重新部署</td>
+</tr>
+<tr>
+<td>RLHF</td>
+<td>季度</td>
+<td>极高</td>
+<td>精细对齐</td>
+<td>困难</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>多数企业的正确判断是：不做 RLHF</strong>。投入产出比远低于把 RAG 与上下文质量做好。原图把「大数据平台」画为埋点回流终点而未画出复杂训练链路，这一克制的表达本身就是合理的架构判断。</p>
+</blockquote>
+<hr>
+<h2 id="2-反馈数据体系"><a href="#2-反馈数据体系" class="headerlink" title="2. 反馈数据体系"></a>2. 反馈数据体系</h2><h3 id="2-1-显式与隐式反馈"><a href="#2-1-显式与隐式反馈" class="headerlink" title="2.1 显式与隐式反馈"></a>2.1 显式与隐式反馈</h3><table>
+<thead>
+<tr>
+<th>类型</th>
+<th>信号</th>
+<th>数据密度</th>
+<th>可靠性</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>显式</td>
+<td>点赞 &#x2F; 点踩</td>
+<td><strong>极低（&lt;2%）</strong></td>
+<td>高</td>
+<td>高质量偏好对</td>
+</tr>
+<tr>
+<td>显式</td>
+<td>文字反馈</td>
+<td>极低</td>
+<td>高</td>
+<td>问题定位</td>
+</tr>
+<tr>
+<td>显式</td>
+<td>用户纠正（”不是这个，我是说…”）</td>
+<td>低（3–8%）</td>
+<td><strong>极高</strong></td>
+<td><strong>最优质的偏好对来源</strong></td>
+</tr>
+<tr>
+<td>隐式</td>
+<td><strong>重问率</strong></td>
+<td>高</td>
+<td>中高</td>
+<td>负样本挖掘</td>
+</tr>
+<tr>
+<td>隐式</td>
+<td><strong>打断率</strong></td>
+<td>高</td>
+<td>中</td>
+<td>回答过长或不对路</td>
+</tr>
+<tr>
+<td>隐式</td>
+<td>追问轮次</td>
+<td>高</td>
+<td>中</td>
+<td>效率评估</td>
+</tr>
+<tr>
+<td>隐式</td>
+<td>会话放弃</td>
+<td>中</td>
+<td>中高</td>
+<td>失败代理</td>
+</tr>
+<tr>
+<td>隐式</td>
+<td>任务完成（业务信号）</td>
+<td>中</td>
+<td>高</td>
+<td>最终目标达成</td>
+</tr>
+<tr>
+<td>隐式</td>
+<td>采纳（用户按建议操作）</td>
+<td>中</td>
+<td>高</td>
+<td>正样本</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>“用户纠正”是数据金矿</strong>。当用户说”不对，我是问 X”时，系统同时得到了：① 一个负样本（原答案）② 正确意图（用户澄清）③ 一个天然偏好对。这类样本应 100% 采集并优先进入标注队列。</p>
+</blockquote>
+<h3 id="2-2-反馈到样本的转化"><a href="#2-2-反馈到样本的转化" class="headerlink" title="2.2 反馈到样本的转化"></a>2.2 反馈到样本的转化</h3><pre class="mermaid">flowchart TB
+    F1["点踩 + 文字反馈"] --&gt; S1["高优先级标注队列"]
+    F2["用户纠正对话"] --&gt; S2["自动构造偏好对&lt;br/&gt;（原答案 = 差，纠正后答案 = 好）"]
+    F3["重问序列"] --&gt; S3["聚类 → 失败模式识别"]
+    F4["空召回查询"] --&gt; S4["知识缺口工单"]
+    F5["打断样本"] --&gt; S5["长度与相关性分析"]
+    F6["点赞 + 采纳"] --&gt; S6["SFT 正样本候选"]
+    S1 &amp; S2 --&gt; DPO["偏好数据集"]
+    S3 --&gt; ROOT["根因分类&lt;br/&gt;意图错/检索错/记忆错/模型错"]
+    ROOT --&gt; FIX["定向修复"]
+    S4 --&gt; KN["知识补全"]
+    S6 --&gt; SFT["SFT 数据集"]</pre>
+
+
+<h3 id="2-3-根因分类（决定用哪种改进手段）"><a href="#2-3-根因分类（决定用哪种改进手段）" class="headerlink" title="2.3 根因分类（决定用哪种改进手段）"></a>2.3 根因分类（决定用哪种改进手段）</h3><table>
+<thead>
+<tr>
+<th>根因</th>
+<th>判定依据</th>
+<th>正确修复手段</th>
+<th>错误做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>意图误判</td>
+<td><code>intent</code> 与用户真实意图不符</td>
+<td>意图归并 + 反例扩充 + 分类器重训</td>
+<td>❌ 微调生成模型</td>
+</tr>
+<tr>
+<td>检索未命中</td>
+<td><code>empty_recall</code> 或召回片段无关</td>
+<td>知识补全 + 查询改写 + 混合检索调优</td>
+<td>❌ 微调</td>
+</tr>
+<tr>
+<td>检索命中但答偏</td>
+<td>有正确片段但答案没用上</td>
+<td>提示词强化引用约束 + Rerank</td>
+<td>❌ 补知识</td>
+</tr>
+<tr>
+<td>记忆错误</td>
+<td>召回了错误记忆</td>
+<td>回溯干预 + 抽取策略收紧</td>
+<td>❌ 微调</td>
+</tr>
+<tr>
+<td>工具选错</td>
+<td><code>tool_ids</code> 不含正确工具或选错</td>
+<td>Skill 描述优化 + 反例 + 工具集裁剪</td>
+<td>❌ 微调</td>
+</tr>
+<tr>
+<td>格式&#x2F;风格不符</td>
+<td>内容对但形式不符要求</td>
+<td><strong>提示词优化 → 仍不行才 SFT</strong></td>
+<td>一上来就 SFT</td>
+</tr>
+<tr>
+<td>事实幻觉</td>
+<td>无引用支撑的编造</td>
+<td>强制引用 + 拒答策略 + 知识补全</td>
+<td>❌ 微调（微调不能消除幻觉）</td>
+</tr>
+<tr>
+<td>偏好不对齐</td>
+<td>内容正确但用户不喜欢</td>
+<td><strong>DPO</strong></td>
+<td>SFT（SFT 学不到”不要什么”）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>这张表是训练体系最重要的产出</strong>。绝大多数团队的错误在于：遇到任何效果问题都想微调。实际上上表中只有两行（格式风格、偏好对齐）真正适合微调，其余六行微调都是错误手段且会浪费数月时间。</p>
+</blockquote>
+<hr>
+<h2 id="3-评测体系"><a href="#3-评测体系" class="headerlink" title="3. 评测体系"></a>3. 评测体系</h2><h3 id="3-1-三套集分离（与-09-文档一致，此处展开管理机制）"><a href="#3-1-三套集分离（与-09-文档一致，此处展开管理机制）" class="headerlink" title="3.1 三套集分离（与 09 文档一致，此处展开管理机制）"></a>3.1 三套集分离（与 09 文档一致，此处展开管理机制）</h3><table>
+<thead>
+<tr>
+<th>集合</th>
+<th>规模</th>
+<th>维护者</th>
+<th>更新频率</th>
+<th>访问权限</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>公开集</td>
+<td>200–500</td>
+<td>算法&#x2F;研发</td>
+<td>随时</td>
+<td>全员可见</td>
+</tr>
+<tr>
+<td>回归集</td>
+<td>300–800</td>
+<td>质量团队</td>
+<td>月度扩充</td>
+<td>可见但不可用于调优</td>
+</tr>
+<tr>
+<td><strong>盲测集</strong></td>
+<td>200–500</td>
+<td><strong>独立质量角色</strong></td>
+<td>季度扩充</td>
+<td><strong>调优人员不可见</strong></td>
+</tr>
+</tbody></table>
+<p><strong>管理机制</strong>：</p>
+<pre class="mermaid">flowchart TB
+    NEW["新增候选样本&lt;br/&gt;来自负反馈与线上挖掘"] --&gt; LB["人工标注"]
+    LB --&gt; RV["交叉复核（双人）"]
+    RV --&gt; SP["分配"]
+    SP --&gt;|"60%"| P1["公开集"]
+    SP --&gt;|"25%"| P2["回归集"]
+    SP --&gt;|"15%"| P3["盲测集（隔离存储）"]
+    P1 --&gt; TUNE["日常调优"]
+    P2 --&gt; GATE["发布门禁"]
+    P3 --&gt; AUDIT["季度真实评估"]
+    AUDIT --&gt; CMP&#123;"公开集提升 vs 盲测集提升"&#125;
+    CMP --&gt;|"差距大"| OF["判定：过拟合评测集&lt;br/&gt;需扩充与轮换"]</pre>
+
+
+<blockquote>
+<p><strong>过拟合检测方法</strong>：若公开集指标提升 15% 而盲测集只提升 2%，说明优化在拟合评测集而非真实提升。这个对比是评测体系健康度的唯一可靠信号。</p>
+</blockquote>
+<h3 id="3-2-评测维度矩阵"><a href="#3-2-评测维度矩阵" class="headerlink" title="3.2 评测维度矩阵"></a>3.2 评测维度矩阵</h3><table>
+<thead>
+<tr>
+<th>层</th>
+<th>指标</th>
+<th>自动化程度</th>
+<th>频率</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>检索</td>
+<td>Recall@K、MRR、NDCG、空召回率</td>
+<td>全自动</td>
+<td>每次变更</td>
+</tr>
+<tr>
+<td>生成</td>
+<td>答案正确性、忠实度、引用准确率</td>
+<td>LLM-as-Judge + 人工校准</td>
+<td>每次变更</td>
+</tr>
+<tr>
+<td>工具</td>
+<td>工具选择准确率、参数正确率</td>
+<td>全自动（有标注）</td>
+<td>每次变更</td>
+</tr>
+<tr>
+<td>意图</td>
+<td>分类准确率、混淆矩阵</td>
+<td>全自动</td>
+<td>每次变更</td>
+</tr>
+<tr>
+<td>安全</td>
+<td>红队用例通过率、误拦截率</td>
+<td>半自动</td>
+<td>每次变更 + 周度</td>
+</tr>
+<tr>
+<td>稳定性</td>
+<td>同输入重复差异率</td>
+<td>全自动</td>
+<td>每次变更</td>
+</tr>
+<tr>
+<td>端到端</td>
+<td>任务完成率、满意度</td>
+<td>人工</td>
+<td>月度</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>单任务 Token、单位业务成本</td>
+<td>全自动</td>
+<td>持续</td>
+</tr>
+</tbody></table>
+<h3 id="3-3-LLM-as-Judge-工程化"><a href="#3-3-LLM-as-Judge-工程化" class="headerlink" title="3.3 LLM-as-Judge 工程化"></a>3.3 LLM-as-Judge 工程化</h3><pre class="mermaid">flowchart LR
+    J1["评分标准 rubric&lt;br/&gt;明确分档定义"] --&gt; J2["参考答案&lt;br/&gt;金标"]
+    J2 --&gt; J3["强模型评判&lt;br/&gt;不与被评模型同源"]
+    J3 --&gt; J4["结构化输出&lt;br/&gt;分数 + 理由 + 引用依据"]
+    J4 --&gt; J5["人工校准&lt;br/&gt;Kappa ≥ 0.7 才采信"]
+    J5 --&gt; J6["定期抽检 10%"]
+    J6 --&gt;|"一致性下降"| J1</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>陷阱</th>
+<th>表现</th>
+<th>规避</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>自评偏袒</td>
+<td>用同一模型评自己，分数虚高</td>
+<td>用不同厂商强模型评判</td>
+</tr>
+<tr>
+<td>无 rubric</td>
+<td>分数不稳定、不可比</td>
+<td>明确分档定义与扣分项</td>
+</tr>
+<tr>
+<td>位置偏见</td>
+<td>偏好排在前面的答案</td>
+<td>A&#x2F;B 位置随机交换</td>
+</tr>
+<tr>
+<td>长度偏见</td>
+<td>偏好更长的答案</td>
+<td>rubric 明确”简洁性”权重</td>
+</tr>
+<tr>
+<td>未校准</td>
+<td>与人工判断不一致但被当真</td>
+<td>Cohen’s Kappa 验证</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="4-数据集构建"><a href="#4-数据集构建" class="headerlink" title="4. 数据集构建"></a>4. 数据集构建</h2><h3 id="4-1-SFT-数据集"><a href="#4-1-SFT-数据集" class="headerlink" title="4.1 SFT 数据集"></a>4.1 SFT 数据集</h3><table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>来源优先级</td>
+<td>线上高质量真实对话 &gt; 人工编写 &gt; 合成数据</td>
+</tr>
+<tr>
+<td>筛选标准</td>
+<td>用户正反馈 + 任务完成 + 人工复核通过</td>
+</tr>
+<tr>
+<td>数据量</td>
+<td>风格对齐 1k–5k 条足够；不需要海量</td>
+</tr>
+<tr>
+<td>多样性</td>
+<td>覆盖全部意图类别，避免头部意图占比过高</td>
+</tr>
+<tr>
+<td>去重</td>
+<td>语义去重（近似样本会导致过拟合）</td>
+</tr>
+<tr>
+<td>授权校验</td>
+<td><strong>必须校验数据是否在用户授权范围内</strong></td>
+</tr>
+<tr>
+<td>PII 剔除</td>
+<td>训练集必须无 PII</td>
+</tr>
+<tr>
+<td>血缘记录</td>
+<td>每条样本记录来源 trace_id，支持事后撤回</td>
+</tr>
+</tbody></table>
+<h3 id="4-2-偏好数据集（DPO）"><a href="#4-2-偏好数据集（DPO）" class="headerlink" title="4.2 偏好数据集（DPO）"></a>4.2 偏好数据集（DPO）</h3><pre class="mermaid">flowchart TB
+    P1["来源一：用户纠正&lt;br/&gt;原答案=rejected，纠正后=chosen"] --&gt; DS["偏好对数据集"]
+    P2["来源二：点赞/点踩对&lt;br/&gt;同问题两次回答"] --&gt; DS
+    P3["来源三：人工标注&lt;br/&gt;对同一问题的多个候选排序"] --&gt; DS
+    P4["来源四：模型生成多候选&lt;br/&gt;+ Judge 排序"] --&gt; DS
+    DS --&gt; Q["质量校验"]
+    Q --&gt; Q1["chosen 与 rejected 差异是否有意义&lt;br/&gt;（避免仅措辞差异）"]
+    Q --&gt; Q2["chosen 是否真的更好&lt;br/&gt;（人工抽检）"]
+    Q --&gt; Q3["是否覆盖多样偏好维度&lt;br/&gt;（简洁性/准确性/语气/结构）"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>数据量</td>
+<td>2k–10k 偏好对可见效</td>
+</tr>
+<tr>
+<td>差异有意义</td>
+<td>若 chosen 与 rejected 只是措辞不同，模型学不到有效信号</td>
+</tr>
+<tr>
+<td>维度平衡</td>
+<td>不要全是”更简洁”的偏好，否则模型会过度简化</td>
+</tr>
+<tr>
+<td>合成数据谨慎</td>
+<td>模型生成 + 模型排序的数据存在自我强化偏差</td>
+</tr>
+</tbody></table>
+<h3 id="4-3-合成数据的正确用法"><a href="#4-3-合成数据的正确用法" class="headerlink" title="4.3 合成数据的正确用法"></a>4.3 合成数据的正确用法</h3><table>
+<thead>
+<tr>
+<th>适用</th>
+<th>不适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>扩充长尾意图的训练样本</td>
+<td>替代真实数据作为主体</td>
+</tr>
+<tr>
+<td>生成评测集的干扰项</td>
+<td>生成金标答案（需人工确认）</td>
+</tr>
+<tr>
+<td>数据增强（同义改写扩充）</td>
+<td>偏好数据（自我强化偏差）</td>
+</tr>
+<tr>
+<td>冷启动阶段快速起量</td>
+<td>成熟阶段的主要来源</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="5-训练方法"><a href="#5-训练方法" class="headerlink" title="5. 训练方法"></a>5. 训练方法</h2><h3 id="5-1-方法对比"><a href="#5-1-方法对比" class="headerlink" title="5.1 方法对比"></a>5.1 方法对比</h3><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>学什么</th>
+<th>数据需求</th>
+<th>算力</th>
+<th>周期</th>
+<th>适用判定</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>提示词优化</strong></td>
+<td>无（不改权重）</td>
+<td>0</td>
+<td>0</td>
+<td>小时</td>
+<td><strong>先做这个</strong></td>
+</tr>
+<tr>
+<td><strong>少样本示例</strong></td>
+<td>无</td>
+<td>几十条</td>
+<td>0</td>
+<td>小时</td>
+<td>格式问题优先尝试</td>
+</tr>
+<tr>
+<td><strong>SFT（LoRA）</strong></td>
+<td>模仿好答案</td>
+<td>1k–5k 对</td>
+<td>单卡~多卡</td>
+<td>天~周</td>
+<td>风格、术语、格式稳定不达标时</td>
+</tr>
+<tr>
+<td><strong>SFT（全参）</strong></td>
+<td>同上，更彻底</td>
+<td>10k+</td>
+<td>多卡</td>
+<td>周</td>
+<td>极少需要</td>
+</tr>
+<tr>
+<td><strong>DPO</strong></td>
+<td>偏好（好与不好的差异）</td>
+<td>2k–10k 对</td>
+<td>单卡~多卡</td>
+<td>周</td>
+<td>需要”学会不要什么”时</td>
+</tr>
+<tr>
+<td><strong>RLHF（PPO）</strong></td>
+<td>精细对齐</td>
+<td>大量偏好 + RM</td>
+<td>大规模</td>
+<td>月~季</td>
+<td><strong>企业平台通常不需要</strong></td>
+</tr>
+<tr>
+<td><strong>Reward Model</strong></td>
+<td>打分能力</td>
+<td>大量偏好</td>
+<td>多卡</td>
+<td>周</td>
+<td>可作自动评测器</td>
+</tr>
+<tr>
+<td><strong>蒸馏</strong></td>
+<td>把大模型能力压进小模型</td>
+<td>大模型输出</td>
+<td>多卡</td>
+<td>周</td>
+<td><strong>端侧 SLM 的关键手段</strong></td>
+</tr>
+</tbody></table>
+<h3 id="5-2-端侧小模型的蒸馏路径（本架构重点）"><a href="#5-2-端侧小模型的蒸馏路径（本架构重点）" class="headerlink" title="5.2 端侧小模型的蒸馏路径（本架构重点）"></a>5.2 端侧小模型的蒸馏路径（本架构重点）</h3><pre class="mermaid">flowchart LR
+    T["教师：云端大模型"] --&gt; D1["在真实线上分布上生成标注&lt;br/&gt;意图/槽位/压缩结果"]
+    D1 --&gt; D2["质量筛选&lt;br/&gt;用金标集验证教师输出"]
+    D2 --&gt; D3["学生：端侧小模型 SFT"]
+    D3 --&gt; D4["量化 int4/int8"]
+    D4 --&gt; D5["端侧评测&lt;br/&gt;精度损失 + 延迟 + 内存"]
+    D5 --&gt; D6&#123;"达标?"&#125;
+    D6 --&gt;|"否"| D7["调整：模型尺寸 / 量化档位 / 任务拆分"]
+    D7 --&gt; D3
+    D6 --&gt;|"是"| D8["按算力等级分档打包下发"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用真实分布</td>
+<td>蒸馏数据必须来自线上真实查询分布，而非公开数据集</td>
+</tr>
+<tr>
+<td>单任务专精</td>
+<td>端侧模型不追求全能，每个任务单独蒸馏（意图&#x2F;抽取&#x2F;压缩）效果远好于通用</td>
+</tr>
+<tr>
+<td>一基座多 LoRA</td>
+<td>共享基座节省内存</td>
+</tr>
+<tr>
+<td>量化后评测</td>
+<td>量化必然掉精度，必须在量化后重新评测</td>
+</tr>
+<tr>
+<td>分档</td>
+<td>高&#x2F;中&#x2F;低算力设备用不同尺寸</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>端侧蒸馏是本架构最值得投入的训练方向</strong>：它同时改善延迟（390 ms vs 1225 ms）、成本（端侧推理零边际成本）、隐私（不上云）与可用性（离线可用）。收益是四重的，而云端微调通常只改善单一维度。</p>
+</blockquote>
+<hr>
+<h2 id="6-模型注册与发布"><a href="#6-模型注册与发布" class="headerlink" title="6. 模型注册与发布"></a>6. 模型注册与发布</h2><h3 id="6-1-模型注册中心"><a href="#6-1-模型注册中心" class="headerlink" title="6.1 模型注册中心"></a>6.1 模型注册中心</h3><table>
+<thead>
+<tr>
+<th>记录内容</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>模型标识与版本</td>
+<td>唯一定位</td>
+</tr>
+<tr>
+<td>基座模型与训练方法</td>
+<td>血缘追溯</td>
+</tr>
+<tr>
+<td>训练数据集版本与血缘</td>
+<td>合规撤回、问题追溯</td>
+</tr>
+<tr>
+<td>能力声明（意图、上下文长度、函数调用支持）</td>
+<td>网关能力矩阵录入</td>
+</tr>
+<tr>
+<td>评测报告（各集合得分）</td>
+<td>发布决策依据</td>
+</tr>
+<tr>
+<td>资源需求（显存、并发）</td>
+<td>部署规划</td>
+</tr>
+<tr>
+<td>许可证与来源</td>
+<td>合规</td>
+</tr>
+<tr>
+<td>上线时间与灰度历史</td>
+<td>审计</td>
+</tr>
+<tr>
+<td>关联的 Prompt 模板版本</td>
+<td>模型-模板绑定</td>
+</tr>
+</tbody></table>
+<h3 id="6-2-发布流程（与-10-文档-7-1-呼应，此处补充门禁细节）"><a href="#6-2-发布流程（与-10-文档-7-1-呼应，此处补充门禁细节）" class="headerlink" title="6.2 发布流程（与 10 文档 7.1 呼应，此处补充门禁细节）"></a>6.2 发布流程（与 10 文档 7.1 呼应，此处补充门禁细节）</h3><pre class="mermaid">flowchart TB
+    R["模型注册"] --&gt; G1&#123;"门禁1：回归集 100% 通过?"&#125;
+    G1 --&gt;|否| STOP1["阻断"]
+    G1 --&gt;|是| G2&#123;"门禁2：安全红队用例 ≥95%?"&#125;
+    G2 --&gt;|否| STOP2["阻断"]
+    G2 --&gt;|是| G3&#123;"门禁3：延迟与成本在预算内?"&#125;
+    G3 --&gt;|否| STOP3["阻断"]
+    G3 --&gt;|是| G4&#123;"门禁4：稳定性差异率 ≤10%?"&#125;
+    G4 --&gt;|否| STOP4["阻断"]
+    G4 --&gt;|是| SH["影子流量&lt;br/&gt;真实分布对比（1–3 天）"]
+    SH --&gt; G5&#123;"门禁5：影子对比不劣化?"&#125;
+    G5 --&gt;|否| STOP5["阻断"]
+    G5 --&gt;|是| C1["灰度 5%"]
+    C1 --&gt; C2["观察窗口 24h&lt;br/&gt;质量+成本+重问率"]
+    C2 --&gt;|"劣化"| RB["自动回滚"]
+    C2 --&gt;|"达标"| C3["灰度 50%"]
+    C3 --&gt; C4["观察 24h"]
+    C4 --&gt; C5["全量"]
+    C5 --&gt; KEEP["保留上一版本 7 天"]</pre>
+
+
+<blockquote>
+<p><strong>门禁必须是阻断式而非提示式</strong>。若评测不通过只是”警告”，则在项目压力下必然被跳过。门禁的价值在于它不可绕过。</p>
+</blockquote>
+<hr>
+<h2 id="7-CI-CD-与-LLMOps-AgentOps"><a href="#7-CI-CD-与-LLMOps-AgentOps" class="headerlink" title="7. CI&#x2F;CD 与 LLMOps &#x2F; AgentOps"></a>7. CI&#x2F;CD 与 LLMOps &#x2F; AgentOps</h2><h3 id="7-1-变更类型与对应流程"><a href="#7-1-变更类型与对应流程" class="headerlink" title="7.1 变更类型与对应流程"></a>7.1 变更类型与对应流程</h3><table>
+<thead>
+<tr>
+<th>变更类型</th>
+<th>触发的门禁</th>
+<th>灰度要求</th>
+<th>回滚方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Prompt 模板</td>
+<td>回归集 + 稳定性</td>
+<td>5% → 100%</td>
+<td>配置回滚（秒级）</td>
+</tr>
+<tr>
+<td>检索参数（切分&#x2F;权重&#x2F;TopK）</td>
+<td>检索指标 + 端到端</td>
+<td>5% → 100%</td>
+<td>配置回滚</td>
+</tr>
+<tr>
+<td>知识内容</td>
+<td>检索指标 + 抽样人工</td>
+<td>灰度知识版本</td>
+<td>知识版本回滚</td>
+</tr>
+<tr>
+<td>Skill 描述</td>
+<td>工具选择准确率</td>
+<td>5% → 100%</td>
+<td>配置回滚</td>
+</tr>
+<tr>
+<td>意图分类器</td>
+<td>分类准确率 + 混淆矩阵</td>
+<td>5% → 100%</td>
+<td>模型版本回滚</td>
+</tr>
+<tr>
+<td>模型版本</td>
+<td>全部 5 道门禁 + 影子流量</td>
+<td>5% → 50% → 100%</td>
+<td>网关权重回滚</td>
+</tr>
+<tr>
+<td>Agent 代码</td>
+<td>回归集 + 单元测试</td>
+<td>常规发布流程</td>
+<td>部署回滚</td>
+</tr>
+<tr>
+<td>围栏策略</td>
+<td>拦截率 + 误拦截率</td>
+<td><strong>可全量（安全优先）</strong></td>
+<td>配置回滚</td>
+</tr>
+<tr>
+<td>端侧模型&#x2F;知识包</td>
+<td>端侧评测 + 灰度设备集</td>
+<td>分批设备灰度</td>
+<td>端侧本地回滚</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>关键洞察</strong>：AI 平台中<strong>大部分变更不是代码变更</strong>（提示词、检索参数、知识、Skill 描述、模型版本）。因此传统 CI&#x2F;CD 覆盖不到这些变更。必须把它们纳入统一的”变更 → 评测 → 灰度 → 回滚”流程，否则会出现”代码严格管控，但改一句提示词就能全量影响用户”的失衡状态。</p>
+</blockquote>
+<h3 id="7-2-AgentOps-特有能力"><a href="#7-2-AgentOps-特有能力" class="headerlink" title="7.2 AgentOps 特有能力"></a>7.2 AgentOps 特有能力</h3><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Agent 版本与 manifest 管理</td>
+<td>见 07 文档 2.2</td>
+</tr>
+<tr>
+<td>预算配置热更新</td>
+<td>三重预算无需发版调整</td>
+</tr>
+<tr>
+<td>能力上下线（秒级）</td>
+<td>应急止损</td>
+</tr>
+<tr>
+<td>轨迹回放</td>
+<td>用固化上下文重跑 Agent，对比不同版本</td>
+</tr>
+<tr>
+<td>Agent 级 SLO 与配额</td>
+<td>独立监控与限流</td>
+</tr>
+<tr>
+<td>多 Agent 一致性测试</td>
+<td>同任务在不同 Agent 上的结果一致性</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="8-训练与评测的组织协作"><a href="#8-训练与评测的组织协作" class="headerlink" title="8. 训练与评测的组织协作"></a>8. 训练与评测的组织协作</h2><pre class="mermaid">flowchart LR
+    subgraph ROLE["角色分工"]
+        R1["知识运营&lt;br/&gt;知识补全 · RAG 门户"]
+        R2["算法/研发&lt;br/&gt;提示词 · 检索参数 · 微调"]
+        R3["质量团队&lt;br/&gt;金标集 · 盲测集 · 门禁"]
+        R4["平台研发&lt;br/&gt;评测基础设施 · 门禁流水线"]
+        R5["安全&lt;br/&gt;红队用例集"]
+    end
+    R1 --&gt; C["共享的失败案例池&lt;br/&gt;按根因分类"]
+    R2 --&gt; C
+    R3 --&gt; C
+    R5 --&gt; C
+    C --&gt; ASSIGN["按根因自动派单&lt;br/&gt;检索问题→R1/R2&lt;br/&gt;安全问题→R5&lt;br/&gt;格式问题→R2"]</pre>
+
+
+<blockquote>
+<p><strong>失败案例池 + 根因自动派单</strong>是让闭环真正跑起来的组织机制。没有它，失败案例会停留在”大家都看到了但没人负责”的状态。根因分类（见 2.3）正是派单的依据。</p>
+</blockquote>
+<hr>
+<h2 id="9-指标与目标"><a href="#9-指标与目标" class="headerlink" title="9. 指标与目标"></a>9. 指标与目标</h2><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>定义</th>
+<th>目标（推断设计）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>知识缺口修复周期</td>
+<td>空召回查询到知识生效</td>
+<td>≤ 7 天</td>
+</tr>
+<tr>
+<td>知识覆盖率</td>
+<td>1 - 空召回率</td>
+<td>≥ 95% 且持续上升</td>
+</tr>
+<tr>
+<td>评测自动化率</td>
+<td>自动评测覆盖的维度比例</td>
+<td>≥ 80%</td>
+</tr>
+<tr>
+<td>回归门禁执行率</td>
+<td>变更经过门禁的比例</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>门禁拦截有效率</td>
+<td>被拦截变更中真实有问题的比例</td>
+<td>≥ 70%（过低说明门禁过严）</td>
+</tr>
+<tr>
+<td>公开集 vs 盲测集提升差</td>
+<td>过拟合检测</td>
+<td>差距 ≤ 3×</td>
+</tr>
+<tr>
+<td>金标集扩充速度</td>
+<td>月新增标注样本</td>
+<td>≥ 100 条</td>
+</tr>
+<tr>
+<td>负反馈样本利用率</td>
+<td>进入标注队列的比例</td>
+<td>≥ 90%</td>
+</tr>
+<tr>
+<td>端侧模型精度保持率</td>
+<td>量化后 vs 量化前</td>
+<td>≥ 95%</td>
+</tr>
+<tr>
+<td>模型发布回滚率</td>
+<td>上线后回滚的比例</td>
+<td>≤ 10%</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="10-风险与治理"><a href="#10-风险与治理" class="headerlink" title="10. 风险与治理"></a>10. 风险与治理</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>影响</th>
+<th>治理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>把所有问题都当微调问题</strong></td>
+<td>浪费数月且效果不涨</td>
+<td>强制根因分类（2.3 表）+ 分类后才决定手段</td>
+</tr>
+<tr>
+<td>评测集过拟合</td>
+<td>指标涨体验不涨</td>
+<td>三集分离 + 盲测集独立维护 + 提升差检测</td>
+</tr>
+<tr>
+<td>门禁被绕过</td>
+<td>劣化变更全量上线</td>
+<td>阻断式门禁 + 绕过需高层审批与记录</td>
+</tr>
+<tr>
+<td>训练数据超出授权范围</td>
+<td>合规风险</td>
+<td>授权校验 + 数据血缘 + 可撤回机制</td>
+</tr>
+<tr>
+<td>PII 进入训练集</td>
+<td>严重合规事故</td>
+<td>自动 PII 扫描 + 人工抽检 + 血缘可追溯</td>
+</tr>
+<tr>
+<td>合成数据自我强化偏差</td>
+<td>模型能力收窄</td>
+<td>合成数据比例上限 + 真实数据为主</td>
+</tr>
+<tr>
+<td>LLM-as-Judge 未校准</td>
+<td>评测结论错误</td>
+<td>Kappa 验证 + 定期人工抽检</td>
+</tr>
+<tr>
+<td>Prompt 变更不走门禁</td>
+<td>一句话改动影响全量用户</td>
+<td>提示词纳入统一变更流程</td>
+</tr>
+<tr>
+<td>端侧量化后精度未评测</td>
+<td>端侧体验劣化不可见</td>
+<td>量化后强制端侧评测</td>
+</tr>
+<tr>
+<td>失败案例无人负责</td>
+<td>闭环空转</td>
+<td>失败案例池 + 根因派单 + owner 机制</td>
+</tr>
+<tr>
+<td>微调模型无法回滚</td>
+<td>故障时间长</td>
+<td>保留上版本 7 天 + 网关权重回滚</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="11-演进路线"><a href="#11-演进路线" class="headerlink" title="11. 演进路线"></a>11. 演进路线</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>训练闭环演进</th>
+<th>退出准则</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>阶段一</strong></td>
+<td>三集分离建立；根因分类表落地；空召回 → 知识工单闭环；提示词与检索参数纳入变更流程；负反馈 100% 采集</td>
+<td>知识缺口 ≤7 天修复；所有变更有门禁</td>
+</tr>
+<tr>
+<td><strong>阶段二</strong></td>
+<td>回归门禁接入 CI 且阻断式；LLM-as-Judge 校准；偏好对自动构造（用户纠正）；端侧蒸馏 pipeline 建立；影子流量机制</td>
+<td>评测自动化 ≥80%；端侧模型可迭代</td>
+</tr>
+<tr>
+<td><strong>阶段三</strong></td>
+<td>SFT&#x2F;DPO 常态化（月度节奏）；失败案例自动派单；成本-质量帕累托优化；Reward Model 作为自动评测器；端侧模型按算力分档自动构建</td>
+<td>改进从人工驱动转为数据驱动；模型迭代不依赖外部供应商</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端 AI 平台可观测性 · <strong>下一篇</strong>：云管端数据平台架构</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/08/18/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-15-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/">云管端数据平台架构</a></h3>
+        <p>数据平台是整个架构的闭环底座——所有改进能力（知识补全、评测、训练、成本治理、记忆演化）都以它为前提。</p>
+        <a class="btn primary" href="/2026/08/18/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-15-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/07/30/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-13-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端 AI 平台可观测性</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#14-%C2%B7-%E8%AE%AD%E7%BB%83%E4%B8%8E%E8%AF%84%E6%B5%8B%E9%97%AD%E7%8E%AF%EF%BC%88Training-System%EF%BC%89" data-toc-target="14-·-训练与评测闭环（Training-System）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">14 · 训练与评测闭环（Training System）</span></a><a class="toc-level-2" href="#1-%E9%97%AD%E7%8E%AF%E5%85%A8%E6%99%AF%E4%B8%8E%E4%BB%B7%E5%80%BC%E6%8E%92%E5%BA%8F" data-toc-target="1-闭环全景与价值排序"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 闭环全景与价值排序</span></a><a class="toc-level-3" href="#1-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AE%AD%E7%BB%83%E6%8E%92%E5%9C%A8%E5%90%8E%E9%9D%A2" data-toc-target="1-1-为什么训练排在后面"><span class="toc-text">1.1 为什么训练排在后面</span></a><a class="toc-level-2" href="#2-%E5%8F%8D%E9%A6%88%E6%95%B0%E6%8D%AE%E4%BD%93%E7%B3%BB" data-toc-target="2-反馈数据体系"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 反馈数据体系</span></a><a class="toc-level-3" href="#2-1-%E6%98%BE%E5%BC%8F%E4%B8%8E%E9%9A%90%E5%BC%8F%E5%8F%8D%E9%A6%88" data-toc-target="2-1-显式与隐式反馈"><span class="toc-text">2.1 显式与隐式反馈</span></a><a class="toc-level-3" href="#2-2-%E5%8F%8D%E9%A6%88%E5%88%B0%E6%A0%B7%E6%9C%AC%E7%9A%84%E8%BD%AC%E5%8C%96" data-toc-target="2-2-反馈到样本的转化"><span class="toc-text">2.2 反馈到样本的转化</span></a><a class="toc-level-3" href="#2-3-%E6%A0%B9%E5%9B%A0%E5%88%86%E7%B1%BB%EF%BC%88%E5%86%B3%E5%AE%9A%E7%94%A8%E5%93%AA%E7%A7%8D%E6%94%B9%E8%BF%9B%E6%89%8B%E6%AE%B5%EF%BC%89" data-toc-target="2-3-根因分类（决定用哪种改进手段）"><span class="toc-text">2.3 根因分类（决定用哪种改进手段）</span></a><a class="toc-level-2" href="#3-%E8%AF%84%E6%B5%8B%E4%BD%93%E7%B3%BB" data-toc-target="3-评测体系"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 评测体系</span></a><a class="toc-level-3" href="#3-1-%E4%B8%89%E5%A5%97%E9%9B%86%E5%88%86%E7%A6%BB%EF%BC%88%E4%B8%8E-09-%E6%96%87%E6%A1%A3%E4%B8%80%E8%87%B4%EF%BC%8C%E6%AD%A4%E5%A4%84%E5%B1%95%E5%BC%80%E7%AE%A1%E7%90%86%E6%9C%BA%E5%88%B6%EF%BC%89" data-toc-target="3-1-三套集分离（与-09-文档一致，此处展开管理机制）"><span class="toc-text">3.1 三套集分离（与 09 文档一致，此处展开管理机制）</span></a><a class="toc-level-3" href="#3-2-%E8%AF%84%E6%B5%8B%E7%BB%B4%E5%BA%A6%E7%9F%A9%E9%98%B5" data-toc-target="3-2-评测维度矩阵"><span class="toc-text">3.2 评测维度矩阵</span></a><a class="toc-level-3" href="#3-3-LLM-as-Judge-%E5%B7%A5%E7%A8%8B%E5%8C%96" data-toc-target="3-3-LLM-as-Judge-工程化"><span class="toc-text">3.3 LLM-as-Judge 工程化</span></a><a class="toc-level-2" href="#4-%E6%95%B0%E6%8D%AE%E9%9B%86%E6%9E%84%E5%BB%BA" data-toc-target="4-数据集构建"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 数据集构建</span></a><a class="toc-level-3" href="#4-1-SFT-%E6%95%B0%E6%8D%AE%E9%9B%86" data-toc-target="4-1-SFT-数据集"><span class="toc-text">4.1 SFT 数据集</span></a><a class="toc-level-3" href="#4-2-%E5%81%8F%E5%A5%BD%E6%95%B0%E6%8D%AE%E9%9B%86%EF%BC%88DPO%EF%BC%89" data-toc-target="4-2-偏好数据集（DPO）"><span class="toc-text">4.2 偏好数据集（DPO）</span></a><a class="toc-level-3" href="#4-3-%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE%E7%9A%84%E6%AD%A3%E7%A1%AE%E7%94%A8%E6%B3%95" data-toc-target="4-3-合成数据的正确用法"><span class="toc-text">4.3 合成数据的正确用法</span></a><a class="toc-level-2" href="#5-%E8%AE%AD%E7%BB%83%E6%96%B9%E6%B3%95" data-toc-target="5-训练方法"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 训练方法</span></a><a class="toc-level-3" href="#5-1-%E6%96%B9%E6%B3%95%E5%AF%B9%E6%AF%94" data-toc-target="5-1-方法对比"><span class="toc-text">5.1 方法对比</span></a><a class="toc-level-3" href="#5-2-%E7%AB%AF%E4%BE%A7%E5%B0%8F%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%92%B8%E9%A6%8F%E8%B7%AF%E5%BE%84%EF%BC%88%E6%9C%AC%E6%9E%B6%E6%9E%84%E9%87%8D%E7%82%B9%EF%BC%89" data-toc-target="5-2-端侧小模型的蒸馏路径（本架构重点）"><span class="toc-text">5.2 端侧小模型的蒸馏路径（本架构重点）</span></a><a class="toc-level-2" href="#6-%E6%A8%A1%E5%9E%8B%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E5%B8%83" data-toc-target="6-模型注册与发布"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 模型注册与发布</span></a><a class="toc-level-3" href="#6-1-%E6%A8%A1%E5%9E%8B%E6%B3%A8%E5%86%8C%E4%B8%AD%E5%BF%83" data-toc-target="6-1-模型注册中心"><span class="toc-text">6.1 模型注册中心</span></a><a class="toc-level-3" href="#6-2-%E5%8F%91%E5%B8%83%E6%B5%81%E7%A8%8B%EF%BC%88%E4%B8%8E-10-%E6%96%87%E6%A1%A3-7-1-%E5%91%BC%E5%BA%94%EF%BC%8C%E6%AD%A4%E5%A4%84%E8%A1%A5%E5%85%85%E9%97%A8%E7%A6%81%E7%BB%86%E8%8A%82%EF%BC%89" data-toc-target="6-2-发布流程（与-10-文档-7-1-呼应，此处补充门禁细节）"><span class="toc-text">6.2 发布流程（与 10 文档 7.1 呼应，此处补充门禁细节）</span></a><a class="toc-level-2" href="#7-CI-CD-%E4%B8%8E-LLMOps-AgentOps" data-toc-target="7-CI-CD-与-LLMOps-AgentOps"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. CI/CD 与 LLMOps / AgentOps</span></a><a class="toc-level-3" href="#7-1-%E5%8F%98%E6%9B%B4%E7%B1%BB%E5%9E%8B%E4%B8%8E%E5%AF%B9%E5%BA%94%E6%B5%81%E7%A8%8B" data-toc-target="7-1-变更类型与对应流程"><span class="toc-text">7.1 变更类型与对应流程</span></a><a class="toc-level-3" href="#7-2-AgentOps-%E7%89%B9%E6%9C%89%E8%83%BD%E5%8A%9B" data-toc-target="7-2-AgentOps-特有能力"><span class="toc-text">7.2 AgentOps 特有能力</span></a><a class="toc-level-2" href="#8-%E8%AE%AD%E7%BB%83%E4%B8%8E%E8%AF%84%E6%B5%8B%E7%9A%84%E7%BB%84%E7%BB%87%E5%8D%8F%E4%BD%9C" data-toc-target="8-训练与评测的组织协作"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 训练与评测的组织协作</span></a><a class="toc-level-2" href="#9-%E6%8C%87%E6%A0%87%E4%B8%8E%E7%9B%AE%E6%A0%87" data-toc-target="9-指标与目标"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 指标与目标</span></a><a class="toc-level-2" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 风险与治理</span></a><a class="toc-level-2" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 演进路线</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 75%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">15 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#14-%C2%B7-%E8%AE%AD%E7%BB%83%E4%B8%8E%E8%AF%84%E6%B5%8B%E9%97%AD%E7%8E%AF%EF%BC%88Training-System%EF%BC%89" data-toc-target="14-·-训练与评测闭环（Training-System）" data-title="01 · 14 · 训练与评测闭环（Training System）" aria-label="14 · 训练与评测闭环（Training System）"></a><a class="toc-strip__dot" href="#1-%E9%97%AD%E7%8E%AF%E5%85%A8%E6%99%AF%E4%B8%8E%E4%BB%B7%E5%80%BC%E6%8E%92%E5%BA%8F" data-toc-target="1-闭环全景与价值排序" data-title="02 · 1. 闭环全景与价值排序" aria-label="1. 闭环全景与价值排序"></a><a class="toc-strip__dot" href="#2-%E5%8F%8D%E9%A6%88%E6%95%B0%E6%8D%AE%E4%BD%93%E7%B3%BB" data-toc-target="2-反馈数据体系" data-title="03 · 2. 反馈数据体系" aria-label="2. 反馈数据体系"></a><a class="toc-strip__dot" href="#3-%E8%AF%84%E6%B5%8B%E4%BD%93%E7%B3%BB" data-toc-target="3-评测体系" data-title="04 · 3. 评测体系" aria-label="3. 评测体系"></a><a class="toc-strip__dot" href="#4-%E6%95%B0%E6%8D%AE%E9%9B%86%E6%9E%84%E5%BB%BA" data-toc-target="4-数据集构建" data-title="05 · 4. 数据集构建" aria-label="4. 数据集构建"></a><a class="toc-strip__dot" href="#5-%E8%AE%AD%E7%BB%83%E6%96%B9%E6%B3%95" data-toc-target="5-训练方法" data-title="06 · 5. 训练方法" aria-label="5. 训练方法"></a><a class="toc-strip__dot" href="#6-%E6%A8%A1%E5%9E%8B%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E5%B8%83" data-toc-target="6-模型注册与发布" data-title="07 · 6. 模型注册与发布" aria-label="6. 模型注册与发布"></a><a class="toc-strip__dot" href="#7-CI-CD-%E4%B8%8E-LLMOps-AgentOps" data-toc-target="7-CI-CD-与-LLMOps-AgentOps" data-title="08 · 7. CI/CD 与 LLMOps / AgentOps" aria-label="7. CI/CD 与 LLMOps / AgentOps"></a><a class="toc-strip__dot" href="#8-%E8%AE%AD%E7%BB%83%E4%B8%8E%E8%AF%84%E6%B5%8B%E7%9A%84%E7%BB%84%E7%BB%87%E5%8D%8F%E4%BD%9C" data-toc-target="8-训练与评测的组织协作" data-title="09 · 8. 训练与评测的组织协作" aria-label="8. 训练与评测的组织协作"></a><a class="toc-strip__dot" href="#9-%E6%8C%87%E6%A0%87%E4%B8%8E%E7%9B%AE%E6%A0%87" data-toc-target="9-指标与目标" data-title="10 · 9. 指标与目标" aria-label="9. 指标与目标"></a><a class="toc-strip__dot" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理" data-title="11 · 10. 风险与治理" aria-label="10. 风险与治理"></a><a class="toc-strip__dot" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线" data-title="12 · 11. 演进路线" aria-label="11. 演进路线"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-14-训练体系","title":"云管端训练体系架构","url":"/2026/08/06/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-14-%E8%AE%AD%E7%BB%83%E4%BD%93%E7%B3%BB/","path":"cloud-pipe-edge-agent-platform","index":14,"total":20,"next":{"title":"云管端数据平台架构","url":"/2026/08/18/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-15-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

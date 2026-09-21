@@ -1,0 +1,291 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>实时监控与可观测性平台 · 飞轮之道</title>
+<meta name="description" content="本篇文档基于SC云平台云原生架构中的SRE（Site Reliability Engineering）体系，详细阐述了可观测性实时监控服务平台的设计依据与核心解决方案。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/08/04/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-13-%E5%AE%9E%E6%97%B6%E7%9B%91%E6%8E%A7%E5%B9%B3%E5%8F%B0/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="实时监控与可观测性平台 · 飞轮之道">
+<meta property="og:description" content="本篇文档基于SC云平台云原生架构中的SRE（Site Reliability Engineering）体系，详细阐述了可观测性实时监控服务平台的设计依据与核心解决方案。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/08/04/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-13-%E5%AE%9E%E6%97%B6%E7%9B%91%E6%8E%A7%E5%B9%B3%E5%8F%B0/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/agent-observability/">生产治理</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 12 / 12 篇</a>
+    </div>
+    <h1>实时监控与可观测性平台</h1>
+    <p class="article-deck">本篇文档基于SC云平台云原生架构中的SRE（Site Reliability Engineering）体系，详细阐述了可观测性实时监控服务平台的设计依据与核心解决方案。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>3 分钟</span>
+      <span>发布于 2026.08</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="SRE关键技术方案-可观测性实时监控服务平台"><a href="#SRE关键技术方案-可观测性实时监控服务平台" class="headerlink" title="SRE关键技术方案 - 可观测性实时监控服务平台"></a>SRE关键技术方案 - 可观测性实时监控服务平台</h2><p>本篇文档基于SC云平台云原生架构中的SRE（Site Reliability Engineering）体系，详细阐述了可观测性实时监控服务平台的设计依据与核心解决方案。</p>
+<h2 id="1-业务现状与痛点分析"><a href="#1-业务现状与痛点分析" class="headerlink" title="1. 业务现状与痛点分析"></a>1. 业务现状与痛点分析</h2><p>在早期的监控模式中，系统主要面临以下显著痛点：</p>
+<ul>
+<li><strong>工具多样性与数据孤岛</strong>：存在多种监控工具（如独立的监控平台、业务打点系统、日志平台、性能监控平台等），相互相对独立，导致数据来源分散（工具分散），难以实现统一管理与串联。</li>
+<li><strong>系统架构庞大复杂</strong>：随着业务的发展与微服务化架构的深入，车辆请求与云内服务之间的调用关系日益复杂。调用链路极长，导致从终端到云端的业务拓扑结构梳理变得异常困难。</li>
+<li><strong>排障效率低下</strong>：当问题发生时，由于日志、监控、性能指标和链路数据分散隔离，问题定位如同大海捞针，无法精准地发现并快速解决问题。</li>
+</ul>
+<h2 id="2-核心架构与优化方案"><a href="#2-核心架构与优化方案" class="headerlink" title="2. 核心架构与优化方案"></a>2. 核心架构与优化方案</h2><p>为了解决上述痛点，云原生架构提出建设<strong>可观测性实时监控服务平台</strong>，旨在整合各方数据，打造一个统一的核心引擎。</p>
+<h3 id="2-1-多维度、多层次的数据汇聚层"><a href="#2-1-多维度、多层次的数据汇聚层" class="headerlink" title="2.1 多维度、多层次的数据汇聚层"></a>2.1 多维度、多层次的数据汇聚层</h3><p>打破原有的工具壁垒，在采集层对多种孤立数据源进行集中化汇聚：</p>
+<ul>
+<li><strong>元数据</strong>：统一基础资源的标识与CMDB信息打通。</li>
+<li><strong>业务打点数据</strong>：采集业务关键流程的处理节点数据。</li>
+<li><strong>日志平台数据（异常日志）</strong>：全量搜集系统和应用级的运行日志。</li>
+<li><strong>性能监控平台数据</strong>：包含基础性能、应用侧处理时延等核心监控指标。</li>
+</ul>
+<p>通过上述数据的汇入，平台可实时处理并提取核心逻辑：实时性能监控、告警分析、监控指标获取等。</p>
+<h3 id="2-2-监控平台核心引擎"><a href="#2-2-监控平台核心引擎" class="headerlink" title="2.2 监控平台核心引擎"></a>2.2 监控平台核心引擎</h3><p>以中心化的架构统一处理和串联所有可观测性数据，引擎涵盖五大核心要素：</p>
+<ol>
+<li><strong>调用关系</strong>：自动建立上下游服务之间的依赖模型。</li>
+<li><strong>全链路追踪</strong>：追踪单次请求从客户端发起到系统各微服务处理完毕的全程日志。</li>
+<li><strong>黄金指标</strong>：提取出反映服务健康度的关键指标（如请求量、错误率、延迟等）。</li>
+<li><strong>异常事件追踪</strong>：对高危阈值或异常状态进行持续监听聚合。</li>
+<li><strong>知识库</strong>：沉淀历史故障数据、告警规则与排障经验。</li>
+</ol>
+<p>基于上述要素，平台对外输出四大核心能力：<strong>故障定位、调用链追踪、服务全景图、运维故障库</strong>。</p>
+<h2 id="3-业务价值体现"><a href="#3-业务价值体现" class="headerlink" title="3. 业务价值体现"></a>3. 业务价值体现</h2><p>建设并落地可观测性实时监控服务平台，对于企业的运维和业务保障有着深远的价值：</p>
+<ul>
+<li><strong>展示可视化（业务拓扑发现）</strong><br>平台能够串联从车端（终端）到服务端的整个数据交互链路，做到全局覆盖云端业务系统，并以直观的可视化模式展示整个微服务请求的业务拓扑，消除架构黑盒。</li>
+<li><strong>排障精准化（提效促优）</strong><br>基于生成的链路拓扑及各项监控黄金指标，当系统产生告警时，平台可协助运维研发人员精准定位到底层故障发生节点，大幅缩短MTTR（Mean Time To Repair），提高排障效率。</li>
+<li><strong>工具一体化（降低运维门槛）</strong><br>协同CMDB、监控告警、日志中心以及打点组件等分散工具，通过建立统一元数据管理，形成一站式的系统化运维体系，大幅提升整体研发及运维部门协同工作效率。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列已读完</div>
+        <h3>「Agent 可观测性」到此结束</h3>
+        <p>回到路径总览，选择下一条要完成的学习路径。</p>
+        <a class="btn primary" href="/paths/">选择下一条路径</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/07/30/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-13-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端 AI 平台可观测性</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 4 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#SRE%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%96%B9%E6%A1%88-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E5%AE%9E%E6%97%B6%E7%9B%91%E6%8E%A7%E6%9C%8D%E5%8A%A1%E5%B9%B3%E5%8F%B0" data-toc-target="SRE关键技术方案-可观测性实时监控服务平台"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">SRE关键技术方案 - 可观测性实时监控服务平台</span></a><a class="toc-level-2" href="#1-%E4%B8%9A%E5%8A%A1%E7%8E%B0%E7%8A%B6%E4%B8%8E%E7%97%9B%E7%82%B9%E5%88%86%E6%9E%90" data-toc-target="1-业务现状与痛点分析"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 业务现状与痛点分析</span></a><a class="toc-level-2" href="#2-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%BC%98%E5%8C%96%E6%96%B9%E6%A1%88" data-toc-target="2-核心架构与优化方案"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 核心架构与优化方案</span></a><a class="toc-level-3" href="#2-1-%E5%A4%9A%E7%BB%B4%E5%BA%A6%E3%80%81%E5%A4%9A%E5%B1%82%E6%AC%A1%E7%9A%84%E6%95%B0%E6%8D%AE%E6%B1%87%E8%81%9A%E5%B1%82" data-toc-target="2-1-多维度、多层次的数据汇聚层"><span class="toc-text">2.1 多维度、多层次的数据汇聚层</span></a><a class="toc-level-3" href="#2-2-%E7%9B%91%E6%8E%A7%E5%B9%B3%E5%8F%B0%E6%A0%B8%E5%BF%83%E5%BC%95%E6%93%8E" data-toc-target="2-2-监控平台核心引擎"><span class="toc-text">2.2 监控平台核心引擎</span></a><a class="toc-level-2" href="#3-%E4%B8%9A%E5%8A%A1%E4%BB%B7%E5%80%BC%E4%BD%93%E7%8E%B0" data-toc-target="3-业务价值体现"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 业务价值体现</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 100%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">12 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#SRE%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%96%B9%E6%A1%88-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E5%AE%9E%E6%97%B6%E7%9B%91%E6%8E%A7%E6%9C%8D%E5%8A%A1%E5%B9%B3%E5%8F%B0" data-toc-target="SRE关键技术方案-可观测性实时监控服务平台" data-title="01 · SRE关键技术方案 - 可观测性实时监控服务平台" aria-label="SRE关键技术方案 - 可观测性实时监控服务平台"></a><a class="toc-strip__dot" href="#1-%E4%B8%9A%E5%8A%A1%E7%8E%B0%E7%8A%B6%E4%B8%8E%E7%97%9B%E7%82%B9%E5%88%86%E6%9E%90" data-toc-target="1-业务现状与痛点分析" data-title="02 · 1. 业务现状与痛点分析" aria-label="1. 业务现状与痛点分析"></a><a class="toc-strip__dot" href="#2-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%BC%98%E5%8C%96%E6%96%B9%E6%A1%88" data-toc-target="2-核心架构与优化方案" data-title="03 · 2. 核心架构与优化方案" aria-label="2. 核心架构与优化方案"></a><a class="toc-strip__dot" href="#3-%E4%B8%9A%E5%8A%A1%E4%BB%B7%E5%80%BC%E4%BD%93%E7%8E%B0" data-toc-target="3-业务价值体现" data-title="04 · 3. 业务价值体现" aria-label="3. 业务价值体现"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-13-实时监控平台","title":"实时监控与可观测性平台","url":"/2026/08/04/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-13-%E5%AE%9E%E6%97%B6%E7%9B%91%E6%8E%A7%E5%B9%B3%E5%8F%B0/","path":"agent-observability","index":11,"total":12,"next":null}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

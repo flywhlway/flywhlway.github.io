@@ -1,0 +1,1311 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>VLA 视觉语言动作模型 · 飞轮之道</title>
+<meta name="description" content="平台的骨架已立（第四篇），现在看它要运送的「大脑」。本篇不讲论文推导，只讲工程：输入输出契约、数据形态、推理流程与延迟预算、失效模式、云边分工与 Scaling。读完你要能与算法团队平等对话，并把 VLA 正确地放进第四篇的模型 OTA、边缘推理与评测体系里。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/11/11/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-05-VLA/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="VLA 视觉语言动作模型 · 飞轮之道">
+<meta property="og:description" content="平台的骨架已立（第四篇），现在看它要运送的「大脑」。本篇不讲论文推导，只讲工程：输入输出契约、数据形态、推理流程与延迟预算、失效模式、云边分工与 Scaling。读完你要能与算法团队平等对话，并把 VLA 正确地放进第四篇的模型 OTA、边缘推理与评测体系里。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/11/11/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-05-VLA/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-ai-engineering/">平台架构</a><a class="series-chip" href="/paths/embodied-ai-engineering/" title="查看学习路径">第 5 / 13 篇</a>
+    </div>
+    <h1>VLA 视觉语言动作模型</h1>
+    <p class="article-deck">平台的骨架已立（第四篇），现在看它要运送的「大脑」。本篇不讲论文推导，只讲工程：输入输出契约、数据形态、推理流程与延迟预算、失效模式、云边分工与 Scaling。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>29 分钟</span>
+      <span>发布于 2025.11</span>
+      <a class="article-meta__tag" href="/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">#具身智能</a><a class="article-meta__tag" href="/tags/AIoT/">#AIoT</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>VLA = 多模态骨干 + 动作头；它接管的是「怎么做」，因此是模型制品而非代码制品。</li><li>分层混合是现阶段现实</li><li>谱系三支：ACT/DP 视觉运动策略、RT/OpenVLA 大模型骨干、π0/GR00T 高频连续…</li></ol>
+      <a class="takeaways-more" href="#5-9-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93">查看全部 10 条 →</a>
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>📖 <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">返回总目录</a> ｜ 🗺️ <a href="../MOC-%E5%8F%8C%E9%93%BE%E5%AF%BC%E8%88%AA.md">MOC 导航</a></p>
+</blockquote>
+<hr>
+<h2 id="第五篇-VLA"><a href="#第五篇-VLA" class="headerlink" title="第五篇 VLA"></a>第五篇 VLA</h2><blockquote>
+<p>平台的骨架已立（第四篇），现在看它要运送的「大脑」。本篇不讲论文推导，只讲工程：<strong>输入输出契约、数据形态、推理流程与延迟预算、失效模式、云边分工与 Scaling</strong>。读完你要能与算法团队平等对话，并把 VLA 正确地放进第四篇的模型 OTA、边缘推理与评测体系里。全篇标注「截至本手册撰写时」的部分请按第十五篇资源清单自行刷新。</p>
+</blockquote>
+<h2 id="5-0-本篇导读"><a href="#5-0-本篇导读" class="headerlink" title="5.0 本篇导读"></a>5.0 本篇导读</h2><h3 id="5-0-1-平台架构师读-VLA-的正确姿势"><a href="#5-0-1-平台架构师读-VLA-的正确姿势" class="headerlink" title="5.0.1 平台架构师读 VLA 的正确姿势"></a>5.0.1 平台架构师读 VLA 的正确姿势</h3><p>你不需要会训 VLA，需要能回答平台侧的六个问题：<strong>它吃什么</strong>（观测契约）、<strong>它吐什么</strong>（动作契约）、<strong>多快吐一次</strong>（频率与延迟预算）、<strong>多大</strong>（显存与分发体积）、<strong>怎么错</strong>（失效模式与安全带）、<strong>数据从哪来</strong>（决定第七篇数据引擎的形状）。这六问的答案，就是模型进入你平台的「接口文档」。</p>
+<h3 id="5-0-2-学完本篇你能回答的十个问题"><a href="#5-0-2-学完本篇你能回答的十个问题" class="headerlink" title="5.0.2 学完本篇你能回答的十个问题"></a>5.0.2 学完本篇你能回答的十个问题</h3><ol>
+<li>VLA 与「LLM + 机械臂 SDK」的本质区别是什么？</li>
+<li>模块化（感知→规划→控制）与端到端 VLA 的工程取舍？分层混合为何仍是主流？</li>
+<li>动作分块（Action Chunking）解决什么问题？为什么它同时是延迟解药与安全隐患？</li>
+<li>离散 token 动作头、回归头、扩散头、流匹配头四种动作表示的工程差异？</li>
+<li>一次 VLA 推理的延迟预算如何分解？50Hz 控制与 5Hz 推理如何共存？</li>
+<li>7B VLA 在 Jetson 上跑得动吗？体积如何影响你的 OTA 分发网络？</li>
+<li>训练数据三源（真机遥操作&#x2F;仿真&#x2F;互联网视频）的成本与作用分工？</li>
+<li>LeRobot 数据集格式与 Open X-Embodiment 对平台意味着什么？</li>
+<li>VLA 的典型失效模式有哪些？平台侧的安全带怎么设计？</li>
+<li>VLA Pipeline 的九个环节分别落在你平台的哪个平面？</li>
+</ol>
+<h3 id="5-0-3-本篇知识地图"><a href="#5-0-3-本篇知识地图" class="headerlink" title="5.0.3 本篇知识地图"></a>5.0.3 本篇知识地图</h3><pre class="mermaid">mindmap
+  root((第五篇 VLA))
+    是什么
+      定义与三要素
+      模块化 vs 端到端
+      分层混合现实
+    谱系
+      RT 系列
+      OpenVLA Octo
+      π0 与流匹配
+      GR00T
+      ACT Diffusion Policy
+      Open X Embodiment
+    契约
+      观测空间
+      动作空间与归一化
+      四种动作头
+      动作分块
+    数据
+      三源混合
+      遥操作采集
+      LeRobot 格式
+      数据配比
+    推理工程
+      延迟预算分解
+      双频架构
+      显存与体积
+      批处理与并发
+    失效与安全
+      六种失效模式
+      平台安全带
+      评测指标
+    Scaling 与云边
+      三条 Scaling 轴
+      云边分工矩阵
+    Pipeline
+      九环节全图
+      平台落点
+      对话接口清单</pre>
+
+
+<hr>
+<h2 id="5-1-什么是-VLA：从模块化到端到端"><a href="#5-1-什么是-VLA：从模块化到端到端" class="headerlink" title="5.1 什么是 VLA：从模块化到端到端"></a>5.1 什么是 VLA：从模块化到端到端</h2><h3 id="5-1-1-定义与三要素"><a href="#5-1-1-定义与三要素" class="headerlink" title="5.1.1 定义与三要素"></a>5.1.1 定义与三要素</h3><p><strong>VLA（Vision-Language-Action，视觉-语言-动作模型）</strong>：以视觉观测与语言指令为输入、直接输出机器人动作序列的策略模型。三要素：<strong>V</strong>（多视角图像&#x2F;深度，有时含点云）、<strong>L</strong>（自然语言任务指令）、<strong>A</strong>（关节角&#x2F;末端位姿&#x2F;夹爪开合的连续序列）。一句话记忆（呼应 1.4.3）：<strong>VLA &#x3D; 多模态大模型骨干 + 动作头</strong>——把输出 token 换成关节角。</p>
+<h3 id="5-1-2-与「LLM-机械臂-SDK」的本质区别"><a href="#5-1-2-与「LLM-机械臂-SDK」的本质区别" class="headerlink" title="5.1.2 与「LLM + 机械臂 SDK」的本质区别"></a>5.1.2 与「LLM + 机械臂 SDK」的本质区别</h3><p>关键区别不在「有没有大模型」，而在<strong>闭环层次</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>LLM + SDK（工具调用式）</th>
+<th>VLA（端到端策略）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LLM 输出</td>
+<td>离散函数调用：<code>pick(cup)</code></td>
+<td>连续动作序列：Δ关节角×N 步</td>
+</tr>
+<tr>
+<td>谁完成「怎么抓」</td>
+<td>预写好的技能实现（视觉伺服&#x2F;规划）</td>
+<td>模型自己学出来</td>
+</tr>
+<tr>
+<td>泛化边界</td>
+<td>技能库的边界</td>
+<td>数据分布的边界</td>
+</tr>
+<tr>
+<td>频率</td>
+<td>按需（秒级）</td>
+<td>固定节拍（5~50Hz）</td>
+</tr>
+<tr>
+<td>失败模式</td>
+<td>调错技能</td>
+<td>动作抖动&#x2F;偏移&#x2F;僵死</td>
+</tr>
+<tr>
+<td>平台含义</td>
+<td>技能&#x3D;可测试的软件制品</td>
+<td>策略&#x3D;需评测的模型制品</td>
+</tr>
+</tbody></table>
+<p>第四篇的 Agent 三铁律正是建立在前者之上；VLA 是把「怎么做」这一层也交给模型——因此它必须进模型 OTA 与影子评测体系，而不是走代码发布流程。</p>
+<h3 id="5-1-3-模块化-vs-端到端：工程取舍表"><a href="#5-1-3-模块化-vs-端到端：工程取舍表" class="headerlink" title="5.1.3 模块化 vs 端到端：工程取舍表"></a>5.1.3 模块化 vs 端到端：工程取舍表</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>模块化（感知→规划→控制）</th>
+<th>端到端 VLA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>可解释</td>
+<td>每级有中间量，可断点定位</td>
+<td>黑盒，只能看输入输出</td>
+</tr>
+<tr>
+<td>可测试</td>
+<td>分级单测 + 集成</td>
+<td>只能整体评测（任务成功率）</td>
+</tr>
+<tr>
+<td>泛化</td>
+<td>弱：新物体&#x2F;新场景要改代码</td>
+<td>强：靠数据覆盖</td>
+</tr>
+<tr>
+<td>长尾</td>
+<td>靠规则堆，越堆越脆</td>
+<td>靠数据补</td>
+</tr>
+<tr>
+<td>数据需求</td>
+<td>低</td>
+<td>极高（本篇 5.4）</td>
+</tr>
+<tr>
+<td>安全论证</td>
+<td>相对容易（可形式化约束）</td>
+<td>困难，必须外挂安全层</td>
+</tr>
+</tbody></table>
+<p>【映射 🚗→🤖】这张表你在智驾看过一模一样的版本：规则规控 vs 端到端。产业结论也同构——<strong>分层混合是现阶段工程现实</strong>：VLA 负责「短时程操作技能」（抓取、插拔、开门），传统栈负责导航、避障与安全兜底；云端 Agent 负责长时程规划（第四篇 L2&#x2F;L3）。</p>
+<h3 id="5-1-4-三层大脑分工（放进第四篇的框架）"><a href="#5-1-4-三层大脑分工（放进第四篇的框架）" class="headerlink" title="5.1.4 三层大脑分工（放进第四篇的框架）"></a>5.1.4 三层大脑分工（放进第四篇的框架）</h3><pre class="mermaid">flowchart TB
+  A["慢脑（云/边，秒级）：LLM Agent 任务规划 —— 第四篇 AI 面"] --&gt; B["中脑（机上，5~50Hz）：VLA 策略 —— 本篇"]
+  B --&gt; C["快脑（机上，100Hz~1kHz）：伺服/力控/安全监控 —— 永不出本体"]
+  C -.状态反馈.-&gt; B
+  B -.任务结果/分歧样本.-&gt; A</pre>
+
+
+<p>这张图把 1.1.3 的五层解剖、1.2.5 的能力放置铁律与第四篇的四层任务模型缝合起来：<strong>VLA 只住在中脑</strong>——它上面有任务笼，下面有安全网。任何把 VLA 直接接到执行器、或让它承担长时程规划的方案，架构评审一律打回。</p>
+<h3 id="5-1-5-与产业物联网平台的映射"><a href="#5-1-5-与产业物联网平台的映射" class="headerlink" title="5.1.5 与产业物联网平台的映射"></a>5.1.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>VLA 世界</th>
+<th>智驾世界</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>VLA 端到端策略</td>
+<td>端到端智驾模型</td>
+<td>传感器进、控制量出</td>
+</tr>
+<tr>
+<td>分层混合</td>
+<td>规则规控 + 端到端并存</td>
+<td>同一产业阶段</td>
+</tr>
+<tr>
+<td>三层大脑</td>
+<td>座舱 Agent &#x2F; 智驾模型 &#x2F; 底盘控制</td>
+<td>时延分层一致</td>
+</tr>
+<tr>
+<td>策略是模型制品</td>
+<td>智驾模型版本管理</td>
+<td>走模型 OTA 不走代码发布</td>
+</tr>
+</tbody></table>
+<h3 id="5-1-6-企业实践建议"><a href="#5-1-6-企业实践建议" class="headerlink" title="5.1.6 企业实践建议"></a>5.1.6 企业实践建议</h3><p>在技术路线讨论中扮演「架构守门人」而非「路线站队者」：不论算法团队选模块化还是端到端，平台侧的要求恒定——<strong>必须能被评测、能被灰度、能被回滚、能被安全层兜底</strong>。把这四个「能」写进模型准入规范，路线之争就与平台稳定性解耦了。</p>
+<h3 id="5-1-7-面试可能问什么"><a href="#5-1-7-面试可能问什么" class="headerlink" title="5.1.7 面试可能问什么"></a>5.1.7 面试可能问什么</h3><ol>
+<li>VLA 与 LLM Agent 调用机械臂 SDK 的区别？（要点：闭环层次、谁负责「怎么做」、泛化边界、失败模式）</li>
+<li>端到端与模块化怎么选？（要点：取舍表 + 分层混合是现阶段现实 + 智驾同构）</li>
+<li>VLA 在系统里的位置？（要点：三层大脑，上有任务笼下有安全网）</li>
+</ol>
+<h3 id="5-1-8-最佳实践"><a href="#5-1-8-最佳实践" class="headerlink" title="5.1.8 最佳实践"></a>5.1.8 最佳实践</h3><ul>
+<li>用「三层大脑图」作为与算法团队的第一张对齐图——它同时定义了接口与责任边界。</li>
+<li>策略与技能分开管：技能走 CI&#x2F;CD，策略走模型 OTA + 影子评测，两条流水线不混。</li>
+</ul>
+<h3 id="5-1-9-常见误区"><a href="#5-1-9-常见误区" class="headerlink" title="5.1.9 常见误区"></a>5.1.9 常见误区</h3><ul>
+<li>❌ 「上了 VLA 就不需要传统栈」——安全监控、定位导航、E-Stop 一样都不能少。</li>
+<li>❌ 把 VLA 当成「更聪明的 LLM」——它是有硬节拍的实时控制组件，延迟预算是一等公民。</li>
+</ul>
+<h3 id="5-1-10-Obsidian-永久笔记"><a href="#5-1-10-Obsidian-永久笔记" class="headerlink" title="5.1.10 Obsidian 永久笔记"></a>5.1.10 Obsidian 永久笔记</h3><ul>
+<li>VLA 等于骨干加动作头：输出 token 换成关节角。</li>
+<li>三层大脑：慢脑规划（云边秒级）&#x2F; 中脑 VLA（机上 5~50Hz）&#x2F; 快脑安全（机上 kHz）。</li>
+<li>平台四能：可评测、可灰度、可回滚、可兜底——路线中立的准入标准。</li>
+</ul>
+<hr>
+<h2 id="5-2-VLA-谱系：工程视角的代表工作"><a href="#5-2-VLA-谱系：工程视角的代表工作" class="headerlink" title="5.2 VLA 谱系：工程视角的代表工作"></a>5.2 VLA 谱系：工程视角的代表工作</h2><blockquote>
+<p>以下为截至本手册撰写时的主流工作，重点看「工程属性」而非论文指标。演进极快，用第十五篇资源清单定期刷新。</p>
+</blockquote>
+<h3 id="5-2-1-谱系图"><a href="#5-2-1-谱系图" class="headerlink" title="5.2.1 谱系图"></a>5.2.1 谱系图</h3><pre class="mermaid">flowchart LR
+  subgraph Pre["前身：视觉运动策略"]
+    ACT["ACT（ALOHA）：动作分块 Transformer"]
+    DP["Diffusion Policy：扩散动作生成"]
+  end
+  subgraph VLM["大模型骨干路线"]
+    RT1["RT-1：Transformer + 离散动作 token"]
+    RT2["RT-2：VLM 直出动作 token，网络知识迁移"]
+    OCT["Octo：开源通用策略（OXE 训练）"]
+    OVLA["OpenVLA：7B 开源 VLA，社区基线"]
+    PI0["π0：VLM + 流匹配动作专家，高频连续控制"]
+    GR["GR00T 系列：NVIDIA 人形基础模型 + Isaac 生态"]
+  end
+  subgraph Data["数据地基"]
+    OXE["Open X-Embodiment：跨本体大规模数据集"]
+    LR["LeRobot：数据格式+训练+部署开源栈"]
+  end
+  ACT --&gt; PI0
+  DP --&gt; PI0
+  RT1 --&gt; RT2 --&gt; OVLA
+  OXE --&gt; OCT
+  OXE --&gt; OVLA
+  OXE --&gt; RT2
+  LR -.工程载体.- OVLA
+  LR -.工程载体.- PI0</pre>
+
+
+<h3 id="5-2-2-工程属性对比表"><a href="#5-2-2-工程属性对比表" class="headerlink" title="5.2.2 工程属性对比表"></a>5.2.2 工程属性对比表</h3><table>
+<thead>
+<tr>
+<th>工作</th>
+<th>骨干&#x2F;规模</th>
+<th>动作表示</th>
+<th>典型控制频率</th>
+<th>工程定位</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ACT</td>
+<td>小型 Transformer（~百 M）</td>
+<td>回归 + 动作分块</td>
+<td>高（50Hz 量级）</td>
+<td>单任务模仿学习基线，最易上手</td>
+</tr>
+<tr>
+<td>Diffusion Policy</td>
+<td>小型（~百 M）</td>
+<td>扩散去噪生成序列</td>
+<td>中高</td>
+<td>多模态动作分布建模的经典</td>
+</tr>
+<tr>
+<td>RT-1 &#x2F; RT-2</td>
+<td>大（RT-2 基于 VLM，数十 B 级）</td>
+<td>离散动作 token</td>
+<td>低（个位数 Hz）</td>
+<td>证明「网络知识→机器人动作」可迁移</td>
+</tr>
+<tr>
+<td>Octo</td>
+<td>中（~百 M 级）</td>
+<td>扩散头（可换）</td>
+<td>中</td>
+<td>开源通用策略，易微调</td>
+</tr>
+<tr>
+<td>OpenVLA</td>
+<td>~7B</td>
+<td>离散动作 token</td>
+<td>低（<del>5</del>10Hz 量级，取决部署）</td>
+<td><strong>开源社区事实基线</strong>，你的入门首选</td>
+</tr>
+<tr>
+<td>π0 &#x2F; π0-FAST</td>
+<td>VLM + 动作专家</td>
+<td>流匹配（连续）&#x2F; 快速 token 化</td>
+<td>高（可达 50Hz 量级）</td>
+<td>面向真实产品的高频连续控制</td>
+</tr>
+<tr>
+<td>GR00T 系列</td>
+<td>中大</td>
+<td>连续动作头</td>
+<td>中高</td>
+<td>人形基础模型 + Isaac&#x2F;Jetson 全栈绑定</td>
+</tr>
+</tbody></table>
+<p>平台侧读表只看三列：<strong>规模决定显存与 OTA 体积</strong>（5.6）、<strong>动作表示决定延迟与抖动特性</strong>（5.3）、<strong>控制频率决定它能干什么活</strong>（能否做力控插拔 vs 只能慢速抓放）。</p>
+<h3 id="5-2-3-Open-X-Embodiment：数据侧的「ImageNet-时刻」"><a href="#5-2-3-Open-X-Embodiment：数据侧的「ImageNet-时刻」" class="headerlink" title="5.2.3 Open X-Embodiment：数据侧的「ImageNet 时刻」"></a>5.2.3 Open X-Embodiment：数据侧的「ImageNet 时刻」</h3><p>由 Google DeepMind 牵头、数十家机构共建的跨本体机器人数据集合集（百万量级轨迹、数十种本体），并训练出 RT-X 系列证明<strong>跨本体共训能提升单本体表现</strong>。对平台的三点含义：其一，<strong>数据格式统一是前提</strong>（RLDS&#x2F;TFDS 与 LeRobot 格式的互通是数据工程的日常）；其二，跨本体意味着你的数据引擎要把 <code>embodiment</code> 作为一等维度（第七篇）；其三，<strong>开源数据决定了「先用公开数据预训练、用自家数据微调」是绝大多数公司的现实路径</strong>——与你在 LLM 时代「基座外购、领域微调」的策略完全一致。</p>
+<h3 id="5-2-4-LeRobot：把-VLA-变成可工程化的东西"><a href="#5-2-4-LeRobot：把-VLA-变成可工程化的东西" class="headerlink" title="5.2.4 LeRobot：把 VLA 变成可工程化的东西"></a>5.2.4 LeRobot：把 VLA 变成可工程化的东西</h3><p>Hugging Face 的 LeRobot 提供**数据集格式（LeRobotDataset）+ 训练脚本 + 策略实现（ACT&#x2F;Diffusion Policy&#x2F;π0 等）+ 真机部署接口 + 低成本硬件方案（SO-ARM 系列）**的完整栈。平台视角：它是机器人界的「transformers + datasets」——<strong>你的第一个 VLA 实验、第一个数据集 Schema、第一条评测流水线都应该从它起步</strong>，第十一篇实战项目的模型侧接口以它为准。</p>
+<h3 id="5-2-5-与产业物联网平台的映射"><a href="#5-2-5-与产业物联网平台的映射" class="headerlink" title="5.2.5 与产业物联网平台的映射"></a>5.2.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>VLA 生态</th>
+<th>智驾&#x2F;LLM 生态</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Open X-Embodiment</td>
+<td>ImageNet&#x2F;nuScenes + 开源语料</td>
+<td>公共基座数据</td>
+</tr>
+<tr>
+<td>LeRobot</td>
+<td>transformers + datasets</td>
+<td>事实工程载体</td>
+</tr>
+<tr>
+<td>OpenVLA</td>
+<td>开源基座模型（如 Llama 系）</td>
+<td>社区基线</td>
+</tr>
+<tr>
+<td>π0 &#x2F; GR00T</td>
+<td>商业闭源模型&#x2F;车企自研端到端</td>
+<td>产品级</td>
+</tr>
+<tr>
+<td>「基座预训练 + 自家微调」</td>
+<td>你的 LLM 落地路径</td>
+<td>策略完全一致</td>
+</tr>
+</tbody></table>
+<h3 id="5-2-6-企业实践建议"><a href="#5-2-6-企业实践建议" class="headerlink" title="5.2.6 企业实践建议"></a>5.2.6 企业实践建议</h3><p>模型选型别一步到位追 SOTA：<strong>先用 LeRobot + ACT 在低成本臂上跑通「数据→训练→部署→评测」全链路</strong>，再换 OpenVLA 验证平台的 GB 级 OTA 与显存假设，最后按业务需要引入 π0&#x2F;GR00T 级方案。平台的价值在于<strong>让换模型变成一次配置变更</strong>——链路先于模型。</p>
+<h3 id="5-2-7-面试可能问什么"><a href="#5-2-7-面试可能问什么" class="headerlink" title="5.2.7 面试可能问什么"></a>5.2.7 面试可能问什么</h3><ol>
+<li>讲讲 VLA 的技术谱系。（要点：ACT&#x2F;DP 视觉运动策略 → RT 系列大模型骨干 → OpenVLA 开源基线 → π0 高频连续；OXE&#x2F;LeRobot 是地基）</li>
+<li>Open X-Embodiment 的工程意义？（要点：跨本体共训、格式统一、预训练+微调路径）</li>
+<li>为什么从 LeRobot 开始？（要点：全栈闭环最短、格式与评测可直接进平台）</li>
+</ol>
+<h3 id="5-2-8-最佳实践"><a href="#5-2-8-最佳实践" class="headerlink" title="5.2.8 最佳实践"></a>5.2.8 最佳实践</h3><ul>
+<li>建立《模型雷达》季度更新：每个候选记录规模&#x2F;动作表示&#x2F;频率&#x2F;许可&#x2F;硬件依赖五列——技术演进快，靠表格而非记忆。</li>
+<li>优先选择「有开源部署接口 + 明确许可」的模型，避免把不可商用的权重带进产品线（合规坑）。</li>
+</ul>
+<h3 id="5-2-9-常见误区"><a href="#5-2-9-常见误区" class="headerlink" title="5.2.9 常见误区"></a>5.2.9 常见误区</h3><ul>
+<li>❌ 只看论文任务成功率选型——不同论文的评测本体、任务与协议都不同，<strong>跨论文数字不可比</strong>。</li>
+<li>❌ 忽视许可证与数据来源合规——模型注册表里必须有许可字段（4.10.3）。</li>
+</ul>
+<h3 id="5-2-10-Obsidian-永久笔记"><a href="#5-2-10-Obsidian-永久笔记" class="headerlink" title="5.2.10 Obsidian 永久笔记"></a>5.2.10 Obsidian 永久笔记</h3><ul>
+<li>VLA 谱系三支：视觉运动策略（ACT&#x2F;DP）、大模型骨干（RT&#x2F;OpenVLA）、高频连续（π0&#x2F;GR00T）。</li>
+<li>OXE 是数据地基：跨本体共训 + 格式统一 + 预训练微调路径。</li>
+<li>LeRobot 是工程载体：数据格式&#x2F;训练&#x2F;部署&#x2F;评测一站起步。</li>
+<li>链路先于模型：平台的价值是让换模型变成配置变更。</li>
+</ul>
+<hr>
+<h2 id="5-3-输入输出契约：平台最该盯的一页"><a href="#5-3-输入输出契约：平台最该盯的一页" class="headerlink" title="5.3 输入输出契约：平台最该盯的一页"></a>5.3 输入输出契约：平台最该盯的一页</h2><h3 id="5-3-1-观测空间（Observation）"><a href="#5-3-1-观测空间（Observation）" class="headerlink" title="5.3.1 观测空间（Observation）"></a>5.3.1 观测空间（Observation）</h3><table>
+<thead>
+<tr>
+<th>组成</th>
+<th>典型形态</th>
+<th>平台关注点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>主视角图像</td>
+<td>1<del>3 路 RGB，224²</del>448²，通常 10~30Hz</td>
+<td>带宽、同步、时间戳（Header！）</td>
+</tr>
+<tr>
+<td>腕部相机</td>
+<td>近距 RGB</td>
+<td>精细操作的关键输入</td>
+</tr>
+<tr>
+<td>本体状态</td>
+<td>关节角&#x2F;速度&#x2F;夹爪&#x2F;末端位姿</td>
+<td>与图像的<strong>时间对齐</strong>是头号工程问题</td>
+</tr>
+<tr>
+<td>语言指令</td>
+<td>短句</td>
+<td>来自第四篇 L3 任务载荷</td>
+</tr>
+<tr>
+<td>历史</td>
+<td>最近 N 帧观测</td>
+<td>决定显存与延迟</td>
+</tr>
+</tbody></table>
+<p><strong>时间对齐</strong>是平台侧必须立规矩的地方：图像与关节状态的时间戳偏差超过一个控制周期，模型就在「用过去的图配现在的关节」——这就是 2.19.3 TF 时间旅行的同一课题在模型输入侧的翻版。规矩：所有观测走 <code>Header.stamp</code>，端侧做同步缓冲（近似时间同步器），偏差超阈值即丢帧并计数上报。</p>
+<h3 id="5-3-2-动作空间（Action）"><a href="#5-3-2-动作空间（Action）" class="headerlink" title="5.3.2 动作空间（Action）"></a>5.3.2 动作空间（Action）</h3><p>三种常见坐标：<strong>关节空间</strong>（Δ关节角，最直接）、<strong>任务空间</strong>（末端位姿增量 + 夹爪，跨本体迁移性好）、<strong>底盘速度</strong>（移动机器人）。三个平台必问：<strong>绝对还是增量</strong>（增量对标定误差更鲁棒，但会累积漂移）、<strong>归一化区间与统计量</strong>（模型输出通常在 [-1,1]，反归一化用的均值&#x2F;方差<strong>属于模型制品的一部分</strong>——参数漂移是最隐蔽的事故源）、<strong>控制模式</strong>（位置&#x2F;速度&#x2F;力矩，决定下游控制器接法）。</p>
+<h3 id="5-3-3-四种动作头的工程差异"><a href="#5-3-3-四种动作头的工程差异" class="headerlink" title="5.3.3 四种动作头的工程差异"></a>5.3.3 四种动作头的工程差异</h3><table>
+<thead>
+<tr>
+<th>动作头</th>
+<th>代表</th>
+<th>优点</th>
+<th>工程代价</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>离散 token</td>
+<td>RT-2, OpenVLA</td>
+<td>复用 LLM 词表与训练栈</td>
+<td>量化误差、逐 token 解码慢</td>
+</tr>
+<tr>
+<td>回归（直接输出）</td>
+<td>ACT</td>
+<td>最快最简单</td>
+<td>多模态动作被「平均」成中庸解</td>
+</tr>
+<tr>
+<td>扩散</td>
+<td>Diffusion Policy, Octo</td>
+<td>多模态分布建模好</td>
+<td>多步去噪 → 延迟随步数线性涨</td>
+</tr>
+<tr>
+<td>流匹配</td>
+<td>π0</td>
+<td>连续、少步、可高频</td>
+<td>实现复杂度高</td>
+</tr>
+</tbody></table>
+<p>平台侧的一句话理解：<strong>动作头 &#x3D; 延迟与质量的旋钮</strong>。扩散步数、token 数、chunk 长度都是可调参数，它们直接决定你的延迟预算能否达标——所以模型卡里必须写清楚这些参数（5.9 接口清单）。</p>
+<h3 id="5-3-4-动作分块（Action-Chunking）：延迟解药与安全隐患"><a href="#5-3-4-动作分块（Action-Chunking）：延迟解药与安全隐患" class="headerlink" title="5.3.4 动作分块（Action Chunking）：延迟解药与安全隐患"></a>5.3.4 动作分块（Action Chunking）：延迟解药与安全隐患</h3><p><strong>机制</strong>：模型一次推理输出未来 H 步动作（chunk，典型 H&#x3D;8~50），端侧以高频逐步执行，下次推理在 chunk 耗尽前完成——于是 <strong>5Hz 的推理可以驱动 50Hz 的执行</strong>。这是 VLA 能在算力受限的机上跑起来的关键工程技巧（ACT 提出、后续广泛采用），并顺带平滑了动作抖动。</p>
+<p>代价必须讲清楚：chunk 执行期间<strong>模型是「盲」的</strong>——它在按 200ms 前的观测开环执行。因此有了工程三件套：<strong>chunk 长度是延迟与反应性的权衡旋钮</strong>；<strong>时序聚合&#x2F;重叠执行</strong>（新旧 chunk 加权融合，减少切换突变）；<strong>快脑必须独立监控</strong>（5.1.4 的 C 层：碰撞&#x2F;力矩&#x2F;几何边界越界立即中断 chunk）。</p>
+<pre class="mermaid">flowchart LR
+  O["观测 t0（图像+状态+指令）"] --&gt; M["VLA 推理 ~100~200ms"]
+  M --&gt; CK["动作 chunk：a(t0+1..t0+H)"]
+  CK --&gt; EX["执行器 50Hz 逐步执行"]
+  EX --&gt; W["chunk 剩余 30% 时触发下次推理（重叠）"]
+  W --&gt; O
+  EX -.每步.-&gt; SAFE["快脑安全监控：越界即中断"]</pre>
+
+
+<h3 id="5-3-5-与产业物联网平台的映射"><a href="#5-3-5-与产业物联网平台的映射" class="headerlink" title="5.3.5 与产业物联网平台的映射"></a>5.3.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>VLA 契约</th>
+<th>智驾&#x2F;产业物联网</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>观测时间对齐</td>
+<td>多传感器时间同步</td>
+<td>Header 时间戳生命线</td>
+</tr>
+<tr>
+<td>动作归一化统计量</td>
+<td>标定参数</td>
+<td>属于制品，不属于代码</td>
+</tr>
+<tr>
+<td>动作分块</td>
+<td>规控轨迹下发（一段轨迹 + 高频跟踪）</td>
+<td><strong>完全同构</strong>：规划低频出轨迹、控制高频跟踪</td>
+</tr>
+<tr>
+<td>快脑中断</td>
+<td>底层安全监控&#x2F;AEB</td>
+<td>独立于模型的兜底</td>
+</tr>
+</tbody></table>
+<p>动作分块 ≈ 智驾「规划输出一段轨迹、控制器高频跟踪」——你已经懂它，只是换了名字。</p>
+<h3 id="5-3-6-企业实践建议"><a href="#5-3-6-企业实践建议" class="headerlink" title="5.3.6 企业实践建议"></a>5.3.6 企业实践建议</h3><p>把「观测契约 + 动作契约 + 频率契约」做成模型注册表的必填字段（4.10.3），并在端侧 Runtime 做<strong>契约校验</strong>：加载模型时校验期望的 topic 列表、图像尺寸、关节顺序、归一化统计量是否与本机 Device Profile 匹配，不匹配拒绝加载——这一道校验能挡住最常见的「换模型后机器人乱动」事故。</p>
+<h3 id="5-3-7-面试可能问什么"><a href="#5-3-7-面试可能问什么" class="headerlink" title="5.3.7 面试可能问什么"></a>5.3.7 面试可能问什么</h3><ol>
+<li>动作分块解决什么、代价是什么？（要点：低频推理驱动高频执行；chunk 内开环 → 需快脑监控与重叠执行）</li>
+<li>关节空间还是任务空间输出？（要点：跨本体迁移 vs 直接性；增量 vs 绝对的漂移与鲁棒权衡）</li>
+<li>归一化统计量放哪？（要点：属于模型制品；错配即事故，端侧契约校验）</li>
+</ol>
+<h3 id="5-3-8-最佳实践"><a href="#5-3-8-最佳实践" class="headerlink" title="5.3.8 最佳实践"></a>5.3.8 最佳实践</h3><ul>
+<li>关节顺序、单位、坐标系约定写进模型卡并在 Runtime 断言——这三样是跨团队最常错位的隐性契约。</li>
+<li>chunk 重叠执行 + 分歧监控（新 chunk 与旧 chunk 首步差异超阈值即告警），异常早发现。</li>
+</ul>
+<h3 id="5-3-9-常见误区"><a href="#5-3-9-常见误区" class="headerlink" title="5.3.9 常见误区"></a>5.3.9 常见误区</h3><ul>
+<li>❌ 认为「换个同类模型就能直接跑」——归一化统计量、关节顺序、图像预处理任一不同，行为即失控。</li>
+<li>❌ 用最新观测配旧动作 chunk 而不做时序聚合——切换突变引起可见抖动，长期损伤减速器。</li>
+</ul>
+<h3 id="5-3-10-Obsidian-永久笔记"><a href="#5-3-10-Obsidian-永久笔记" class="headerlink" title="5.3.10 Obsidian 永久笔记"></a>5.3.10 Obsidian 永久笔记</h3><ul>
+<li>VLA 三契约：观测&#x2F;动作&#x2F;频率，注册表必填 + Runtime 断言。</li>
+<li>动作分块即轨迹下发：低频推理驱动高频执行，chunk 内开环靠快脑兜底。</li>
+<li>归一化统计量属于制品：错配是最隐蔽的事故源。</li>
+</ul>
+<hr>
+<h2 id="5-4-训练数据：VLA-工程的真正战场"><a href="#5-4-训练数据：VLA-工程的真正战场" class="headerlink" title="5.4 训练数据：VLA 工程的真正战场"></a>5.4 训练数据：VLA 工程的真正战场</h2><h3 id="5-4-1-三源混合：成本与作用分工"><a href="#5-4-1-三源混合：成本与作用分工" class="headerlink" title="5.4.1 三源混合：成本与作用分工"></a>5.4.1 三源混合：成本与作用分工</h3><table>
+<thead>
+<tr>
+<th>数据源</th>
+<th>成本</th>
+<th>提供什么</th>
+<th>局限</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>真机遥操作</td>
+<td><strong>极高</strong>（按人时计，一条轨迹分钟级）</td>
+<td>真实物理接触、精确动作标签</td>
+<td>贵、慢、场景覆盖窄</td>
+</tr>
+<tr>
+<td>仿真合成</td>
+<td>低（算力换数据）</td>
+<td>海量、可随机化、危险场景免费</td>
+<td>Sim2Real gap（第八篇）</td>
+</tr>
+<tr>
+<td>互联网视频&#x2F;人类演示</td>
+<td>极低</td>
+<td>语义与常识、任务多样性</td>
+<td><strong>无动作标签</strong>，需姿态估计&#x2F;隐式学习</td>
+</tr>
+</tbody></table>
+<p>行业共识配方：<strong>互联网数据给常识、仿真给覆盖、真机给对齐</strong>——与 LLM 的「预训练语料&#x2F;合成数据&#x2F;高质量对齐数据」三段式惊人同构。你的角色：把三条管道都变成平台能力（第七篇数据引擎 + 第八篇仿真）。</p>
+<h3 id="5-4-2-真机遥操作采集：平台侧要建什么"><a href="#5-4-2-真机遥操作采集：平台侧要建什么" class="headerlink" title="5.4.2 真机遥操作采集：平台侧要建什么"></a>5.4.2 真机遥操作采集：平台侧要建什么</h3><p>采集链路：遥操作设备（主从臂&#x2F;VR 手柄&#x2F;手持夹爪装置）→ 记录器（同步录制图像+关节+指令，rosbag2&#x2F;LeRobot writer）→ 质检（成功&#x2F;失败标注、剪裁、异常剔除）→ 入湖（对象存储 + 元数据入库）。平台四件事：<strong>采集会话管理</strong>（谁、哪台机、什么任务、多少条）、<strong>数据质量门禁</strong>（时间戳连续性、频率稳定性、动作范围合法性——自动质检脚本挡掉 30% 的废数据）、<strong>成本看板</strong>（每条轨迹成本 &#x3D; 人时 + 设备占用，让管理层看见数据的价格）、<strong>版本化数据集</strong>（可复现训练的前提，第七篇）。</p>
+<p>【映射 🚗→🤖】这就是<strong>智驾数据采集车队</strong>的缩小版：采集员≈安全员，遥操作站≈采集车，质检与标注流程原样复用。你甚至可以把产业物联网的采集任务调度系统改名直接用（4.7 的 Fleet 任务面即可承接「采集任务」）。</p>
+<h3 id="5-4-3-数据格式：LeRobotDataset-的平台意义"><a href="#5-4-3-数据格式：LeRobotDataset-的平台意义" class="headerlink" title="5.4.3 数据格式：LeRobotDataset 的平台意义"></a>5.4.3 数据格式：LeRobotDataset 的平台意义</h3><p>LeRobotDataset 把「多路视频 + 时序状态&#x2F;动作 + 任务描述 + 元信息」组织成标准结构（视频编码存储 + 表格化时序 + 数据集卡片），并原生对接训练与评测脚本。平台侧价值三条：<strong>统一 Schema</strong>（不同本体、不同采集端产出同构数据，是数据飞轮能转的前提）；<strong>视频编码存储</strong>（原始图像流转 H.264&#x2F;265 后体积降一到两个数量级——直接决定你的存储账单）；<strong>与 OXE 互通</strong>（公开数据与自家数据可混训）。</p>
+<p><strong>决策建议</strong>：端侧录 rosbag2（MCAP，机内一切原始信号）→ 云端 ETL 转 LeRobotDataset（训练用视图）。<strong>Bag 是原始档案、Dataset 是训练视图</strong>——与你「原始日志入湖、加工出特征表」的分层完全一致。</p>
+<h3 id="5-4-4-数据配比与长尾"><a href="#5-4-4-数据配比与长尾" class="headerlink" title="5.4.4 数据配比与长尾"></a>5.4.4 数据配比与长尾</h3><p>三个经验法则（结论级，具体比例随任务变）：其一，<strong>微调数据的质量远比数量重要</strong>——几十条高质量演示常胜过几百条含噪演示；其二，<strong>失败样本有价值但需标注</strong>（作为负例或用于失败恢复训练），不能当垃圾丢；其三，<strong>长尾靠触发式回传补</strong>——2.21.4 的触发链在这里兑现价值：干预、失败、低置信度三类现场就是下一轮训练集的种子。</p>
+<h3 id="5-4-5-数据飞轮在-VLA-上的具体形态（第七篇预告）"><a href="#5-4-5-数据飞轮在-VLA-上的具体形态（第七篇预告）" class="headerlink" title="5.4.5 数据飞轮在 VLA 上的具体形态（第七篇预告）"></a>5.4.5 数据飞轮在 VLA 上的具体形态（第七篇预告）</h3><pre class="mermaid">flowchart LR
+  D1["部署：VLA vX 在机队运行"] --&gt; D2["触发采集：干预/失败/低置信度/新场景"]
+  D2 --&gt; D3["回传：bag 片段 + 上下文（第四篇分发反向通道）"]
+  D3 --&gt; D4["筛选与质检：自动规则 + 人工复核"]
+  D4 --&gt; D5["标注/补采：遥操作补齐正确演示"]
+  D5 --&gt; D6["训练：预训练权重 + 新数据微调"]
+  D6 --&gt; D7["评测：离线数据集 + 仿真基准 + 影子模式"]
+  D7 --&gt; D8["模型 OTA 灰度（4.3.6）"]
+  D8 --&gt; D1</pre>
+
+
+<h3 id="5-4-6-与产业物联网平台的映射"><a href="#5-4-6-与产业物联网平台的映射" class="headerlink" title="5.4.6 与产业物联网平台的映射"></a>5.4.6 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>VLA 数据</th>
+<th>智驾数据</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>遥操作采集</td>
+<td>采集车队</td>
+<td>调度可复用 Fleet 任务面</td>
+</tr>
+<tr>
+<td>触发式回传</td>
+<td>影子模式触发回传</td>
+<td>机制原文</td>
+</tr>
+<tr>
+<td>Bag→Dataset</td>
+<td>原始日志→训练集</td>
+<td>分层同构</td>
+</tr>
+<tr>
+<td>数据集版本化</td>
+<td>数据集版本管理</td>
+<td>可复现训练前提</td>
+</tr>
+<tr>
+<td>三源混合</td>
+<td>真实+仿真+合成</td>
+<td>智驾早已如此</td>
+</tr>
+</tbody></table>
+<h3 id="5-4-7-企业实践建议"><a href="#5-4-7-企业实践建议" class="headerlink" title="5.4.7 企业实践建议"></a>5.4.7 企业实践建议</h3><p>第一个季度只做一件事：<strong>把「一条演示数据」的端到端成本与周期算清楚并可视化</strong>（采集→质检→入库→可训练）。这个数字会成为公司最重要的运营指标之一，也是你争取数据平台预算最有力的一页——正如你当年用「单车数据回传成本」推动产业物联网数据平台立项。</p>
+<h3 id="5-4-8-面试可能问什么"><a href="#5-4-8-面试可能问什么" class="headerlink" title="5.4.8 面试可能问什么"></a>5.4.8 面试可能问什么</h3><ol>
+<li>VLA 数据从哪来？三源如何分工？（要点：网络给常识、仿真给覆盖、真机给对齐；LLM 三段式类比）</li>
+<li>数据格式怎么选？（要点：端侧 bag 原始档案、云侧 LeRobotDataset 训练视图、与 OXE 互通）</li>
+<li>长尾数据怎么补？（要点：触发式回传三类现场 + 遥操作补采 + 质量门禁）</li>
+</ol>
+<h3 id="5-4-9-最佳实践"><a href="#5-4-9-最佳实践" class="headerlink" title="5.4.9 最佳实践"></a>5.4.9 最佳实践</h3><ul>
+<li>数据质检自动化优先级高于标注平台——<strong>垃圾进垃圾出</strong>，质检脚本的 ROI 最高。</li>
+<li>每个数据集必须有卡片（来源&#x2F;本体&#x2F;任务&#x2F;条数&#x2F;采集协议&#x2F;许可），无卡片不入训练——数据血缘的起点（4.10.3）。</li>
+</ul>
+<h3 id="5-4-10-常见误区"><a href="#5-4-10-常见误区" class="headerlink" title="5.4.10 常见误区"></a>5.4.10 常见误区</h3><ul>
+<li>❌ 「先大量采集再说」——没有质检与 Schema 的采集是在生产垃圾，成本还极高。</li>
+<li>❌ 丢弃失败与干预样本——那是长尾金矿，也是评测集的天然来源。</li>
+</ul>
+<h3 id="5-4-11-Obsidian-永久笔记"><a href="#5-4-11-Obsidian-永久笔记" class="headerlink" title="5.4.11 Obsidian 永久笔记"></a>5.4.11 Obsidian 永久笔记</h3><ul>
+<li>三源配方：网络给常识、仿真给覆盖、真机给对齐。</li>
+<li>Bag 是档案 Dataset 是视图：端侧 MCAP、云侧 LeRobotDataset。</li>
+<li>一条演示的成本：最该被可视化的运营指标。</li>
+<li>三类触发是长尾种子：干预、失败、低置信度。</li>
+</ul>
+<hr>
+<h2 id="5-5-推理工程：延迟预算与部署"><a href="#5-5-推理工程：延迟预算与部署" class="headerlink" title="5.5 推理工程：延迟预算与部署"></a>5.5 推理工程：延迟预算与部署</h2><h3 id="5-5-1-延迟预算分解（平台架构师的核心表）"><a href="#5-5-1-延迟预算分解（平台架构师的核心表）" class="headerlink" title="5.5.1 延迟预算分解（平台架构师的核心表）"></a>5.5.1 延迟预算分解（平台架构师的核心表）</h3><p>以「50Hz 执行 + 5Hz 推理 + chunk&#x3D;10」为例，一次推理的端到端预算（数量级示意，随硬件与模型剧烈变化）：</p>
+<table>
+<thead>
+<tr>
+<th>环节</th>
+<th>典型耗时</th>
+<th>优化手段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>图像采集与传输</td>
+<td>5~20ms</td>
+<td>组合部署零拷贝（2.22）、降分辨率</td>
+</tr>
+<tr>
+<td>预处理（缩放&#x2F;归一化）</td>
+<td>2~10ms</td>
+<td>GPU 预处理、避免 CPU 拷贝</td>
+</tr>
+<tr>
+<td>视觉编码器</td>
+<td>20~60ms</td>
+<td>TensorRT、FP8&#x2F;INT8（第六篇）</td>
+</tr>
+<tr>
+<td>语言&#x2F;骨干前向</td>
+<td>30~150ms</td>
+<td>KV Cache 复用（指令不变时）、量化</td>
+</tr>
+<tr>
+<td>动作头解码</td>
+<td>5~50ms</td>
+<td>减少扩散步数&#x2F;token 数</td>
+</tr>
+<tr>
+<td>后处理与下发</td>
+<td>1~5ms</td>
+<td>反归一化 + 安全裁剪</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td><strong><del>60</del>300ms</strong></td>
+<td><strong>必须 &lt; chunk 时长（10&#x2F;50Hz&#x3D;200ms）</strong></td>
+</tr>
+</tbody></table>
+<p><strong>铁律</strong>：<code>推理延迟 + 抖动裕度 &lt; chunk 执行时长</code>，否则动作断流（机器人「卡顿」）。这条不等式就是你与算法团队谈判的语言——它把「模型多大」翻译成了「能不能上线」。</p>
+<h3 id="5-5-2-双频架构：推理与控制解耦"><a href="#5-5-2-双频架构：推理与控制解耦" class="headerlink" title="5.5.2 双频架构：推理与控制解耦"></a>5.5.2 双频架构：推理与控制解耦</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">title 双频架构：5Hz 推理 × 50Hz 执行（chunk 重叠）</span><br><span class="line">participant &quot;感知/观测缓冲&quot; as O</span><br><span class="line">participant &quot;VLA Runtime (GPU)&quot; as V</span><br><span class="line">participant &quot;动作缓冲 Chunk Buffer&quot; as B</span><br><span class="line">participant &quot;控制器 50Hz&quot; as C</span><br><span class="line">participant &quot;安全监控 (快脑)&quot; as S</span><br><span class="line">O -&gt; V : 观测快照 t0（对齐后）</span><br><span class="line">V -&gt; B : chunk a(t0+1..t0+10)</span><br><span class="line">loop 每 20ms</span><br><span class="line">  B -&gt; C : 取下一步动作</span><br><span class="line">  C -&gt; S : 执行前校验（限位/力矩/几何边界）</span><br><span class="line">  S --&gt; C : 放行 / 中断</span><br><span class="line">end</span><br><span class="line">B -&gt; V : 剩余 30% → 触发下一次推理（重叠，避免断流）</span><br><span class="line">V -&gt; B : 新 chunk（与旧 chunk 时序聚合融合）</span><br><span class="line">@enduml</span><br></pre></td></tr></table></figure>
+
+<p>工程要点：<strong>Chunk Buffer 是解耦点</strong>——推理慢一次不至于立刻断流（缓冲兜底），但连续慢就会耗尽（监控 buffer 水位并上报，这是端侧最重要的健康指标之一）。</p>
+<h3 id="5-5-3-显存、体积与你的-OTA"><a href="#5-5-3-显存、体积与你的-OTA" class="headerlink" title="5.5.3 显存、体积与你的 OTA"></a>5.5.3 显存、体积与你的 OTA</h3><table>
+<thead>
+<tr>
+<th>模型规模</th>
+<th>FP16 显存</th>
+<th>INT8&#x2F;W4 量化后</th>
+<th>Jetson 可行性（第六篇细化）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>~100M（ACT&#x2F;DP）</td>
+<td>亚 GB</td>
+<td>—</td>
+<td>轻松</td>
+</tr>
+<tr>
+<td>~1B（Octo&#x2F;RDT 级）</td>
+<td>~2GB+</td>
+<td>~1GB</td>
+<td>可行</td>
+</tr>
+<tr>
+<td>~7B（OpenVLA 级）</td>
+<td>~14GB+</td>
+<td><del>4</del>7GB</td>
+<td>Orin AGX 64GB 可行；Orin Nano 8GB 需强量化且延迟吃紧</td>
+</tr>
+</tbody></table>
+<p>三个平台推论：<strong>量化不是可选项而是默认项</strong>（第六篇）；<strong>模型体积直接换算成 OTA 分发账</strong>（4.3.4 的四级瀑布因它而存在：7B 量化后仍有数 GB × 万台）；<strong>显存决定能否双缓冲热切换</strong>（4.3.5！新旧模型同时驻留需要双份显存——这是端侧硬件选型时最容易被漏掉的一条约束，写进机型规格书）。</p>
+<h3 id="5-5-4-端侧-Runtime-设计要点"><a href="#5-5-4-端侧-Runtime-设计要点" class="headerlink" title="5.5.4 端侧 Runtime 设计要点"></a>5.5.4 端侧 Runtime 设计要点</h3><p>一个合格的 VLA Runtime（第六篇给部署细节、第十一篇给代码位置）必须有：模型槽位管理（A&#x2F;B 双缓冲 + 原子切换 + 版本上报）、契约校验（5.3.6）、观测同步缓冲、chunk buffer 与水位监控、失效降级（推理超时&#x2F;异常 → 立即降级到安全策略：停住&#x2F;收臂&#x2F;交还传统栈）、指标上报（延迟 P50&#x2F;P99、buffer 水位、置信度分布、分歧计数 → 第四篇数据面）。<strong>这份清单就是你给算法团队的「模型上机验收标准」。</strong></p>
+<h3 id="5-5-5-与产业物联网平台的映射"><a href="#5-5-5-与产业物联网平台的映射" class="headerlink" title="5.5.5 与产业物联网平台的映射"></a>5.5.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>VLA 推理</th>
+<th>你的 AI Infra 经验</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>延迟预算表</td>
+<td>LLM 服务 P99 预算</td>
+<td>从 SLA 变成物理硬约束</td>
+</tr>
+<tr>
+<td>KV Cache 复用</td>
+<td>vLLM 的 PagedAttention 思想</td>
+<td>指令不变时复用</td>
+</tr>
+<tr>
+<td>量化（INT8&#x2F;FP8&#x2F;W4）</td>
+<td>LLM 量化实践</td>
+<td>直接迁移</td>
+</tr>
+<tr>
+<td>双缓冲热切换</td>
+<td>模型热更新&#x2F;蓝绿</td>
+<td>多一份显存约束</td>
+</tr>
+<tr>
+<td>Runtime 指标</td>
+<td>推理服务可观测</td>
+<td>加 buffer 水位与置信度</td>
+</tr>
+</tbody></table>
+<h3 id="5-5-6-企业实践建议"><a href="#5-5-6-企业实践建议" class="headerlink" title="5.5.6 企业实践建议"></a>5.5.6 企业实践建议</h3><p>把「延迟预算表」做成机型规格书的一节：给定机型（Orin Nano&#x2F;NX&#x2F;AGX）与控制频率，明确可承载的模型规模上限与量化要求——<strong>用硬件规格反向约束模型选型</strong>，比事后优化便宜十倍。这份表也是采购与算法团队争执时唯一的仲裁者。</p>
+<h3 id="5-5-7-面试可能问什么"><a href="#5-5-7-面试可能问什么" class="headerlink" title="5.5.7 面试可能问什么"></a>5.5.7 面试可能问什么</h3><ol>
+<li>VLA 推理延迟如何分解与优化？（要点：六环节表 + 不等式铁律 + 量化&#x2F;TensorRT&#x2F;KV Cache）</li>
+<li>7B 模型能上 Jetson 吗？（要点：量化后显存、双缓冲要双份、延迟与频率的匹配）</li>
+<li>推理超时怎么办？（要点：chunk buffer 兜底 + 水位监控 + 超时降级到安全策略）</li>
+</ol>
+<h3 id="5-5-8-最佳实践"><a href="#5-5-8-最佳实践" class="headerlink" title="5.5.8 最佳实践"></a>5.5.8 最佳实践</h3><ul>
+<li>端侧永远有「模型不可用」的降级路径（停&#x2F;收&#x2F;交还传统栈），并定期演练——模型是会失败的组件。</li>
+<li>延迟指标按 P99 而非均值定门禁；抖动（P99-P50）比绝对值更能预示断流。</li>
+</ul>
+<h3 id="5-5-9-常见误区"><a href="#5-5-9-常见误区" class="headerlink" title="5.5.9 常见误区"></a>5.5.9 常见误区</h3><ul>
+<li>❌ 只看均值延迟达标就上线——P99 抖动一超 chunk 时长就是可见卡顿。</li>
+<li>❌ 端侧选型只算单模型显存——忘了双缓冲、忘了感知模型也占显存，上线即 OOM。</li>
+</ul>
+<h3 id="5-5-10-Obsidian-永久笔记"><a href="#5-5-10-Obsidian-永久笔记" class="headerlink" title="5.5.10 Obsidian 永久笔记"></a>5.5.10 Obsidian 永久笔记</h3><ul>
+<li>延迟不等式：推理延迟 + 抖动裕度 &lt; chunk 执行时长。</li>
+<li>双频架构：chunk buffer 解耦推理与控制，水位是核心健康指标。</li>
+<li>双缓冲要双份显存：热切换的隐性硬件约束，写进机型规格书。</li>
+<li>Runtime 六件事：槽位&#x2F;契约校验&#x2F;同步缓冲&#x2F;水位&#x2F;降级&#x2F;指标。</li>
+</ul>
+<hr>
+<h2 id="5-6-失效模式与安全带"><a href="#5-6-失效模式与安全带" class="headerlink" title="5.6 失效模式与安全带"></a>5.6 失效模式与安全带</h2><h3 id="5-6-1-六种典型失效"><a href="#5-6-1-六种典型失效" class="headerlink" title="5.6.1 六种典型失效"></a>5.6.1 六种典型失效</h3><table>
+<thead>
+<tr>
+<th>失效</th>
+<th>现象</th>
+<th>端侧检测</th>
+<th>平台侧动作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>分布外（OOD）</td>
+<td>新物体&#x2F;新布光下动作离谱</td>
+<td>置信度&#x2F;熵异常、动作幅度异常</td>
+<td>触发回传 + 降级</td>
+</tr>
+<tr>
+<td>动作抖动</td>
+<td>高频振荡，减速器受损</td>
+<td>动作二阶差分超阈</td>
+<td>告警 + 限幅</td>
+</tr>
+<tr>
+<td>僵死</td>
+<td>停在原地反复微动</td>
+<td>位移&#x2F;进度停滞检测</td>
+<td>超时中断任务</td>
+</tr>
+<tr>
+<td>幻觉式操作</td>
+<td>抓空气、对不存在的物体动作</td>
+<td>力矩无接触反馈</td>
+<td>中断 + 现场回传</td>
+</tr>
+<tr>
+<td>语言误解</td>
+<td>执行了别的任务</td>
+<td>任务后校验（视觉核对）</td>
+<td>判失败 + 人工复核</td>
+</tr>
+<tr>
+<td>分块断流</td>
+<td>卡顿、动作不连续</td>
+<td>buffer 水位见底</td>
+<td>降频&#x2F;降级&#x2F;告警</td>
+</tr>
+</tbody></table>
+<h3 id="5-6-2-平台侧安全带四层"><a href="#5-6-2-平台侧安全带四层" class="headerlink" title="5.6.2 平台侧安全带四层"></a>5.6.2 平台侧安全带四层</h3><p><strong>L1 契约层</strong>：Runtime 加载时校验观测&#x2F;动作&#x2F;频率契约（5.3.6）；<strong>L2 输出层</strong>：动作限幅（关节限位、速度&#x2F;加速度上限、力矩上限）、几何围栏（工作空间&#x2F;禁行区）——<strong>这一层必须独立于模型实现</strong>，是纯规则代码，可形式化审查；<strong>L3 监控层</strong>：快脑实时监控（碰撞、力矩突变、越界）→ 中断 chunk；<strong>L4 系统层</strong>：E-Stop（永不出本体，1.2.5）+ 人机共管区规则 + 任务级超时。</p>
+<p><strong>核心原则：安全不由模型负责</strong>。模型可以变、可以回滚、可以出错；安全层是恒定的、可审查的、独立演进的——这与你在智驾里「AEB 独立于端到端模型」的架构原则一字不差。</p>
+<h3 id="5-6-3-评测指标：模型好不好，用平台指标说话"><a href="#5-6-3-评测指标：模型好不好，用平台指标说话" class="headerlink" title="5.6.3 评测指标：模型好不好，用平台指标说话"></a>5.6.3 评测指标：模型好不好，用平台指标说话</h3><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>定义</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>任务成功率</td>
+<td>无干预完成 &#x2F; 总尝试</td>
+<td>主门禁（4.8.4）</td>
+</tr>
+<tr>
+<td>人工干预率</td>
+<td>干预次数 &#x2F; 100 任务</td>
+<td>主门禁</td>
+</tr>
+<tr>
+<td>首次成功率 vs 重试成功率</td>
+<td>分层看鲁棒性</td>
+<td>定位「靠重试蒙对」</td>
+</tr>
+<tr>
+<td>动作平滑度</td>
+<td>加加速度（jerk）统计</td>
+<td>机械寿命与体感</td>
+</tr>
+<tr>
+<td>OOD 率</td>
+<td>低置信度帧占比</td>
+<td>数据补采信号</td>
+</tr>
+<tr>
+<td>延迟 P99 &#x2F; buffer 见底次数</td>
+<td>见 5.5</td>
+<td>上线门禁</td>
+</tr>
+<tr>
+<td>安全事件数</td>
+<td>限幅触发&#x2F;中断&#x2F;E-Stop</td>
+<td>一票否决</td>
+</tr>
+</tbody></table>
+<p><strong>三级评测</strong>：离线数据集（快、便宜、不可信）→ 仿真基准（中、可批量、有 gap，第八篇）→ 影子&#x2F;小批真机（慢、贵、最可信，4.3.6）。三级门禁串联，逐级放行。</p>
+<h3 id="5-6-4-与产业物联网平台的映射"><a href="#5-6-4-与产业物联网平台的映射" class="headerlink" title="5.6.4 与产业物联网平台的映射"></a>5.6.4 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>VLA 安全</th>
+<th>智驾</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>安全层独立于模型</td>
+<td>AEB&#x2F;安全监控独立于端到端</td>
+<td>同一原则</td>
+</tr>
+<tr>
+<td>三级评测</td>
+<td>离线回放→仿真→影子&#x2F;实车</td>
+<td>完全同构</td>
+</tr>
+<tr>
+<td>安全事件一票否决</td>
+<td>智驾安全门禁</td>
+<td>优先级最高</td>
+</tr>
+<tr>
+<td>OOD 触发回传</td>
+<td>corner case 挖掘</td>
+<td>数据飞轮入口</td>
+</tr>
+</tbody></table>
+<h3 id="5-6-5-企业实践建议"><a href="#5-6-5-企业实践建议" class="headerlink" title="5.6.5 企业实践建议"></a>5.6.5 企业实践建议</h3><p>把 5.6.1 的六种失效写成**《VLA 失效模式与检测规范》**并要求端侧 Runtime 逐条实现检测与上报——这份文档是平台团队对模型「不可解释性」的正面回应：<strong>我不要求你解释，但我要求你可检测、可中断、可回滚</strong>。这句话足以定义平台与算法团队的健康关系。</p>
+<h3 id="5-6-6-面试可能问什么"><a href="#5-6-6-面试可能问什么" class="headerlink" title="5.6.6 面试可能问什么"></a>5.6.6 面试可能问什么</h3><ol>
+<li>VLA 的失效模式有哪些？平台怎么兜？（要点：六种失效 + 安全带四层 + 安全不由模型负责）</li>
+<li>如何评测一个 VLA？（要点：七指标 + 三级评测串联门禁 + 安全事件一票否决）</li>
+<li>模型不可解释怎么上线？（要点：可检测&#x2F;可中断&#x2F;可回滚三件套 + 影子与灰度）</li>
+</ol>
+<h3 id="5-6-7-最佳实践"><a href="#5-6-7-最佳实践" class="headerlink" title="5.6.7 最佳实践"></a>5.6.7 最佳实践</h3><ul>
+<li>限幅与围栏的参数属于<strong>机型基线配置</strong>（走配置 OTA，2.13.4），不硬编码在模型或节点里。</li>
+<li>每次安全事件自动打包现场（bag + 孪生快照 + 模型版本）——事故复盘的证据链是平台的信誉资产。</li>
+</ul>
+<h3 id="5-6-8-常见误区"><a href="#5-6-8-常见误区" class="headerlink" title="5.6.8 常见误区"></a>5.6.8 常见误区</h3><ul>
+<li>❌ 「模型足够好就不需要安全层」——分布外永远存在，安全层是常量。</li>
+<li>❌ 用离线成功率当上线门禁——离线与真机的相关性常常弱到危险。</li>
+</ul>
+<h3 id="5-6-9-Obsidian-永久笔记"><a href="#5-6-9-Obsidian-永久笔记" class="headerlink" title="5.6.9 Obsidian 永久笔记"></a>5.6.9 Obsidian 永久笔记</h3><ul>
+<li>安全不由模型负责：安全层独立、恒定、可审查。</li>
+<li>VLA 六失效：OOD&#x2F;抖动&#x2F;僵死&#x2F;幻觉操作&#x2F;语言误解&#x2F;分块断流。</li>
+<li>三级评测串联：离线→仿真→影子真机，逐级放行。</li>
+</ul>
+<hr>
+<h2 id="5-7-Scaling-与云边分工"><a href="#5-7-Scaling-与云边分工" class="headerlink" title="5.7 Scaling 与云边分工"></a>5.7 Scaling 与云边分工</h2><h3 id="5-7-1-三条-Scaling-轴"><a href="#5-7-1-三条-Scaling-轴" class="headerlink" title="5.7.1 三条 Scaling 轴"></a>5.7.1 三条 Scaling 轴</h3><p><strong>模型规模</strong>：更大骨干带来更强语义泛化，但端侧显存与延迟是硬墙——所以行业出现「大骨干 + 轻动作专家」（π0 式）与「云端大脑 + 端侧小脑」两种解法。<strong>数据规模</strong>：跨本体共训（OXE）已被证明有效，数据仍是主瓶颈（5.4）。<strong>本体规模</strong>：一个策略服务多种本体，需要动作空间抽象与 embodiment 条件化——这是<strong>平台的活儿</strong>（Device Profile + 数据里的 embodiment 维度）。</p>
+<h3 id="5-7-2-云边分工矩阵（回答「VLA-能不能上云」）"><a href="#5-7-2-云边分工矩阵（回答「VLA-能不能上云」）" class="headerlink" title="5.7.2 云边分工矩阵（回答「VLA 能不能上云」）"></a>5.7.2 云边分工矩阵（回答「VLA 能不能上云」）</h3><table>
+<thead>
+<tr>
+<th>部署形态</th>
+<th>可行性</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>全端侧</td>
+<td>✅ 主流</td>
+<td>实时操作、断网可用（首选）</td>
+</tr>
+<tr>
+<td>边缘池推理</td>
+<td>⚠️ 条件可行</td>
+<td>有线内网 RTT&lt;5ms 且抖动可控、固定工位（4.9.3 三问）</td>
+</tr>
+<tr>
+<td>云端推理</td>
+<td>❌ 控制回路不可行</td>
+<td>仅用于离线评测&#x2F;影子并跑&#x2F;大脑级规划</td>
+</tr>
+<tr>
+<td>云端大脑 + 端侧小脑</td>
+<td>✅ 推荐</td>
+<td>LLM 规划在云（秒级）+ VLA 执行在端（50Hz）——即三层大脑</td>
+</tr>
+</tbody></table>
+<p>结论一句话：<strong>VLA 是端侧组件，云是它的工厂与考场，不是它的运行时</strong>。这条结论把第四篇的架构与本篇缝死了。</p>
+<h3 id="5-7-3-与产业物联网平台的映射"><a href="#5-7-3-与产业物联网平台的映射" class="headerlink" title="5.7.3 与产业物联网平台的映射"></a>5.7.3 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>Scaling</th>
+<th>智驾</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>大骨干+轻动作头</td>
+<td>大模型蒸馏到车端</td>
+<td>同一路线</td>
+</tr>
+<tr>
+<td>跨本体共训</td>
+<td>多车型共训</td>
+<td>embodiment≈车型</td>
+</tr>
+<tr>
+<td>云端大脑+端侧小脑</td>
+<td>云端 Agent + 车端模型</td>
+<td>结构同构</td>
+</tr>
+<tr>
+<td>模型不上云做控制</td>
+<td>智驾不依赖云闭环</td>
+<td>铁律同源</td>
+</tr>
+</tbody></table>
+<h3 id="5-7-4-企业实践建议"><a href="#5-7-4-企业实践建议" class="headerlink" title="5.7.4 企业实践建议"></a>5.7.4 企业实践建议</h3><p>面对「能不能把 VLA 放云端省 GPU」的提问（一定会有人问），用 4.9.3 三问 + 5.7.2 矩阵回答，并把它写进架构原则文档——这类问题每季度都会重来一次，有文档就不必重新辩论。</p>
+<h3 id="5-7-5-面试可能问什么"><a href="#5-7-5-面试可能问什么" class="headerlink" title="5.7.5 面试可能问什么"></a>5.7.5 面试可能问什么</h3><ol>
+<li>VLA 能不能云端推理？（要点：矩阵 + 三问 + 「云是工厂与考场不是运行时」）</li>
+<li>一个策略服务多本体需要什么？（要点：动作空间抽象、embodiment 条件化、Profile 与数据维度）</li>
+</ol>
+<h3 id="5-7-6-最佳实践"><a href="#5-7-6-最佳实践" class="headerlink" title="5.7.6 最佳实践"></a>5.7.6 最佳实践</h3><ul>
+<li>机型规格书与模型规模上限绑定演进：新一代硬件到位前，模型规模冻结——避免「模型跑在 PPT 上」。</li>
+</ul>
+<h3 id="5-7-7-常见误区"><a href="#5-7-7-常见误区" class="headerlink" title="5.7.7 常见误区"></a>5.7.7 常见误区</h3><ul>
+<li>❌ 拿云端 GPU 利用率的账去论证 VLA 上云——它是控制链路组件，账不能这么算。</li>
+</ul>
+<h3 id="5-7-8-Obsidian-永久笔记"><a href="#5-7-8-Obsidian-永久笔记" class="headerlink" title="5.7.8 Obsidian 永久笔记"></a>5.7.8 Obsidian 永久笔记</h3><ul>
+<li>VLA 是端侧组件：云是工厂与考场，不是运行时。</li>
+<li>三条 Scaling 轴：模型&#x2F;数据&#x2F;本体，本体那条是平台的活。</li>
+</ul>
+<hr>
+<h2 id="5-8-VLA-Pipeline-全图与平台落点"><a href="#5-8-VLA-Pipeline-全图与平台落点" class="headerlink" title="5.8 VLA Pipeline 全图与平台落点"></a>5.8 VLA Pipeline 全图与平台落点</h2><h3 id="5-8-1-九环节全图"><a href="#5-8-1-九环节全图" class="headerlink" title="5.8.1 九环节全图"></a>5.8.1 九环节全图</h3><pre class="mermaid">flowchart TB
+  P1["1 需求：任务定义与成功判据"] --&gt; P2["2 数据采集：遥操作/仿真/回传（第七、八篇）"]
+  P2 --&gt; P3["3 数据处理：质检/格式化 LeRobotDataset/版本化"]
+  P3 --&gt; P4["4 训练：预训练权重 + 微调（云 GPU 集群）"]
+  P4 --&gt; P5["5 离线评测：验证集 + 回放"]
+  P5 --&gt; P6["6 仿真评测：Isaac 基准场景（第八篇）"]
+  P6 --&gt; P7["7 打包：量化/TensorRT/契约元数据/签名（第六篇 + 4.3.3）"]
+  P7 --&gt; P8["8 分发：模型 OTA 四级瀑布 + 双缓冲热切换（4.3）"]
+  P8 --&gt; P9["9 运行与影子评测：Runtime + 指标 + 触发回传（4.8 / 5.5 / 5.6）"]
+  P9 --&gt;|"分歧/失败/OOD 样本"| P2
+  P9 --&gt;|"门禁破线"| RBK["自动回滚（4.3.7）"]</pre>
+
+
+<h3 id="5-8-2-环节与平台平面对照表"><a href="#5-8-2-环节与平台平面对照表" class="headerlink" title="5.8.2 环节与平台平面对照表"></a>5.8.2 环节与平台平面对照表</h3><table>
+<thead>
+<tr>
+<th>环节</th>
+<th>落在哪个平面</th>
+<th>已有存量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1 需求与判据</td>
+<td>任务面 + 评测规范</td>
+<td>你的 Agent 评测方法论</td>
+</tr>
+<tr>
+<td>2 采集</td>
+<td>任务面（采集任务）+ 数据面</td>
+<td>Fleet 调度可复用</td>
+</tr>
+<tr>
+<td>3 处理</td>
+<td>数据面（第七篇）</td>
+<td>Kafka&#x2F;Flink&#x2F;湖仓原班人马</td>
+</tr>
+<tr>
+<td>4 训练</td>
+<td>AI 面（训练平台）</td>
+<td>GPU 平台经验</td>
+</tr>
+<tr>
+<td>5-6 评测</td>
+<td>AI 面 + 仿真（第八篇）</td>
+<td>评测门禁思想复用</td>
+</tr>
+<tr>
+<td>7 打包</td>
+<td>OTA 面（制品库+签名）</td>
+<td>制品治理</td>
+</tr>
+<tr>
+<td>8 分发</td>
+<td>OTA 面（分发网络）</td>
+<td>云管端升级 + 模型子系统</td>
+</tr>
+<tr>
+<td>9 运行</td>
+<td>边缘&#x2F;端侧 + 数据面</td>
+<td>可观测体系</td>
+</tr>
+</tbody></table>
+<p><strong>九个环节没有一个是「纯算法」——七个落在你的存量能力上</strong>。这张表是本篇给你的最大信心：VLA 时代的机器人公司，缺的不是模型工程师，是能把这九环节连成飞轮的平台架构师。</p>
+<h3 id="5-8-3-平台架构师与算法团队的对话接口清单"><a href="#5-8-3-平台架构师与算法团队的对话接口清单" class="headerlink" title="5.8.3 平台架构师与算法团队的对话接口清单"></a>5.8.3 平台架构师与算法团队的对话接口清单</h3><p>向算法团队索要（写进模型卡，缺项即拒绝入库）：</p>
+<ul>
+<li><strong>观测契约</strong>：话题清单、图像路数&#x2F;分辨率&#x2F;预处理、状态字段与关节顺序、历史帧数</li>
+<li><strong>动作契约</strong>：空间（关节&#x2F;任务）、绝对或增量、单位、归一化统计量文件、chunk 长度 H</li>
+<li><strong>频率契约</strong>：推理频率、期望控制频率、可容忍的最大推理延迟</li>
+<li><strong>资源契约</strong>：FP16&#x2F;量化后显存、期望硬件、是否支持 TensorRT&#x2F;ONNX 导出</li>
+<li><strong>评测契约</strong>：训练数据集版本与卡片、离线指标、仿真基准分、已知失效场景</li>
+<li><strong>合规契约</strong>：权重来源与许可、数据来源与许可</li>
+</ul>
+<p>向算法团队承诺（平台的交付物）：数据集版本化与血缘、训练算力与调度、仿真基准环境、模型 OTA 与灰度回滚、影子评测与分歧回传、线上指标看板与失效现场包。<strong>这两份清单构成平台与算法的 SLA</strong>——把它贴在两个团队的协作文档首页。</p>
+<h3 id="5-8-4-与产业物联网平台的映射"><a href="#5-8-4-与产业物联网平台的映射" class="headerlink" title="5.8.4 与产业物联网平台的映射"></a>5.8.4 与产业物联网平台的映射</h3><p>九环节 ≈ 智驾模型的「采集→标注→训练→仿真→评测→OTA→影子」全流程；对话接口清单 ≈ 你与智驾算法团队的模型交付规范。名词一换，方法论零折损。</p>
+<h3 id="5-8-5-企业实践建议"><a href="#5-8-5-企业实践建议" class="headerlink" title="5.8.5 企业实践建议"></a>5.8.5 企业实践建议</h3><p>用「九环节成熟度雷达」做季度评估（每环节 0~5 分），预算精确投向最短板——第一次评估通常会发现：训练算力不缺、模型不缺，<strong>缺的是 3（数据处理）与 9（影子评测）</strong>。这两处正是平台团队最该先动手的地方。</p>
+<h3 id="5-8-6-面试可能问什么"><a href="#5-8-6-面试可能问什么" class="headerlink" title="5.8.6 面试可能问什么"></a>5.8.6 面试可能问什么</h3><ol>
+<li>画出 VLA 的完整工程 Pipeline。（要点：九环节 + 闭环回流 + 每环节落点）</li>
+<li>平台与算法团队如何协作？（要点：双向清单 &#x3D; SLA；模型卡缺项拒绝入库）</li>
+<li>你会先补哪个环节？（要点：数据处理与影子评测，给出成熟度雷达的判据）</li>
+</ol>
+<h3 id="5-8-7-最佳实践"><a href="#5-8-7-最佳实践" class="headerlink" title="5.8.7 最佳实践"></a>5.8.7 最佳实践</h3><ul>
+<li>模型卡即准入契约：CI 里做 schema 校验，缺字段的模型连制品库都进不去（4.3.3 的准入门）。</li>
+<li>九环节每环设「单点耗时」度量，飞轮转速 &#x3D; 从回传到新模型上线的天数——<strong>这是机器人公司的第一性指标</strong>（1.6.2）。</li>
+</ul>
+<h3 id="5-8-8-常见误区"><a href="#5-8-8-常见误区" class="headerlink" title="5.8.8 常见误区"></a>5.8.8 常见误区</h3><ul>
+<li>❌ 把 VLA 项目当「算法项目」立项——九环节里七个是平台工程，立项书必须体现。</li>
+<li>❌ 缺失环节 9（影子评测）就上灰度——没有影子的灰度是拿客户现场做实验。</li>
+</ul>
+<h3 id="5-8-9-Obsidian-永久笔记"><a href="#5-8-9-Obsidian-永久笔记" class="headerlink" title="5.8.9 Obsidian 永久笔记"></a>5.8.9 Obsidian 永久笔记</h3><ul>
+<li>VLA 九环节：需求&#x2F;采集&#x2F;处理&#x2F;训练&#x2F;离线评测&#x2F;仿真评测&#x2F;打包&#x2F;分发&#x2F;运行影子。</li>
+<li>七个环节是你的存量：VLA 时代缺的是连飞轮的平台架构师。</li>
+<li>双向清单即 SLA：模型卡六契约 ⇄ 平台六承诺。</li>
+<li>飞轮转速：从回传到新模型上线的天数。</li>
+</ul>
+<hr>
+<h2 id="5-9-本篇总结"><a href="#5-9-本篇总结" class="headerlink" title="5.9 本篇总结"></a>5.9 本篇总结</h2><h3 id="5-9-1-十条核心结论"><a href="#5-9-1-十条核心结论" class="headerlink" title="5.9.1 十条核心结论"></a>5.9.1 十条核心结论</h3><ol>
+<li>VLA &#x3D; 多模态骨干 + 动作头；它接管的是「怎么做」，因此是模型制品而非代码制品。</li>
+<li>分层混合是现阶段现实：慢脑规划（云边）、中脑 VLA（机上）、快脑安全（机上）。</li>
+<li>谱系三支：ACT&#x2F;DP 视觉运动策略、RT&#x2F;OpenVLA 大模型骨干、π0&#x2F;GR00T 高频连续；OXE 与 LeRobot 是地基。</li>
+<li>平台只盯三契约：观测、动作、频率——注册表必填、Runtime 断言。</li>
+<li>动作分块 &#x3D; 智驾的「轨迹下发 + 高频跟踪」，chunk 内开环必须靠快脑兜底。</li>
+<li>延迟不等式：推理延迟 + 抖动裕度 &lt; chunk 时长；P99 与抖动比均值重要。</li>
+<li>双缓冲热切换要双份显存——端侧选型最易漏的一条约束。</li>
+<li>数据是真正的战场：三源配方 + 质检门禁 + 触发回传补长尾；「一条演示的成本」要可视化。</li>
+<li>安全不由模型负责：契约&#x2F;限幅&#x2F;监控&#x2F;系统四层安全带独立演进，安全事件一票否决。</li>
+<li>VLA 九环节里七个落在你的存量平面上——飞轮转速是机器人公司的第一性指标。</li>
+</ol>
+<h3 id="5-9-2-本篇卡片索引"><a href="#5-9-2-本篇卡片索引" class="headerlink" title="5.9.2 本篇卡片索引"></a>5.9.2 本篇卡片索引</h3><p>VLA 等于骨干加动作头 · 三层大脑 · 平台四能 · VLA 谱系三支 · OXE 是数据地基 · LeRobot 是工程载体 · 链路先于模型 · VLA 三契约 · 动作分块即轨迹下发 · 归一化统计量属于制品 · 三源配方 · Bag 是档案 Dataset 是视图 · 一条演示的成本 · 三类触发是长尾种子 · 延迟不等式 · 双频架构 · 双缓冲要双份显存 · Runtime 六件事 · 安全不由模型负责 · VLA 六失效 · 三级评测串联 · VLA 是端侧组件 · 三条 Scaling 轴 · VLA 九环节 · 七个环节是你的存量 · 双向清单即 SLA · 飞轮转速</p>
+<h3 id="5-9-3-第六篇预告"><a href="#5-9-3-第六篇预告" class="headerlink" title="5.9.3 第六篇预告"></a>5.9.3 第六篇预告</h3><p>VLA 要落到硅片上。第六篇《Robot Edge AI》深入端侧推理基础设施：Jetson 家族（Orin Nano&#x2F;NX&#x2F;AGX）选型与 TOPS 的真相、TensorRT&#x2F;ONNX 部署链、量化（FP8&#x2F;INT8&#x2F;AWQ&#x2F;GPTQ&#x2F;GGUF）、vLLM&#x2F;SGLang&#x2F;MLX 在边缘的位置、KV Cache 与连续批处理、内存&#x2F;功耗&#x2F;散热&#x2F;调度的物理约束、实时控制与推理的资源隔离，最终产出可直接施工的 <strong>Robot Edge Deployment Guide</strong>。</p>
+<hr>
+<hr>
+<p><a href="./04-Robot-Cloud-Platform.md">⬅️ 上一篇</a> ｜ <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">🔝 返回总目录</a> ｜ <a href="./06-Robot-Edge-AI.md">下一篇 ➡️</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/12/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-06-%E7%AB%AF%E4%BE%A7AI/">机器人端侧 AI 架构</a></h3>
+        <p>一句话总纲：云端优化吞吐，端侧优化确定性。你所有「压榨 GPU 利用率」的直觉在这里要反过来——端侧宁可留裕量，也不要一次抖动。</p>
+        <a class="btn primary" href="/2025/12/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-06-%E7%AB%AF%E4%BE%A7AI/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/09/17/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-04-%E6%9C%BA%E5%99%A8%E4%BA%BA%E4%BA%91%E5%B9%B3%E5%8F%B0/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：机器人云平台架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 11 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E4%BA%94%E7%AF%87-VLA" data-toc-target="第五篇-VLA"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第五篇 VLA</span></a><a class="toc-level-2" href="#5-0-%E6%9C%AC%E7%AF%87%E5%AF%BC%E8%AF%BB" data-toc-target="5-0-本篇导读"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">5.0 本篇导读</span></a><a class="toc-level-3" href="#5-0-1-%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E5%B8%88%E8%AF%BB-VLA-%E7%9A%84%E6%AD%A3%E7%A1%AE%E5%A7%BF%E5%8A%BF" data-toc-target="5-0-1-平台架构师读-VLA-的正确姿势"><span class="toc-text">5.0.1 平台架构师读 VLA 的正确姿势</span></a><a class="toc-level-3" href="#5-0-2-%E5%AD%A6%E5%AE%8C%E6%9C%AC%E7%AF%87%E4%BD%A0%E8%83%BD%E5%9B%9E%E7%AD%94%E7%9A%84%E5%8D%81%E4%B8%AA%E9%97%AE%E9%A2%98" data-toc-target="5-0-2-学完本篇你能回答的十个问题"><span class="toc-text">5.0.2 学完本篇你能回答的十个问题</span></a><a class="toc-level-3" href="#5-0-3-%E6%9C%AC%E7%AF%87%E7%9F%A5%E8%AF%86%E5%9C%B0%E5%9B%BE" data-toc-target="5-0-3-本篇知识地图"><span class="toc-text">5.0.3 本篇知识地图</span></a><a class="toc-level-2" href="#5-1-%E4%BB%80%E4%B9%88%E6%98%AF-VLA%EF%BC%9A%E4%BB%8E%E6%A8%A1%E5%9D%97%E5%8C%96%E5%88%B0%E7%AB%AF%E5%88%B0%E7%AB%AF" data-toc-target="5-1-什么是-VLA：从模块化到端到端"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">5.1 什么是 VLA：从模块化到端到端</span></a><a class="toc-level-3" href="#5-1-1-%E5%AE%9A%E4%B9%89%E4%B8%8E%E4%B8%89%E8%A6%81%E7%B4%A0" data-toc-target="5-1-1-定义与三要素"><span class="toc-text">5.1.1 定义与三要素</span></a><a class="toc-level-3" href="#5-1-2-%E4%B8%8E%E3%80%8CLLM-%E6%9C%BA%E6%A2%B0%E8%87%82-SDK%E3%80%8D%E7%9A%84%E6%9C%AC%E8%B4%A8%E5%8C%BA%E5%88%AB" data-toc-target="5-1-2-与「LLM-机械臂-SDK」的本质区别"><span class="toc-text">5.1.2 与「LLM + 机械臂 SDK」的本质区别</span></a><a class="toc-level-3" href="#5-1-3-%E6%A8%A1%E5%9D%97%E5%8C%96-vs-%E7%AB%AF%E5%88%B0%E7%AB%AF%EF%BC%9A%E5%B7%A5%E7%A8%8B%E5%8F%96%E8%88%8D%E8%A1%A8" data-toc-target="5-1-3-模块化-vs-端到端：工程取舍表"><span class="toc-text">5.1.3 模块化 vs 端到端：工程取舍表</span></a><a class="toc-level-3" href="#5-1-4-%E4%B8%89%E5%B1%82%E5%A4%A7%E8%84%91%E5%88%86%E5%B7%A5%EF%BC%88%E6%94%BE%E8%BF%9B%E7%AC%AC%E5%9B%9B%E7%AF%87%E7%9A%84%E6%A1%86%E6%9E%B6%EF%BC%89" data-toc-target="5-1-4-三层大脑分工（放进第四篇的框架）"><span class="toc-text">5.1.4 三层大脑分工（放进第四篇的框架）</span></a><a class="toc-level-3" href="#5-1-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-1-5-与产业物联网平台的映射"><span class="toc-text">5.1.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-1-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-1-6-企业实践建议"><span class="toc-text">5.1.6 企业实践建议</span></a><a class="toc-level-3" href="#5-1-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-1-7-面试可能问什么"><span class="toc-text">5.1.7 面试可能问什么</span></a><a class="toc-level-3" href="#5-1-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-1-8-最佳实践"><span class="toc-text">5.1.8 最佳实践</span></a><a class="toc-level-3" href="#5-1-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-1-9-常见误区"><span class="toc-text">5.1.9 常见误区</span></a><a class="toc-level-3" href="#5-1-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-1-10-Obsidian-永久笔记"><span class="toc-text">5.1.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-2-VLA-%E8%B0%B1%E7%B3%BB%EF%BC%9A%E5%B7%A5%E7%A8%8B%E8%A7%86%E8%A7%92%E7%9A%84%E4%BB%A3%E8%A1%A8%E5%B7%A5%E4%BD%9C" data-toc-target="5-2-VLA-谱系：工程视角的代表工作"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">5.2 VLA 谱系：工程视角的代表工作</span></a><a class="toc-level-3" href="#5-2-1-%E8%B0%B1%E7%B3%BB%E5%9B%BE" data-toc-target="5-2-1-谱系图"><span class="toc-text">5.2.1 谱系图</span></a><a class="toc-level-3" href="#5-2-2-%E5%B7%A5%E7%A8%8B%E5%B1%9E%E6%80%A7%E5%AF%B9%E6%AF%94%E8%A1%A8" data-toc-target="5-2-2-工程属性对比表"><span class="toc-text">5.2.2 工程属性对比表</span></a><a class="toc-level-3" href="#5-2-3-Open-X-Embodiment%EF%BC%9A%E6%95%B0%E6%8D%AE%E4%BE%A7%E7%9A%84%E3%80%8CImageNet-%E6%97%B6%E5%88%BB%E3%80%8D" data-toc-target="5-2-3-Open-X-Embodiment：数据侧的「ImageNet-时刻」"><span class="toc-text">5.2.3 Open X-Embodiment：数据侧的「ImageNet 时刻」</span></a><a class="toc-level-3" href="#5-2-4-LeRobot%EF%BC%9A%E6%8A%8A-VLA-%E5%8F%98%E6%88%90%E5%8F%AF%E5%B7%A5%E7%A8%8B%E5%8C%96%E7%9A%84%E4%B8%9C%E8%A5%BF" data-toc-target="5-2-4-LeRobot：把-VLA-变成可工程化的东西"><span class="toc-text">5.2.4 LeRobot：把 VLA 变成可工程化的东西</span></a><a class="toc-level-3" href="#5-2-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-2-5-与产业物联网平台的映射"><span class="toc-text">5.2.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-2-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-2-6-企业实践建议"><span class="toc-text">5.2.6 企业实践建议</span></a><a class="toc-level-3" href="#5-2-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-2-7-面试可能问什么"><span class="toc-text">5.2.7 面试可能问什么</span></a><a class="toc-level-3" href="#5-2-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-2-8-最佳实践"><span class="toc-text">5.2.8 最佳实践</span></a><a class="toc-level-3" href="#5-2-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-2-9-常见误区"><span class="toc-text">5.2.9 常见误区</span></a><a class="toc-level-3" href="#5-2-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-2-10-Obsidian-永久笔记"><span class="toc-text">5.2.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-3-%E8%BE%93%E5%85%A5%E8%BE%93%E5%87%BA%E5%A5%91%E7%BA%A6%EF%BC%9A%E5%B9%B3%E5%8F%B0%E6%9C%80%E8%AF%A5%E7%9B%AF%E7%9A%84%E4%B8%80%E9%A1%B5" data-toc-target="5-3-输入输出契约：平台最该盯的一页"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">5.3 输入输出契约：平台最该盯的一页</span></a><a class="toc-level-3" href="#5-3-1-%E8%A7%82%E6%B5%8B%E7%A9%BA%E9%97%B4%EF%BC%88Observation%EF%BC%89" data-toc-target="5-3-1-观测空间（Observation）"><span class="toc-text">5.3.1 观测空间（Observation）</span></a><a class="toc-level-3" href="#5-3-2-%E5%8A%A8%E4%BD%9C%E7%A9%BA%E9%97%B4%EF%BC%88Action%EF%BC%89" data-toc-target="5-3-2-动作空间（Action）"><span class="toc-text">5.3.2 动作空间（Action）</span></a><a class="toc-level-3" href="#5-3-3-%E5%9B%9B%E7%A7%8D%E5%8A%A8%E4%BD%9C%E5%A4%B4%E7%9A%84%E5%B7%A5%E7%A8%8B%E5%B7%AE%E5%BC%82" data-toc-target="5-3-3-四种动作头的工程差异"><span class="toc-text">5.3.3 四种动作头的工程差异</span></a><a class="toc-level-3" href="#5-3-4-%E5%8A%A8%E4%BD%9C%E5%88%86%E5%9D%97%EF%BC%88Action-Chunking%EF%BC%89%EF%BC%9A%E5%BB%B6%E8%BF%9F%E8%A7%A3%E8%8D%AF%E4%B8%8E%E5%AE%89%E5%85%A8%E9%9A%90%E6%82%A3" data-toc-target="5-3-4-动作分块（Action-Chunking）：延迟解药与安全隐患"><span class="toc-text">5.3.4 动作分块（Action Chunking）：延迟解药与安全隐患</span></a><a class="toc-level-3" href="#5-3-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-3-5-与产业物联网平台的映射"><span class="toc-text">5.3.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-3-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-3-6-企业实践建议"><span class="toc-text">5.3.6 企业实践建议</span></a><a class="toc-level-3" href="#5-3-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-3-7-面试可能问什么"><span class="toc-text">5.3.7 面试可能问什么</span></a><a class="toc-level-3" href="#5-3-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-3-8-最佳实践"><span class="toc-text">5.3.8 最佳实践</span></a><a class="toc-level-3" href="#5-3-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-3-9-常见误区"><span class="toc-text">5.3.9 常见误区</span></a><a class="toc-level-3" href="#5-3-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-3-10-Obsidian-永久笔记"><span class="toc-text">5.3.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-4-%E8%AE%AD%E7%BB%83%E6%95%B0%E6%8D%AE%EF%BC%9AVLA-%E5%B7%A5%E7%A8%8B%E7%9A%84%E7%9C%9F%E6%AD%A3%E6%88%98%E5%9C%BA" data-toc-target="5-4-训练数据：VLA-工程的真正战场"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5.4 训练数据：VLA 工程的真正战场</span></a><a class="toc-level-3" href="#5-4-1-%E4%B8%89%E6%BA%90%E6%B7%B7%E5%90%88%EF%BC%9A%E6%88%90%E6%9C%AC%E4%B8%8E%E4%BD%9C%E7%94%A8%E5%88%86%E5%B7%A5" data-toc-target="5-4-1-三源混合：成本与作用分工"><span class="toc-text">5.4.1 三源混合：成本与作用分工</span></a><a class="toc-level-3" href="#5-4-2-%E7%9C%9F%E6%9C%BA%E9%81%A5%E6%93%8D%E4%BD%9C%E9%87%87%E9%9B%86%EF%BC%9A%E5%B9%B3%E5%8F%B0%E4%BE%A7%E8%A6%81%E5%BB%BA%E4%BB%80%E4%B9%88" data-toc-target="5-4-2-真机遥操作采集：平台侧要建什么"><span class="toc-text">5.4.2 真机遥操作采集：平台侧要建什么</span></a><a class="toc-level-3" href="#5-4-3-%E6%95%B0%E6%8D%AE%E6%A0%BC%E5%BC%8F%EF%BC%9ALeRobotDataset-%E7%9A%84%E5%B9%B3%E5%8F%B0%E6%84%8F%E4%B9%89" data-toc-target="5-4-3-数据格式：LeRobotDataset-的平台意义"><span class="toc-text">5.4.3 数据格式：LeRobotDataset 的平台意义</span></a><a class="toc-level-3" href="#5-4-4-%E6%95%B0%E6%8D%AE%E9%85%8D%E6%AF%94%E4%B8%8E%E9%95%BF%E5%B0%BE" data-toc-target="5-4-4-数据配比与长尾"><span class="toc-text">5.4.4 数据配比与长尾</span></a><a class="toc-level-3" href="#5-4-5-%E6%95%B0%E6%8D%AE%E9%A3%9E%E8%BD%AE%E5%9C%A8-VLA-%E4%B8%8A%E7%9A%84%E5%85%B7%E4%BD%93%E5%BD%A2%E6%80%81%EF%BC%88%E7%AC%AC%E4%B8%83%E7%AF%87%E9%A2%84%E5%91%8A%EF%BC%89" data-toc-target="5-4-5-数据飞轮在-VLA-上的具体形态（第七篇预告）"><span class="toc-text">5.4.5 数据飞轮在 VLA 上的具体形态（第七篇预告）</span></a><a class="toc-level-3" href="#5-4-6-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-4-6-与产业物联网平台的映射"><span class="toc-text">5.4.6 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-4-7-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-4-7-企业实践建议"><span class="toc-text">5.4.7 企业实践建议</span></a><a class="toc-level-3" href="#5-4-8-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-4-8-面试可能问什么"><span class="toc-text">5.4.8 面试可能问什么</span></a><a class="toc-level-3" href="#5-4-9-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-4-9-最佳实践"><span class="toc-text">5.4.9 最佳实践</span></a><a class="toc-level-3" href="#5-4-10-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-4-10-常见误区"><span class="toc-text">5.4.10 常见误区</span></a><a class="toc-level-3" href="#5-4-11-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-4-11-Obsidian-永久笔记"><span class="toc-text">5.4.11 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-5-%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B%EF%BC%9A%E5%BB%B6%E8%BF%9F%E9%A2%84%E7%AE%97%E4%B8%8E%E9%83%A8%E7%BD%B2" data-toc-target="5-5-推理工程：延迟预算与部署"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">5.5 推理工程：延迟预算与部署</span></a><a class="toc-level-3" href="#5-5-1-%E5%BB%B6%E8%BF%9F%E9%A2%84%E7%AE%97%E5%88%86%E8%A7%A3%EF%BC%88%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E5%B8%88%E7%9A%84%E6%A0%B8%E5%BF%83%E8%A1%A8%EF%BC%89" data-toc-target="5-5-1-延迟预算分解（平台架构师的核心表）"><span class="toc-text">5.5.1 延迟预算分解（平台架构师的核心表）</span></a><a class="toc-level-3" href="#5-5-2-%E5%8F%8C%E9%A2%91%E6%9E%B6%E6%9E%84%EF%BC%9A%E6%8E%A8%E7%90%86%E4%B8%8E%E6%8E%A7%E5%88%B6%E8%A7%A3%E8%80%A6" data-toc-target="5-5-2-双频架构：推理与控制解耦"><span class="toc-text">5.5.2 双频架构：推理与控制解耦</span></a><a class="toc-level-3" href="#5-5-3-%E6%98%BE%E5%AD%98%E3%80%81%E4%BD%93%E7%A7%AF%E4%B8%8E%E4%BD%A0%E7%9A%84-OTA" data-toc-target="5-5-3-显存、体积与你的-OTA"><span class="toc-text">5.5.3 显存、体积与你的 OTA</span></a><a class="toc-level-3" href="#5-5-4-%E7%AB%AF%E4%BE%A7-Runtime-%E8%AE%BE%E8%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="5-5-4-端侧-Runtime-设计要点"><span class="toc-text">5.5.4 端侧 Runtime 设计要点</span></a><a class="toc-level-3" href="#5-5-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-5-5-与产业物联网平台的映射"><span class="toc-text">5.5.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-5-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-5-6-企业实践建议"><span class="toc-text">5.5.6 企业实践建议</span></a><a class="toc-level-3" href="#5-5-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-5-7-面试可能问什么"><span class="toc-text">5.5.7 面试可能问什么</span></a><a class="toc-level-3" href="#5-5-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-5-8-最佳实践"><span class="toc-text">5.5.8 最佳实践</span></a><a class="toc-level-3" href="#5-5-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-5-9-常见误区"><span class="toc-text">5.5.9 常见误区</span></a><a class="toc-level-3" href="#5-5-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-5-10-Obsidian-永久笔记"><span class="toc-text">5.5.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-6-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F%E4%B8%8E%E5%AE%89%E5%85%A8%E5%B8%A6" data-toc-target="5-6-失效模式与安全带"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">5.6 失效模式与安全带</span></a><a class="toc-level-3" href="#5-6-1-%E5%85%AD%E7%A7%8D%E5%85%B8%E5%9E%8B%E5%A4%B1%E6%95%88" data-toc-target="5-6-1-六种典型失效"><span class="toc-text">5.6.1 六种典型失效</span></a><a class="toc-level-3" href="#5-6-2-%E5%B9%B3%E5%8F%B0%E4%BE%A7%E5%AE%89%E5%85%A8%E5%B8%A6%E5%9B%9B%E5%B1%82" data-toc-target="5-6-2-平台侧安全带四层"><span class="toc-text">5.6.2 平台侧安全带四层</span></a><a class="toc-level-3" href="#5-6-3-%E8%AF%84%E6%B5%8B%E6%8C%87%E6%A0%87%EF%BC%9A%E6%A8%A1%E5%9E%8B%E5%A5%BD%E4%B8%8D%E5%A5%BD%EF%BC%8C%E7%94%A8%E5%B9%B3%E5%8F%B0%E6%8C%87%E6%A0%87%E8%AF%B4%E8%AF%9D" data-toc-target="5-6-3-评测指标：模型好不好，用平台指标说话"><span class="toc-text">5.6.3 评测指标：模型好不好，用平台指标说话</span></a><a class="toc-level-3" href="#5-6-4-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-6-4-与产业物联网平台的映射"><span class="toc-text">5.6.4 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-6-5-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-6-5-企业实践建议"><span class="toc-text">5.6.5 企业实践建议</span></a><a class="toc-level-3" href="#5-6-6-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-6-6-面试可能问什么"><span class="toc-text">5.6.6 面试可能问什么</span></a><a class="toc-level-3" href="#5-6-7-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-6-7-最佳实践"><span class="toc-text">5.6.7 最佳实践</span></a><a class="toc-level-3" href="#5-6-8-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-6-8-常见误区"><span class="toc-text">5.6.8 常见误区</span></a><a class="toc-level-3" href="#5-6-9-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-6-9-Obsidian-永久笔记"><span class="toc-text">5.6.9 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-7-Scaling-%E4%B8%8E%E4%BA%91%E8%BE%B9%E5%88%86%E5%B7%A5" data-toc-target="5-7-Scaling-与云边分工"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">5.7 Scaling 与云边分工</span></a><a class="toc-level-3" href="#5-7-1-%E4%B8%89%E6%9D%A1-Scaling-%E8%BD%B4" data-toc-target="5-7-1-三条-Scaling-轴"><span class="toc-text">5.7.1 三条 Scaling 轴</span></a><a class="toc-level-3" href="#5-7-2-%E4%BA%91%E8%BE%B9%E5%88%86%E5%B7%A5%E7%9F%A9%E9%98%B5%EF%BC%88%E5%9B%9E%E7%AD%94%E3%80%8CVLA-%E8%83%BD%E4%B8%8D%E8%83%BD%E4%B8%8A%E4%BA%91%E3%80%8D%EF%BC%89" data-toc-target="5-7-2-云边分工矩阵（回答「VLA-能不能上云」）"><span class="toc-text">5.7.2 云边分工矩阵（回答「VLA 能不能上云」）</span></a><a class="toc-level-3" href="#5-7-3-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-7-3-与产业物联网平台的映射"><span class="toc-text">5.7.3 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-7-4-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-7-4-企业实践建议"><span class="toc-text">5.7.4 企业实践建议</span></a><a class="toc-level-3" href="#5-7-5-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-7-5-面试可能问什么"><span class="toc-text">5.7.5 面试可能问什么</span></a><a class="toc-level-3" href="#5-7-6-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-7-6-最佳实践"><span class="toc-text">5.7.6 最佳实践</span></a><a class="toc-level-3" href="#5-7-7-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-7-7-常见误区"><span class="toc-text">5.7.7 常见误区</span></a><a class="toc-level-3" href="#5-7-8-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-7-8-Obsidian-永久笔记"><span class="toc-text">5.7.8 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-8-VLA-Pipeline-%E5%85%A8%E5%9B%BE%E4%B8%8E%E5%B9%B3%E5%8F%B0%E8%90%BD%E7%82%B9" data-toc-target="5-8-VLA-Pipeline-全图与平台落点"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">5.8 VLA Pipeline 全图与平台落点</span></a><a class="toc-level-3" href="#5-8-1-%E4%B9%9D%E7%8E%AF%E8%8A%82%E5%85%A8%E5%9B%BE" data-toc-target="5-8-1-九环节全图"><span class="toc-text">5.8.1 九环节全图</span></a><a class="toc-level-3" href="#5-8-2-%E7%8E%AF%E8%8A%82%E4%B8%8E%E5%B9%B3%E5%8F%B0%E5%B9%B3%E9%9D%A2%E5%AF%B9%E7%85%A7%E8%A1%A8" data-toc-target="5-8-2-环节与平台平面对照表"><span class="toc-text">5.8.2 环节与平台平面对照表</span></a><a class="toc-level-3" href="#5-8-3-%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E5%B8%88%E4%B8%8E%E7%AE%97%E6%B3%95%E5%9B%A2%E9%98%9F%E7%9A%84%E5%AF%B9%E8%AF%9D%E6%8E%A5%E5%8F%A3%E6%B8%85%E5%8D%95" data-toc-target="5-8-3-平台架构师与算法团队的对话接口清单"><span class="toc-text">5.8.3 平台架构师与算法团队的对话接口清单</span></a><a class="toc-level-3" href="#5-8-4-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="5-8-4-与产业物联网平台的映射"><span class="toc-text">5.8.4 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#5-8-5-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="5-8-5-企业实践建议"><span class="toc-text">5.8.5 企业实践建议</span></a><a class="toc-level-3" href="#5-8-6-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="5-8-6-面试可能问什么"><span class="toc-text">5.8.6 面试可能问什么</span></a><a class="toc-level-3" href="#5-8-7-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="5-8-7-最佳实践"><span class="toc-text">5.8.7 最佳实践</span></a><a class="toc-level-3" href="#5-8-8-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="5-8-8-常见误区"><span class="toc-text">5.8.8 常见误区</span></a><a class="toc-level-3" href="#5-8-9-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="5-8-9-Obsidian-永久笔记"><span class="toc-text">5.8.9 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#5-9-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="5-9-本篇总结"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">5.9 本篇总结</span></a><a class="toc-level-3" href="#5-9-1-%E5%8D%81%E6%9D%A1%E6%A0%B8%E5%BF%83%E7%BB%93%E8%AE%BA" data-toc-target="5-9-1-十条核心结论"><span class="toc-text">5.9.1 十条核心结论</span></a><a class="toc-level-3" href="#5-9-2-%E6%9C%AC%E7%AF%87%E5%8D%A1%E7%89%87%E7%B4%A2%E5%BC%95" data-toc-target="5-9-2-本篇卡片索引"><span class="toc-text">5.9.2 本篇卡片索引</span></a><a class="toc-level-3" href="#5-9-3-%E7%AC%AC%E5%85%AD%E7%AF%87%E9%A2%84%E5%91%8A" data-toc-target="5-9-3-第六篇预告"><span class="toc-text">5.9.3 第六篇预告</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-ai-engineering/" style="--rail: 38%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 13</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E4%BA%94%E7%AF%87-VLA" data-toc-target="第五篇-VLA" data-title="01 · 第五篇 VLA" aria-label="第五篇 VLA"></a><a class="toc-strip__dot" href="#5-0-%E6%9C%AC%E7%AF%87%E5%AF%BC%E8%AF%BB" data-toc-target="5-0-本篇导读" data-title="02 · 5.0 本篇导读" aria-label="5.0 本篇导读"></a><a class="toc-strip__dot" href="#5-1-%E4%BB%80%E4%B9%88%E6%98%AF-VLA%EF%BC%9A%E4%BB%8E%E6%A8%A1%E5%9D%97%E5%8C%96%E5%88%B0%E7%AB%AF%E5%88%B0%E7%AB%AF" data-toc-target="5-1-什么是-VLA：从模块化到端到端" data-title="03 · 5.1 什么是 VLA：从模块化到端到端" aria-label="5.1 什么是 VLA：从模块化到端到端"></a><a class="toc-strip__dot" href="#5-2-VLA-%E8%B0%B1%E7%B3%BB%EF%BC%9A%E5%B7%A5%E7%A8%8B%E8%A7%86%E8%A7%92%E7%9A%84%E4%BB%A3%E8%A1%A8%E5%B7%A5%E4%BD%9C" data-toc-target="5-2-VLA-谱系：工程视角的代表工作" data-title="04 · 5.2 VLA 谱系：工程视角的代表工作" aria-label="5.2 VLA 谱系：工程视角的代表工作"></a><a class="toc-strip__dot" href="#5-3-%E8%BE%93%E5%85%A5%E8%BE%93%E5%87%BA%E5%A5%91%E7%BA%A6%EF%BC%9A%E5%B9%B3%E5%8F%B0%E6%9C%80%E8%AF%A5%E7%9B%AF%E7%9A%84%E4%B8%80%E9%A1%B5" data-toc-target="5-3-输入输出契约：平台最该盯的一页" data-title="05 · 5.3 输入输出契约：平台最该盯的一页" aria-label="5.3 输入输出契约：平台最该盯的一页"></a><a class="toc-strip__dot" href="#5-4-%E8%AE%AD%E7%BB%83%E6%95%B0%E6%8D%AE%EF%BC%9AVLA-%E5%B7%A5%E7%A8%8B%E7%9A%84%E7%9C%9F%E6%AD%A3%E6%88%98%E5%9C%BA" data-toc-target="5-4-训练数据：VLA-工程的真正战场" data-title="06 · 5.4 训练数据：VLA 工程的真正战场" aria-label="5.4 训练数据：VLA 工程的真正战场"></a><a class="toc-strip__dot" href="#5-5-%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B%EF%BC%9A%E5%BB%B6%E8%BF%9F%E9%A2%84%E7%AE%97%E4%B8%8E%E9%83%A8%E7%BD%B2" data-toc-target="5-5-推理工程：延迟预算与部署" data-title="07 · 5.5 推理工程：延迟预算与部署" aria-label="5.5 推理工程：延迟预算与部署"></a><a class="toc-strip__dot" href="#5-6-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F%E4%B8%8E%E5%AE%89%E5%85%A8%E5%B8%A6" data-toc-target="5-6-失效模式与安全带" data-title="08 · 5.6 失效模式与安全带" aria-label="5.6 失效模式与安全带"></a><a class="toc-strip__dot" href="#5-7-Scaling-%E4%B8%8E%E4%BA%91%E8%BE%B9%E5%88%86%E5%B7%A5" data-toc-target="5-7-Scaling-与云边分工" data-title="09 · 5.7 Scaling 与云边分工" aria-label="5.7 Scaling 与云边分工"></a><a class="toc-strip__dot" href="#5-8-VLA-Pipeline-%E5%85%A8%E5%9B%BE%E4%B8%8E%E5%B9%B3%E5%8F%B0%E8%90%BD%E7%82%B9" data-toc-target="5-8-VLA-Pipeline-全图与平台落点" data-title="10 · 5.8 VLA Pipeline 全图与平台落点" aria-label="5.8 VLA Pipeline 全图与平台落点"></a><a class="toc-strip__dot" href="#5-9-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="5-9-本篇总结" data-title="11 · 5.9 本篇总结" aria-label="5.9 本篇总结"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身智能-05-VLA","title":"VLA 视觉语言动作模型","url":"/2025/11/11/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-05-VLA/","path":"embodied-ai-engineering","index":4,"total":13,"next":{"title":"机器人端侧 AI 架构","url":"/2025/12/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-06-%E7%AB%AF%E4%BE%A7AI/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

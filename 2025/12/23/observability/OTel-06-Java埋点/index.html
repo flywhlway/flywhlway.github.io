@@ -1,0 +1,347 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Java 埋点：Spring Cloud Gateway 与 Nacos · 飞轮之道</title>
+<meta name="description" content="Java 控制面（网关、编排、管理服务）与 Python 执行面必须共享同一条 Trace。本篇给出两条埋点路线的完整配置、跨语言链路透传验证方法、以及日志三件套关联。基准：JDK 21 + Spring Boot 3.5.x + Spring Cloud Alibaba（Nacos 服务发现）。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/12/23/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Java 埋点：Spring Cloud Gateway 与 Nacos · 飞轮之道">
+<meta property="og:description" content="Java 控制面（网关、编排、管理服务）与 Python 执行面必须共享同一条 Trace。本篇给出两条埋点路线的完整配置、跨语言链路透传验证方法、以及日志三件套关联。基准：JDK 21 + Spring Boot 3.5.x + Spring Cloud Alibaba（Nacos 服务发现）。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/12/23/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">采集证据</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 6 / 12 篇</a>
+    </div>
+    <h1>Java 埋点：Spring Cloud Gateway 与 Nacos</h1>
+    <p class="article-deck">Java 控制面（网关、编排、管理服务）与 Python 执行面必须共享同一条 Trace。本篇给出两条埋点路线的完整配置、跨语言链路透传验证方法、以及日志三件套关联。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>6 分钟</span>
+      <span>发布于 2025.12</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="06-·-Java-侧埋点：Spring-Cloud-Gateway-Nacos-微服务"><a href="#06-·-Java-侧埋点：Spring-Cloud-Gateway-Nacos-微服务" class="headerlink" title="06 · Java 侧埋点：Spring Cloud Gateway + Nacos 微服务"></a>06 · Java 侧埋点：Spring Cloud Gateway + Nacos 微服务</h2><blockquote>
+<p>Java 控制面（网关、编排、管理服务）与 Python 执行面必须共享同一条 Trace。本篇给出两条埋点路线的完整配置、跨语言链路透传验证方法、以及日志三件套关联。基准：JDK 21 + Spring Boot 3.5.x + Spring Cloud Alibaba（Nacos 服务发现）。</p>
+</blockquote>
+<hr>
+<h2 id="1-两条路线怎么选"><a href="#1-两条路线怎么选" class="headerlink" title="1. 两条路线怎么选"></a>1. 两条路线怎么选</h2><table>
+<thead>
+<tr>
+<th>路线</th>
+<th>原理</th>
+<th>优点</th>
+<th>代价</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A. OTel Java Agent</td>
+<td><code>-javaagent</code> 字节码增强，零代码</td>
+<td>覆盖面最广（Servlet&#x2F;WebFlux&#x2F;JDBC&#x2F;Kafka&#x2F;Redis&#x2F;gRPC 200+ 库），三信号齐全</td>
+<td>启动稍慢、黑盒</td>
+<td><strong>默认推荐</strong>，存量服务批量接入</td>
+</tr>
+<tr>
+<td>B. Micrometer Tracing 桥接</td>
+<td>Spring Boot 原生 Observation API → OTel 导出</td>
+<td>白盒、与 Spring AI 观测体系同源、可精细定制</td>
+<td>只管 Trace&#x2F;Metrics，日志需另配；覆盖面依赖 starter</td>
+<td>新建服务、需要 Spring AI <code>gen_ai</code> 观测时</td>
+</tr>
+</tbody></table>
+<p>两条路线产出的都是标准 OTLP，可在同一集群混用（但<strong>同一服务只能选一条</strong>，避免重复 Span）。</p>
+<h2 id="2-路线-A：OTel-Java-Agent（零代码接入）"><a href="#2-路线-A：OTel-Java-Agent（零代码接入）" class="headerlink" title="2. 路线 A：OTel Java Agent（零代码接入）"></a>2. 路线 A：OTel Java Agent（零代码接入）</h2><h3 id="2-1-获取与启动"><a href="#2-1-获取与启动" class="headerlink" title="2.1 获取与启动"></a>2.1 获取与启动</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">curl -L -o otel/opentelemetry-javaagent.jar \</span><br><span class="line">  https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar</span><br><span class="line"></span><br><span class="line">java -javaagent:otel/opentelemetry-javaagent.jar \</span><br><span class="line">  -Dotel.service.name=scg-gateway \</span><br><span class="line">  -Dotel.exporter.otlp.endpoint=http://localhost:4317 \</span><br><span class="line">  -Dotel.resource.attributes=service.namespace=aits,deployment.environment.name=poc \</span><br><span class="line">  -Dotel.logs.exporter=otlp \</span><br><span class="line">  -jar scg-gateway.jar</span><br></pre></td></tr></table></figure>
+
+<p>容器化（Dockerfile 片段）：</p>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">FROM</span> eclipse-temurin:<span class="number">21</span>-jre</span><br><span class="line"><span class="keyword">COPY</span><span class="language-bash"> opentelemetry-javaagent.jar /otel/agent.jar</span></span><br><span class="line"><span class="keyword">COPY</span><span class="language-bash"> app.jar /app.jar</span></span><br><span class="line"><span class="keyword">ENV</span> JAVA_TOOL_OPTIONS=<span class="string">&quot;-javaagent:/otel/agent.jar&quot;</span></span><br><span class="line"><span class="keyword">ENV</span> OTEL_SERVICE_NAME=scg-gateway \</span><br><span class="line">    OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:<span class="number">4317</span> \</span><br><span class="line">    OTEL_LOGS_EXPORTER=otlp</span><br><span class="line"><span class="keyword">ENTRYPOINT</span><span class="language-bash"> [<span class="string">&quot;java&quot;</span>,<span class="string">&quot;-jar&quot;</span>,<span class="string">&quot;/app.jar&quot;</span>]</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-Agent-自动覆盖的内容"><a href="#2-2-Agent-自动覆盖的内容" class="headerlink" title="2.2 Agent 自动覆盖的内容"></a>2.2 Agent 自动覆盖的内容</h3><ul>
+<li>Spring Cloud Gateway（WebFlux）入站&#x2F;出站 Span，<strong>自动透传 W3C <code>traceparent</code></strong>；</li>
+<li>Nacos 之上的 OpenFeign&#x2F;RestTemplate&#x2F;WebClient 调用；</li>
+<li>JDBC（含 ClickHouse JDBC）、Redis(Lettuce)、Kafka 生产消费（含跨消息链路）；</li>
+<li>JVM 指标（内存&#x2F;GC&#x2F;线程）与 HTTP RED 指标；</li>
+<li>Logback&#x2F;Log4j2 MDC 自动注入 <code>trace_id</code>&#x2F;<code>span_id</code>，且日志经 OTLP 直发 Loki（<code>OTEL_LOGS_EXPORTER=otlp</code>）。</li>
+</ul>
+<h2 id="3-路线-B：Micrometer-Tracing-桥接（Spring-原生）"><a href="#3-路线-B：Micrometer-Tracing-桥接（Spring-原生）" class="headerlink" title="3. 路线 B：Micrometer Tracing 桥接（Spring 原生）"></a>3. 路线 B：Micrometer Tracing 桥接（Spring 原生）</h2><h3 id="3-1-依赖（Maven）"><a href="#3-1-依赖（Maven）" class="headerlink" title="3.1 依赖（Maven）"></a>3.1 依赖（Maven）</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-actuator<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.micrometer<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>micrometer-tracing-bridge-otel<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span>  <span class="comment">&lt;!-- OTLP Trace 导出 --&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.opentelemetry<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>opentelemetry-exporter-otlp<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span>  <span class="comment">&lt;!-- OTLP Metrics 导出 --&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.micrometer<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>micrometer-registry-otlp<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span>  <span class="comment">&lt;!-- Logback → OTLP Logs --&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.opentelemetry.instrumentation<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>opentelemetry-logback-appender-1.0<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>替换点(项目方，取 2.x 最新)<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-application-yml"><a href="#3-2-application-yml" class="headerlink" title="3.2 application.yml"></a>3.2 <code>application.yml</code></h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">scg-gateway</span></span><br><span class="line">  <span class="attr">cloud:</span></span><br><span class="line">    <span class="attr">nacos:</span></span><br><span class="line">      <span class="attr">discovery:</span></span><br><span class="line">        <span class="attr">server-addr:</span> <span class="string">替换点(项目方):8848</span></span><br><span class="line"></span><br><span class="line"><span class="attr">management:</span></span><br><span class="line">  <span class="attr">tracing:</span></span><br><span class="line">    <span class="attr">sampling:</span></span><br><span class="line">      <span class="attr">probability:</span> <span class="number">1.0</span>            <span class="comment"># POC 全采；生产配合 Collector 尾采样下调</span></span><br><span class="line">  <span class="attr">otlp:</span></span><br><span class="line">    <span class="attr">tracing:</span></span><br><span class="line">      <span class="attr">endpoint:</span> <span class="string">http://localhost:4318/v1/traces</span>   <span class="comment"># Micrometer OTLP 走 HTTP</span></span><br><span class="line">    <span class="attr">metrics:</span></span><br><span class="line">      <span class="attr">export:</span></span><br><span class="line">        <span class="attr">url:</span> <span class="string">http://localhost:4318/v1/metrics</span></span><br><span class="line">        <span class="attr">step:</span> <span class="string">15s</span></span><br><span class="line">  <span class="attr">observations:</span></span><br><span class="line">    <span class="attr">key-values:</span></span><br><span class="line">      <span class="attr">service.namespace:</span> <span class="string">aits</span>     <span class="comment"># 附加公共维度</span></span><br><span class="line"></span><br><span class="line"><span class="attr">logging:</span></span><br><span class="line">  <span class="attr">pattern:</span></span><br><span class="line">    <span class="attr">level:</span> <span class="string">&quot;%5p [$&#123;spring.application.name&#125;,%X&#123;traceId:-&#125;,%X&#123;spanId:-&#125;]&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-Logback-→-Loki（logback-spring-xml-追加）"><a href="#3-3-Logback-→-Loki（logback-spring-xml-追加）" class="headerlink" title="3.3 Logback → Loki（logback-spring.xml 追加）"></a>3.3 Logback → Loki（<code>logback-spring.xml</code> 追加）</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">appender</span> <span class="attr">name</span>=<span class="string">&quot;OTEL&quot;</span> <span class="attr">class</span>=<span class="string">&quot;io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender&quot;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">captureMdcAttributes</span>&gt;</span>*<span class="tag">&lt;/<span class="name">captureMdcAttributes</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">appender</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span> <span class="attr">level</span>=<span class="string">&quot;INFO&quot;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">appender-ref</span> <span class="attr">ref</span>=<span class="string">&quot;CONSOLE&quot;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">appender-ref</span> <span class="attr">ref</span>=<span class="string">&quot;OTEL&quot;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>并在启动类注入 SDK 实例：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line">ApplicationRunner <span class="title function_">otelLogbackInstaller</span><span class="params">(OpenTelemetry openTelemetry)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> args -&gt; OpenTelemetryAppender.install(openTelemetry);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="4-Spring-Cloud-Gateway-的链路职责"><a href="#4-Spring-Cloud-Gateway-的链路职责" class="headerlink" title="4. Spring Cloud Gateway 的链路职责"></a>4. Spring Cloud Gateway 的链路职责</h2><p>SCG 在链路中承担「入口 Span + 上下文透传」职责，无论路线 A&#x2F;B 均自动完成 W3C Trace Context 传播。需要人工确认的三点：</p>
+<ol>
+<li><strong>自定义 GlobalFilter 不要吞头</strong>：转发时保留 <code>traceparent</code>&#x2F;<code>tracestate</code>&#x2F;<code>baggage</code> 请求头；</li>
+<li><strong>路由级属性增强</strong>（可选）：</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Component</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RouteTagFilter</span> <span class="keyword">implements</span> <span class="title class_">GlobalFilter</span>, Ordered &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> Mono&lt;Void&gt; <span class="title function_">filter</span><span class="params">(ServerWebExchange exchange, GatewayFilterChain chain)</span> &#123;</span><br><span class="line">        <span class="type">Route</span> <span class="variable">route</span> <span class="operator">=</span> exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR);</span><br><span class="line">        <span class="type">Span</span> <span class="variable">current</span> <span class="operator">=</span> Span.current();</span><br><span class="line">        <span class="keyword">if</span> (route != <span class="literal">null</span>) &#123;</span><br><span class="line">            current.setAttribute(<span class="string">&quot;aits.gateway.route.id&quot;</span>, route.getId());</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> chain.filter(exchange);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Override</span> <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getOrder</span><span class="params">()</span> &#123; <span class="keyword">return</span> Ordered.HIGHEST_PRECEDENCE + <span class="number">10</span>; &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol start="3">
+<li><strong>Baggage 透传业务标识</strong>：<code>user.id</code> &#x2F; <code>session.id</code> 放入 Baggage 后，Python 侧与 Langfuse 均可消费（文档 08 §4）。</li>
+</ol>
+<h2 id="5-跨语言链路验证（Java-→-Python）"><a href="#5-跨语言链路验证（Java-→-Python）" class="headerlink" title="5. 跨语言链路验证（Java → Python）"></a>5. 跨语言链路验证（Java → Python）</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl → SCG(scg-gateway) → FastAPI(diag-agent) → DeepSeek</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>启动 SCG（路由指向 diag-agent）与文档 05 的 FastAPI 服务；</li>
+<li><code>curl -s http://localhost:8080/api/diagnose -d &#39;{...}&#39;</code>；</li>
+<li>Grafana → Tempo 查询：<code>{ resource.service.name = &quot;scg-gateway&quot; }</code>；</li>
+<li>打开 Trace，应看到完整 Span 树：</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">scg-gateway  HTTP POST /api/diagnose          (SERVER)</span><br><span class="line"> └─ scg-gateway  proxy → diag-agent           (CLIENT)</span><br><span class="line">     └─ diag-agent  POST /api/diagnose        (SERVER)   ← trace_id 相同即打通</span><br><span class="line">         └─ invoke_agent vehicle-diag-agent</span><br><span class="line">             └─ chat deepseek-chat            (CLIENT)</span><br></pre></td></tr></table></figure>
+
+<p>若 Python 段变成了独立 Trace：九成是 SCG 自定义 Filter 重建了请求头，或 FastAPI 前面还有未埋点的中间层（如 Nginx，需开启 opentracing&#x2F;otel 模块或至少原样透传头部）。</p>
+<h2 id="6-Nacos-相关注意事项"><a href="#6-Nacos-相关注意事项" class="headerlink" title="6. Nacos 相关注意事项"></a>6. Nacos 相关注意事项</h2><ul>
+<li>Nacos 客户端心跳&#x2F;配置轮询会产生大量低价值 Span，用 Agent 参数抑制：<br><code>-Dotel.instrumentation.common.default-enabled=true -Dotel.instrumentation.okhttp.enabled=false</code>（按实际客户端库微调），或在 Collector 用 <code>filter</code> 处理器按 <code>url.path =~ &quot;/nacos/&quot;</code> 丢弃；</li>
+<li>服务实例元数据建议写入 Resource：<code>-Dotel.resource.attributes=...,nacos.cluster=替换点(项目方)</code>，便于按集群维度聚合。</li>
+</ul>
+<h2 id="7-Spring-AI-服务的-GenAI-观测（Java-侧-LLM-调用）"><a href="#7-Spring-AI-服务的-GenAI-观测（Java-侧-LLM-调用）" class="headerlink" title="7. Spring AI 服务的 GenAI 观测（Java 侧 LLM 调用）"></a>7. Spring AI 服务的 GenAI 观测（Java 侧 LLM 调用）</h2><p>Java 服务直接调用 LLM（如经 Spring AI 调 DashScope&#x2F;DeepSeek）时，Spring AI 内置 Observation 会产出 <code>gen_ai.*</code> Span 与指标：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">ai:</span></span><br><span class="line">    <span class="attr">chat:</span></span><br><span class="line">      <span class="attr">observations:</span></span><br><span class="line">        <span class="attr">log-prompt:</span> <span class="literal">true</span>        <span class="comment"># 捕获 Prompt（敏感环境关闭）</span></span><br><span class="line">        <span class="attr">log-completion:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">management:</span></span><br><span class="line">  <span class="attr">tracing:</span></span><br><span class="line">    <span class="attr">sampling:</span></span><br><span class="line">      <span class="attr">probability:</span> <span class="number">1.0</span></span><br></pre></td></tr></table></figure>
+
+<p>如需把 Prompt&#x2F;Completion 写入 Span 属性（供 Langfuse 展示），注册 <code>ChatModelCompletionContentObservationFilter</code>／<code>ChatModelPromptContentObservationFilter</code> 为 <code>@Component</code>。该链路与 Python 侧产出的 <code>gen_ai.*</code> 属性同构，Tempo&#x2F;Langfuse 查询语句完全复用。</p>
+<h2 id="8-验收清单"><a href="#8-验收清单" class="headerlink" title="8. 验收清单"></a>8. 验收清单</h2><ul>
+<li><input disabled="" type="checkbox"> SCG 与 diag-agent 出现在同一条 Trace（trace_id 一致）；</li>
+<li><input disabled="" type="checkbox"> Grafana 服务拓扑图（Tempo service graph）出现 <code>scg-gateway → diag-agent</code> 边；</li>
+<li><input disabled="" type="checkbox"> Loki 中 Java 日志携带 <code>trace_id</code>，与 Tempo 双向互跳成功；</li>
+<li><input disabled="" type="checkbox"> Prometheus 出现 <code>http_server_request_duration_seconds</code>（或 Agent 版 <code>http.server.request.duration</code>）与 JVM 指标；</li>
+<li><input disabled="" type="checkbox"> Nacos 心跳类噪声 Span 已抑制。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/02/12/observability/OTel-07-Higress%E4%B8%8ETemporal/">Higress 与 Temporal 链路观测</a></h3>
+        <p>本篇解决两类&#34;链路断点&#34;：① AI 流量入口（Higress AI 网关）的 Token/TTFT 观测与 Trace 接入…</p>
+        <a class="btn primary" href="/2026/02/12/observability/OTel-07-Higress%E4%B8%8ETemporal/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/11/04/observability/OTel-05-Python%E5%9F%8B%E7%82%B9/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Python 埋点：FastAPI、LangGraph 与 mem0</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 9 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#06-%C2%B7-Java-%E4%BE%A7%E5%9F%8B%E7%82%B9%EF%BC%9ASpring-Cloud-Gateway-Nacos-%E5%BE%AE%E6%9C%8D%E5%8A%A1" data-toc-target="06-·-Java-侧埋点：Spring-Cloud-Gateway-Nacos-微服务"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">06 · Java 侧埋点：Spring Cloud Gateway + Nacos 微服务</span></a><a class="toc-level-2" href="#1-%E4%B8%A4%E6%9D%A1%E8%B7%AF%E7%BA%BF%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="1-两条路线怎么选"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 两条路线怎么选</span></a><a class="toc-level-2" href="#2-%E8%B7%AF%E7%BA%BF-A%EF%BC%9AOTel-Java-Agent%EF%BC%88%E9%9B%B6%E4%BB%A3%E7%A0%81%E6%8E%A5%E5%85%A5%EF%BC%89" data-toc-target="2-路线-A：OTel-Java-Agent（零代码接入）"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 路线 A：OTel Java Agent（零代码接入）</span></a><a class="toc-level-3" href="#2-1-%E8%8E%B7%E5%8F%96%E4%B8%8E%E5%90%AF%E5%8A%A8" data-toc-target="2-1-获取与启动"><span class="toc-text">2.1 获取与启动</span></a><a class="toc-level-3" href="#2-2-Agent-%E8%87%AA%E5%8A%A8%E8%A6%86%E7%9B%96%E7%9A%84%E5%86%85%E5%AE%B9" data-toc-target="2-2-Agent-自动覆盖的内容"><span class="toc-text">2.2 Agent 自动覆盖的内容</span></a><a class="toc-level-2" href="#3-%E8%B7%AF%E7%BA%BF-B%EF%BC%9AMicrometer-Tracing-%E6%A1%A5%E6%8E%A5%EF%BC%88Spring-%E5%8E%9F%E7%94%9F%EF%BC%89" data-toc-target="3-路线-B：Micrometer-Tracing-桥接（Spring-原生）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 路线 B：Micrometer Tracing 桥接（Spring 原生）</span></a><a class="toc-level-3" href="#3-1-%E4%BE%9D%E8%B5%96%EF%BC%88Maven%EF%BC%89" data-toc-target="3-1-依赖（Maven）"><span class="toc-text">3.1 依赖（Maven）</span></a><a class="toc-level-3" href="#3-2-application-yml" data-toc-target="3-2-application-yml"><span class="toc-text">3.2 application.yml</span></a><a class="toc-level-3" href="#3-3-Logback-%E2%86%92-Loki%EF%BC%88logback-spring-xml-%E8%BF%BD%E5%8A%A0%EF%BC%89" data-toc-target="3-3-Logback-→-Loki（logback-spring-xml-追加）"><span class="toc-text">3.3 Logback → Loki（logback-spring.xml 追加）</span></a><a class="toc-level-2" href="#4-Spring-Cloud-Gateway-%E7%9A%84%E9%93%BE%E8%B7%AF%E8%81%8C%E8%B4%A3" data-toc-target="4-Spring-Cloud-Gateway-的链路职责"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. Spring Cloud Gateway 的链路职责</span></a><a class="toc-level-2" href="#5-%E8%B7%A8%E8%AF%AD%E8%A8%80%E9%93%BE%E8%B7%AF%E9%AA%8C%E8%AF%81%EF%BC%88Java-%E2%86%92-Python%EF%BC%89" data-toc-target="5-跨语言链路验证（Java-→-Python）"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 跨语言链路验证（Java → Python）</span></a><a class="toc-level-2" href="#6-Nacos-%E7%9B%B8%E5%85%B3%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9" data-toc-target="6-Nacos-相关注意事项"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. Nacos 相关注意事项</span></a><a class="toc-level-2" href="#7-Spring-AI-%E6%9C%8D%E5%8A%A1%E7%9A%84-GenAI-%E8%A7%82%E6%B5%8B%EF%BC%88Java-%E4%BE%A7-LLM-%E8%B0%83%E7%94%A8%EF%BC%89" data-toc-target="7-Spring-AI-服务的-GenAI-观测（Java-侧-LLM-调用）"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. Spring AI 服务的 GenAI 观测（Java 侧 LLM 调用）</span></a><a class="toc-level-2" href="#8-%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="8-验收清单"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 验收清单</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 50%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#06-%C2%B7-Java-%E4%BE%A7%E5%9F%8B%E7%82%B9%EF%BC%9ASpring-Cloud-Gateway-Nacos-%E5%BE%AE%E6%9C%8D%E5%8A%A1" data-toc-target="06-·-Java-侧埋点：Spring-Cloud-Gateway-Nacos-微服务" data-title="01 · 06 · Java 侧埋点：Spring Cloud Gateway + Nacos 微服务" aria-label="06 · Java 侧埋点：Spring Cloud Gateway + Nacos 微服务"></a><a class="toc-strip__dot" href="#1-%E4%B8%A4%E6%9D%A1%E8%B7%AF%E7%BA%BF%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="1-两条路线怎么选" data-title="02 · 1. 两条路线怎么选" aria-label="1. 两条路线怎么选"></a><a class="toc-strip__dot" href="#2-%E8%B7%AF%E7%BA%BF-A%EF%BC%9AOTel-Java-Agent%EF%BC%88%E9%9B%B6%E4%BB%A3%E7%A0%81%E6%8E%A5%E5%85%A5%EF%BC%89" data-toc-target="2-路线-A：OTel-Java-Agent（零代码接入）" data-title="03 · 2. 路线 A：OTel Java Agent（零代码接入）" aria-label="2. 路线 A：OTel Java Agent（零代码接入）"></a><a class="toc-strip__dot" href="#3-%E8%B7%AF%E7%BA%BF-B%EF%BC%9AMicrometer-Tracing-%E6%A1%A5%E6%8E%A5%EF%BC%88Spring-%E5%8E%9F%E7%94%9F%EF%BC%89" data-toc-target="3-路线-B：Micrometer-Tracing-桥接（Spring-原生）" data-title="04 · 3. 路线 B：Micrometer Tracing 桥接（Spring 原生）" aria-label="3. 路线 B：Micrometer Tracing 桥接（Spring 原生）"></a><a class="toc-strip__dot" href="#4-Spring-Cloud-Gateway-%E7%9A%84%E9%93%BE%E8%B7%AF%E8%81%8C%E8%B4%A3" data-toc-target="4-Spring-Cloud-Gateway-的链路职责" data-title="05 · 4. Spring Cloud Gateway 的链路职责" aria-label="4. Spring Cloud Gateway 的链路职责"></a><a class="toc-strip__dot" href="#5-%E8%B7%A8%E8%AF%AD%E8%A8%80%E9%93%BE%E8%B7%AF%E9%AA%8C%E8%AF%81%EF%BC%88Java-%E2%86%92-Python%EF%BC%89" data-toc-target="5-跨语言链路验证（Java-→-Python）" data-title="06 · 5. 跨语言链路验证（Java → Python）" aria-label="5. 跨语言链路验证（Java → Python）"></a><a class="toc-strip__dot" href="#6-Nacos-%E7%9B%B8%E5%85%B3%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9" data-toc-target="6-Nacos-相关注意事项" data-title="07 · 6. Nacos 相关注意事项" aria-label="6. Nacos 相关注意事项"></a><a class="toc-strip__dot" href="#7-Spring-AI-%E6%9C%8D%E5%8A%A1%E7%9A%84-GenAI-%E8%A7%82%E6%B5%8B%EF%BC%88Java-%E4%BE%A7-LLM-%E8%B0%83%E7%94%A8%EF%BC%89" data-toc-target="7-Spring-AI-服务的-GenAI-观测（Java-侧-LLM-调用）" data-title="08 · 7. Spring AI 服务的 GenAI 观测（Java 侧 LLM 调用）" aria-label="7. Spring AI 服务的 GenAI 观测（Java 侧 LLM 调用）"></a><a class="toc-strip__dot" href="#8-%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="8-验收清单" data-title="09 · 8. 验收清单" aria-label="8. 验收清单"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-06-Java埋点","title":"Java 埋点：Spring Cloud Gateway 与 Nacos","url":"/2025/12/23/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/","path":"agent-observability","index":5,"total":12,"next":{"title":"Higress 与 Temporal 链路观测","url":"/2026/02/12/observability/OTel-07-Higress%E4%B8%8ETemporal/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

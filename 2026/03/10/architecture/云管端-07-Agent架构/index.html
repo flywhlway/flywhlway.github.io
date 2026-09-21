@@ -1,0 +1,1072 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端 Agent 运行时架构 · 飞轮之道</title>
+<meta name="description" content="原图中明确出现的 Agent 有三类：System Agent（端侧总控）、User Agents（端侧场景智能体）、Cloud Agents（云端业务智能体）。加上编排与能力层中隐含的职能体，本架构完整 Agent 体系如下（超出图示部分标注为推断设计）。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/03/10/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-07-Agent%E6%9E%B6%E6%9E%84/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端 Agent 运行时架构 · 飞轮之道">
+<meta property="og:description" content="原图中明确出现的 Agent 有三类：System Agent（端侧总控）、User Agents（端侧场景智能体）、Cloud Agents（云端业务智能体）。加上编排与能力层中隐含的职能体，本架构完整 Agent 体系如下（超出图示部分标注为推断设计）。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/03/10/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-07-Agent%E6%9E%B6%E6%9E%84/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">拆解系统</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 8 / 20 篇</a>
+    </div>
+    <h1>云管端 Agent 运行时架构</h1>
+    <p class="article-deck">原图中明确出现的 Agent 有三类：System Agent（端侧总控）、User Agents（端侧场景智能体）、Cloud Agents（云端业务智能体）。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>发布于 2026.03</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="07-·-Agent-架构（Agent-Architecture）"><a href="#07-·-Agent-架构（Agent-Architecture）" class="headerlink" title="07 · Agent 架构（Agent Architecture）"></a>07 · Agent 架构（Agent Architecture）</h2><blockquote>
+<p>文档类型：架构设计说明书 · Agent 体系专章<br>覆盖：Agent 分类与职责、生命周期、通信协议、协作模式、状态管理、上下文管理、记忆机制、任务编排、预算与失控防护</p>
+</blockquote>
+<hr>
+<h2 id="1-Agent-全景图"><a href="#1-Agent-全景图" class="headerlink" title="1. Agent 全景图"></a>1. Agent 全景图</h2><p>原图中明确出现的 Agent 有三类：<strong>System Agent</strong>（端侧总控）、<strong>User Agents</strong>（端侧场景智能体）、<strong>Cloud Agents</strong>（云端业务智能体）。加上编排与能力层中隐含的职能体，本架构完整 Agent 体系如下（超出图示部分标注为推断设计）。</p>
+<pre class="mermaid">flowchart TB
+    subgraph EDGE["端侧 Agent"]
+        SA["System Agent 【图示】&lt;br/&gt;端侧唯一总控"]
+        UA["User Agents 【图示】&lt;br/&gt;场景化智能体集群"]
+    end
+    subgraph CLOUD["云端 Agent 与职能体"]
+        PL["Planner Agent 【图示】&lt;br/&gt;意图与路由决策"]
+        CA["Cloud Agents 【图示】&lt;br/&gt;业务执行智能体"]
+        MA["Memory Agent 【推断】&lt;br/&gt;记忆抽取与演化"]
+        KA["Knowledge Agent 【推断】&lt;br/&gt;知识入库/纠错/缺口挖掘"]
+        RA["Router Agent 【推断】&lt;br/&gt;模型路由策略（网关内）"]
+        SKA["Skill Agent 【推断】&lt;br/&gt;能力聚合与适配"]
+        GA["Safety Agent 【推断】&lt;br/&gt;围栏与内容判定"]
+        EA["Evaluation Agent 【推断】&lt;br/&gt;离线评测与打分"]
+        TA["Tool Agent 【推断】&lt;br/&gt;MCP 工具执行代理"]
+    end
+    SA --&gt; UA
+    SA --&gt; PL
+    PL --&gt; CA
+    CA --&gt; TA
+    CA --&gt; RA
+    CA --&gt; GA
+    CA --&gt; MA
+    PL --&gt; SKA
+    MA --&gt; KA
+    EA -.-&gt; PL &amp; CA</pre>
+
+
+<h3 id="1-1-Agent-分类矩阵"><a href="#1-1-Agent-分类矩阵" class="headerlink" title="1.1 Agent 分类矩阵"></a>1.1 Agent 分类矩阵</h3><table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>类型</th>
+<th>是否面向用户</th>
+<th>是否含 LLM</th>
+<th>运行位置</th>
+<th>生命周期</th>
+<th>图示&#x2F;推断</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>System Agent</td>
+<td>总控型</td>
+<td>间接</td>
+<td>否（用规则+小分类器）</td>
+<td>端侧</td>
+<td>常驻</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>User Agents</td>
+<td>应用型</td>
+<td>是</td>
+<td>是（端侧 SLM 或经云）</td>
+<td>端侧</td>
+<td>按需</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>Planner Agent</td>
+<td>决策型</td>
+<td>否</td>
+<td>部分（分类器为主）</td>
+<td>云端</td>
+<td>无状态请求级</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>Cloud Agents</td>
+<td>应用型</td>
+<td>是</td>
+<td>是</td>
+<td>云端</td>
+<td>会话级</td>
+<td>图示</td>
+</tr>
+<tr>
+<td>Memory Agent</td>
+<td>职能型</td>
+<td>否</td>
+<td>是（抽取用小模型）</td>
+<td>云端</td>
+<td>异步任务级</td>
+<td>推断</td>
+</tr>
+<tr>
+<td>Knowledge Agent</td>
+<td>职能型</td>
+<td>否</td>
+<td>是</td>
+<td>云端</td>
+<td>批任务级</td>
+<td>推断</td>
+</tr>
+<tr>
+<td>Router Agent</td>
+<td>职能型</td>
+<td>否</td>
+<td>否（策略引擎）</td>
+<td>云端</td>
+<td>请求级</td>
+<td>推断</td>
+</tr>
+<tr>
+<td>Skill Agent</td>
+<td>职能型</td>
+<td>否</td>
+<td>否</td>
+<td>云端</td>
+<td>请求级</td>
+<td>推断</td>
+</tr>
+<tr>
+<td>Safety Agent</td>
+<td>职能型</td>
+<td>否</td>
+<td>是（判定模型）</td>
+<td>云端</td>
+<td>请求级</td>
+<td>推断</td>
+</tr>
+<tr>
+<td>Evaluation Agent</td>
+<td>职能型</td>
+<td>否</td>
+<td>是（LLM-as-Judge）</td>
+<td>云端</td>
+<td>批任务级</td>
+<td>推断</td>
+</tr>
+<tr>
+<td>Tool Agent</td>
+<td>职能型</td>
+<td>否</td>
+<td>否</td>
+<td>云端</td>
+<td>请求级</td>
+<td>推断</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>重要区分</strong>：并非所有”Agent”都需要 LLM。表中 4 个职能体不含 LLM（Router、Skill、Tool、部分 System Agent 能力）。把它们称为 Agent 是因为它们有自主策略，但实现上是<strong>策略引擎</strong>。混淆这一点会导致把简单路由做成大模型调用，延迟与成本双输。</p>
+</blockquote>
+<hr>
+<h2 id="2-三类核心-Agent-的职责边界"><a href="#2-三类核心-Agent-的职责边界" class="headerlink" title="2. 三类核心 Agent 的职责边界"></a>2. 三类核心 Agent 的职责边界</h2><h3 id="2-1-System-Agent（端侧总控）"><a href="#2-1-System-Agent（端侧总控）" class="headerlink" title="2.1 System Agent（端侧总控）"></a>2.1 System Agent（端侧总控）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>唯一性</strong></td>
+<td>单例，与车机同生命周期</td>
+</tr>
+<tr>
+<td><strong>核心职责</strong></td>
+<td>会话所有权、落点决策、User Agents 生命周期管理、能力权限代理、端云链路管理、结果仲裁、断网缓冲</td>
+</tr>
+<tr>
+<td><strong>不做什么</strong></td>
+<td>不做业务逻辑、不直接调用大模型、不承载人设</td>
+</tr>
+<tr>
+<td><strong>状态</strong></td>
+<td>有状态（会话表、待同步队列、能力清单版本）</td>
+</tr>
+<tr>
+<td><strong>失败影响</strong></td>
+<td>端侧全部 AI 能力不可用 → 必须进程守护 + 5 s 内自恢复 + 会话可重放</td>
+</tr>
+</tbody></table>
+<p><strong>为什么必须有 System Agent</strong>：若 User Agents 各自直连云端，则端侧限流、权限、埋点、落点决策全部旁路（违反 P2）。System Agent 在端侧扮演”端内网关 + 调度器”双重角色。</p>
+<h3 id="2-2-User-Agents（端侧场景智能体）"><a href="#2-2-User-Agents（端侧场景智能体）" class="headerlink" title="2.2 User Agents（端侧场景智能体）"></a>2.2 User Agents（端侧场景智能体）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>数量</strong></td>
+<td>多实例，动态装载</td>
+</tr>
+<tr>
+<td><strong>核心职责</strong></td>
+<td>场景化多轮对话、人设与语气、场景内任务执行</td>
+</tr>
+<tr>
+<td><strong>约束</strong></td>
+<td>不可直连云、不可直接调用车控能力、必须声明终止条件</td>
+</tr>
+<tr>
+<td><strong>状态</strong></td>
+<td>会话内有状态，状态由 System Agent 托管（便于崩溃恢复）</td>
+</tr>
+<tr>
+<td><strong>失败影响</strong></td>
+<td>局部场景不可用</td>
+</tr>
+</tbody></table>
+<p><strong>声明式清单（manifest）示例结构</strong>（推断设计）：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">agent_id:</span> <span class="string">companion.reading</span></span><br><span class="line"><span class="attr">version:</span> <span class="string">&quot;1.4.0&quot;</span></span><br><span class="line"><span class="attr">runtime_min_version:</span> <span class="string">&quot;3.2&quot;</span></span><br><span class="line"><span class="attr">persona_ref:</span> <span class="string">&quot;persona/warm-narrator@2&quot;</span></span><br><span class="line"><span class="attr">required_capabilities:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">media.playback.control</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">content.recommend.read</span></span><br><span class="line"><span class="attr">memory_namespaces:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">user.reading_preference</span></span><br><span class="line"><span class="attr">budgets:</span></span><br><span class="line">  <span class="attr">max_turns:</span> <span class="number">8</span></span><br><span class="line">  <span class="attr">max_tool_calls:</span> <span class="number">4</span></span><br><span class="line">  <span class="attr">max_tokens:</span> <span class="number">6000</span></span><br><span class="line">  <span class="attr">max_duration_ms:</span> <span class="number">12000</span></span><br><span class="line"><span class="attr">termination_conditions:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">user_explicit_exit</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">idle_timeout_ms:</span> <span class="number">30000</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">budget_exhausted</span></span><br><span class="line"><span class="attr">fallback_agent:</span> <span class="string">general.qa</span></span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><strong><code>termination_conditions</code> 是必填项而非可选项</strong>。没有终止条件的 Agent 会在异常输入下无限循环，端侧表现为算力占满、云端表现为账单飙升。</p>
+</blockquote>
+<h3 id="2-3-Cloud-Agents（云端业务智能体）"><a href="#2-3-Cloud-Agents（云端业务智能体）" class="headerlink" title="2.3 Cloud Agents（云端业务智能体）"></a>2.3 Cloud Agents（云端业务智能体）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>数量</strong></td>
+<td>每业务域一个或多个，独立部署</td>
+</tr>
+<tr>
+<td><strong>核心职责</strong></td>
+<td>ReAct 多轮推理、工具编排、长任务执行、流式输出</td>
+</tr>
+<tr>
+<td><strong>状态</strong></td>
+<td>无状态服务 + 外置状态（Checkpoint 存储）</td>
+</tr>
+<tr>
+<td><strong>隔离</strong></td>
+<td>独立 Deployment、独立配额、独立 SLO、独立熔断</td>
+</tr>
+<tr>
+<td><strong>失败影响</strong></td>
+<td>单业务域不可用，其他域不受影响</td>
+</tr>
+</tbody></table>
+<p><strong>为什么每 Agent 独立部署</strong>：AI Agent 的资源消耗方差极大（一个长任务 Agent 可能占用 10 倍于问答 Agent 的资源）。混部会导致互相拖垮。独立部署使故障与成本都可隔离归因。</p>
+<hr>
+<h2 id="3-Agent-生命周期"><a href="#3-Agent-生命周期" class="headerlink" title="3. Agent 生命周期"></a>3. Agent 生命周期</h2><pre class="mermaid">stateDiagram-v2
+    [*] --&gt; 已注册: 提交注册中心并通过审核
+    已注册 --&gt; 已发布: 版本发布（灰度 5%）
+    已发布 --&gt; 灰度中
+    灰度中 --&gt; 全量: 指标达标
+    灰度中 --&gt; 已回滚: 异常率超阈值
+    已回滚 --&gt; 已发布: 修复后重新发布
+    全量 --&gt; 运行中
+
+    state 运行中 &#123;
+        [*] --&gt; 空闲
+        空闲 --&gt; 装载: 收到任务派发
+        装载 --&gt; 就绪: 上下文注入 + 预算注册
+        就绪 --&gt; 执行: 开始推理循环
+        执行 --&gt; 执行: ReAct 迭代（受预算约束）
+        执行 --&gt; 完成: 产出结果
+        执行 --&gt; 中止: 预算耗尽 / 用户打断 / 超时
+        完成 --&gt; 挂起: 会话保持
+        中止 --&gt; 挂起
+        挂起 --&gt; 装载: 用户继续会话
+        挂起 --&gt; 销毁: 会话超时
+        销毁 --&gt; [*]
+    &#125;
+
+    全量 --&gt; 已弃用: 声明 Sunset
+    已弃用 --&gt; 已下线: 流量归零后下线
+    已下线 --&gt; [*]</pre>
+
+
+<h3 id="3-1-生命周期各阶段的治理要求"><a href="#3-1-生命周期各阶段的治理要求" class="headerlink" title="3.1 生命周期各阶段的治理要求"></a>3.1 生命周期各阶段的治理要求</h3><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>治理要求</th>
+<th>门禁</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>注册</td>
+<td>描述完整、≥10 正例 + ≥5 反例、Schema 合规、权限最小化</td>
+<td>自动校验 + 人工审核</td>
+</tr>
+<tr>
+<td>发布</td>
+<td>通过回归评测集、灰度计划明确、回滚方案就绪</td>
+<td>评测门禁（阻断式）</td>
+</tr>
+<tr>
+<td>灰度</td>
+<td>观察窗口内异常率、满意度、成本三项达标</td>
+<td>自动扩量或自动回滚</td>
+</tr>
+<tr>
+<td>运行</td>
+<td>预算强制、轨迹上报、SLO 监控</td>
+<td>超预算熔断</td>
+</tr>
+<tr>
+<td>弃用</td>
+<td>Sunset 日期公示、流量迁移路径明确</td>
+<td>流量归零才可下线</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>最常缺失的是”弃用”阶段</strong>。企业平台上线一年后往往积累几十个无人维护的 Agent，既占资源又是安全隐患。<strong>注册时即应要求声明 owner 与复核周期</strong>。</p>
+</blockquote>
+<hr>
+<h2 id="4-通信协议"><a href="#4-通信协议" class="headerlink" title="4. 通信协议"></a>4. 通信协议</h2><table>
+<thead>
+<tr>
+<th>通信路径</th>
+<th>协议</th>
+<th>特性</th>
+<th>承载组件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>User Agent → System Agent</td>
+<td>端内 IPC &#x2F; 进程内调用</td>
+<td>低延迟、无网络</td>
+<td>端侧运行时</td>
+</tr>
+<tr>
+<td>System Agent → 云</td>
+<td>HTTPS + SSE（经 Agent 网关）</td>
+<td>流式、单向推送、可续传</td>
+<td>Agent 网关</td>
+</tr>
+<tr>
+<td>端 Agent ↔ 云 Agent</td>
+<td><strong>A2A（经 Agent 网关桥接）</strong></td>
+<td>跨域寻址、任务与结果传递</td>
+<td>Agent 网关</td>
+</tr>
+<tr>
+<td>Planner → Cloud Agent</td>
+<td>内部 RPC（gRPC）+ 流式</td>
+<td>低延迟、强类型</td>
+<td>服务网格</td>
+</tr>
+<tr>
+<td>Cloud Agent → 工具</td>
+<td><strong>MCP</strong> &#x2F; REST</td>
+<td>标准化工具接入</td>
+<td>能力中心适配</td>
+</tr>
+<tr>
+<td>Cloud Agent → 模型</td>
+<td>HTTP（经 LLM 网关）</td>
+<td>流式、语义化意图</td>
+<td>LLM 网关</td>
+</tr>
+<tr>
+<td>Agent → 记忆&#x2F;知识</td>
+<td>内部 RPC</td>
+<td>读多写少</td>
+<td>基础能力层</td>
+</tr>
+<tr>
+<td>端云状态同步</td>
+<td>mTLS 长连接&#x2F;批量 HTTP</td>
+<td>幂等、断点续传</td>
+<td>双向认证网关</td>
+</tr>
+</tbody></table>
+<h3 id="4-1-A2A-桥接的安全模型"><a href="#4-1-A2A-桥接的安全模型" class="headerlink" title="4.1 A2A 桥接的安全模型"></a>4.1 A2A 桥接的安全模型</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant EA as 端侧 Agent
+    participant BR as A2A 桥接（网关）
+    participant AUTH as 权限服务
+    participant CA as 云端 Agent
+    EA-&gt;&gt;BR: A2A 请求（目标 Agent + 任务 + 自身身份）
+    BR-&gt;&gt;AUTH: 校验：调用方身份 + 目标白名单 + 权限交集
+    AUTH--&gt;&gt;BR: 允许（有效权限集 = 调用方∩目标∩用户授权）
+    BR-&gt;&gt;CA: 转发（附有效权限集，非原始身份）
+    Note over BR,CA: 关键：不传递调用方身份，只传递计算后的有效权限集
+    CA-&gt;&gt;CA: 在有效权限集内执行
+    CA--&gt;&gt;BR: 结果
+    BR--&gt;&gt;EA: 结果</pre>
+
+
+<blockquote>
+<p><strong>A2A 最危险的实现方式是”身份透传”</strong>：Agent A 把自己的令牌传给 Agent B，B 用 A 的身份调用高权限能力。正确做法是桥接层计算<strong>权限交集</strong>并下发有效权限集，每跳独立鉴权。</p>
+</blockquote>
+<hr>
+<h2 id="5-协作模式"><a href="#5-协作模式" class="headerlink" title="5. 协作模式"></a>5. 协作模式</h2><pre class="mermaid">flowchart TB
+    subgraph M1["模式一：层级委派（本架构主模式）"]
+        A1["System Agent"] --&gt; B1["Planner"] --&gt; C1["Cloud Agent"] --&gt; D1["Tool Agent"]
+    end
+    subgraph M2["模式二：并行竞速"]
+        P2["Planner"] --&gt; X1["Agent A"] &amp; X2["Agent B"]
+        X1 &amp; X2 --&gt; W2["先返回者胜出"]
+    end
+    subgraph M3["模式三：管道串联"]
+        Y1["检索 Agent"] --&gt; Y2["分析 Agent"] --&gt; Y3["生成 Agent"]
+    end
+    subgraph M4["模式四：端云互补"]
+        Z1["端侧 SLM&lt;br/&gt;快速草稿"] --&gt; Z2["云端 LLM&lt;br/&gt;精修补全"]
+    end</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>适用场景</th>
+<th>优点</th>
+<th>代价</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>层级委派</strong></td>
+<td>主链路（本架构选择）</td>
+<td>职责清晰、可控、易归因</td>
+<td>层级延迟累积</td>
+</tr>
+<tr>
+<td><strong>并行竞速</strong></td>
+<td>意图置信度中等（0.6–0.85）</td>
+<td>降低误判损失、延迟取最优</td>
+<td>成本翻倍（可用小模型缓解）</td>
+</tr>
+<tr>
+<td><strong>管道串联</strong></td>
+<td>复杂研究型任务</td>
+<td>各步可独立优化与评测</td>
+<td>总延迟长，需流式反馈进度</td>
+</tr>
+<tr>
+<td><strong>端云互补</strong></td>
+<td>长回答场景</td>
+<td>首字极快（端侧）+ 质量保障（云端）</td>
+<td>需处理两段内容的衔接自然度</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>不推荐的模式：自由多 Agent 讨论</strong>（多个 Agent 互相对话直到收敛）。在企业生产环境中，它的成本不可预测、延迟不可控、结果不可复现。适合研究与创意场景，不适合承载 SLA。</p>
+</blockquote>
+<hr>
+<h2 id="6-状态管理"><a href="#6-状态管理" class="headerlink" title="6. 状态管理"></a>6. 状态管理</h2><h3 id="6-1-状态分类与存放位置"><a href="#6-1-状态分类与存放位置" class="headerlink" title="6.1 状态分类与存放位置"></a>6.1 状态分类与存放位置</h3><table>
+<thead>
+<tr>
+<th>状态类型</th>
+<th>内容</th>
+<th>存放</th>
+<th>生命周期</th>
+<th>丢失影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>会话状态</td>
+<td>当前轮次、已用预算、待确认动作</td>
+<td>Redis（云）&#x2F; 内存+WAL（端）</td>
+<td>会话周期</td>
+<td>会话需重启</td>
+</tr>
+<tr>
+<td>执行状态</td>
+<td>ReAct 轨迹、已调工具、中间结论</td>
+<td>Checkpoint 存储（PG）</td>
+<td>任务周期</td>
+<td>长任务需重跑</td>
+</tr>
+<tr>
+<td>短期记忆</td>
+<td>最近 N 轮对话与摘要</td>
+<td>Redis</td>
+<td>会话周期</td>
+<td>失去上下文连贯</td>
+</tr>
+<tr>
+<td>长期记忆</td>
+<td>跨会话事实</td>
+<td>PG + 向量库</td>
+<td>长期（带 TTL）</td>
+<td>失去个性化</td>
+</tr>
+<tr>
+<td>Agent 配置</td>
+<td>清单、人设、预算</td>
+<td>注册中心 + 本地缓存</td>
+<td>版本周期</td>
+<td>用快照兜底</td>
+</tr>
+<tr>
+<td>端侧待同步</td>
+<td>记忆变更、埋点缓冲</td>
+<td>本地持久队列</td>
+<td>至同步成功</td>
+<td>数据丢失</td>
+</tr>
+</tbody></table>
+<h3 id="6-2-Checkpoint-设计（长任务）"><a href="#6-2-Checkpoint-设计（长任务）" class="headerlink" title="6.2 Checkpoint 设计（长任务）"></a>6.2 Checkpoint 设计（长任务）</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant CA as Cloud Agent
+    participant CP as Checkpoint 存储
+    CA-&gt;&gt;CP: 写入初始状态（task_id, context_ref, budget）
+    loop 每步执行后
+        CA-&gt;&gt;CP: 增量写入（step_n: thought/action/observation）
+    end
+    Note over CA: 进程崩溃 / 扩缩容驱逐
+    CA-&gt;&gt;CP: 新实例按 task_id 恢复
+    CP--&gt;&gt;CA: 完整轨迹
+    CA-&gt;&gt;CA: 从最后一步继续（跳过已完成的副作用操作）</pre>
+
+
+<blockquote>
+<p><strong>恢复的难点是副作用幂等</strong>。若第 3 步已经”提交了订单”，恢复时不能重复提交。因此所有有副作用的工具调用必须记录幂等键，恢复时先查询状态而非直接重试。</p>
+</blockquote>
+<hr>
+<h2 id="7-上下文管理"><a href="#7-上下文管理" class="headerlink" title="7. 上下文管理"></a>7. 上下文管理</h2><h3 id="7-1-上下文的四个来源与优先级"><a href="#7-1-上下文的四个来源与优先级" class="headerlink" title="7.1 上下文的四个来源与优先级"></a>7.1 上下文的四个来源与优先级</h3><pre class="mermaid">flowchart LR
+    S["系统指令&lt;br/&gt;优先级 1&lt;br/&gt;不可裁剪"] --&gt; Q["用户当前问题&lt;br/&gt;优先级 2&lt;br/&gt;不可裁剪"]
+    Q --&gt; K["知识片段&lt;br/&gt;优先级 3&lt;br/&gt;可裁剪至 Top-3"]
+    K --&gt; M["记忆&lt;br/&gt;优先级 4&lt;br/&gt;可裁剪至高置信项"]
+    M --&gt; P["画像&lt;br/&gt;优先级 5&lt;br/&gt;可全部裁剪"]
+    P --&gt; T["工具描述&lt;br/&gt;优先级 3（若需工具）&lt;br/&gt;可用渐进式披露压缩"]</pre>
+
+
+<h3 id="7-2-上下文管理的五条实践规则"><a href="#7-2-上下文管理的五条实践规则" class="headerlink" title="7.2 上下文管理的五条实践规则"></a>7.2 上下文管理的五条实践规则</h3><table>
+<thead>
+<tr>
+<th>规则</th>
+<th>说明</th>
+<th>反例后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>硬预算</strong></td>
+<td>总 Token 上限固定，超出必须裁剪或压缩</td>
+<td>上下文溢出报错或成本失控</td>
+</tr>
+<tr>
+<td><strong>优先级固定</strong></td>
+<td>裁剪顺序写死在代码中，不随实现变化</td>
+<td>同问题不同时刻表现不一致，无法复现</td>
+</tr>
+<tr>
+<td><strong>稳定内容前置</strong></td>
+<td>系统指令与工具描述在前，用户问题在后</td>
+<td>前缀缓存失效，成本与延迟上升</td>
+</tr>
+<tr>
+<td><strong>来源可追溯</strong></td>
+<td>每段上下文标记来源与版本</td>
+<td>答错时无法定位是知识错还是记忆错</td>
+</tr>
+<tr>
+<td><strong>压缩优于裁剪</strong></td>
+<td>超预算时先压缩（结构化摘要），最后才丢弃</td>
+<td>关键信息被静默丢弃</td>
+</tr>
+</tbody></table>
+<h3 id="7-3-多轮上下文演化"><a href="#7-3-多轮上下文演化" class="headerlink" title="7.3 多轮上下文演化"></a>7.3 多轮上下文演化</h3><pre class="mermaid">flowchart TB
+    T1["轮次 1&lt;br/&gt;完整上下文"] --&gt; T2["轮次 2&lt;br/&gt;+ 轮1摘要"]
+    T2 --&gt; T3["轮次 3&lt;br/&gt;+ 轮1-2摘要"]
+    T3 --&gt; TN["轮次 N&lt;br/&gt;滚动摘要 + 最近3轮原文"]
+    TN --&gt; CMP&#123;"超预算?"&#125;
+    CMP --&gt;|是| SUM["触发二次压缩&lt;br/&gt;摘要的摘要"]
+    CMP --&gt;|否| GO["继续"]
+    SUM --&gt; RISK["风险：实体与数字丢失"]
+    RISK --&gt; FIX["缓解：实体表单独维护&lt;br/&gt;不参与摘要压缩"]</pre>
+
+
+<blockquote>
+<p><strong>实体表是被广泛忽略的关键设计</strong>。摘要压缩最容易丢失的正是具体实体与数字（车型、日期、金额、地点）。解决办法是维护一个<strong>结构化实体表</strong>随上下文传递，它不参与自然语言摘要，因此不会被压缩丢失。</p>
+</blockquote>
+<hr>
+<h2 id="8-记忆机制在-Agent-中的应用"><a href="#8-记忆机制在-Agent-中的应用" class="headerlink" title="8. 记忆机制在 Agent 中的应用"></a>8. 记忆机制在 Agent 中的应用</h2><table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>使用的记忆类型</th>
+<th>访问模式</th>
+<th>命名空间隔离</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>System Agent</td>
+<td>端侧短期 + 端侧偏好</td>
+<td>读写</td>
+<td>系统级</td>
+</tr>
+<tr>
+<td>User Agent</td>
+<td>场景记忆 + 用户偏好切片</td>
+<td>读多写少</td>
+<td>按 Agent 隔离</td>
+</tr>
+<tr>
+<td>Cloud Agent</td>
+<td>短期 + 长期 + 画像</td>
+<td>读多写少（写走异步）</td>
+<td>按 Agent 隔离 + 共享区</td>
+</tr>
+<tr>
+<td>Memory Agent</td>
+<td>全部</td>
+<td>读写（唯一写权威）</td>
+<td>全局</td>
+</tr>
+</tbody></table>
+<h3 id="8-1-命名空间隔离规则"><a href="#8-1-命名空间隔离规则" class="headerlink" title="8.1 命名空间隔离规则"></a>8.1 命名空间隔离规则</h3><pre class="mermaid">flowchart TB
+    U["用户记忆空间"] --&gt; SH["共享区&lt;br/&gt;基础事实、通用偏好&lt;br/&gt;所有 Agent 可读"]
+    U --&gt; NS1["Agent A 私有区&lt;br/&gt;仅 A 可读写"]
+    U --&gt; NS2["Agent B 私有区&lt;br/&gt;仅 B 可读写"]
+    U --&gt; PRI["隐私区&lt;br/&gt;不出端、不进训练集"]
+    MA["Memory Agent"] --&gt;|"唯一写权威"| SH
+    NS1 -.-&gt;|"经审核可提升"| SH</pre>
+
+
+<blockquote>
+<p><strong>为什么需要私有区</strong>：若所有 Agent 共享全部记忆，会出现隐私越界（娱乐 Agent 读到用户在其他场景的敏感表达），且记忆空间会被无关内容污染。私有区内容经审核后可”提升”到共享区。</p>
+</blockquote>
+<hr>
+<h2 id="9-任务编排与预算控制"><a href="#9-任务编排与预算控制" class="headerlink" title="9. 任务编排与预算控制"></a>9. 任务编排与预算控制</h2><h3 id="9-1-三重预算"><a href="#9-1-三重预算" class="headerlink" title="9.1 三重预算"></a>9.1 三重预算</h3><table>
+<thead>
+<tr>
+<th>预算</th>
+<th>默认值（推断设计）</th>
+<th>超限动作</th>
+<th>目的</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>最大轮次</td>
+<td>对话型 4 &#x2F; 任务型 8</td>
+<td>强制输出已有结论</td>
+<td>防无限循环</td>
+</tr>
+<tr>
+<td>最大工具调用</td>
+<td>6</td>
+<td>拒绝新调用并告知模型</td>
+<td>防工具滥用</td>
+</tr>
+<tr>
+<td>最大 Token</td>
+<td>8k（单次任务累计）</td>
+<td>中止并返回部分结果</td>
+<td>成本可控</td>
+</tr>
+<tr>
+<td>最大耗时</td>
+<td>对话型 10 s &#x2F; 任务型 60 s</td>
+<td>中止并说明</td>
+<td>用户体验</td>
+</tr>
+</tbody></table>
+<h3 id="9-2-预算耗尽的正确处理"><a href="#9-2-预算耗尽的正确处理" class="headerlink" title="9.2 预算耗尽的正确处理"></a>9.2 预算耗尽的正确处理</h3><pre class="mermaid">flowchart LR
+    B["预算耗尽"] --&gt; W1["❌ 错误：静默返回空结果"]
+    B --&gt; W2["❌ 错误：假装完成"]
+    B --&gt; R1["✅ 正确：返回已有部分结论"]
+    R1 --&gt; R2["✅ 明确说明未完成的部分"]
+    R2 --&gt; R3["✅ 提供下一步选项（继续/换方式）"]
+    R3 --&gt; R4["✅ 上报 budget_exhausted 埋点"]</pre>
+
+
+<h3 id="9-3-失控防护（Runaway-Protection）"><a href="#9-3-失控防护（Runaway-Protection）" class="headerlink" title="9.3 失控防护（Runaway Protection）"></a>9.3 失控防护（Runaway Protection）</h3><table>
+<thead>
+<tr>
+<th>失控形态</th>
+<th>检测</th>
+<th>防护</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>重复调用同一工具同一参数</td>
+<td>调用指纹去重计数</td>
+<td>3 次相同则强制中止</td>
+</tr>
+<tr>
+<td>思考不收敛（轮次增加但无进展）</td>
+<td>连续轮次无新信息增量</td>
+<td>相似度检测 + 中止</td>
+</tr>
+<tr>
+<td>上下文持续膨胀</td>
+<td>每轮 Token 增量监控</td>
+<td>超阈值触发压缩或中止</td>
+</tr>
+<tr>
+<td>Agent 间循环调用（A→B→A）</td>
+<td>A2A 调用链深度与环检测</td>
+<td>深度上限 3 + 环检测拒绝</td>
+</tr>
+<tr>
+<td>成本异常</td>
+<td>单会话成本 vs 分位数</td>
+<td>超 P99 × 3 自动熔断并告警</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>成本熔断是必备而非可选</strong>。一个进入循环的 Agent 在无防护情况下，单会话可产生数百次模型调用。必须在网关侧设置单会话硬上限。</p>
+</blockquote>
+<hr>
+<h2 id="10-Agent-评测"><a href="#10-Agent-评测" class="headerlink" title="10. Agent 评测"></a>10. Agent 评测</h2><table>
+<thead>
+<tr>
+<th>评测维度</th>
+<th>指标</th>
+<th>方法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>意图路由准确率</td>
+<td>落对 Agent 的比例</td>
+<td>标注集 + 混淆矩阵</td>
+</tr>
+<tr>
+<td>工具选择准确率</td>
+<td>选对工具的比例</td>
+<td>标注集（含”不该用工具”的负例）</td>
+</tr>
+<tr>
+<td>任务完成率</td>
+<td>端到端达成用户目标</td>
+<td>人工标注 + 隐式信号（是否重问）</td>
+</tr>
+<tr>
+<td>轮次效率</td>
+<td>平均轮次 &#x2F; 最优轮次</td>
+<td>与人工最优路径对比</td>
+</tr>
+<tr>
+<td>成本效率</td>
+<td>单任务 Token 数</td>
+<td>分布监控</td>
+</tr>
+<tr>
+<td>稳定性</td>
+<td>同输入多次运行结果一致性</td>
+<td>重复运行差异率</td>
+</tr>
+<tr>
+<td>安全性</td>
+<td>越权尝试、注入抵抗</td>
+<td>红队测试集</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>稳定性常被忽略但极其重要</strong>。同一问题连续三次得到三种不同答案，用户信任会迅速崩塌。降低温度、固定工具集、结构化输出都可提升稳定性。</p>
+</blockquote>
+<hr>
+<h2 id="11-风险与最佳实践总结"><a href="#11-风险与最佳实践总结" class="headerlink" title="11. 风险与最佳实践总结"></a>11. 风险与最佳实践总结</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>最佳实践</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Agent 数量膨胀无人维护</td>
+<td>注册时必填 owner 与复核周期；无流量 Agent 自动进入弃用流程</td>
+</tr>
+<tr>
+<td>端侧 Agent 直连云导致治理旁路</td>
+<td>System Agent 强制代理；网关侧校验调用来源</td>
+</tr>
+<tr>
+<td>A2A 越权</td>
+<td>权限交集计算 + 每跳鉴权 + 白名单 + 深度上限</td>
+</tr>
+<tr>
+<td>Agent 失控烧钱</td>
+<td>三重预算 + 成本熔断 + 循环检测</td>
+</tr>
+<tr>
+<td>上下文膨胀导致效果退化</td>
+<td>硬预算 + 优先级裁剪 + 结构化实体表</td>
+</tr>
+<tr>
+<td>长任务崩溃丢失进度</td>
+<td>Checkpoint + 副作用幂等键</td>
+</tr>
+<tr>
+<td>记忆跨 Agent 越界</td>
+<td>命名空间隔离 + 私有区 + 提升审核</td>
+</tr>
+<tr>
+<td>结果不稳定</td>
+<td>低温度 + 结构化输出 + 工具集固定 + 稳定性评测</td>
+</tr>
+<tr>
+<td>多 Agent 自由讨论不可控</td>
+<td>生产环境禁用；改用层级委派或管道串联</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="12-演进路线"><a href="#12-演进路线" class="headerlink" title="12. 演进路线"></a>12. 演进路线</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>Agent 体系演进</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>阶段一</td>
+<td>确立 System Agent 单点代理；三重预算全量接入；注册中心强制 manifest；轨迹全量上报</td>
+</tr>
+<tr>
+<td>阶段二</td>
+<td>Checkpoint 与副作用幂等完善；A2A 权限交集模型落地；命名空间隔离；稳定性评测纳入门禁</td>
+</tr>
+<tr>
+<td>阶段三</td>
+<td>端云 Agent 同构（同一份 manifest 编译端云双运行时）；并行竞速与端云互补模式常态化；落点决策学习化</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端 AI Agent 调用链 · <strong>下一篇</strong>：云管端记忆系统设计</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/04/21/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-08-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F/">云管端记忆系统设计</a></h3>
+        <p>实体表是防止信息丢失的关键。自然语言摘要必然丢失具体实体（”上周三”变成”最近”，”3 号充电桩”变成”某个充电桩”）。</p>
+        <a class="btn primary" href="/2026/04/21/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-08-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/01/22/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-06-%E8%B0%83%E7%94%A8%E9%93%BE/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端 AI Agent 调用链</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 13 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#07-%C2%B7-Agent-%E6%9E%B6%E6%9E%84%EF%BC%88Agent-Architecture%EF%BC%89" data-toc-target="07-·-Agent-架构（Agent-Architecture）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">07 · Agent 架构（Agent Architecture）</span></a><a class="toc-level-2" href="#1-Agent-%E5%85%A8%E6%99%AF%E5%9B%BE" data-toc-target="1-Agent-全景图"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. Agent 全景图</span></a><a class="toc-level-3" href="#1-1-Agent-%E5%88%86%E7%B1%BB%E7%9F%A9%E9%98%B5" data-toc-target="1-1-Agent-分类矩阵"><span class="toc-text">1.1 Agent 分类矩阵</span></a><a class="toc-level-2" href="#2-%E4%B8%89%E7%B1%BB%E6%A0%B8%E5%BF%83-Agent-%E7%9A%84%E8%81%8C%E8%B4%A3%E8%BE%B9%E7%95%8C" data-toc-target="2-三类核心-Agent-的职责边界"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 三类核心 Agent 的职责边界</span></a><a class="toc-level-3" href="#2-1-System-Agent%EF%BC%88%E7%AB%AF%E4%BE%A7%E6%80%BB%E6%8E%A7%EF%BC%89" data-toc-target="2-1-System-Agent（端侧总控）"><span class="toc-text">2.1 System Agent（端侧总控）</span></a><a class="toc-level-3" href="#2-2-User-Agents%EF%BC%88%E7%AB%AF%E4%BE%A7%E5%9C%BA%E6%99%AF%E6%99%BA%E8%83%BD%E4%BD%93%EF%BC%89" data-toc-target="2-2-User-Agents（端侧场景智能体）"><span class="toc-text">2.2 User Agents（端侧场景智能体）</span></a><a class="toc-level-3" href="#2-3-Cloud-Agents%EF%BC%88%E4%BA%91%E7%AB%AF%E4%B8%9A%E5%8A%A1%E6%99%BA%E8%83%BD%E4%BD%93%EF%BC%89" data-toc-target="2-3-Cloud-Agents（云端业务智能体）"><span class="toc-text">2.3 Cloud Agents（云端业务智能体）</span></a><a class="toc-level-2" href="#3-Agent-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F" data-toc-target="3-Agent-生命周期"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. Agent 生命周期</span></a><a class="toc-level-3" href="#3-1-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E5%90%84%E9%98%B6%E6%AE%B5%E7%9A%84%E6%B2%BB%E7%90%86%E8%A6%81%E6%B1%82" data-toc-target="3-1-生命周期各阶段的治理要求"><span class="toc-text">3.1 生命周期各阶段的治理要求</span></a><a class="toc-level-2" href="#4-%E9%80%9A%E4%BF%A1%E5%8D%8F%E8%AE%AE" data-toc-target="4-通信协议"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 通信协议</span></a><a class="toc-level-3" href="#4-1-A2A-%E6%A1%A5%E6%8E%A5%E7%9A%84%E5%AE%89%E5%85%A8%E6%A8%A1%E5%9E%8B" data-toc-target="4-1-A2A-桥接的安全模型"><span class="toc-text">4.1 A2A 桥接的安全模型</span></a><a class="toc-level-2" href="#5-%E5%8D%8F%E4%BD%9C%E6%A8%A1%E5%BC%8F" data-toc-target="5-协作模式"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 协作模式</span></a><a class="toc-level-2" href="#6-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86" data-toc-target="6-状态管理"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 状态管理</span></a><a class="toc-level-3" href="#6-1-%E7%8A%B6%E6%80%81%E5%88%86%E7%B1%BB%E4%B8%8E%E5%AD%98%E6%94%BE%E4%BD%8D%E7%BD%AE" data-toc-target="6-1-状态分类与存放位置"><span class="toc-text">6.1 状态分类与存放位置</span></a><a class="toc-level-3" href="#6-2-Checkpoint-%E8%AE%BE%E8%AE%A1%EF%BC%88%E9%95%BF%E4%BB%BB%E5%8A%A1%EF%BC%89" data-toc-target="6-2-Checkpoint-设计（长任务）"><span class="toc-text">6.2 Checkpoint 设计（长任务）</span></a><a class="toc-level-2" href="#7-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86" data-toc-target="7-上下文管理"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 上下文管理</span></a><a class="toc-level-3" href="#7-1-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%9A%84%E5%9B%9B%E4%B8%AA%E6%9D%A5%E6%BA%90%E4%B8%8E%E4%BC%98%E5%85%88%E7%BA%A7" data-toc-target="7-1-上下文的四个来源与优先级"><span class="toc-text">7.1 上下文的四个来源与优先级</span></a><a class="toc-level-3" href="#7-2-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%E7%9A%84%E4%BA%94%E6%9D%A1%E5%AE%9E%E8%B7%B5%E8%A7%84%E5%88%99" data-toc-target="7-2-上下文管理的五条实践规则"><span class="toc-text">7.2 上下文管理的五条实践规则</span></a><a class="toc-level-3" href="#7-3-%E5%A4%9A%E8%BD%AE%E4%B8%8A%E4%B8%8B%E6%96%87%E6%BC%94%E5%8C%96" data-toc-target="7-3-多轮上下文演化"><span class="toc-text">7.3 多轮上下文演化</span></a><a class="toc-level-2" href="#8-%E8%AE%B0%E5%BF%86%E6%9C%BA%E5%88%B6%E5%9C%A8-Agent-%E4%B8%AD%E7%9A%84%E5%BA%94%E7%94%A8" data-toc-target="8-记忆机制在-Agent-中的应用"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 记忆机制在 Agent 中的应用</span></a><a class="toc-level-3" href="#8-1-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E9%9A%94%E7%A6%BB%E8%A7%84%E5%88%99" data-toc-target="8-1-命名空间隔离规则"><span class="toc-text">8.1 命名空间隔离规则</span></a><a class="toc-level-2" href="#9-%E4%BB%BB%E5%8A%A1%E7%BC%96%E6%8E%92%E4%B8%8E%E9%A2%84%E7%AE%97%E6%8E%A7%E5%88%B6" data-toc-target="9-任务编排与预算控制"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 任务编排与预算控制</span></a><a class="toc-level-3" href="#9-1-%E4%B8%89%E9%87%8D%E9%A2%84%E7%AE%97" data-toc-target="9-1-三重预算"><span class="toc-text">9.1 三重预算</span></a><a class="toc-level-3" href="#9-2-%E9%A2%84%E7%AE%97%E8%80%97%E5%B0%BD%E7%9A%84%E6%AD%A3%E7%A1%AE%E5%A4%84%E7%90%86" data-toc-target="9-2-预算耗尽的正确处理"><span class="toc-text">9.2 预算耗尽的正确处理</span></a><a class="toc-level-3" href="#9-3-%E5%A4%B1%E6%8E%A7%E9%98%B2%E6%8A%A4%EF%BC%88Runaway-Protection%EF%BC%89" data-toc-target="9-3-失控防护（Runaway-Protection）"><span class="toc-text">9.3 失控防护（Runaway Protection）</span></a><a class="toc-level-2" href="#10-Agent-%E8%AF%84%E6%B5%8B" data-toc-target="10-Agent-评测"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. Agent 评测</span></a><a class="toc-level-2" href="#11-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93" data-toc-target="11-风险与最佳实践总结"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 风险与最佳实践总结</span></a><a class="toc-level-2" href="#12-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="12-演进路线"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">12. 演进路线</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 40%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">8 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#07-%C2%B7-Agent-%E6%9E%B6%E6%9E%84%EF%BC%88Agent-Architecture%EF%BC%89" data-toc-target="07-·-Agent-架构（Agent-Architecture）" data-title="01 · 07 · Agent 架构（Agent Architecture）" aria-label="07 · Agent 架构（Agent Architecture）"></a><a class="toc-strip__dot" href="#1-Agent-%E5%85%A8%E6%99%AF%E5%9B%BE" data-toc-target="1-Agent-全景图" data-title="02 · 1. Agent 全景图" aria-label="1. Agent 全景图"></a><a class="toc-strip__dot" href="#2-%E4%B8%89%E7%B1%BB%E6%A0%B8%E5%BF%83-Agent-%E7%9A%84%E8%81%8C%E8%B4%A3%E8%BE%B9%E7%95%8C" data-toc-target="2-三类核心-Agent-的职责边界" data-title="03 · 2. 三类核心 Agent 的职责边界" aria-label="2. 三类核心 Agent 的职责边界"></a><a class="toc-strip__dot" href="#3-Agent-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F" data-toc-target="3-Agent-生命周期" data-title="04 · 3. Agent 生命周期" aria-label="3. Agent 生命周期"></a><a class="toc-strip__dot" href="#4-%E9%80%9A%E4%BF%A1%E5%8D%8F%E8%AE%AE" data-toc-target="4-通信协议" data-title="05 · 4. 通信协议" aria-label="4. 通信协议"></a><a class="toc-strip__dot" href="#5-%E5%8D%8F%E4%BD%9C%E6%A8%A1%E5%BC%8F" data-toc-target="5-协作模式" data-title="06 · 5. 协作模式" aria-label="5. 协作模式"></a><a class="toc-strip__dot" href="#6-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86" data-toc-target="6-状态管理" data-title="07 · 6. 状态管理" aria-label="6. 状态管理"></a><a class="toc-strip__dot" href="#7-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86" data-toc-target="7-上下文管理" data-title="08 · 7. 上下文管理" aria-label="7. 上下文管理"></a><a class="toc-strip__dot" href="#8-%E8%AE%B0%E5%BF%86%E6%9C%BA%E5%88%B6%E5%9C%A8-Agent-%E4%B8%AD%E7%9A%84%E5%BA%94%E7%94%A8" data-toc-target="8-记忆机制在-Agent-中的应用" data-title="09 · 8. 记忆机制在 Agent 中的应用" aria-label="8. 记忆机制在 Agent 中的应用"></a><a class="toc-strip__dot" href="#9-%E4%BB%BB%E5%8A%A1%E7%BC%96%E6%8E%92%E4%B8%8E%E9%A2%84%E7%AE%97%E6%8E%A7%E5%88%B6" data-toc-target="9-任务编排与预算控制" data-title="10 · 9. 任务编排与预算控制" aria-label="9. 任务编排与预算控制"></a><a class="toc-strip__dot" href="#10-Agent-%E8%AF%84%E6%B5%8B" data-toc-target="10-Agent-评测" data-title="11 · 10. Agent 评测" aria-label="10. Agent 评测"></a><a class="toc-strip__dot" href="#11-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93" data-toc-target="11-风险与最佳实践总结" data-title="12 · 11. 风险与最佳实践总结" aria-label="11. 风险与最佳实践总结"></a><a class="toc-strip__dot" href="#12-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="12-演进路线" data-title="13 · 12. 演进路线" aria-label="12. 演进路线"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-07-Agent架构","title":"云管端 Agent 运行时架构","url":"/2026/03/10/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-07-Agent%E6%9E%B6%E6%9E%84/","path":"cloud-pipe-edge-agent-platform","index":7,"total":20,"next":{"title":"云管端记忆系统设计","url":"/2026/04/21/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-08-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

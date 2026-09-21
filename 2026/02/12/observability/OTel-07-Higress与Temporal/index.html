@@ -1,0 +1,336 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Higress 与 Temporal 链路观测 · 飞轮之道</title>
+<meta name="description" content="本篇解决两类&#34;链路断点&#34;：① AI 流量入口（Higress AI 网关）的 Token/TTFT 观测与 Trace 接入；② 异步工作流（Temporal）跨 Workflow/Activity 的上下文传播。两者是企业级 Agent 平台区别于玩具 Demo 的关键观测能力。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/02/12/observability/OTel-07-Higress%E4%B8%8ETemporal/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Higress 与 Temporal 链路观测 · 飞轮之道">
+<meta property="og:description" content="本篇解决两类&#34;链路断点&#34;：① AI 流量入口（Higress AI 网关）的 Token/TTFT 观测与 Trace 接入；② 异步工作流（Temporal）跨 Workflow/Activity 的上下文传播。两者是企业级 Agent 平台区别于玩具 Demo 的关键观测能力。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/02/12/observability/OTel-07-Higress%E4%B8%8ETemporal/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">采集证据</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 7 / 12 篇</a>
+    </div>
+    <h1>Higress 与 Temporal 链路观测</h1>
+    <p class="article-deck">本篇解决两类&#34;链路断点&#34;：① AI 流量入口（Higress AI 网关）的 Token/TTFT 观测与 Trace 接入…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>5 分钟</span>
+      <span>发布于 2026.02</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="07-·-Higress-与-Temporal-链路观测"><a href="#07-·-Higress-与-Temporal-链路观测" class="headerlink" title="07 · Higress 与 Temporal 链路观测"></a>07 · Higress 与 Temporal 链路观测</h2><blockquote>
+<p>本篇解决两类”链路断点”：① AI 流量入口（Higress AI 网关）的 Token&#x2F;TTFT 观测与 Trace 接入；② 异步工作流（Temporal）跨 Workflow&#x2F;Activity 的上下文传播。两者是企业级 Agent 平台区别于玩具 Demo 的关键观测能力。</p>
+</blockquote>
+<hr>
+<h2 id="第一部分：Higress-AI-网关观测"><a href="#第一部分：Higress-AI-网关观测" class="headerlink" title="第一部分：Higress AI 网关观测"></a>第一部分：Higress AI 网关观测</h2><h3 id="1-1-Higress-在观测体系中的定位"><a href="#1-1-Higress-在观测体系中的定位" class="headerlink" title="1.1 Higress 在观测体系中的定位"></a>1.1 Higress 在观测体系中的定位</h3><p>Higress（Istio&#x2F;Envoy 内核）作为 AI 流量统一入口，与 SCG 分工：SCG 管业务微服务南北向，Higress 管 LLM&#x2F;MCP 流量（多模型路由、token 限流、语义缓存）。其观测价值在于<strong>模型无关的入口视角</strong>：无论后端是 DeepSeek、通义还是本地 Ollama，Token 与延迟在网关处统一度量。</p>
+<h3 id="1-2-ai-statistics-插件：开箱即用的三信号"><a href="#1-2-ai-statistics-插件：开箱即用的三信号" class="headerlink" title="1.2 ai-statistics 插件：开箱即用的三信号"></a>1.2 ai-statistics 插件：开箱即用的三信号</h3><p>Higress 通过 <code>ai-proxy</code> + <code>ai-statistics</code> 插件组合（默认 OpenAI 协议格式）提供：</p>
+<ul>
+<li><strong>Metric</strong>：输入&#x2F;输出 Token、首 Token 响应时间（流式 TTFT）、请求总耗时——支持在 <strong>网关 &#x2F; 路由 &#x2F; 服务 &#x2F; 模型</strong> 四个维度观测，直接暴露为 Prometheus 指标；</li>
+<li><strong>Log</strong>：访问日志附加 <code>input_token</code>、<code>output_token</code>、<code>model</code>、<code>llm_service_duration</code>、<code>llm_first_token_duration</code> 字段；</li>
+<li><strong>Trace</strong>：Token 等信息以 span attribute 写入链路。</li>
+</ul>
+<p>自定义扩展（从流式响应体提取字段的规则）：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ai-statistics 插件配置示例：额外采集首个 chunk 的模型名与拼接完整回答</span></span><br><span class="line"><span class="attr">attributes:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">key:</span> <span class="string">model</span></span><br><span class="line">    <span class="attr">value_source:</span> <span class="string">response_streaming_body</span></span><br><span class="line">    <span class="attr">value:</span> <span class="string">&quot;model&quot;</span></span><br><span class="line">    <span class="attr">rule:</span> <span class="string">first</span>        <span class="comment"># first: 取第一个有效 chunk</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">key:</span> <span class="string">answer</span></span><br><span class="line">    <span class="attr">value_source:</span> <span class="string">response_streaming_body</span></span><br><span class="line">    <span class="attr">value:</span> <span class="string">&quot;choices.0.delta.content&quot;</span></span><br><span class="line">    <span class="attr">rule:</span> <span class="string">append</span>       <span class="comment"># append: 拼接全部 chunk（谨慎：内容捕获，注意脱敏）</span></span><br><span class="line">    <span class="attr">apply_to_span:</span> <span class="literal">false</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="1-3-接入-Trace-后端（higress-config-全局配置）"><a href="#1-3-接入-Trace-后端（higress-config-全局配置）" class="headerlink" title="1.3 接入 Trace 后端（higress-config 全局配置）"></a>1.3 接入 Trace 后端（higress-config 全局配置）</h3><p>Higress 支持对接 OpenTelemetry &#x2F; SkyWalking &#x2F; Zipkin。对接本文档集 Collector：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ConfigMap higress-config 中的 higress 配置段</span></span><br><span class="line"><span class="attr">tracing:</span></span><br><span class="line">  <span class="attr">enable:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">sampling:</span> <span class="number">100</span>            <span class="comment"># POC 全采样；生产下调并交给 Collector 尾采样</span></span><br><span class="line">  <span class="attr">timeout:</span> <span class="number">500</span></span><br><span class="line">  <span class="attr">opentelemetry:</span></span><br><span class="line">    <span class="attr">service:</span> <span class="string">otel-collector.observability.svc.cluster.local</span>   <span class="comment"># 本地 compose 场景为 otel-collector</span></span><br><span class="line">    <span class="attr">port:</span> <span class="number">4317</span></span><br></pre></td></tr></table></figure>
+
+<p>本地极简部署（Higress 支持单容器脱离 K8s 运行）时，将 <code>service</code> 指向 <code>otel-collector</code> 容器名并共享 <code>otel-net</code> 网络即可。</p>
+<h3 id="1-4-指标接入-Prometheus"><a href="#1-4-指标接入-Prometheus" class="headerlink" title="1.4 指标接入 Prometheus"></a>1.4 指标接入 Prometheus</h3><p>Higress 网关暴露 Envoy&#x2F;插件指标端口，Prometheus 追加抓取任务：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">scrape_configs:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">job_name:</span> <span class="string">higress-gateway</span></span><br><span class="line">    <span class="attr">static_configs:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">targets:</span> [<span class="string">&quot;higress-gateway:15020&quot;</span>]   <span class="comment"># 端口以实际部署形态为准，K8s 场景走 ServiceMonitor</span></span><br></pre></td></tr></table></figure>
+
+<p>关键面板指标（Grafana 建盘用）：</p>
+<table>
+<thead>
+<tr>
+<th>观测目标</th>
+<th>指标来源</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>各模型 Token 吞吐</td>
+<td>ai-statistics token 指标（route&#x2F;model 维度）</td>
+</tr>
+<tr>
+<td>TTFT P95</td>
+<td><code>llm_first_token_duration</code> 直方图</td>
+</tr>
+<tr>
+<td>模型 fallback 次数</td>
+<td>ai-proxy fallback 指标</td>
+</tr>
+<tr>
+<td>Token 限流触发</td>
+<td>ai-token-ratelimit 指标</td>
+</tr>
+</tbody></table>
+<h3 id="1-5-链路衔接要点"><a href="#1-5-链路衔接要点" class="headerlink" title="1.5 链路衔接要点"></a>1.5 链路衔接要点</h3><p>Higress（Envoy）默认透传 W3C <code>traceparent</code>，因此完整链路为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Client → Higress(入口 Span, token/TTFT 属性)</span><br><span class="line">       → SCG 或直达 diag-agent（同一 trace_id）</span><br><span class="line">       → LLM Provider</span><br></pre></td></tr></table></figure>
+
+<p>注意：Higress 作为<strong>发起端</strong>产生 trace 时使用其自身采样率；若希望采样决策统一收敛，网关侧设 100%、由 Collector 尾采样统一裁决（文档 03 §4.2）。</p>
+<hr>
+<h2 id="第二部分：Temporal-异步工作流观测"><a href="#第二部分：Temporal-异步工作流观测" class="headerlink" title="第二部分：Temporal 异步工作流观测"></a>第二部分：Temporal 异步工作流观测</h2><h3 id="2-1-问题定义"><a href="#2-1-问题定义" class="headerlink" title="2.1 问题定义"></a>2.1 问题定义</h3><p>诊断类业务的典型断点：HTTP 请求触发 Temporal Workflow 后立即返回，Workflow 在 Worker 进程中异步执行数分钟——<strong>默认情况下 Worker 里的一切与触发请求不在同一条 Trace</strong>。目标：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">HTTP POST /api/diagnose (diag-api)</span><br><span class="line"> └─ StartWorkflow DiagnosisWorkflow        ← 上下文经 Temporal Header 传播</span><br><span class="line">     └─ [worker] RunWorkflow DiagnosisWorkflow</span><br><span class="line">         ├─ Activity: collect_signals</span><br><span class="line">         ├─ Activity: run_agent            ← 内部 LangGraph/LLM Span 继续挂树</span><br><span class="line">         └─ Activity: write_report</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-Python-SDK：TracingInterceptor（官方方案）"><a href="#2-2-Python-SDK：TracingInterceptor（官方方案）" class="headerlink" title="2.2 Python SDK：TracingInterceptor（官方方案）"></a>2.2 Python SDK：TracingInterceptor（官方方案）</h3><p>Temporal Python SDK 通过 <code>temporalio.contrib.opentelemetry.TracingInterceptor</code> 实现跨进程上下文传播（trace context 写入 Temporal Header 随任务流转）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># client 侧（发起方，如 FastAPI 服务）</span></span><br><span class="line"><span class="keyword">from</span> temporalio.client <span class="keyword">import</span> Client</span><br><span class="line"><span class="keyword">from</span> temporalio.contrib.opentelemetry <span class="keyword">import</span> TracingInterceptor</span><br><span class="line"></span><br><span class="line">client = <span class="keyword">await</span> Client.connect(</span><br><span class="line">    <span class="string">&quot;localhost:7233&quot;</span>,</span><br><span class="line">    interceptors=[TracingInterceptor()],</span><br><span class="line">)</span><br><span class="line"><span class="keyword">await</span> client.start_workflow(</span><br><span class="line">    DiagnosisWorkflow.run, args, <span class="built_in">id</span>=<span class="string">f&quot;diag-<span class="subst">&#123;session_id&#125;</span>&quot;</span>,</span><br><span class="line">    task_queue=<span class="string">&quot;diag-queue&quot;</span>,</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># worker 侧</span></span><br><span class="line"><span class="keyword">from</span> temporalio.worker <span class="keyword">import</span> Worker</span><br><span class="line"><span class="keyword">from</span> temporalio.contrib.opentelemetry <span class="keyword">import</span> TracingInterceptor</span><br><span class="line"><span class="keyword">from</span> telemetry <span class="keyword">import</span> setup_telemetry            <span class="comment"># 文档 05 的引导模块</span></span><br><span class="line"></span><br><span class="line">setup_telemetry(<span class="string">&quot;diag-worker&quot;</span>)</span><br><span class="line"></span><br><span class="line">worker = Worker(</span><br><span class="line">    client,                                       <span class="comment"># client 已带 TracingInterceptor</span></span><br><span class="line">    task_queue=<span class="string">&quot;diag-queue&quot;</span>,</span><br><span class="line">    workflows=[DiagnosisWorkflow],</span><br><span class="line">    activities=[collect_signals, run_agent, write_report],</span><br><span class="line">    interceptors=[TracingInterceptor()],</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>产出 Span 命名形如 <code>StartWorkflow:DiagnosisWorkflow</code>、<code>RunWorkflow:DiagnosisWorkflow</code>、<code>RunActivity:run_agent</code>，父子关系自动衔接。</p>
+<h3 id="2-3-三个必须知道的工程约束"><a href="#2-3-三个必须知道的工程约束" class="headerlink" title="2.3 三个必须知道的工程约束"></a>2.3 三个必须知道的工程约束</h3><ol>
+<li><strong>Workflow 代码内不要直接创建普通 Span</strong>：Workflow 必须确定性可重放（replay），SDK 在 Workflow 上下文里提供的是”重放安全”的追踪封装；<strong>真实 I&#x2F;O 与 LLM 调用一律放 Activity</strong>——这与 示例业务平台「LLM 不入确定性关键路径」的架构原则天然一致；</li>
+<li><strong>长工作流与采样</strong>：Workflow 可能存活数小时，链路极长。尾采样 <code>decision_wait</code> 无法覆盖时，接受”一个 Workflow &#x3D; 多段 Trace + 用 <code>temporal.workflow.id</code> 属性串联”的模式，在 Tempo 用属性查询聚合：<code>{ span.temporalWorkflowID = &quot;diag-xxx&quot; }</code>（属性名以 SDK 实际输出为准，可在 Span 详情确认）；</li>
+<li><strong>重试的可视化</strong>：Activity 重试会产生多个 <code>RunActivity</code> Span，务必在面板中按 <code>status=ERROR</code> 过滤首个失败点，而不是只看最终成功的那次。</li>
+</ol>
+<h3 id="2-4-Java-SDK-提示"><a href="#2-4-Java-SDK-提示" class="headerlink" title="2.4 Java SDK 提示"></a>2.4 Java SDK 提示</h3><p>Java 侧使用 <code>temporal-opentracing</code> 模块 + OpenTracing→OTel shim（<code>opentelemetry-opentracing-shim</code>）注入 <code>WorkflowClientOptions</code>&#x2F;<code>WorkerFactoryOptions</code> 拦截器，效果等价；细节以 Temporal Java SDK 当前文档为准（替换点(项目方)：按所用 SDK 版本核对 artifact 坐标）。</p>
+<h3 id="2-5-Temporal-平台自身指标"><a href="#2-5-Temporal-平台自身指标" class="headerlink" title="2.5 Temporal 平台自身指标"></a>2.5 Temporal 平台自身指标</h3><p>Worker&#x2F;Server 均暴露 Prometheus 指标（任务队列积压 <code>temporal_workflow_task_schedule_to_start_latency</code>、Activity 失败率等），Prometheus 追加抓取任务后与业务链路同盘展示：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Python Worker 开启运行时指标</span></span><br><span class="line"><span class="keyword">from</span> temporalio.runtime <span class="keyword">import</span> Runtime, TelemetryConfig, PrometheusConfig</span><br><span class="line">runtime = Runtime(telemetry=TelemetryConfig(</span><br><span class="line">    metrics=PrometheusConfig(bind_address=<span class="string">&quot;0.0.0.0:9464&quot;</span>)))</span><br><span class="line">client = <span class="keyword">await</span> Client.connect(<span class="string">&quot;localhost:7233&quot;</span>, runtime=runtime,</span><br><span class="line">                              interceptors=[TracingInterceptor()])</span><br></pre></td></tr></table></figure>
+
+<h2 id="本章验收清单"><a href="#本章验收清单" class="headerlink" title="本章验收清单"></a>本章验收清单</h2><ul>
+<li><input disabled="" type="checkbox"> Higress 入口 Span 与后端服务 Span 同 trace_id；</li>
+<li><input disabled="" type="checkbox"> Grafana 可见 网关&#x2F;路由&#x2F;模型 维度的 Token 与 TTFT 指标；</li>
+<li><input disabled="" type="checkbox"> 触发 API 的 Trace 中能看到 <code>StartWorkflow</code>，Worker 的 <code>RunWorkflow/RunActivity</code> 正确挂树；</li>
+<li><input disabled="" type="checkbox"> Activity 内 LLM 调用的 <code>gen_ai.*</code> Span 出现在工作流 Trace 下；</li>
+<li><input disabled="" type="checkbox"> Temporal 队列积压指标已接入 Prometheus 并配置告警阈值。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/03/31/observability/OTel-08-Langfuse%E5%8F%8C%E5%B1%82%E8%A7%82%E6%B5%8B/">Langfuse 双层观测融合</a></h3>
+        <p>反模式提醒：不要试图用 Langfuse 看微服务拓扑，也不要用 Grafana 做 Prompt 评测——让每层做擅长的事。</p>
+        <a class="btn primary" href="/2026/03/31/observability/OTel-08-Langfuse%E5%8F%8C%E5%B1%82%E8%A7%82%E6%B5%8B/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/12/23/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Java 埋点：Spring Cloud Gateway 与 Nacos</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 4 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#07-%C2%B7-Higress-%E4%B8%8E-Temporal-%E9%93%BE%E8%B7%AF%E8%A7%82%E6%B5%8B" data-toc-target="07-·-Higress-与-Temporal-链路观测"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">07 · Higress 与 Temporal 链路观测</span></a><a class="toc-level-2" href="#%E7%AC%AC%E4%B8%80%E9%83%A8%E5%88%86%EF%BC%9AHigress-AI-%E7%BD%91%E5%85%B3%E8%A7%82%E6%B5%8B" data-toc-target="第一部分：Higress-AI-网关观测"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">第一部分：Higress AI 网关观测</span></a><a class="toc-level-3" href="#1-1-Higress-%E5%9C%A8%E8%A7%82%E6%B5%8B%E4%BD%93%E7%B3%BB%E4%B8%AD%E7%9A%84%E5%AE%9A%E4%BD%8D" data-toc-target="1-1-Higress-在观测体系中的定位"><span class="toc-text">1.1 Higress 在观测体系中的定位</span></a><a class="toc-level-3" href="#1-2-ai-statistics-%E6%8F%92%E4%BB%B6%EF%BC%9A%E5%BC%80%E7%AE%B1%E5%8D%B3%E7%94%A8%E7%9A%84%E4%B8%89%E4%BF%A1%E5%8F%B7" data-toc-target="1-2-ai-statistics-插件：开箱即用的三信号"><span class="toc-text">1.2 ai-statistics 插件：开箱即用的三信号</span></a><a class="toc-level-3" href="#1-3-%E6%8E%A5%E5%85%A5-Trace-%E5%90%8E%E7%AB%AF%EF%BC%88higress-config-%E5%85%A8%E5%B1%80%E9%85%8D%E7%BD%AE%EF%BC%89" data-toc-target="1-3-接入-Trace-后端（higress-config-全局配置）"><span class="toc-text">1.3 接入 Trace 后端（higress-config 全局配置）</span></a><a class="toc-level-3" href="#1-4-%E6%8C%87%E6%A0%87%E6%8E%A5%E5%85%A5-Prometheus" data-toc-target="1-4-指标接入-Prometheus"><span class="toc-text">1.4 指标接入 Prometheus</span></a><a class="toc-level-3" href="#1-5-%E9%93%BE%E8%B7%AF%E8%A1%94%E6%8E%A5%E8%A6%81%E7%82%B9" data-toc-target="1-5-链路衔接要点"><span class="toc-text">1.5 链路衔接要点</span></a><a class="toc-level-2" href="#%E7%AC%AC%E4%BA%8C%E9%83%A8%E5%88%86%EF%BC%9ATemporal-%E5%BC%82%E6%AD%A5%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%A7%82%E6%B5%8B" data-toc-target="第二部分：Temporal-异步工作流观测"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">第二部分：Temporal 异步工作流观测</span></a><a class="toc-level-3" href="#2-1-%E9%97%AE%E9%A2%98%E5%AE%9A%E4%B9%89" data-toc-target="2-1-问题定义"><span class="toc-text">2.1 问题定义</span></a><a class="toc-level-3" href="#2-2-Python-SDK%EF%BC%9ATracingInterceptor%EF%BC%88%E5%AE%98%E6%96%B9%E6%96%B9%E6%A1%88%EF%BC%89" data-toc-target="2-2-Python-SDK：TracingInterceptor（官方方案）"><span class="toc-text">2.2 Python SDK：TracingInterceptor（官方方案）</span></a><a class="toc-level-3" href="#2-3-%E4%B8%89%E4%B8%AA%E5%BF%85%E9%A1%BB%E7%9F%A5%E9%81%93%E7%9A%84%E5%B7%A5%E7%A8%8B%E7%BA%A6%E6%9D%9F" data-toc-target="2-3-三个必须知道的工程约束"><span class="toc-text">2.3 三个必须知道的工程约束</span></a><a class="toc-level-3" href="#2-4-Java-SDK-%E6%8F%90%E7%A4%BA" data-toc-target="2-4-Java-SDK-提示"><span class="toc-text">2.4 Java SDK 提示</span></a><a class="toc-level-3" href="#2-5-Temporal-%E5%B9%B3%E5%8F%B0%E8%87%AA%E8%BA%AB%E6%8C%87%E6%A0%87" data-toc-target="2-5-Temporal-平台自身指标"><span class="toc-text">2.5 Temporal 平台自身指标</span></a><a class="toc-level-2" href="#%E6%9C%AC%E7%AB%A0%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="本章验收清单"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">本章验收清单</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 58%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">7 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#07-%C2%B7-Higress-%E4%B8%8E-Temporal-%E9%93%BE%E8%B7%AF%E8%A7%82%E6%B5%8B" data-toc-target="07-·-Higress-与-Temporal-链路观测" data-title="01 · 07 · Higress 与 Temporal 链路观测" aria-label="07 · Higress 与 Temporal 链路观测"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E4%B8%80%E9%83%A8%E5%88%86%EF%BC%9AHigress-AI-%E7%BD%91%E5%85%B3%E8%A7%82%E6%B5%8B" data-toc-target="第一部分：Higress-AI-网关观测" data-title="02 · 第一部分：Higress AI 网关观测" aria-label="第一部分：Higress AI 网关观测"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E4%BA%8C%E9%83%A8%E5%88%86%EF%BC%9ATemporal-%E5%BC%82%E6%AD%A5%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%A7%82%E6%B5%8B" data-toc-target="第二部分：Temporal-异步工作流观测" data-title="03 · 第二部分：Temporal 异步工作流观测" aria-label="第二部分：Temporal 异步工作流观测"></a><a class="toc-strip__dot" href="#%E6%9C%AC%E7%AB%A0%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="本章验收清单" data-title="04 · 本章验收清单" aria-label="本章验收清单"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-07-Higress与Temporal","title":"Higress 与 Temporal 链路观测","url":"/2026/02/12/observability/OTel-07-Higress%E4%B8%8ETemporal/","path":"agent-observability","index":6,"total":12,"next":{"title":"Langfuse 双层观测融合","url":"/2026/03/31/observability/OTel-08-Langfuse%E5%8F%8C%E5%B1%82%E8%A7%82%E6%B5%8B/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

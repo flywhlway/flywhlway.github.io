@@ -1,0 +1,1115 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>机器人端侧 AI 架构 · 飞轮之道</title>
+<meta name="description" content="第五篇的结论是「VLA 是端侧组件」。本篇把它落到硅片上：Jetson 家族选型与 TOPS 的真相、ONNX/TensorRT 部署链、量化全谱、边缘 LLM 引擎、内存/功耗/散热的物理约束、实时控制与推理的资源隔离。卷末产出可直接施工的 Robot Edge Deployment Guide。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/12/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-06-%E7%AB%AF%E4%BE%A7AI/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="机器人端侧 AI 架构 · 飞轮之道">
+<meta property="og:description" content="第五篇的结论是「VLA 是端侧组件」。本篇把它落到硅片上：Jetson 家族选型与 TOPS 的真相、ONNX/TensorRT 部署链、量化全谱、边缘 LLM 引擎、内存/功耗/散热的物理约束、实时控制与推理的资源隔离。卷末产出可直接施工的 Robot Edge Deployment Guide。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/12/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-06-%E7%AB%AF%E4%BE%A7AI/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-ai-engineering/">平台架构</a><a class="series-chip" href="/paths/embodied-ai-engineering/" title="查看学习路径">第 6 / 13 篇</a>
+    </div>
+    <h1>机器人端侧 AI 架构</h1>
+    <p class="article-deck">一句话总纲：云端优化吞吐，端侧优化确定性。你所有「压榨 GPU 利用率」的直觉在这里要反过来——端侧宁可留裕量，也不要一次抖动。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>25 分钟</span>
+      <span>发布于 2025.12</span>
+      <a class="article-meta__tag" href="/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">#具身智能</a><a class="article-meta__tag" href="/tags/AIoT/">#AIoT</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>云端优化吞吐，端侧优化确定性——P99、功耗、温度取代 QPS 成为一等指标。</li><li>选型看内存/带宽/功耗/DLA 四件事；TOPS 是峰值不是承诺，只信自己的压测。</li><li>统一内存是一口锅</li></ol>
+      <a class="takeaways-more" href="#6-8-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93">查看全部 10 条 →</a>
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>📖 <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">返回总目录</a> ｜ 🗺️ <a href="../MOC-%E5%8F%8C%E9%93%BE%E5%AF%BC%E8%88%AA.md">MOC 导航</a></p>
+</blockquote>
+<hr>
+<h2 id="第六篇-Robot-Edge-AI"><a href="#第六篇-Robot-Edge-AI" class="headerlink" title="第六篇 Robot Edge AI"></a>第六篇 Robot Edge AI</h2><blockquote>
+<p>第五篇的结论是「VLA 是端侧组件」。本篇把它落到硅片上：Jetson 家族选型与 TOPS 的真相、ONNX&#x2F;TensorRT 部署链、量化全谱、边缘 LLM 引擎、内存&#x2F;功耗&#x2F;散热的物理约束、实时控制与推理的资源隔离。卷末产出可直接施工的 <strong>Robot Edge Deployment Guide</strong>。你的 GPU 平台与 LLM 推理经验在此有八成可直接迁移，本篇重点标注那两成「端侧特有」的坑。</p>
+</blockquote>
+<h2 id="6-0-本篇导读"><a href="#6-0-本篇导读" class="headerlink" title="6.0 本篇导读"></a>6.0 本篇导读</h2><h3 id="6-0-1-与你的-AI-Infra-经验：八成迁移，两成重学"><a href="#6-0-1-与你的-AI-Infra-经验：八成迁移，两成重学" class="headerlink" title="6.0.1 与你的 AI Infra 经验：八成迁移，两成重学"></a>6.0.1 与你的 AI Infra 经验：八成迁移，两成重学</h3><table>
+<thead>
+<tr>
+<th>你已掌握</th>
+<th>端侧是否成立</th>
+<th>差异</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>量化（INT8&#x2F;FP8&#x2F;W4）</td>
+<td>✅ 完全成立</td>
+<td>更刚需，且 DLA 只吃 INT8</td>
+</tr>
+<tr>
+<td>KV Cache &#x2F; 连续批处理</td>
+<td>⚠️ 部分成立</td>
+<td>端侧 batch≈1，连续批处理收益锐减</td>
+</tr>
+<tr>
+<td>推理服务化 &#x2F; 网关</td>
+<td>⚠️ 变形</td>
+<td>端侧是「进程内库」而非「服务」</td>
+</tr>
+<tr>
+<td>GPU 显存规划</td>
+<td>⚠️ <strong>重学</strong></td>
+<td><strong>统一内存</strong>：CPU&#x2F;GPU 共用一块 DRAM</td>
+</tr>
+<tr>
+<td>K8s GPU 调度</td>
+<td>⚠️ 变形</td>
+<td>端侧靠 cgroup&#x2F;优先级，不靠调度器</td>
+</tr>
+<tr>
+<td>性能&#x3D;吞吐</td>
+<td>❌ <strong>反转</strong></td>
+<td>端侧性能 &#x3D; <strong>P99 延迟 + 功耗 + 温度</strong></td>
+</tr>
+</tbody></table>
+<p>一句话总纲：<strong>云端优化吞吐，端侧优化确定性</strong>。你所有「压榨 GPU 利用率」的直觉在这里要反过来——端侧宁可留裕量，也不要一次抖动。</p>
+<h3 id="6-0-2-学完本篇你能回答的十个问题"><a href="#6-0-2-学完本篇你能回答的十个问题" class="headerlink" title="6.0.2 学完本篇你能回答的十个问题"></a>6.0.2 学完本篇你能回答的十个问题</h3><ol>
+<li>Orin Nano&#x2F;NX&#x2F;AGX 怎么选？标称 TOPS 为什么不能直接用来算延迟？</li>
+<li>统一内存意味着什么？为什么它同时是福利和陷阱？</li>
+<li>DLA 是什么？什么模型能上、什么不能？</li>
+<li>ONNX → TensorRT engine 的构建链有哪些坑？为什么 engine 不能跨设备复制？</li>
+<li>TensorRT engine 不可移植，如何设计模型 OTA 的分发策略？</li>
+<li>INT8&#x2F;FP8&#x2F;AWQ&#x2F;GPTQ&#x2F;GGUF 在端侧各自的位置？校准数据集怎么来？</li>
+<li>vLLM&#x2F;SGLang 该不该上机器人？端侧 LLM 用什么？</li>
+<li>nvpmodel&#x2F;jetson_clocks 是什么？为什么功耗档位是架构决策？</li>
+<li>推理进程如何与 1kHz 控制进程共存而不互相伤害？</li>
+<li>一台新机型从零到模型上线，施工顺序是什么？</li>
+</ol>
+<h3 id="6-0-3-本篇知识地图"><a href="#6-0-3-本篇知识地图" class="headerlink" title="6.0.3 本篇知识地图"></a>6.0.3 本篇知识地图</h3><pre class="mermaid">mindmap
+  root((第六篇 Robot Edge AI))
+    硬件
+      Jetson 家族
+      TOPS 真相
+      统一内存
+      DLA 与引擎分工
+    部署链
+      PyTorch 到 ONNX
+      TensorRT 构建
+      engine 不可移植
+      OTA 分发三策略
+    量化
+      INT8 校准
+      FP8 与 W4
+      AWQ GPTQ GGUF
+      精度回归门禁
+    边缘 LLM
+      batch1 现实
+      引擎选型
+      KV Cache
+      语音与规划负载
+    物理约束
+      功耗档位
+      散热与降频
+      内存水位
+      存储与寿命
+    隔离与实时
+      核绑定
+      优先级
+      推理不抢控制
+    施工指南
+      Deployment Guide
+      压测与验收</pre>
+
+
+<hr>
+<h2 id="6-1-Jetson-家族与硬件选型"><a href="#6-1-Jetson-家族与硬件选型" class="headerlink" title="6.1 Jetson 家族与硬件选型"></a>6.1 Jetson 家族与硬件选型</h2><h3 id="6-1-1-家族速查（截至本手册撰写时）"><a href="#6-1-1-家族速查（截至本手册撰写时）" class="headerlink" title="6.1.1 家族速查（截至本手册撰写时）"></a>6.1.1 家族速查（截至本手册撰写时）</h3><table>
+<thead>
+<tr>
+<th>型号</th>
+<th>内存</th>
+<th>标称算力</th>
+<th>功耗档</th>
+<th>DLA</th>
+<th>典型定位</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Orin Nano 4&#x2F;8GB</td>
+<td>4&#x2F;8GB LPDDR5</td>
+<td><del>20</del>40 TOPS（Super 版本更高）</td>
+<td>7~15W(+)</td>
+<td>❌</td>
+<td>轻量感知、AMR、教学</td>
+</tr>
+<tr>
+<td>Orin NX 8&#x2F;16GB</td>
+<td>8&#x2F;16GB</td>
+<td><del>70</del>100 TOPS</td>
+<td>10~25W</td>
+<td>✅ ×2</td>
+<td>主力机型：感知+轻 VLA</td>
+</tr>
+<tr>
+<td>AGX Orin 32&#x2F;64GB</td>
+<td>32&#x2F;64GB</td>
+<td><del>200</del>275 TOPS</td>
+<td>15~60W</td>
+<td>✅ ×2</td>
+<td>人形&#x2F;多路感知+大 VLA</td>
+</tr>
+<tr>
+<td>Thor 级新平台</td>
+<td>更大</td>
+<td>数量级提升（FP4）</td>
+<td>更高</td>
+<td>—</td>
+<td>面向人形的新一代（选型前务必查最新规格）</td>
+</tr>
+</tbody></table>
+<p>选型不看 TOPS，看四件事：<strong>内存容量</strong>（第五篇：模型 + 双缓冲 + 感知 + 系统，8GB 极易见底）、<strong>内存带宽</strong>（大模型推理常是带宽瓶颈而非算力瓶颈）、<strong>功耗预算</strong>（决定电池续航与散热设计）、<strong>DLA 有无</strong>（能否把感知卸载出 GPU，给 VLA 让路）。</p>
+<h3 id="6-1-2-TOPS-的真相：为什么它不能算延迟"><a href="#6-1-2-TOPS-的真相：为什么它不能算延迟" class="headerlink" title="6.1.2 TOPS 的真相：为什么它不能算延迟"></a>6.1.2 TOPS 的真相：为什么它不能算延迟</h3><p>标称 TOPS 是<strong>峰值</strong>（通常按 INT8 稠密算力、MAXN 档、理想利用率），而真实延迟受制于：算子是否被引擎充分融合、内存带宽是否打满、数据搬运与预处理开销、功耗档位与温度降频、以及与其他进程的资源争抢。经验倍率：<strong>实际可用算力常在标称的 20%~50%</strong>——所以 6.5 节的结论是「<strong>唯一可信的数字来自你自己的机型压测</strong>」。这与你在云上「不信任厂商 benchmark、只信自己的压测」是同一条纪律。</p>
+<h3 id="6-1-3-统一内存（Unified-Memory）：福利与陷阱"><a href="#6-1-3-统一内存（Unified-Memory）：福利与陷阱" class="headerlink" title="6.1.3 统一内存（Unified Memory）：福利与陷阱"></a>6.1.3 统一内存（Unified Memory）：福利与陷阱</h3><p>Jetson 的 CPU 与 GPU <strong>共享同一块物理 DRAM</strong>，没有独立显存。福利：Host↔Device 拷贝可省（零拷贝路径），预处理链路更短。陷阱三条：<strong>「显存」与系统内存互相挤占</strong>——模型加载、图像缓冲、ROS 节点、日志缓存全在一口锅里抢饭，OOM 时被杀的可能是控制进程（灾难）；<strong>内存带宽是全系统共享的</strong>——感知拷图能把 VLA 的带宽吃掉；<strong>容量规划必须按总量算</strong>：<code>系统+ROS 栈 + 感知模型 + VLA×2(双缓冲) + 图像/点云缓冲 + 余量 ≥ 总内存</code>。</p>
+<p>这就是 5.5.3「双缓冲要双份显存」的物理根源。写进机型规格书的内存预算表长这样：</p>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>Orin NX 16GB 示例预算</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>系统 + JetPack</td>
+<td>~2GB</td>
+</tr>
+<tr>
+<td>ROS2 栈与业务节点</td>
+<td>~1.5GB</td>
+</tr>
+<tr>
+<td>感知模型（INT8）</td>
+<td>~1.5GB</td>
+</tr>
+<tr>
+<td>VLA 主槽（W4&#x2F;INT8 量化后）</td>
+<td>~4GB</td>
+</tr>
+<tr>
+<td>VLA 备槽（热切换期间）</td>
+<td>~4GB</td>
+</tr>
+<tr>
+<td>图像&#x2F;点云缓冲 + bag 缓冲</td>
+<td>~1.5GB</td>
+</tr>
+<tr>
+<td><strong>余量（防 OOM）</strong></td>
+<td><strong>≥1.5GB</strong></td>
+</tr>
+</tbody></table>
+<h3 id="6-1-4-DLA：把感知卸载出-GPU"><a href="#6-1-4-DLA：把感知卸载出-GPU" class="headerlink" title="6.1.4 DLA：把感知卸载出 GPU"></a>6.1.4 DLA：把感知卸载出 GPU</h3><p>DLA（Deep Learning Accelerator）是 Orin NX&#x2F;AGX 上的专用推理硬核（Nano 无）：能效高，但<strong>只支持 INT8&#x2F;FP16 的有限算子集</strong>，不支持的层会回退（fallback）到 GPU——回退过多反而更慢。工程用法：<strong>把稳定的 CNN 类感知模型（检测&#x2F;分割）放 DLA，把 Transformer 类 VLA 留 GPU</strong>，两者并行互不抢算力。这是端侧最实用的一次「算力扩容」，且不花钱。</p>
+<h3 id="6-1-5-与产业物联网平台的映射"><a href="#6-1-5-与产业物联网平台的映射" class="headerlink" title="6.1.5 与产业物联网平台的映射"></a>6.1.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>端侧 AI</th>
+<th>车端</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Jetson</td>
+<td>智驾域控（Orin 本就同源）</td>
+<td>心智直接迁移</td>
+</tr>
+<tr>
+<td>统一内存预算</td>
+<td>域控内存&#x2F;算力预算表</td>
+<td>机型规格书同款</td>
+</tr>
+<tr>
+<td>DLA 卸载</td>
+<td>域控里的专用加速核</td>
+<td>同一手法</td>
+</tr>
+<tr>
+<td>TOPS 不可信</td>
+<td>域控算力标称与实测差</td>
+<td>老朋友了</td>
+</tr>
+</tbody></table>
+<h3 id="6-1-6-企业实践建议"><a href="#6-1-6-企业实践建议" class="headerlink" title="6.1.6 企业实践建议"></a>6.1.6 企业实践建议</h3><p>把**《机型算力规格书》**作为平台团队的交付物：每个机型一页，写清内存预算表、功耗档、可承载模型规模上限、DLA 分工、实测延迟基线。它是采购、算法、结构三方的仲裁文件——没有它，模型选型永远靠嗓门大。</p>
+<h3 id="6-1-7-面试可能问什么"><a href="#6-1-7-面试可能问什么" class="headerlink" title="6.1.7 面试可能问什么"></a>6.1.7 面试可能问什么</h3><ol>
+<li>Jetson 选型怎么做？（要点：内存&#x2F;带宽&#x2F;功耗&#x2F;DLA 四件事，不看 TOPS）</li>
+<li>统一内存的影响？（要点：共享一口锅、OOM 可能杀控制进程、带宽全局共享、预算按总量算）</li>
+<li>DLA 怎么用？（要点：CNN 上 DLA、Transformer 留 GPU、注意回退）</li>
+</ol>
+<h3 id="6-1-8-最佳实践"><a href="#6-1-8-最佳实践" class="headerlink" title="6.1.8 最佳实践"></a>6.1.8 最佳实践</h3><ul>
+<li>内存预算表留 ≥10% 余量并配 OOM 守护（关键进程 oom_score_adj 保护），控制进程永不被杀。</li>
+<li>选型阶段就用目标模型跑一次真机压测，别信任何 PPT 上的 TOPS。</li>
+</ul>
+<h3 id="6-1-9-常见误区"><a href="#6-1-9-常见误区" class="headerlink" title="6.1.9 常见误区"></a>6.1.9 常见误区</h3><ul>
+<li>❌ 用 TOPS 比值估算延迟（「NX 是 Nano 的 2.5 倍，所以快 2.5 倍」）——带宽、回退与降频会把结论撕碎。</li>
+<li>❌ 忘记双缓冲与感知模型也吃内存——上线即 OOM 的头号原因。</li>
+</ul>
+<h3 id="6-1-10-Obsidian-永久笔记"><a href="#6-1-10-Obsidian-永久笔记" class="headerlink" title="6.1.10 Obsidian 永久笔记"></a>6.1.10 Obsidian 永久笔记</h3><ul>
+<li>端侧优化确定性：云优化吞吐，端优化 P99+功耗+温度。</li>
+<li>TOPS 是峰值不是承诺：实际常在 20%~50%，只信自己的压测。</li>
+<li>统一内存一口锅：模型&#x2F;缓冲&#x2F;ROS&#x2F;系统互抢，预算按总量算并留余量。</li>
+<li>DLA 卸载感知：CNN 上 DLA，Transformer 留 GPU。</li>
+</ul>
+<hr>
+<h2 id="6-2-部署链：PyTorch-→-ONNX-→-TensorRT"><a href="#6-2-部署链：PyTorch-→-ONNX-→-TensorRT" class="headerlink" title="6.2 部署链：PyTorch → ONNX → TensorRT"></a>6.2 部署链：PyTorch → ONNX → TensorRT</h2><h3 id="6-2-1-全链路"><a href="#6-2-1-全链路" class="headerlink" title="6.2.1 全链路"></a>6.2.1 全链路</h3><pre class="mermaid">flowchart LR
+  PT["PyTorch 权重（算法团队产出）"] --&gt; EXP["导出：torch.onnx.export / dynamo"]
+  EXP --&gt; ONX["ONNX 图（含算子集 opset）"]
+  ONX --&gt; SIM["图简化/算子替换（onnx-simplifier）"]
+  SIM --&gt; BLD["TensorRT builder：精度/校准/层融合/kernel 自动调优"]
+  BLD --&gt; ENG["engine 文件（.plan）"]
+  ENG --&gt; RT["端侧 Runtime 加载执行"]
+  PT -.替代路线.-&gt; TRTX["Torch-TensorRT / TensorRT-LLM（大模型）"]
+  TRTX --&gt; ENG</pre>
+
+
+<p>三条路线的取舍：<strong>ONNX→TRT</strong> 通用性最好（跨框架、可离线构建），是感知模型主路线；<strong>Torch-TensorRT</strong> 省去导出摩擦，适合迭代期；<strong>TensorRT-LLM</strong> 面向 Transformer&#x2F;LLM 类（含 VLA 骨干），有专门的注意力与 KV Cache 优化。</p>
+<h3 id="6-2-2-导出期的五个经典坑"><a href="#6-2-2-导出期的五个经典坑" class="headerlink" title="6.2.2 导出期的五个经典坑"></a>6.2.2 导出期的五个经典坑</h3><p>其一，<strong>动态形状</strong>：不声明 dynamic_axes 就锁死 batch&#x2F;分辨率，换输入即报错；其二，<strong>不支持的算子</strong>：自定义算子需写插件或改网络（这一步常把交付卡住一周）；其三，<strong>opset 版本</strong>：与 TensorRT 版本的兼容矩阵要对齐（写进模型卡）；其四，<strong>前后处理漏在框架里</strong>：Python 里的 resize&#x2F;normalize 没进图，端侧行为不一致——<strong>必须把预处理契约与模型一起交付</strong>（呼应 5.3.6）；其五，<strong>训练态算子</strong>（dropout&#x2F;BN 未 fold）——导出前 <code>model.eval()</code> 是常识但年年有人栽。</p>
+<h3 id="6-2-3-引擎构建：为什么-engine-不可移植（平台最关键的一条）"><a href="#6-2-3-引擎构建：为什么-engine-不可移植（平台最关键的一条）" class="headerlink" title="6.2.3 引擎构建：为什么 engine 不可移植（平台最关键的一条）"></a>6.2.3 引擎构建：为什么 engine 不可移植（平台最关键的一条）</h3><p>TensorRT builder 会针对<strong>具体 GPU 架构 + TensorRT&#x2F;CUDA 版本 + 精度模式</strong>做 kernel 自动调优（tactic 选择），产物 <code>.plan</code> 因此<strong>绑定硬件与软件栈版本</strong>——AGX 上构建的 engine 拿到 Orin NX 上通常直接加载失败，甚至同型号跨 JetPack 版本也不保证兼容。</p>
+<p>这一条把 6.2 与第四篇缝死了：<strong>你的模型 OTA 不能只分发一个 .plan</strong>。三种策略：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>做法</th>
+<th>优点</th>
+<th>代价</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A. 端侧构建</td>
+<td>分发 ONNX，机器人首次加载时本地 build</td>
+<td>一份制品通吃</td>
+<td>构建耗时（分钟~十几分钟）、占内存、结果不确定</td>
+</tr>
+<tr>
+<td>B. 按目标预构建</td>
+<td>CI 为每个 (机型 × JetPack 版本 × 精度) 构建 engine 矩阵</td>
+<td>端侧秒级加载、行为确定</td>
+<td>制品矩阵膨胀，需版本治理</td>
+</tr>
+<tr>
+<td>C. 混合</td>
+<td>主力机型预构建 + 长尾机型端侧构建兜底</td>
+<td>平衡</td>
+<td>两套路径都要维护</td>
+</tr>
+</tbody></table>
+<p><strong>推荐 B（生产）+ A（兜底）</strong>：把「构建」放进 CI 制品流水线，engine 作为制品库的一等公民，兼容矩阵（4.3.3）新增两维——<strong>GPU 架构与 JetPack 版本</strong>。这是很多团队上线后才痛苦发现的架构级约束，你提前知道了。</p>
+<h3 id="6-2-4-端侧构建的工程细节（策略-A-兜底时）"><a href="#6-2-4-端侧构建的工程细节（策略-A-兜底时）" class="headerlink" title="6.2.4 端侧构建的工程细节（策略 A 兜底时）"></a>6.2.4 端侧构建的工程细节（策略 A 兜底时）</h3><p>必须做三件事：<strong>timing cache 复用</strong>（同机型缓存 tactic 选择结果，二次构建大幅加速）、<strong>构建期资源隔离</strong>（构建吃满 CPU&#x2F;内存，必须在「非作业窗口 + 限核」下进行，否则拖垮控制回路）、<strong>构建失败降级</strong>（回落到上一版 engine 或 FP16 保守配置，并上报事件）。构建过程本身就是一次「任务」——用第三篇的 RobotTask 承接它，进度与结果自然进平台。</p>
+<h3 id="6-2-5-与产业物联网平台的映射"><a href="#6-2-5-与产业物联网平台的映射" class="headerlink" title="6.2.5 与产业物联网平台的映射"></a>6.2.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>端侧部署链</th>
+<th>车端</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ONNX→TRT engine</td>
+<td>域控模型编译产物</td>
+<td>同款绑定问题</td>
+</tr>
+<tr>
+<td>engine 不可移植</td>
+<td>编译产物绑定芯片&#x2F;SDK 版本</td>
+<td>兼容矩阵扩两维</td>
+</tr>
+<tr>
+<td>CI 构建 engine 矩阵</td>
+<td>多车型固件矩阵构建</td>
+<td>你的 CI 经验直用</td>
+</tr>
+<tr>
+<td>预处理契约随模型</td>
+<td>标定&#x2F;预处理参数随包</td>
+<td>制品完整性</td>
+</tr>
+</tbody></table>
+<h3 id="6-2-6-企业实践建议"><a href="#6-2-6-企业实践建议" class="headerlink" title="6.2.6 企业实践建议"></a>6.2.6 企业实践建议</h3><p>在制品库里把「模型制品」定义为<strong>四件套</strong>：权重&#x2F;engine + 预处理契约 + 归一化统计量 + 模型卡（含 opset&#x2F;TRT&#x2F;JetPack&#x2F;GPU 架构版本）。<strong>四件套缺一不入库</strong>——这条规则能消灭端侧「行为莫名不一致」的绝大多数事故。</p>
+<h3 id="6-2-7-面试可能问什么"><a href="#6-2-7-面试可能问什么" class="headerlink" title="6.2.7 面试可能问什么"></a>6.2.7 面试可能问什么</h3><ol>
+<li>TensorRT engine 为什么不能跨设备分发？如何设计 OTA？（要点：tactic 绑定硬件+版本；三策略与推荐 B+A）</li>
+<li>ONNX 导出的常见坑？（要点：动态形状&#x2F;自定义算子&#x2F;opset&#x2F;前后处理&#x2F;eval 五条）</li>
+<li>端侧构建的风险？（要点：耗时、抢资源、结果不确定；用任务承接 + 非作业窗口 + timing cache）</li>
+</ol>
+<h3 id="6-2-8-最佳实践"><a href="#6-2-8-最佳实践" class="headerlink" title="6.2.8 最佳实践"></a>6.2.8 最佳实践</h3><ul>
+<li>engine 文件名嵌 <code>模型版本_机型_GPU架构_TRT版本_精度</code>，加载时校验——命名即契约。</li>
+<li>CI 每次构建都归档 build log 与层级 profile，性能回归时可对比 tactic 变化。</li>
+</ul>
+<h3 id="6-2-9-常见误区"><a href="#6-2-9-常见误区" class="headerlink" title="6.2.9 常见误区"></a>6.2.9 常见误区</h3><ul>
+<li>❌ 把开发机上构建的 engine 直接打进 OTA 包——机型&#x2F;版本一变即挂。</li>
+<li>❌ 端侧构建放在作业时段——控制回路被构建进程挤兑，抖动与卡顿随之而来。</li>
+</ul>
+<h3 id="6-2-10-Obsidian-永久笔记"><a href="#6-2-10-Obsidian-永久笔记" class="headerlink" title="6.2.10 Obsidian 永久笔记"></a>6.2.10 Obsidian 永久笔记</h3><ul>
+<li>engine 绑定硬件与版本：模型 OTA 必须按 (机型 × JetPack × 精度) 建矩阵。</li>
+<li>模型制品四件套：权重&#x2F;engine + 预处理契约 + 归一化统计量 + 模型卡。</li>
+<li>端侧构建是一次任务：非作业窗口 + 限核 + timing cache + 失败降级。</li>
+</ul>
+<hr>
+<h2 id="6-3-量化：端侧的默认项"><a href="#6-3-量化：端侧的默认项" class="headerlink" title="6.3 量化：端侧的默认项"></a>6.3 量化：端侧的默认项</h2><h3 id="6-3-1-全谱速查"><a href="#6-3-1-全谱速查" class="headerlink" title="6.3.1 全谱速查"></a>6.3.1 全谱速查</h3><table>
+<thead>
+<tr>
+<th>方案</th>
+<th>位宽</th>
+<th>适用</th>
+<th>端侧位置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FP16</td>
+<td>16</td>
+<td>通用基线</td>
+<td>保守选择，延迟&#x2F;内存翻倍</td>
+</tr>
+<tr>
+<td><strong>INT8（PTQ+校准）</strong></td>
+<td>8</td>
+<td>CNN 感知</td>
+<td><strong>DLA 必需</strong>，感知主力</td>
+</tr>
+<tr>
+<td>FP8</td>
+<td>8</td>
+<td>Transformer（Ada&#x2F;Hopper&#x2F;Blackwell 级支持）</td>
+<td>新平台上的 VLA 优选</td>
+</tr>
+<tr>
+<td>INT4 &#x2F; W4A16（AWQ&#x2F;GPTQ）</td>
+<td>权重 4</td>
+<td>LLM&#x2F;VLA 骨干</td>
+<td>显存瓶颈时的救命稻草</td>
+</tr>
+<tr>
+<td>GGUF（llama.cpp 生态）</td>
+<td>混合</td>
+<td>CPU&#x2F;小 GPU 上的 LLM</td>
+<td>边缘小模型、快速验证</td>
+</tr>
+<tr>
+<td>QAT（量化感知训练）</td>
+<td>8&#x2F;4</td>
+<td>精度掉太多时</td>
+<td>算法团队的活，成本高</td>
+</tr>
+</tbody></table>
+<p>选择顺序（工程实用主义）：<strong>FP16 跑通 → INT8&#x2F;FP8 达标就停 → 显存不够再上 W4 → 精度崩了才谈 QAT</strong>。</p>
+<h3 id="6-3-2-校准数据集：最容易被忽略的制品"><a href="#6-3-2-校准数据集：最容易被忽略的制品" class="headerlink" title="6.3.2 校准数据集：最容易被忽略的制品"></a>6.3.2 校准数据集：最容易被忽略的制品</h3><p>INT8 PTQ 需要校准集（几百张代表性样本）来统计激活分布。三条纪律：<strong>校准集必须来自目标场景</strong>（用 ImageNet 校准仓库机器人的检测模型 &#x3D; 自找精度悬崖）；<strong>校准集要版本化并入制品血缘</strong>（4.10.3）——它决定了量化结果，属于可复现性的一部分；<strong>校准集要随场景演进更新</strong>（新站点&#x2F;新光照 → 重新校准）。你在 LLM 量化里对校准集的直觉，这里同样成立且更敏感。</p>
+<h3 id="6-3-3-精度回归门禁"><a href="#6-3-3-精度回归门禁" class="headerlink" title="6.3.3 精度回归门禁"></a>6.3.3 精度回归门禁</h3><p>量化后必须过三关：<strong>逐层数值对比</strong>（余弦相似度&#x2F;最大误差，定位是哪层崩了）→ <strong>任务指标对比</strong>（检测 mAP &#x2F; VLA 离线动作误差，跌幅超阈即拒绝）→ <strong>端到端评测</strong>（第五篇三级评测串联）。把这三关做进 CI，量化就从「玄学调参」变成「可回归的流水线」——这正是平台团队该给算法团队的礼物。</p>
+<h3 id="6-3-4-量化对-VLA-的特殊性"><a href="#6-3-4-量化对-VLA-的特殊性" class="headerlink" title="6.3.4 量化对 VLA 的特殊性"></a>6.3.4 量化对 VLA 的特殊性</h3><p>第五篇提过动作是连续量：<strong>量化误差会直接变成动作误差</strong>（不像分类任务有 softmax 的容错缓冲）。工程建议三条：动作头（最后几层）<strong>保守精度</strong>（FP16 甚至 FP32），骨干激进量化——混合精度是标准做法；量化后必须看<strong>动作平滑度指标</strong>（jerk，5.6.3）而不只看成功率；影子模式并跑「FP16 版 vs 量化版」，用<strong>动作分歧分布</strong>做门禁——这是最灵敏的检测器。</p>
+<h3 id="6-3-5-与产业物联网平台的映射"><a href="#6-3-5-与产业物联网平台的映射" class="headerlink" title="6.3.5 与产业物联网平台的映射"></a>6.3.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>量化</th>
+<th>你的 LLM 经验</th>
+<th>差异</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PTQ&#x2F;校准集</td>
+<td>同款</td>
+<td>端侧对校准集分布更敏感</td>
+</tr>
+<tr>
+<td>AWQ&#x2F;GPTQ&#x2F;W4</td>
+<td>同款</td>
+<td>目标从省成本变成「能否装下」</td>
+</tr>
+<tr>
+<td>混合精度</td>
+<td>同款</td>
+<td>动作头必须保守</td>
+</tr>
+<tr>
+<td>量化门禁</td>
+<td>评测流水线</td>
+<td>加动作平滑度与分歧分布</td>
+</tr>
+</tbody></table>
+<h3 id="6-3-6-企业实践建议"><a href="#6-3-6-企业实践建议" class="headerlink" title="6.3.6 企业实践建议"></a>6.3.6 企业实践建议</h3><p>把「量化 + 精度回归」做成<strong>平台提供的自助流水线</strong>：算法团队提交权重与校准集，流水线自动产出多精度 engine 矩阵 + 精度报告 + 延迟报告。这一条服务能把模型上机周期从周级压到天级——是平台团队最容易被感知到的价值。</p>
+<h3 id="6-3-7-面试可能问什么"><a href="#6-3-7-面试可能问什么" class="headerlink" title="6.3.7 面试可能问什么"></a>6.3.7 面试可能问什么</h3><ol>
+<li>端侧量化怎么选？（要点：FP16→INT8&#x2F;FP8→W4→QAT 的实用顺序 + DLA 只吃 INT8）</li>
+<li>量化 VLA 与量化 CNN 的差异？（要点：动作是连续量、误差直传；动作头保守、看 jerk 与分歧分布）</li>
+<li>校准集要注意什么？（要点：目标场景、版本化入血缘、随场景更新）</li>
+</ol>
+<h3 id="6-3-8-最佳实践"><a href="#6-3-8-最佳实践" class="headerlink" title="6.3.8 最佳实践"></a>6.3.8 最佳实践</h3><ul>
+<li>每个量化制品附「精度-延迟-内存」三元报告，选型即读表，不再靠感觉。</li>
+<li>影子并跑高精度基线做分歧监控——量化退化在真机上最先表现为动作分歧上升。</li>
+</ul>
+<h3 id="6-3-9-常见误区"><a href="#6-3-9-常见误区" class="headerlink" title="6.3.9 常见误区"></a>6.3.9 常见误区</h3><ul>
+<li>❌ 用通用公开数据当校准集——分布不匹配，实测精度崩塌且难归因。</li>
+<li>❌ 全网络一刀切量化——动作头&#x2F;输出层崩了，机器人抖给你看。</li>
+</ul>
+<h3 id="6-3-10-Obsidian-永久笔记"><a href="#6-3-10-Obsidian-永久笔记" class="headerlink" title="6.3.10 Obsidian 永久笔记"></a>6.3.10 Obsidian 永久笔记</h3><ul>
+<li>量化是端侧默认项：FP16→INT8&#x2F;FP8→W4→QAT 的实用顺序。</li>
+<li>校准集是制品：目标场景 + 版本化 + 入血缘。</li>
+<li>动作头保守量化：连续动作无容错缓冲，看 jerk 与分歧分布。</li>
+</ul>
+<hr>
+<h2 id="6-4-边缘-LLM：vLLM-SGLang-TensorRT-LLM-llama-cpp-MLX-的位置"><a href="#6-4-边缘-LLM：vLLM-SGLang-TensorRT-LLM-llama-cpp-MLX-的位置" class="headerlink" title="6.4 边缘 LLM：vLLM &#x2F; SGLang &#x2F; TensorRT-LLM &#x2F; llama.cpp &#x2F; MLX 的位置"></a>6.4 边缘 LLM：vLLM &#x2F; SGLang &#x2F; TensorRT-LLM &#x2F; llama.cpp &#x2F; MLX 的位置</h2><h3 id="6-4-1-先破一个幻觉：端侧-batch-1"><a href="#6-4-1-先破一个幻觉：端侧-batch-1" class="headerlink" title="6.4.1 先破一个幻觉：端侧 batch&#x3D;1"></a>6.4.1 先破一个幻觉：端侧 batch&#x3D;1</h3><p>vLLM&#x2F;SGLang 的核心武器是<strong>连续批处理 + PagedAttention</strong>——它们优化的是「多请求并发下的吞吐」。而机器人端侧只有一个消费者、一个请求、固定节拍：<strong>batch≈1，连续批处理无用武之地</strong>。这是你的云端直觉在端侧最大的一次失效。端侧真正有用的是：算子融合、量化、KV Cache 复用（多轮同前缀）、显存分页（防碎片）、CUDA Graph（消除 kernel launch 抖动）。</p>
+<h3 id="6-4-2-引擎选型矩阵"><a href="#6-4-2-引擎选型矩阵" class="headerlink" title="6.4.2 引擎选型矩阵"></a>6.4.2 引擎选型矩阵</h3><table>
+<thead>
+<tr>
+<th>引擎</th>
+<th>端侧位置</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>TensorRT &#x2F; TensorRT-LLM</strong></td>
+<td>✅ 生产首选</td>
+<td>NVIDIA 官方链路，Jetson 支持最好，延迟最优</td>
+</tr>
+<tr>
+<td>llama.cpp &#x2F; GGUF</td>
+<td>✅ 快速验证 &#x2F; CPU 兜底</td>
+<td>部署极简，适合小模型与原型</td>
+</tr>
+<tr>
+<td>vLLM &#x2F; SGLang</td>
+<td>⚠️ 站点边缘池可用</td>
+<td>池化多机器人请求时才有价值（4.9.1 推理池）</td>
+</tr>
+<tr>
+<td>MLX</td>
+<td>❌ 端侧无关</td>
+<td>Apple Silicon 专用——你的 Mac <strong>开发机</strong>上跑实验有用</td>
+</tr>
+<tr>
+<td>ONNX Runtime</td>
+<td>⚠️ 备选</td>
+<td>跨平台好，Jetson 上性能通常不敌 TRT</td>
+</tr>
+</tbody></table>
+<p>结论：<strong>机上 &#x3D; TensorRT 系；站点池 &#x3D; vLLM&#x2F;SGLang；开发机 &#x3D; MLX&#x2F;llama.cpp</strong>。三个场所三种引擎，不要混用心智。</p>
+<h3 id="6-4-3-KV-Cache-在机器人上的具体用法"><a href="#6-4-3-KV-Cache-在机器人上的具体用法" class="headerlink" title="6.4.3 KV Cache 在机器人上的具体用法"></a>6.4.3 KV Cache 在机器人上的具体用法</h3><p>VLA 的语言指令在一次任务内通常<strong>不变</strong>（「把杯子放到托盘上」重复 50 次推理）。因此<strong>指令前缀的 KV Cache 可跨帧复用</strong>，每次只增量计算视觉 token 与新观测——这是端侧最划算的一次优化（可省掉骨干前向的可观比例）。工程要点：任务切换时必须失效缓存（脏读会让机器人执行上一个任务的语义，属于 5.6.1 的「语言误解」类事故）；缓存占内存，计入 6.1.3 的预算表。</p>
+<h3 id="6-4-4-端侧-LLM-的真实负载：不是-VLA，是这三样"><a href="#6-4-4-端侧-LLM-的真实负载：不是-VLA，是这三样" class="headerlink" title="6.4.4 端侧 LLM 的真实负载：不是 VLA，是这三样"></a>6.4.4 端侧 LLM 的真实负载：不是 VLA，是这三样</h3><p>澄清一个常见混淆：<strong>VLA 走的是 TensorRT&#x2F;TRT-LLM 的定制链路，不走「LLM 服务」那一套</strong>。端侧真正的 LLM 类负载是：<strong>语音交互</strong>（ASR + 小 LLM + TTS，秒级容忍）、<strong>本地兜底规划</strong>（断云时的简易任务分解，4.9.4 自治清单）、<strong>本地日志&#x2F;故障摘要</strong>（诊断前置处理）。这三样的选型标准是「小、稳、能降级」——3B 以内、GGUF&#x2F;TRT 量化、失败即回退规则或转云。</p>
+<h3 id="6-4-5-与产业物联网平台的映射"><a href="#6-4-5-与产业物联网平台的映射" class="headerlink" title="6.4.5 与产业物联网平台的映射"></a>6.4.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>边缘 LLM</th>
+<th>你的经验</th>
+<th>差异</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>batch&#x3D;1 现实</td>
+<td>云端追吞吐</td>
+<td>直觉反转</td>
+</tr>
+<tr>
+<td>KV Cache 前缀复用</td>
+<td>vLLM prefix caching</td>
+<td>同思想，跨帧复用</td>
+</tr>
+<tr>
+<td>站点池用 vLLM</td>
+<td>你的推理服务栈</td>
+<td>原样迁移</td>
+</tr>
+<tr>
+<td>车机语音助手</td>
+<td>座舱 ASR+LLM+TTS</td>
+<td>完全同构</td>
+</tr>
+</tbody></table>
+<h3 id="6-4-6-企业实践建议"><a href="#6-4-6-企业实践建议" class="headerlink" title="6.4.6 企业实践建议"></a>6.4.6 企业实践建议</h3><p>在《机型算力规格书》里显式区分「实时推理预算」（VLA&#x2F;感知，TRT 链路）与「弹性推理预算」（语音&#x2F;摘要，可抢占可降级）——两类负载共享一块 DRAM，必须显式分池与限额，否则语音助手一句话就能顶掉 VLA 的显存（真实事故）。</p>
+<h3 id="6-4-7-面试可能问什么"><a href="#6-4-7-面试可能问什么" class="headerlink" title="6.4.7 面试可能问什么"></a>6.4.7 面试可能问什么</h3><ol>
+<li>机器人端侧该用 vLLM 吗？（要点：batch&#x3D;1 → 连续批处理无收益；TRT 系首选；vLLM 归站点池）</li>
+<li>KV Cache 在 VLA 上怎么用？（要点：指令前缀跨帧复用；任务切换必须失效）</li>
+<li>端侧 LLM 的真实负载？（要点：语音&#x2F;兜底规划&#x2F;日志摘要三类，小稳能降级）</li>
+</ol>
+<h3 id="6-4-8-最佳实践"><a href="#6-4-8-最佳实践" class="headerlink" title="6.4.8 最佳实践"></a>6.4.8 最佳实践</h3><ul>
+<li>CUDA Graph 用于固定 shape 的高频推理，消除 launch 抖动——P99 优化的性价比之王。</li>
+<li>弹性负载全部设内存上限与优先级，可被实时负载抢占。</li>
+</ul>
+<h3 id="6-4-9-常见误区"><a href="#6-4-9-常见误区" class="headerlink" title="6.4.9 常见误区"></a>6.4.9 常见误区</h3><ul>
+<li>❌ 把云端推理服务架构原样搬到机器人上（起 HTTP 服务、上批处理）——徒增延迟与故障面，端侧应是进程内库调用。</li>
+<li>❌ 忘记任务切换时失效 KV Cache——「按上一个任务的语义干活」的诡异事故。</li>
+</ul>
+<h3 id="6-4-10-Obsidian-永久笔记"><a href="#6-4-10-Obsidian-永久笔记" class="headerlink" title="6.4.10 Obsidian 永久笔记"></a>6.4.10 Obsidian 永久笔记</h3><ul>
+<li>端侧 batch 等于 1：连续批处理失效，优化转向融合&#x2F;量化&#x2F;CUDA Graph。</li>
+<li>三场所三引擎：机上 TRT、站点池 vLLM、开发机 MLX&#x2F;llama.cpp。</li>
+<li>指令前缀 KV 复用：任务内跨帧复用，切换即失效。</li>
+</ul>
+<hr>
+<h2 id="6-5-物理约束：功耗、散热、内存与存储"><a href="#6-5-物理约束：功耗、散热、内存与存储" class="headerlink" title="6.5 物理约束：功耗、散热、内存与存储"></a>6.5 物理约束：功耗、散热、内存与存储</h2><h3 id="6-5-1-功耗档位：nvpmodel-与-jetson-clocks"><a href="#6-5-1-功耗档位：nvpmodel-与-jetson-clocks" class="headerlink" title="6.5.1 功耗档位：nvpmodel 与 jetson_clocks"></a>6.5.1 功耗档位：nvpmodel 与 jetson_clocks</h3><p>Jetson 通过 <code>nvpmodel</code> 切换功耗模式（限定 CPU&#x2F;GPU 核数与频率上限），<code>jetson_clocks</code> 锁定最高频（禁用动态调频）。这两个命令背后是<strong>架构决策而非调参</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>档位</th>
+<th>效果</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>低功耗档（如 15W）</td>
+<td>续航长、温度低、算力受限</td>
+<td>电池敏感的 AMR</td>
+</tr>
+<tr>
+<td>高性能档（MAXN）</td>
+<td>算力全开、发热大</td>
+<td>有线供电&#x2F;散热充足的工位机器人</td>
+</tr>
+<tr>
+<td>jetson_clocks 锁频</td>
+<td><strong>消除调频引起的延迟抖动</strong></td>
+<td><strong>实时性敏感场景推荐</strong>（代价：功耗与发热恒高）</td>
+</tr>
+</tbody></table>
+<p><strong>平台含义</strong>：功耗档位属于机型基线配置（走配置 OTA，2.13.4），且<strong>必须与延迟基线绑定测量</strong>——换档位等于换了一台机器，所有延迟数字全部作废需重测。</p>
+<h3 id="6-5-2-散热与降频：延迟-P99-的隐形杀手"><a href="#6-5-2-散热与降频：延迟-P99-的隐形杀手" class="headerlink" title="6.5.2 散热与降频：延迟 P99 的隐形杀手"></a>6.5.2 散热与降频：延迟 P99 的隐形杀手</h3><p>热节流（thermal throttling）是端侧最阴险的问题：实验室 10 分钟压测一切正常，产线连续跑 2 小时后 GPU 降频 30%，VLA 推理超过 chunk 时长 → 5.5.1 的不等式破裂 → 机器人肉眼可见卡顿。<strong>三条纪律</strong>：压测必须做<strong>长时热浸泡</strong>（≥2 小时到热稳态，而非 10 分钟冲刺）；温度与频率必须进遥测上云（4.8.4 加两个指标：<code>gpu_temp</code>、<code>gpu_freq_throttled_ratio</code>）；机型规格书写明「热稳态下的延迟基线」而非峰值基线。</p>
+<p>【映射 🚗→🤖】这就是车端域控的<strong>热管理与降频</strong>，你在智驾域控上遇到的同一课题——夏季车顶暴晒后算力衰减，结论也一样：<strong>按热稳态设计，不按峰值设计</strong>。</p>
+<h3 id="6-5-3-内存水位与-OOM-保护"><a href="#6-5-3-内存水位与-OOM-保护" class="headerlink" title="6.5.3 内存水位与 OOM 保护"></a>6.5.3 内存水位与 OOM 保护</h3><p>统一内存（6.1.3）下 OOM 的后果可能是灾难性的——Linux OOM killer 不认识「控制进程比日志进程重要」。<strong>三层防线</strong>：预算表留 ≥10% 余量；关键进程设 <code>oom_score_adj=-1000</code>（永不被杀），日志&#x2F;录制类设正值（优先牺牲）；内存水位进遥测 + 分级降级（水位高 → 停止 bag 录制 → 降图像分辨率 → 卸载备槽模型 → 最后才是拒绝新任务）。<strong>降级顺序必须预先定义并演练</strong>，这是机型规格书的一节。</p>
+<h3 id="6-5-4-存储：eMMC-NVMe-的寿命与带宽"><a href="#6-5-4-存储：eMMC-NVMe-的寿命与带宽" class="headerlink" title="6.5.4 存储：eMMC&#x2F;NVMe 的寿命与带宽"></a>6.5.4 存储：eMMC&#x2F;NVMe 的寿命与带宽</h3><p>三条易被忽略的坑：<strong>bag 录制写放大</strong>（连续高码率写入会显著缩短 eMMC 寿命——生产机型建议 NVMe，且触发式录制而非全量，2.21）；<strong>OTA 需要双份空间</strong>（新固件&#x2F;模型下载 + 旧版本保留，A&#x2F;B 与双缓冲都吃磁盘）；<strong>日志轮转必须设死上限</strong>（磁盘写满 &#x3D; 机器人罢工，且往往在夜班无人时发生）。存储余量与寿命（写入量统计）同样应进遥测。</p>
+<h3 id="6-5-5-端侧监控：tegrastats-jtop-与指标上云"><a href="#6-5-5-端侧监控：tegrastats-jtop-与指标上云" class="headerlink" title="6.5.5 端侧监控：tegrastats &#x2F; jtop 与指标上云"></a>6.5.5 端侧监控：tegrastats &#x2F; jtop 与指标上云</h3><p><code>tegrastats</code>（NVIDIA 原生）与 <code>jtop</code>（jetson-stats 社区工具）提供 CPU&#x2F;GPU 利用率、频率、温度、功耗、内存水位。工程做法：写一个 <code>jetson_metrics_node</code>（ROS2 节点）周期解析并发布到遥测话题 → 云桥 → 第四篇数据面 → 大盘与告警。第三篇 <code>telemetry_agg</code> 里那行 <code>gpu_load = 0.0</code> 的 TODO，就在这里补上。</p>
+<p><strong>必上云的六个端侧指标</strong>：GPU 利用率、GPU 温度、降频比例、内存水位、功耗档位、推理延迟 P99。</p>
+<h3 id="6-5-6-与产业物联网平台的映射"><a href="#6-5-6-与产业物联网平台的映射" class="headerlink" title="6.5.6 与产业物联网平台的映射"></a>6.5.6 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>物理约束</th>
+<th>车端</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>功耗档位</td>
+<td>域控功耗模式&#x2F;整车电源管理</td>
+<td>与续航强相关</td>
+</tr>
+<tr>
+<td>热降频</td>
+<td>域控热管理</td>
+<td>按热稳态设计</td>
+</tr>
+<tr>
+<td>OOM 保护</td>
+<td>关键进程保护</td>
+<td>同一手法</td>
+</tr>
+<tr>
+<td>存储寿命</td>
+<td>车载存储写放大</td>
+<td>触发式录制</td>
+</tr>
+<tr>
+<td>tegrastats 上云</td>
+<td>域控健康遥测</td>
+<td>指标直接对应</td>
+</tr>
+</tbody></table>
+<h3 id="6-5-7-企业实践建议"><a href="#6-5-7-企业实践建议" class="headerlink" title="6.5.7 企业实践建议"></a>6.5.7 企业实践建议</h3><p>把「<strong>热稳态压测</strong>」写进机型准入流程：新机型&#x2F;新模型&#x2F;新散热方案，必须提交 2 小时热浸泡下的延迟 P99 与降频曲线，否则不予上线。这一条能挡下工厂里最尴尬的一类事故——「实验室好好的，客户现场跑一下午就卡」。</p>
+<h3 id="6-5-8-面试可能问什么"><a href="#6-5-8-面试可能问什么" class="headerlink" title="6.5.8 面试可能问什么"></a>6.5.8 面试可能问什么</h3><ol>
+<li>端侧性能测试要注意什么？（要点：热稳态而非冲刺、P99 而非均值、档位绑定、长时压测）</li>
+<li>统一内存 OOM 怎么防？（要点：预算余量、oom_score_adj、水位分级降级并演练）</li>
+<li>哪些端侧指标必须上云？（要点：六指标 + 为什么每个都有消费方）</li>
+</ol>
+<h3 id="6-5-9-最佳实践"><a href="#6-5-9-最佳实践" class="headerlink" title="6.5.9 最佳实践"></a>6.5.9 最佳实践</h3><ul>
+<li>实时性敏感机型锁频（jetson_clocks）换确定性，用散热设计买单——<strong>确定性优先于能效</strong>是端侧的价值排序。</li>
+<li>所有物理指标（温度&#x2F;功耗&#x2F;水位）都设「趋势告警」而非仅阈值告警——退化是渐进的。</li>
+</ul>
+<h3 id="6-5-10-常见误区"><a href="#6-5-10-常见误区" class="headerlink" title="6.5.10 常见误区"></a>6.5.10 常见误区</h3><ul>
+<li>❌ 用 10 分钟压测数据写规格书——热稳态一到全部作废。</li>
+<li>❌ 全量录制 bag 到 eMMC——半年后一批机器人集体存储损坏，且难归因。</li>
+</ul>
+<h3 id="6-5-11-Obsidian-永久笔记"><a href="#6-5-11-Obsidian-永久笔记" class="headerlink" title="6.5.11 Obsidian 永久笔记"></a>6.5.11 Obsidian 永久笔记</h3><ul>
+<li>按热稳态设计：2 小时浸泡后的 P99 才是真数字。</li>
+<li>水位分级降级：停录制→降分辨率→卸备槽→拒新任务，预先定义并演练。</li>
+<li>六个端侧指标：GPU 利用率&#x2F;温度&#x2F;降频比&#x2F;内存水位&#x2F;功耗档&#x2F;延迟 P99。</li>
+</ul>
+<hr>
+<h2 id="6-6-资源隔离与实时性：推理不能抢控制"><a href="#6-6-资源隔离与实时性：推理不能抢控制" class="headerlink" title="6.6 资源隔离与实时性：推理不能抢控制"></a>6.6 资源隔离与实时性：推理不能抢控制</h2><h3 id="6-6-1-冲突的本质"><a href="#6-6-1-冲突的本质" class="headerlink" title="6.6.1 冲突的本质"></a>6.6.1 冲突的本质</h3><p>一台机器人上同时跑着：1kHz 控制回路（硬实时）、50Hz 执行器指令、5Hz VLA 推理（吃满 GPU 与带宽）、感知（吃 DLA&#x2F;GPU）、遥测&#x2F;录制（吃 IO）、OTA Agent（偶发吃满 CPU&#x2F;IO）。<strong>它们共享 CPU 核、一块 DRAM、一条内存带宽、一块磁盘</strong>。若不隔离，一次 bag 落盘或一次模型加载就能让控制回路抖动——机器人晃一下，可能就是一次安全事件。</p>
+<h3 id="6-6-2-隔离四板斧"><a href="#6-6-2-隔离四板斧" class="headerlink" title="6.6.2 隔离四板斧"></a>6.6.2 隔离四板斧</h3><table>
+<thead>
+<tr>
+<th>手段</th>
+<th>做法</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CPU 核绑定</strong></td>
+<td>控制进程独占核（isolcpus&#x2F;taskset&#x2F;cgroup cpuset），推理与业务用其余核</td>
+<td>消除调度争抢</td>
+</tr>
+<tr>
+<td><strong>实时优先级</strong></td>
+<td>控制线程 SCHED_FIFO 高优先级 + mlockall 锁内存</td>
+<td>不被换出、不被抢占</td>
+</tr>
+<tr>
+<td><strong>cgroup 限额</strong></td>
+<td>推理&#x2F;录制&#x2F;OTA 进程限 CPU 份额与内存上限</td>
+<td>防单进程吃垮系统</td>
+</tr>
+<tr>
+<td><strong>IO 与带宽</strong></td>
+<td>录制&#x2F;OTA 限速（ionice&#x2F;cgroup blkio），大流量话题走共享内存</td>
+<td>防 IO 抖动传导</td>
+</tr>
+</tbody></table>
+<p>这就是 2.6.6 的「控制节点隔离清单」的完整实现版——当时给的是评审要点，这里是施工手册。</p>
+<h3 id="6-6-3-推理侧的自律三条"><a href="#6-6-3-推理侧的自律三条" class="headerlink" title="6.6.3 推理侧的自律三条"></a>6.6.3 推理侧的自律三条</h3><p><strong>其一，模型加载&#x2F;构建只在非作业窗口</strong>（6.2.4）；<strong>其二，推理进程可被抢占且有超时</strong>——超时立即返回上一 chunk 或降级策略（5.5.4），绝不阻塞等待；<strong>其三，CUDA Graph + 固定 shape</strong> 消除 kernel launch 与内存分配抖动（6.4.8）。一句话：<strong>推理是「客人」，控制是「主人」</strong>——客人再重要也不能掀桌子。</p>
+<h3 id="6-6-4-部署拓扑：进程与资源的对应"><a href="#6-6-4-部署拓扑：进程与资源的对应" class="headerlink" title="6.6.4 部署拓扑：进程与资源的对应"></a>6.6.4 部署拓扑：进程与资源的对应</h3><pre class="mermaid">flowchart TB
+  subgraph CPU["CPU 核分配（示意：8 核）"]
+    C0["核 0-1：控制回路（isolcpus + SCHED_FIFO + mlockall）"]
+    C2["核 2-3：ROS2 感知/业务节点（组合容器，2.22）"]
+    C4["核 4-5：VLA Runtime（cgroup 限额）"]
+    C6["核 6-7：遥测/录制/OTA Agent（低优先级 + IO 限速）"]
+  end
+  subgraph MEM["统一内存（预算表 6.1.3）"]
+    M1["控制+系统（锁定）"] --- M2["感知模型"] --- M3["VLA 主槽+备槽"] --- M4["缓冲区+余量"]
+  end
+  subgraph ACC["加速器"]
+    G["GPU：VLA（TRT）"] --- D["DLA：感知 CNN（INT8）"]
+  end
+  C0 -.绝不共享.- C4</pre>
+
+
+<h3 id="6-6-5-与产业物联网平台的映射"><a href="#6-6-5-与产业物联网平台的映射" class="headerlink" title="6.6.5 与产业物联网平台的映射"></a>6.6.5 与产业物联网平台的映射</h3><table>
+<thead>
+<tr>
+<th>端侧隔离</th>
+<th>车端&#x2F;云端</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>核绑定 + FIFO</td>
+<td>车端实时任务分区</td>
+<td>AUTOSAR 世界的日常</td>
+</tr>
+<tr>
+<td>cgroup 限额</td>
+<td>K8s requests&#x2F;limits</td>
+<td>概念同构，粒度更细</td>
+</tr>
+<tr>
+<td>推理可抢占</td>
+<td>非安全相关功能可降级</td>
+<td>功能安全分级思想</td>
+</tr>
+<tr>
+<td>客人与主人</td>
+<td>计费服务不与日志共享连接池</td>
+<td>你的老直觉</td>
+</tr>
+</tbody></table>
+<h3 id="6-6-6-企业实践建议"><a href="#6-6-6-企业实践建议" class="headerlink" title="6.6.6 企业实践建议"></a>6.6.6 企业实践建议</h3><p>把「资源隔离配置」纳入机型基线并做<strong>开机自检</strong>：启动时校验 isolcpus 参数、关键进程优先级与 oom_score_adj、cgroup 限额是否生效，任一不符则拒绝进入 Active 状态（2.12 的 Lifecycle configure 阶段正是这个检查的家）。配置漂移在端侧是慢性毒药，自检是唯一解药。</p>
+<h3 id="6-6-7-面试可能问什么"><a href="#6-6-7-面试可能问什么" class="headerlink" title="6.6.7 面试可能问什么"></a>6.6.7 面试可能问什么</h3><ol>
+<li>推理与控制如何在一块 SoC 上共存？（要点：隔离四板斧 + 推理自律三条 + 客人主人比喻）</li>
+<li>为什么控制线程要 mlockall？（要点：防页换出导致的不可预测延迟）</li>
+<li>隔离配置如何保证不漂移？（要点：机型基线 + 开机自检 + Lifecycle 门禁）</li>
+</ol>
+<h3 id="6-6-8-最佳实践"><a href="#6-6-8-最佳实践" class="headerlink" title="6.6.8 最佳实践"></a>6.6.8 最佳实践</h3><ul>
+<li>任何新增端侧进程（新功能、新 Agent、新录制器）必须申报资源预算并进隔离配置——<strong>端侧没有「顺便跑一下」的东西</strong>。</li>
+<li>隔离生效性做成常态化压测项：注入推理满载 + IO 满载，测控制回路抖动是否仍在阈值内。</li>
+</ul>
+<h3 id="6-6-9-常见误区"><a href="#6-6-9-常见误区" class="headerlink" title="6.6.9 常见误区"></a>6.6.9 常见误区</h3><ul>
+<li>❌ 「Jetson 核多，随便跑」——不绑定核的系统，抖动来源永远查不清。</li>
+<li>❌ 把 OTA&#x2F;录制当无害后台——它们的 IO 与内存尖峰是控制抖动的经典元凶。</li>
+</ul>
+<h3 id="6-6-10-Obsidian-永久笔记"><a href="#6-6-10-Obsidian-永久笔记" class="headerlink" title="6.6.10 Obsidian 永久笔记"></a>6.6.10 Obsidian 永久笔记</h3><ul>
+<li>隔离四板斧：核绑定、实时优先级+锁内存、cgroup 限额、IO 限速。</li>
+<li>推理是客人控制是主人：可抢占、有超时、非作业窗口加载。</li>
+<li>开机自检隔离配置：Lifecycle configure 阶段校验，不符不进 Active。</li>
+</ul>
+<hr>
+<h2 id="6-7-Robot-Edge-Deployment-Guide（可施工版）"><a href="#6-7-Robot-Edge-Deployment-Guide（可施工版）" class="headerlink" title="6.7 Robot Edge Deployment Guide（可施工版）"></a>6.7 Robot Edge Deployment Guide（可施工版）</h2><blockquote>
+<p>从零把一个模型送上一台新机型的完整施工顺序。每步给出「输入 → 动作 → 验收」，可直接作为团队 SOP。</p>
+</blockquote>
+<h3 id="6-7-1-阶段一：机型基线（一次性，产出规格书）"><a href="#6-7-1-阶段一：机型基线（一次性，产出规格书）" class="headerlink" title="6.7.1 阶段一：机型基线（一次性，产出规格书）"></a>6.7.1 阶段一：机型基线（一次性，产出规格书）</h3><table>
+<thead>
+<tr>
+<th>步</th>
+<th>动作</th>
+<th>验收</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>确定 SoC 型号、内存、供电与散热方案</td>
+<td>机型规格书 v0</td>
+</tr>
+<tr>
+<td>2</td>
+<td>填内存预算表（6.1.3），含双缓冲与余量</td>
+<td>总和 ≤ 物理内存 ×0.9</td>
+</tr>
+<tr>
+<td>3</td>
+<td>定功耗档与是否锁频（6.5.1）</td>
+<td>档位写入机型基线配置</td>
+</tr>
+<tr>
+<td>4</td>
+<td>配置隔离四板斧 + 开机自检（6.6）</td>
+<td>自检通过才进 Active</td>
+</tr>
+<tr>
+<td>5</td>
+<td>部署 jetson_metrics_node，六指标上云（6.5.5）</td>
+<td>云端大盘可见该机型</td>
+</tr>
+</tbody></table>
+<h3 id="6-7-2-阶段二：模型上机（每个模型）"><a href="#6-7-2-阶段二：模型上机（每个模型）" class="headerlink" title="6.7.2 阶段二：模型上机（每个模型）"></a>6.7.2 阶段二：模型上机（每个模型）</h3><table>
+<thead>
+<tr>
+<th>步</th>
+<th>动作</th>
+<th>验收</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>6</td>
+<td>收齐模型四件套（6.2.6）与三契约（5.3）</td>
+<td>缺一不入制品库</td>
+</tr>
+<tr>
+<td>7</td>
+<td>CI 构建 engine 矩阵（机型×JetPack×精度，6.2.3）</td>
+<td>矩阵齐全，命名合规</td>
+</tr>
+<tr>
+<td>8</td>
+<td>量化 + 精度回归三关（6.3.3）</td>
+<td>报告：精度&#x2F;延迟&#x2F;内存三元组</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Runtime 契约校验 + 六件事就位（5.5.4）</td>
+<td>加载即校验，不符拒载</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>热稳态压测 ≥2h</strong>（6.5.2）</td>
+<td>P99 延迟 &lt; chunk 时长 - 抖动裕度</td>
+</tr>
+<tr>
+<td>11</td>
+<td>隔离压测：推理+IO 满载下测控制抖动</td>
+<td>控制抖动在阈值内</td>
+</tr>
+</tbody></table>
+<h3 id="6-7-3-阶段三：上线与运营"><a href="#6-7-3-阶段三：上线与运营" class="headerlink" title="6.7.3 阶段三：上线与运营"></a>6.7.3 阶段三：上线与运营</h3><table>
+<thead>
+<tr>
+<th>步</th>
+<th>动作</th>
+<th>验收</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>12</td>
+<td>影子模式并跑（4.3.6 &#x2F; 5.6）</td>
+<td>动作分歧分布达标</td>
+</tr>
+<tr>
+<td>13</td>
+<td>模型 OTA 灰度环 + 门禁（4.3.7）</td>
+<td>每环烘烤期指标不破线</td>
+</tr>
+<tr>
+<td>14</td>
+<td>端侧指标接入大盘与告警（4.8）</td>
+<td>延迟 P99&#x2F;水位&#x2F;温度可观测</td>
+</tr>
+<tr>
+<td>15</td>
+<td>失效演练：推理超时&#x2F;OOM&#x2F;降频注入</td>
+<td>降级路径全部生效</td>
+</tr>
+<tr>
+<td>16</td>
+<td>归档：规格书 + 报告 + engine 矩阵 + 血缘</td>
+<td>可审计、可复现</td>
+</tr>
+</tbody></table>
+<h3 id="6-7-4-施工全流程图"><a href="#6-7-4-施工全流程图" class="headerlink" title="6.7.4 施工全流程图"></a>6.7.4 施工全流程图</h3><pre class="mermaid">flowchart TB
+  S1["1-5 机型基线：预算/档位/隔离/自检/指标"] --&gt; S2["6-8 制品化：四件套→engine 矩阵→量化回归"]
+  S2 --&gt; S3["9-11 上机验证：契约校验→热稳态压测→隔离压测"]
+  S3 --&gt; S4["12-13 影子与灰度：分歧门禁→环+烘烤"]
+  S4 --&gt; S5["14-16 运营：可观测→失效演练→归档"]
+  S3 -.不达标.-&gt; S2
+  S4 -.破线.-&gt; RB["自动回滚"]</pre>
+
+
+<h3 id="6-7-5-与产业物联网平台的映射"><a href="#6-7-5-与产业物联网平台的映射" class="headerlink" title="6.7.5 与产业物联网平台的映射"></a>6.7.5 与产业物联网平台的映射</h3><p>这份 Guide ≈ 你们的<strong>域控软件上车流程</strong>：机型基线 ≈ 域控平台化配置，制品化 ≈ 编译与签名流水线，上机验证 ≈ 台架测试，影子灰度 ≈ 影子模式 + 分批 OTA，归档 ≈ 变更审计。名词替换即可复用你的存量 SOP。</p>
+<h3 id="6-7-6-企业实践建议"><a href="#6-7-6-企业实践建议" class="headerlink" title="6.7.6 企业实践建议"></a>6.7.6 企业实践建议</h3><p>把 16 步做成 Checklist 卡片贴进项目看板，每个模型上线拉一张——<strong>流程可视化是平台团队治理端侧混沌的第一步</strong>，也是新人最快理解「端侧为什么这么麻烦」的教具。</p>
+<h3 id="6-7-7-面试可能问什么"><a href="#6-7-7-面试可能问什么" class="headerlink" title="6.7.7 面试可能问什么"></a>6.7.7 面试可能问什么</h3><ol>
+<li>一个模型从训练完到上线，端侧要做哪些事？（要点：三阶段 16 步，重点讲 engine 矩阵、热稳态、影子）</li>
+<li>端侧上线的门禁有哪些？（要点：契约校验、P99 不等式、隔离压测、分歧分布、灰度烘烤）</li>
+</ol>
+<h3 id="6-7-8-最佳实践"><a href="#6-7-8-最佳实践" class="headerlink" title="6.7.8 最佳实践"></a>6.7.8 最佳实践</h3><ul>
+<li>每步都留「机器可读的产出物」（报告 JSON、engine 清单、压测曲线），归档进制品血缘——人类记忆不可审计。</li>
+<li>16 步中任一步失败都要能定位到唯一责任方（算法&#x2F;平台&#x2F;结构&#x2F;采购），流程即责任划分。</li>
+</ul>
+<h3 id="6-7-9-常见误区"><a href="#6-7-9-常见误区" class="headerlink" title="6.7.9 常见误区"></a>6.7.9 常见误区</h3><ul>
+<li>❌ 跳过阶段一直接上模型——机型基线不稳，后面所有数字都是流沙。</li>
+<li>❌ 把 16 步当官僚流程——每一步都对应一类曾经的真实事故，删哪步就是复现哪个坑。</li>
+</ul>
+<h3 id="6-7-10-Obsidian-永久笔记"><a href="#6-7-10-Obsidian-永久笔记" class="headerlink" title="6.7.10 Obsidian 永久笔记"></a>6.7.10 Obsidian 永久笔记</h3><ul>
+<li>三阶段 16 步：机型基线 → 制品化上机 → 影子灰度运营。</li>
+<li>每步都有机器可读产出：报告&#x2F;清单&#x2F;曲线入血缘，可审计可复现。</li>
+</ul>
+<hr>
+<h2 id="6-8-本篇总结"><a href="#6-8-本篇总结" class="headerlink" title="6.8 本篇总结"></a>6.8 本篇总结</h2><h3 id="6-8-1-十条核心结论"><a href="#6-8-1-十条核心结论" class="headerlink" title="6.8.1 十条核心结论"></a>6.8.1 十条核心结论</h3><ol>
+<li>云端优化吞吐，端侧优化确定性——P99、功耗、温度取代 QPS 成为一等指标。</li>
+<li>选型看内存&#x2F;带宽&#x2F;功耗&#x2F;DLA 四件事；TOPS 是峰值不是承诺，只信自己的压测。</li>
+<li>统一内存是一口锅：模型、缓冲、ROS、系统互抢，预算按总量算并留余量。</li>
+<li>TensorRT engine 绑定硬件与版本——模型 OTA 必须建 (机型 × JetPack × 精度) 矩阵。</li>
+<li>模型制品四件套：权重&#x2F;engine + 预处理契约 + 归一化统计量 + 模型卡，缺一不入库。</li>
+<li>量化是默认项：FP16→INT8&#x2F;FP8→W4→QAT；校准集是制品；动作头保守量化。</li>
+<li>端侧 batch&#x3D;1，连续批处理失效：机上 TRT、站点池 vLLM、开发机 MLX&#x2F;llama.cpp。</li>
+<li>按热稳态设计而非峰值：2 小时浸泡后的 P99 才是能写进规格书的数字。</li>
+<li>推理是客人、控制是主人：隔离四板斧 + 推理自律三条 + 开机自检防漂移。</li>
+<li>三阶段 16 步 Deployment Guide：把端侧混沌变成可审计的流水线。</li>
+</ol>
+<h3 id="6-8-2-本篇卡片索引"><a href="#6-8-2-本篇卡片索引" class="headerlink" title="6.8.2 本篇卡片索引"></a>6.8.2 本篇卡片索引</h3><p>端侧优化确定性 · TOPS 是峰值不是承诺 · 统一内存一口锅 · DLA 卸载感知 · engine 绑定硬件与版本 · 模型制品四件套 · 端侧构建是一次任务 · 量化是端侧默认项 · 校准集是制品 · 动作头保守量化 · 端侧 batch 等于 1 · 三场所三引擎 · 指令前缀 KV 复用 · 按热稳态设计 · 水位分级降级 · 六个端侧指标 · 隔离四板斧 · 推理是客人控制是主人 · 开机自检隔离配置 · 三阶段 16 步 · 每步都有机器可读产出</p>
+<h3 id="6-8-3-第七篇预告"><a href="#6-8-3-第七篇预告" class="headerlink" title="6.8.3 第七篇预告"></a>6.8.3 第七篇预告</h3><p>模型与硬件都就位了，接下来是让它们持续变强的燃料。第七篇《Robot Data Engine》用你最熟的武器建机器人数据飞轮：Kafka&#x2F;Flink 实时管道、Iceberg&#x2F;Delta 湖仓与 MinIO、ClickHouse 遥测仓、Milvus 与 Feature Store、bag 索引与检索、数据筛选与挖掘策略、Replay 与 Evaluation 体系——最终画出完整的<strong>机器人数据飞轮</strong>，并给出「从回传到新模型上线」的转速优化清单。</p>
+<hr>
+<hr>
+<p><a href="./05-VLA.md">⬅️ 上一篇</a> ｜ <a href="../%E7%B4%A2%E5%BC%95-%E6%80%BB%E7%9B%AE%E5%BD%95.md">🔝 返回总目录</a> ｜ <a href="./07-Robot-Data-Engine.md">下一篇 ➡️</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/02/24/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-07-%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/">机器人数据引擎</a></h3>
+        <p>模型（第五篇）与硬件（第六篇）就位后，决定胜负的是燃料供给系统。</p>
+        <a class="btn primary" href="/2026/02/24/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-07-%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/11/11/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-05-VLA/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：VLA 视觉语言动作模型</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E5%85%AD%E7%AF%87-Robot-Edge-AI" data-toc-target="第六篇-Robot-Edge-AI"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第六篇 Robot Edge AI</span></a><a class="toc-level-2" href="#6-0-%E6%9C%AC%E7%AF%87%E5%AF%BC%E8%AF%BB" data-toc-target="6-0-本篇导读"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">6.0 本篇导读</span></a><a class="toc-level-3" href="#6-0-1-%E4%B8%8E%E4%BD%A0%E7%9A%84-AI-Infra-%E7%BB%8F%E9%AA%8C%EF%BC%9A%E5%85%AB%E6%88%90%E8%BF%81%E7%A7%BB%EF%BC%8C%E4%B8%A4%E6%88%90%E9%87%8D%E5%AD%A6" data-toc-target="6-0-1-与你的-AI-Infra-经验：八成迁移，两成重学"><span class="toc-text">6.0.1 与你的 AI Infra 经验：八成迁移，两成重学</span></a><a class="toc-level-3" href="#6-0-2-%E5%AD%A6%E5%AE%8C%E6%9C%AC%E7%AF%87%E4%BD%A0%E8%83%BD%E5%9B%9E%E7%AD%94%E7%9A%84%E5%8D%81%E4%B8%AA%E9%97%AE%E9%A2%98" data-toc-target="6-0-2-学完本篇你能回答的十个问题"><span class="toc-text">6.0.2 学完本篇你能回答的十个问题</span></a><a class="toc-level-3" href="#6-0-3-%E6%9C%AC%E7%AF%87%E7%9F%A5%E8%AF%86%E5%9C%B0%E5%9B%BE" data-toc-target="6-0-3-本篇知识地图"><span class="toc-text">6.0.3 本篇知识地图</span></a><a class="toc-level-2" href="#6-1-Jetson-%E5%AE%B6%E6%97%8F%E4%B8%8E%E7%A1%AC%E4%BB%B6%E9%80%89%E5%9E%8B" data-toc-target="6-1-Jetson-家族与硬件选型"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">6.1 Jetson 家族与硬件选型</span></a><a class="toc-level-3" href="#6-1-1-%E5%AE%B6%E6%97%8F%E9%80%9F%E6%9F%A5%EF%BC%88%E6%88%AA%E8%87%B3%E6%9C%AC%E6%89%8B%E5%86%8C%E6%92%B0%E5%86%99%E6%97%B6%EF%BC%89" data-toc-target="6-1-1-家族速查（截至本手册撰写时）"><span class="toc-text">6.1.1 家族速查（截至本手册撰写时）</span></a><a class="toc-level-3" href="#6-1-2-TOPS-%E7%9A%84%E7%9C%9F%E7%9B%B8%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E5%AE%83%E4%B8%8D%E8%83%BD%E7%AE%97%E5%BB%B6%E8%BF%9F" data-toc-target="6-1-2-TOPS-的真相：为什么它不能算延迟"><span class="toc-text">6.1.2 TOPS 的真相：为什么它不能算延迟</span></a><a class="toc-level-3" href="#6-1-3-%E7%BB%9F%E4%B8%80%E5%86%85%E5%AD%98%EF%BC%88Unified-Memory%EF%BC%89%EF%BC%9A%E7%A6%8F%E5%88%A9%E4%B8%8E%E9%99%B7%E9%98%B1" data-toc-target="6-1-3-统一内存（Unified-Memory）：福利与陷阱"><span class="toc-text">6.1.3 统一内存（Unified Memory）：福利与陷阱</span></a><a class="toc-level-3" href="#6-1-4-DLA%EF%BC%9A%E6%8A%8A%E6%84%9F%E7%9F%A5%E5%8D%B8%E8%BD%BD%E5%87%BA-GPU" data-toc-target="6-1-4-DLA：把感知卸载出-GPU"><span class="toc-text">6.1.4 DLA：把感知卸载出 GPU</span></a><a class="toc-level-3" href="#6-1-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="6-1-5-与产业物联网平台的映射"><span class="toc-text">6.1.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#6-1-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="6-1-6-企业实践建议"><span class="toc-text">6.1.6 企业实践建议</span></a><a class="toc-level-3" href="#6-1-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="6-1-7-面试可能问什么"><span class="toc-text">6.1.7 面试可能问什么</span></a><a class="toc-level-3" href="#6-1-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="6-1-8-最佳实践"><span class="toc-text">6.1.8 最佳实践</span></a><a class="toc-level-3" href="#6-1-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="6-1-9-常见误区"><span class="toc-text">6.1.9 常见误区</span></a><a class="toc-level-3" href="#6-1-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="6-1-10-Obsidian-永久笔记"><span class="toc-text">6.1.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#6-2-%E9%83%A8%E7%BD%B2%E9%93%BE%EF%BC%9APyTorch-%E2%86%92-ONNX-%E2%86%92-TensorRT" data-toc-target="6-2-部署链：PyTorch-→-ONNX-→-TensorRT"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">6.2 部署链：PyTorch → ONNX → TensorRT</span></a><a class="toc-level-3" href="#6-2-1-%E5%85%A8%E9%93%BE%E8%B7%AF" data-toc-target="6-2-1-全链路"><span class="toc-text">6.2.1 全链路</span></a><a class="toc-level-3" href="#6-2-2-%E5%AF%BC%E5%87%BA%E6%9C%9F%E7%9A%84%E4%BA%94%E4%B8%AA%E7%BB%8F%E5%85%B8%E5%9D%91" data-toc-target="6-2-2-导出期的五个经典坑"><span class="toc-text">6.2.2 导出期的五个经典坑</span></a><a class="toc-level-3" href="#6-2-3-%E5%BC%95%E6%93%8E%E6%9E%84%E5%BB%BA%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88-engine-%E4%B8%8D%E5%8F%AF%E7%A7%BB%E6%A4%8D%EF%BC%88%E5%B9%B3%E5%8F%B0%E6%9C%80%E5%85%B3%E9%94%AE%E7%9A%84%E4%B8%80%E6%9D%A1%EF%BC%89" data-toc-target="6-2-3-引擎构建：为什么-engine-不可移植（平台最关键的一条）"><span class="toc-text">6.2.3 引擎构建：为什么 engine 不可移植（平台最关键的一条）</span></a><a class="toc-level-3" href="#6-2-4-%E7%AB%AF%E4%BE%A7%E6%9E%84%E5%BB%BA%E7%9A%84%E5%B7%A5%E7%A8%8B%E7%BB%86%E8%8A%82%EF%BC%88%E7%AD%96%E7%95%A5-A-%E5%85%9C%E5%BA%95%E6%97%B6%EF%BC%89" data-toc-target="6-2-4-端侧构建的工程细节（策略-A-兜底时）"><span class="toc-text">6.2.4 端侧构建的工程细节（策略 A 兜底时）</span></a><a class="toc-level-3" href="#6-2-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="6-2-5-与产业物联网平台的映射"><span class="toc-text">6.2.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#6-2-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="6-2-6-企业实践建议"><span class="toc-text">6.2.6 企业实践建议</span></a><a class="toc-level-3" href="#6-2-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="6-2-7-面试可能问什么"><span class="toc-text">6.2.7 面试可能问什么</span></a><a class="toc-level-3" href="#6-2-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="6-2-8-最佳实践"><span class="toc-text">6.2.8 最佳实践</span></a><a class="toc-level-3" href="#6-2-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="6-2-9-常见误区"><span class="toc-text">6.2.9 常见误区</span></a><a class="toc-level-3" href="#6-2-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="6-2-10-Obsidian-永久笔记"><span class="toc-text">6.2.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#6-3-%E9%87%8F%E5%8C%96%EF%BC%9A%E7%AB%AF%E4%BE%A7%E7%9A%84%E9%BB%98%E8%AE%A4%E9%A1%B9" data-toc-target="6-3-量化：端侧的默认项"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">6.3 量化：端侧的默认项</span></a><a class="toc-level-3" href="#6-3-1-%E5%85%A8%E8%B0%B1%E9%80%9F%E6%9F%A5" data-toc-target="6-3-1-全谱速查"><span class="toc-text">6.3.1 全谱速查</span></a><a class="toc-level-3" href="#6-3-2-%E6%A0%A1%E5%87%86%E6%95%B0%E6%8D%AE%E9%9B%86%EF%BC%9A%E6%9C%80%E5%AE%B9%E6%98%93%E8%A2%AB%E5%BF%BD%E7%95%A5%E7%9A%84%E5%88%B6%E5%93%81" data-toc-target="6-3-2-校准数据集：最容易被忽略的制品"><span class="toc-text">6.3.2 校准数据集：最容易被忽略的制品</span></a><a class="toc-level-3" href="#6-3-3-%E7%B2%BE%E5%BA%A6%E5%9B%9E%E5%BD%92%E9%97%A8%E7%A6%81" data-toc-target="6-3-3-精度回归门禁"><span class="toc-text">6.3.3 精度回归门禁</span></a><a class="toc-level-3" href="#6-3-4-%E9%87%8F%E5%8C%96%E5%AF%B9-VLA-%E7%9A%84%E7%89%B9%E6%AE%8A%E6%80%A7" data-toc-target="6-3-4-量化对-VLA-的特殊性"><span class="toc-text">6.3.4 量化对 VLA 的特殊性</span></a><a class="toc-level-3" href="#6-3-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="6-3-5-与产业物联网平台的映射"><span class="toc-text">6.3.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#6-3-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="6-3-6-企业实践建议"><span class="toc-text">6.3.6 企业实践建议</span></a><a class="toc-level-3" href="#6-3-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="6-3-7-面试可能问什么"><span class="toc-text">6.3.7 面试可能问什么</span></a><a class="toc-level-3" href="#6-3-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="6-3-8-最佳实践"><span class="toc-text">6.3.8 最佳实践</span></a><a class="toc-level-3" href="#6-3-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="6-3-9-常见误区"><span class="toc-text">6.3.9 常见误区</span></a><a class="toc-level-3" href="#6-3-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="6-3-10-Obsidian-永久笔记"><span class="toc-text">6.3.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#6-4-%E8%BE%B9%E7%BC%98-LLM%EF%BC%9AvLLM-SGLang-TensorRT-LLM-llama-cpp-MLX-%E7%9A%84%E4%BD%8D%E7%BD%AE" data-toc-target="6-4-边缘-LLM：vLLM-SGLang-TensorRT-LLM-llama-cpp-MLX-的位置"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">6.4 边缘 LLM：vLLM / SGLang / TensorRT-LLM / llama.cpp / MLX 的位置</span></a><a class="toc-level-3" href="#6-4-1-%E5%85%88%E7%A0%B4%E4%B8%80%E4%B8%AA%E5%B9%BB%E8%A7%89%EF%BC%9A%E7%AB%AF%E4%BE%A7-batch-1" data-toc-target="6-4-1-先破一个幻觉：端侧-batch-1"><span class="toc-text">6.4.1 先破一个幻觉：端侧 batch=1</span></a><a class="toc-level-3" href="#6-4-2-%E5%BC%95%E6%93%8E%E9%80%89%E5%9E%8B%E7%9F%A9%E9%98%B5" data-toc-target="6-4-2-引擎选型矩阵"><span class="toc-text">6.4.2 引擎选型矩阵</span></a><a class="toc-level-3" href="#6-4-3-KV-Cache-%E5%9C%A8%E6%9C%BA%E5%99%A8%E4%BA%BA%E4%B8%8A%E7%9A%84%E5%85%B7%E4%BD%93%E7%94%A8%E6%B3%95" data-toc-target="6-4-3-KV-Cache-在机器人上的具体用法"><span class="toc-text">6.4.3 KV Cache 在机器人上的具体用法</span></a><a class="toc-level-3" href="#6-4-4-%E7%AB%AF%E4%BE%A7-LLM-%E7%9A%84%E7%9C%9F%E5%AE%9E%E8%B4%9F%E8%BD%BD%EF%BC%9A%E4%B8%8D%E6%98%AF-VLA%EF%BC%8C%E6%98%AF%E8%BF%99%E4%B8%89%E6%A0%B7" data-toc-target="6-4-4-端侧-LLM-的真实负载：不是-VLA，是这三样"><span class="toc-text">6.4.4 端侧 LLM 的真实负载：不是 VLA，是这三样</span></a><a class="toc-level-3" href="#6-4-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="6-4-5-与产业物联网平台的映射"><span class="toc-text">6.4.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#6-4-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="6-4-6-企业实践建议"><span class="toc-text">6.4.6 企业实践建议</span></a><a class="toc-level-3" href="#6-4-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="6-4-7-面试可能问什么"><span class="toc-text">6.4.7 面试可能问什么</span></a><a class="toc-level-3" href="#6-4-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="6-4-8-最佳实践"><span class="toc-text">6.4.8 最佳实践</span></a><a class="toc-level-3" href="#6-4-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="6-4-9-常见误区"><span class="toc-text">6.4.9 常见误区</span></a><a class="toc-level-3" href="#6-4-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="6-4-10-Obsidian-永久笔记"><span class="toc-text">6.4.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#6-5-%E7%89%A9%E7%90%86%E7%BA%A6%E6%9D%9F%EF%BC%9A%E5%8A%9F%E8%80%97%E3%80%81%E6%95%A3%E7%83%AD%E3%80%81%E5%86%85%E5%AD%98%E4%B8%8E%E5%AD%98%E5%82%A8" data-toc-target="6-5-物理约束：功耗、散热、内存与存储"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6.5 物理约束：功耗、散热、内存与存储</span></a><a class="toc-level-3" href="#6-5-1-%E5%8A%9F%E8%80%97%E6%A1%A3%E4%BD%8D%EF%BC%9Anvpmodel-%E4%B8%8E-jetson-clocks" data-toc-target="6-5-1-功耗档位：nvpmodel-与-jetson-clocks"><span class="toc-text">6.5.1 功耗档位：nvpmodel 与 jetson_clocks</span></a><a class="toc-level-3" href="#6-5-2-%E6%95%A3%E7%83%AD%E4%B8%8E%E9%99%8D%E9%A2%91%EF%BC%9A%E5%BB%B6%E8%BF%9F-P99-%E7%9A%84%E9%9A%90%E5%BD%A2%E6%9D%80%E6%89%8B" data-toc-target="6-5-2-散热与降频：延迟-P99-的隐形杀手"><span class="toc-text">6.5.2 散热与降频：延迟 P99 的隐形杀手</span></a><a class="toc-level-3" href="#6-5-3-%E5%86%85%E5%AD%98%E6%B0%B4%E4%BD%8D%E4%B8%8E-OOM-%E4%BF%9D%E6%8A%A4" data-toc-target="6-5-3-内存水位与-OOM-保护"><span class="toc-text">6.5.3 内存水位与 OOM 保护</span></a><a class="toc-level-3" href="#6-5-4-%E5%AD%98%E5%82%A8%EF%BC%9AeMMC-NVMe-%E7%9A%84%E5%AF%BF%E5%91%BD%E4%B8%8E%E5%B8%A6%E5%AE%BD" data-toc-target="6-5-4-存储：eMMC-NVMe-的寿命与带宽"><span class="toc-text">6.5.4 存储：eMMC/NVMe 的寿命与带宽</span></a><a class="toc-level-3" href="#6-5-5-%E7%AB%AF%E4%BE%A7%E7%9B%91%E6%8E%A7%EF%BC%9Ategrastats-jtop-%E4%B8%8E%E6%8C%87%E6%A0%87%E4%B8%8A%E4%BA%91" data-toc-target="6-5-5-端侧监控：tegrastats-jtop-与指标上云"><span class="toc-text">6.5.5 端侧监控：tegrastats / jtop 与指标上云</span></a><a class="toc-level-3" href="#6-5-6-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="6-5-6-与产业物联网平台的映射"><span class="toc-text">6.5.6 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#6-5-7-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="6-5-7-企业实践建议"><span class="toc-text">6.5.7 企业实践建议</span></a><a class="toc-level-3" href="#6-5-8-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="6-5-8-面试可能问什么"><span class="toc-text">6.5.8 面试可能问什么</span></a><a class="toc-level-3" href="#6-5-9-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="6-5-9-最佳实践"><span class="toc-text">6.5.9 最佳实践</span></a><a class="toc-level-3" href="#6-5-10-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="6-5-10-常见误区"><span class="toc-text">6.5.10 常见误区</span></a><a class="toc-level-3" href="#6-5-11-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="6-5-11-Obsidian-永久笔记"><span class="toc-text">6.5.11 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#6-6-%E8%B5%84%E6%BA%90%E9%9A%94%E7%A6%BB%E4%B8%8E%E5%AE%9E%E6%97%B6%E6%80%A7%EF%BC%9A%E6%8E%A8%E7%90%86%E4%B8%8D%E8%83%BD%E6%8A%A2%E6%8E%A7%E5%88%B6" data-toc-target="6-6-资源隔离与实时性：推理不能抢控制"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">6.6 资源隔离与实时性：推理不能抢控制</span></a><a class="toc-level-3" href="#6-6-1-%E5%86%B2%E7%AA%81%E7%9A%84%E6%9C%AC%E8%B4%A8" data-toc-target="6-6-1-冲突的本质"><span class="toc-text">6.6.1 冲突的本质</span></a><a class="toc-level-3" href="#6-6-2-%E9%9A%94%E7%A6%BB%E5%9B%9B%E6%9D%BF%E6%96%A7" data-toc-target="6-6-2-隔离四板斧"><span class="toc-text">6.6.2 隔离四板斧</span></a><a class="toc-level-3" href="#6-6-3-%E6%8E%A8%E7%90%86%E4%BE%A7%E7%9A%84%E8%87%AA%E5%BE%8B%E4%B8%89%E6%9D%A1" data-toc-target="6-6-3-推理侧的自律三条"><span class="toc-text">6.6.3 推理侧的自律三条</span></a><a class="toc-level-3" href="#6-6-4-%E9%83%A8%E7%BD%B2%E6%8B%93%E6%89%91%EF%BC%9A%E8%BF%9B%E7%A8%8B%E4%B8%8E%E8%B5%84%E6%BA%90%E7%9A%84%E5%AF%B9%E5%BA%94" data-toc-target="6-6-4-部署拓扑：进程与资源的对应"><span class="toc-text">6.6.4 部署拓扑：进程与资源的对应</span></a><a class="toc-level-3" href="#6-6-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="6-6-5-与产业物联网平台的映射"><span class="toc-text">6.6.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#6-6-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="6-6-6-企业实践建议"><span class="toc-text">6.6.6 企业实践建议</span></a><a class="toc-level-3" href="#6-6-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="6-6-7-面试可能问什么"><span class="toc-text">6.6.7 面试可能问什么</span></a><a class="toc-level-3" href="#6-6-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="6-6-8-最佳实践"><span class="toc-text">6.6.8 最佳实践</span></a><a class="toc-level-3" href="#6-6-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="6-6-9-常见误区"><span class="toc-text">6.6.9 常见误区</span></a><a class="toc-level-3" href="#6-6-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="6-6-10-Obsidian-永久笔记"><span class="toc-text">6.6.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#6-7-Robot-Edge-Deployment-Guide%EF%BC%88%E5%8F%AF%E6%96%BD%E5%B7%A5%E7%89%88%EF%BC%89" data-toc-target="6-7-Robot-Edge-Deployment-Guide（可施工版）"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">6.7 Robot Edge Deployment Guide（可施工版）</span></a><a class="toc-level-3" href="#6-7-1-%E9%98%B6%E6%AE%B5%E4%B8%80%EF%BC%9A%E6%9C%BA%E5%9E%8B%E5%9F%BA%E7%BA%BF%EF%BC%88%E4%B8%80%E6%AC%A1%E6%80%A7%EF%BC%8C%E4%BA%A7%E5%87%BA%E8%A7%84%E6%A0%BC%E4%B9%A6%EF%BC%89" data-toc-target="6-7-1-阶段一：机型基线（一次性，产出规格书）"><span class="toc-text">6.7.1 阶段一：机型基线（一次性，产出规格书）</span></a><a class="toc-level-3" href="#6-7-2-%E9%98%B6%E6%AE%B5%E4%BA%8C%EF%BC%9A%E6%A8%A1%E5%9E%8B%E4%B8%8A%E6%9C%BA%EF%BC%88%E6%AF%8F%E4%B8%AA%E6%A8%A1%E5%9E%8B%EF%BC%89" data-toc-target="6-7-2-阶段二：模型上机（每个模型）"><span class="toc-text">6.7.2 阶段二：模型上机（每个模型）</span></a><a class="toc-level-3" href="#6-7-3-%E9%98%B6%E6%AE%B5%E4%B8%89%EF%BC%9A%E4%B8%8A%E7%BA%BF%E4%B8%8E%E8%BF%90%E8%90%A5" data-toc-target="6-7-3-阶段三：上线与运营"><span class="toc-text">6.7.3 阶段三：上线与运营</span></a><a class="toc-level-3" href="#6-7-4-%E6%96%BD%E5%B7%A5%E5%85%A8%E6%B5%81%E7%A8%8B%E5%9B%BE" data-toc-target="6-7-4-施工全流程图"><span class="toc-text">6.7.4 施工全流程图</span></a><a class="toc-level-3" href="#6-7-5-%E4%B8%8E%E4%BA%A7%E4%B8%9A%E7%89%A9%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E7%9A%84%E6%98%A0%E5%B0%84" data-toc-target="6-7-5-与产业物联网平台的映射"><span class="toc-text">6.7.5 与产业物联网平台的映射</span></a><a class="toc-level-3" href="#6-7-6-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="6-7-6-企业实践建议"><span class="toc-text">6.7.6 企业实践建议</span></a><a class="toc-level-3" href="#6-7-7-%E9%9D%A2%E8%AF%95%E5%8F%AF%E8%83%BD%E9%97%AE%E4%BB%80%E4%B9%88" data-toc-target="6-7-7-面试可能问什么"><span class="toc-text">6.7.7 面试可能问什么</span></a><a class="toc-level-3" href="#6-7-8-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5" data-toc-target="6-7-8-最佳实践"><span class="toc-text">6.7.8 最佳实践</span></a><a class="toc-level-3" href="#6-7-9-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA" data-toc-target="6-7-9-常见误区"><span class="toc-text">6.7.9 常见误区</span></a><a class="toc-level-3" href="#6-7-10-Obsidian-%E6%B0%B8%E4%B9%85%E7%AC%94%E8%AE%B0" data-toc-target="6-7-10-Obsidian-永久笔记"><span class="toc-text">6.7.10 Obsidian 永久笔记</span></a><a class="toc-level-2" href="#6-8-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="6-8-本篇总结"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">6.8 本篇总结</span></a><a class="toc-level-3" href="#6-8-1-%E5%8D%81%E6%9D%A1%E6%A0%B8%E5%BF%83%E7%BB%93%E8%AE%BA" data-toc-target="6-8-1-十条核心结论"><span class="toc-text">6.8.1 十条核心结论</span></a><a class="toc-level-3" href="#6-8-2-%E6%9C%AC%E7%AF%87%E5%8D%A1%E7%89%87%E7%B4%A2%E5%BC%95" data-toc-target="6-8-2-本篇卡片索引"><span class="toc-text">6.8.2 本篇卡片索引</span></a><a class="toc-level-3" href="#6-8-3-%E7%AC%AC%E4%B8%83%E7%AF%87%E9%A2%84%E5%91%8A" data-toc-target="6-8-3-第七篇预告"><span class="toc-text">6.8.3 第七篇预告</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-ai-engineering/" style="--rail: 46%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 13</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E5%85%AD%E7%AF%87-Robot-Edge-AI" data-toc-target="第六篇-Robot-Edge-AI" data-title="01 · 第六篇 Robot Edge AI" aria-label="第六篇 Robot Edge AI"></a><a class="toc-strip__dot" href="#6-0-%E6%9C%AC%E7%AF%87%E5%AF%BC%E8%AF%BB" data-toc-target="6-0-本篇导读" data-title="02 · 6.0 本篇导读" aria-label="6.0 本篇导读"></a><a class="toc-strip__dot" href="#6-1-Jetson-%E5%AE%B6%E6%97%8F%E4%B8%8E%E7%A1%AC%E4%BB%B6%E9%80%89%E5%9E%8B" data-toc-target="6-1-Jetson-家族与硬件选型" data-title="03 · 6.1 Jetson 家族与硬件选型" aria-label="6.1 Jetson 家族与硬件选型"></a><a class="toc-strip__dot" href="#6-2-%E9%83%A8%E7%BD%B2%E9%93%BE%EF%BC%9APyTorch-%E2%86%92-ONNX-%E2%86%92-TensorRT" data-toc-target="6-2-部署链：PyTorch-→-ONNX-→-TensorRT" data-title="04 · 6.2 部署链：PyTorch → ONNX → TensorRT" aria-label="6.2 部署链：PyTorch → ONNX → TensorRT"></a><a class="toc-strip__dot" href="#6-3-%E9%87%8F%E5%8C%96%EF%BC%9A%E7%AB%AF%E4%BE%A7%E7%9A%84%E9%BB%98%E8%AE%A4%E9%A1%B9" data-toc-target="6-3-量化：端侧的默认项" data-title="05 · 6.3 量化：端侧的默认项" aria-label="6.3 量化：端侧的默认项"></a><a class="toc-strip__dot" href="#6-4-%E8%BE%B9%E7%BC%98-LLM%EF%BC%9AvLLM-SGLang-TensorRT-LLM-llama-cpp-MLX-%E7%9A%84%E4%BD%8D%E7%BD%AE" data-toc-target="6-4-边缘-LLM：vLLM-SGLang-TensorRT-LLM-llama-cpp-MLX-的位置" data-title="06 · 6.4 边缘 LLM：vLLM / SGLang / TensorRT-LLM / llama.cpp / MLX 的位置" aria-label="6.4 边缘 LLM：vLLM / SGLang / TensorRT-LLM / llama.cpp / MLX 的位置"></a><a class="toc-strip__dot" href="#6-5-%E7%89%A9%E7%90%86%E7%BA%A6%E6%9D%9F%EF%BC%9A%E5%8A%9F%E8%80%97%E3%80%81%E6%95%A3%E7%83%AD%E3%80%81%E5%86%85%E5%AD%98%E4%B8%8E%E5%AD%98%E5%82%A8" data-toc-target="6-5-物理约束：功耗、散热、内存与存储" data-title="07 · 6.5 物理约束：功耗、散热、内存与存储" aria-label="6.5 物理约束：功耗、散热、内存与存储"></a><a class="toc-strip__dot" href="#6-6-%E8%B5%84%E6%BA%90%E9%9A%94%E7%A6%BB%E4%B8%8E%E5%AE%9E%E6%97%B6%E6%80%A7%EF%BC%9A%E6%8E%A8%E7%90%86%E4%B8%8D%E8%83%BD%E6%8A%A2%E6%8E%A7%E5%88%B6" data-toc-target="6-6-资源隔离与实时性：推理不能抢控制" data-title="08 · 6.6 资源隔离与实时性：推理不能抢控制" aria-label="6.6 资源隔离与实时性：推理不能抢控制"></a><a class="toc-strip__dot" href="#6-7-Robot-Edge-Deployment-Guide%EF%BC%88%E5%8F%AF%E6%96%BD%E5%B7%A5%E7%89%88%EF%BC%89" data-toc-target="6-7-Robot-Edge-Deployment-Guide（可施工版）" data-title="09 · 6.7 Robot Edge Deployment Guide（可施工版）" aria-label="6.7 Robot Edge Deployment Guide（可施工版）"></a><a class="toc-strip__dot" href="#6-8-%E6%9C%AC%E7%AF%87%E6%80%BB%E7%BB%93" data-toc-target="6-8-本篇总结" data-title="10 · 6.8 本篇总结" aria-label="6.8 本篇总结"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身智能-06-端侧AI","title":"机器人端侧 AI 架构","url":"/2025/12/30/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-06-%E7%AB%AF%E4%BE%A7AI/","path":"embodied-ai-engineering","index":5,"total":13,"next":{"title":"机器人数据引擎","url":"/2026/02/24/embodied-ai/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD-07-%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

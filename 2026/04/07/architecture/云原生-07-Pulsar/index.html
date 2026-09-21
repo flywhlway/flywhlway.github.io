@@ -1,0 +1,428 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>高性能中间件：Pulsar · 飞轮之道</title>
+<meta name="description" content="本文档描述了基础平台（BP）中下一代云原生分布式消息流平台Pulsar的预研与应用方案。Pulsar采用计算与存储分离架构，可根据业务发展需要动态扩容，支持多租户和命名空间，同时具备跨地域复制功能，进一步提升系统性能及部署运维效率。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/04/07/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-Pulsar/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="高性能中间件：Pulsar · 飞轮之道">
+<meta property="og:description" content="本文档描述了基础平台（BP）中下一代云原生分布式消息流平台Pulsar的预研与应用方案。Pulsar采用计算与存储分离架构，可根据业务发展需要动态扩容，支持多租户和命名空间，同时具备跨地域复制功能，进一步提升系统性能及部署运维效率。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/04/07/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-Pulsar/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">数据与中间件</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 8 / 19 篇</a>
+    </div>
+    <h1>高性能中间件：Pulsar</h1>
+    <p class="article-deck">本文档描述了基础平台（BP）中下一代云原生分布式消息流平台Pulsar的预研与应用方案。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>4 分钟</span>
+      <span>发布于 2026.04</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="BP关键技术方案-高性能中间件Pulsar应用"><a href="#BP关键技术方案-高性能中间件Pulsar应用" class="headerlink" title="BP关键技术方案 - 高性能中间件Pulsar应用"></a>BP关键技术方案 - 高性能中间件Pulsar应用</h2><blockquote>
+<p>📷 原始图片：</p>
+</blockquote>
+<h2 id="一、概述"><a href="#一、概述" class="headerlink" title="一、概述"></a>一、概述</h2><p>本文档描述了基础平台（BP）中下一代云原生分布式消息流平台Pulsar的预研与应用方案。Pulsar采用计算与存储分离架构，可根据业务发展需要动态扩容，支持多租户和命名空间，同时具备跨地域复制功能，进一步提升系统性能及部署运维效率。</p>
+<h2 id="二、Kafka-vs-Pulsar-架构对比"><a href="#二、Kafka-vs-Pulsar-架构对比" class="headerlink" title="二、Kafka vs Pulsar 架构对比"></a>二、Kafka vs Pulsar 架构对比</h2><h3 id="2-1-Kafka-架构"><a href="#2-1-Kafka-架构" class="headerlink" title="2.1 Kafka 架构"></a>2.1 Kafka 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">Producer Producer Producer Producer</span><br><span class="line">   │        │        │        │</span><br><span class="line">   push     push     push     push    ──→ register ──→ ZooKeeper Cluster</span><br><span class="line">   │        │        │        │                            │</span><br><span class="line">   ▼        ▼        ▼        ▼                         register</span><br><span class="line">┌──────────────────────────────────┐</span><br><span class="line">│          Kafka Cluster            │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐    │</span><br><span class="line">│  │Kafka │ │Kafka │ │Kafka │    │</span><br><span class="line">│  │Broker│ │Broker│ │Broker│    │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘    │</span><br><span class="line">└──────────────────────────────────┘</span><br><span class="line">   │        │        │        │</span><br><span class="line">   pull     pull     pull     pull</span><br><span class="line">   ▼        ▼        ▼        ▼</span><br><span class="line">Consumer Consumer Consumer Consumer</span><br></pre></td></tr></table></figure>
+
+<p><strong>Kafka 痛点</strong>：</p>
+<ul>
+<li>❌ 计算与存储耦合，高延时</li>
+<li>❌ 容量规划困难，水平扩展需全量复制分区数据，影响业务稳定运行</li>
+<li>❌ 无租户概念，资源环境利用率低、成本高</li>
+</ul>
+<h3 id="2-2-Pulsar-架构"><a href="#2-2-Pulsar-架构" class="headerlink" title="2.2 Pulsar 架构"></a>2.2 Pulsar 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────┐</span><br><span class="line">│  客户端                                       │</span><br><span class="line">│  Producer                    Consumer        │</span><br><span class="line">├─────────────────────────────────────────────┤</span><br><span class="line">│  服务端                                       │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐                │</span><br><span class="line">│  │ 租户 │ │命名空间│ │ Topic│                │ ──→ Broker 集群</span><br><span class="line">│  │      │ │      │ │      │                │</span><br><span class="line">│  │ 同步 │ │ 同步 │ │ 异步 │   消息持久化模式   │</span><br><span class="line">│  │      │ │      │ │      │                │</span><br><span class="line">│  │独享模式│ │共享模式│ │灾备模式│  消息订阅模式    │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘                │</span><br><span class="line">├─────────────────────────────────────────────┤</span><br><span class="line">│  存储端                                       │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐  │ ──→ Bookie 集群</span><br><span class="line">│  │分片存储│ │水平扩展│ │自动重载│ │消息存储    │  │</span><br><span class="line">│  │      │ │      │ │      │ │          │  │</span><br><span class="line">│  │副本机制│ │quorum│ │异地复制│ │消息可靠性  │  │</span><br><span class="line">│  │      │ │机制   │ │      │ │          │  │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘ └──────────┘  │</span><br><span class="line">├─────────────────────────────────────────────┤</span><br><span class="line">│  元数据管理                                    │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐      │ ──→ ZK集群</span><br><span class="line">│  │集群配置│ │租户数据│ │Topic │ │服务发现│      │</span><br><span class="line">│  │      │ │      │ │分配  │ │      │      │</span><br><span class="line">│  │元数据 │ │协调器 │ │用户  │ │       │      │</span><br><span class="line">│  │管理  │ │      │ │资源  │ │       │      │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘ └──────┘      │</span><br><span class="line">└─────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<p><strong>Pulsar 优势</strong>：</p>
+<ul>
+<li>✅ 计算与存储分离架构模式</li>
+<li>✅ 无需提前准确规划容量，对业务无感知的水平扩容</li>
+<li>✅ 支持多租户、多机房跨区域数据复制、高吞吐、低延时</li>
+</ul>
+<h2 id="三、Pulsar-核心架构特性"><a href="#三、Pulsar-核心架构特性" class="headerlink" title="三、Pulsar 核心架构特性"></a>三、Pulsar 核心架构特性</h2><h3 id="3-1-计算存储分离"><a href="#3-1-计算存储分离" class="headerlink" title="3.1 计算存储分离"></a>3.1 计算存储分离</h3><table>
+<thead>
+<tr>
+<th>层级</th>
+<th>组件</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>计算层</td>
+<td>Broker集群</td>
+<td>消息路由、订阅管理、协议处理</td>
+</tr>
+<tr>
+<td>存储层</td>
+<td>Bookie集群</td>
+<td>消息持久化存储、分片管理</td>
+</tr>
+<tr>
+<td>元数据层</td>
+<td>ZK集群</td>
+<td>集群配置、服务发现、元数据管理</td>
+</tr>
+</tbody></table>
+<h3 id="3-2-多租户支持"><a href="#3-2-多租户支持" class="headerlink" title="3.2 多租户支持"></a>3.2 多租户支持</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Pulsar Instance</span><br><span class="line">├── Tenant A（租户A）</span><br><span class="line">│   ├── Namespace 1</span><br><span class="line">│   │   ├── Topic 1</span><br><span class="line">│   │   └── Topic 2</span><br><span class="line">│   └── Namespace 2</span><br><span class="line">│       └── Topic 3</span><br><span class="line">└── Tenant B（租户B）</span><br><span class="line">    └── Namespace 3</span><br><span class="line">        ├── Topic 4</span><br><span class="line">        └── Topic 5</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>租户级别的资源隔离</li>
+<li>命名空间级别的策略配置</li>
+<li>支持独享、共享、灾备多种模式</li>
+</ul>
+<h3 id="3-3-消息订阅模式"><a href="#3-3-消息订阅模式" class="headerlink" title="3.3 消息订阅模式"></a>3.3 消息订阅模式</h3><table>
+<thead>
+<tr>
+<th>模式</th>
+<th>说明</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>独享模式</td>
+<td>一个Consumer独占一个Subscription</td>
+<td>严格顺序消费</td>
+</tr>
+<tr>
+<td>共享模式</td>
+<td>多个Consumer共享一个Subscription</td>
+<td>负载均衡消费</td>
+</tr>
+<tr>
+<td>灾备模式</td>
+<td>主备Consumer切换</td>
+<td>高可用消费</td>
+</tr>
+<tr>
+<td>消息订阅模式</td>
+<td>自定义分发策略</td>
+<td>灵活业务场景</td>
+</tr>
+</tbody></table>
+<h3 id="3-4-存储特性"><a href="#3-4-存储特性" class="headerlink" title="3.4 存储特性"></a>3.4 存储特性</h3><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>分片存储</td>
+<td>消息按分片分布存储</td>
+</tr>
+<tr>
+<td>水平扩展</td>
+<td>添加Bookie节点即可扩容</td>
+</tr>
+<tr>
+<td>自动重载</td>
+<td>节点故障自动重新分配</td>
+</tr>
+<tr>
+<td>副本机制</td>
+<td>多副本保障数据可靠性</td>
+</tr>
+<tr>
+<td>quorum机制</td>
+<td>多数派写入确认</td>
+</tr>
+<tr>
+<td>异地复制</td>
+<td>跨地域数据同步</td>
+</tr>
+</tbody></table>
+<h2 id="四、Kafka-vs-Pulsar-核心对比"><a href="#四、Kafka-vs-Pulsar-核心对比" class="headerlink" title="四、Kafka vs Pulsar 核心对比"></a>四、Kafka vs Pulsar 核心对比</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>Kafka</th>
+<th>Pulsar</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>架构模式</td>
+<td>计算存储耦合</td>
+<td>计算存储分离</td>
+</tr>
+<tr>
+<td>扩容方式</td>
+<td>全量复制分区数据</td>
+<td>对业务无感知水平扩容</td>
+</tr>
+<tr>
+<td>多租户</td>
+<td>❌ 不支持</td>
+<td>✅ 原生支持</td>
+</tr>
+<tr>
+<td>跨地域</td>
+<td>需MirrorMaker</td>
+<td>原生异地复制</td>
+</tr>
+<tr>
+<td>延时</td>
+<td>相对较高</td>
+<td>低延时</td>
+</tr>
+<tr>
+<td>吞吐量</td>
+<td>高</td>
+<td>同等甚至更高</td>
+</tr>
+<tr>
+<td>容量规划</td>
+<td>需提前规划</td>
+<td>按需动态扩展</td>
+</tr>
+<tr>
+<td>ZooKeeper</td>
+<td>强依赖</td>
+<td>可选（新版去ZK）</td>
+</tr>
+</tbody></table>
+<h2 id="五、关键技术洞察"><a href="#五、关键技术洞察" class="headerlink" title="五、关键技术洞察"></a>五、关键技术洞察</h2><ol>
+<li><strong>计算存储分离</strong>：这是Pulsar vs Kafka最核心的架构差异，实现真正的弹性伸缩</li>
+<li><strong>多租户原生支持</strong>：在产业物联网多业务线场景下，多租户能力避免资源浪费</li>
+<li><strong>无感知扩容</strong>：对业务完全无影响的水平扩容，极大提升运维效率</li>
+<li><strong>跨地域复制</strong>：原生跨地域数据同步能力，满足多数据中心部署需求</li>
+<li><strong>消息中间件趋势</strong>：从Kafka到Pulsar的演进代表了消息中间件的技术发展方向</li>
+</ol>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/05/12/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-08-%E6%97%B6%E5%BA%8F%E6%95%B0%E6%8D%AE%E5%BA%93/">时序数据库架构选型</a></h3>
+        <p>本文档描述了大数据平台（DF）在时序数据库领域的关键技术方案。</p>
+        <a class="btn primary" href="/2026/05/12/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-08-%E6%97%B6%E5%BA%8F%E6%95%B0%E6%8D%AE%E5%BA%93/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/02/17/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-KeyDB/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：高性能中间件：KeyDB</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 6 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#BP%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%96%B9%E6%A1%88-%E9%AB%98%E6%80%A7%E8%83%BD%E4%B8%AD%E9%97%B4%E4%BB%B6Pulsar%E5%BA%94%E7%94%A8" data-toc-target="BP关键技术方案-高性能中间件Pulsar应用"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">BP关键技术方案 - 高性能中间件Pulsar应用</span></a><a class="toc-level-2" href="#%E4%B8%80%E3%80%81%E6%A6%82%E8%BF%B0" data-toc-target="一、概述"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">一、概述</span></a><a class="toc-level-2" href="#%E4%BA%8C%E3%80%81Kafka-vs-Pulsar-%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94" data-toc-target="二、Kafka-vs-Pulsar-架构对比"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">二、Kafka vs Pulsar 架构对比</span></a><a class="toc-level-3" href="#2-1-Kafka-%E6%9E%B6%E6%9E%84" data-toc-target="2-1-Kafka-架构"><span class="toc-text">2.1 Kafka 架构</span></a><a class="toc-level-3" href="#2-2-Pulsar-%E6%9E%B6%E6%9E%84" data-toc-target="2-2-Pulsar-架构"><span class="toc-text">2.2 Pulsar 架构</span></a><a class="toc-level-2" href="#%E4%B8%89%E3%80%81Pulsar-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%E7%89%B9%E6%80%A7" data-toc-target="三、Pulsar-核心架构特性"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">三、Pulsar 核心架构特性</span></a><a class="toc-level-3" href="#3-1-%E8%AE%A1%E7%AE%97%E5%AD%98%E5%82%A8%E5%88%86%E7%A6%BB" data-toc-target="3-1-计算存储分离"><span class="toc-text">3.1 计算存储分离</span></a><a class="toc-level-3" href="#3-2-%E5%A4%9A%E7%A7%9F%E6%88%B7%E6%94%AF%E6%8C%81" data-toc-target="3-2-多租户支持"><span class="toc-text">3.2 多租户支持</span></a><a class="toc-level-3" href="#3-3-%E6%B6%88%E6%81%AF%E8%AE%A2%E9%98%85%E6%A8%A1%E5%BC%8F" data-toc-target="3-3-消息订阅模式"><span class="toc-text">3.3 消息订阅模式</span></a><a class="toc-level-3" href="#3-4-%E5%AD%98%E5%82%A8%E7%89%B9%E6%80%A7" data-toc-target="3-4-存储特性"><span class="toc-text">3.4 存储特性</span></a><a class="toc-level-2" href="#%E5%9B%9B%E3%80%81Kafka-vs-Pulsar-%E6%A0%B8%E5%BF%83%E5%AF%B9%E6%AF%94" data-toc-target="四、Kafka-vs-Pulsar-核心对比"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">四、Kafka vs Pulsar 核心对比</span></a><a class="toc-level-2" href="#%E4%BA%94%E3%80%81%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%B4%9E%E5%AF%9F" data-toc-target="五、关键技术洞察"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">五、关键技术洞察</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 42%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">8 / 19</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#BP%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%96%B9%E6%A1%88-%E9%AB%98%E6%80%A7%E8%83%BD%E4%B8%AD%E9%97%B4%E4%BB%B6Pulsar%E5%BA%94%E7%94%A8" data-toc-target="BP关键技术方案-高性能中间件Pulsar应用" data-title="01 · BP关键技术方案 - 高性能中间件Pulsar应用" aria-label="BP关键技术方案 - 高性能中间件Pulsar应用"></a><a class="toc-strip__dot" href="#%E4%B8%80%E3%80%81%E6%A6%82%E8%BF%B0" data-toc-target="一、概述" data-title="02 · 一、概述" aria-label="一、概述"></a><a class="toc-strip__dot" href="#%E4%BA%8C%E3%80%81Kafka-vs-Pulsar-%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94" data-toc-target="二、Kafka-vs-Pulsar-架构对比" data-title="03 · 二、Kafka vs Pulsar 架构对比" aria-label="二、Kafka vs Pulsar 架构对比"></a><a class="toc-strip__dot" href="#%E4%B8%89%E3%80%81Pulsar-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%E7%89%B9%E6%80%A7" data-toc-target="三、Pulsar-核心架构特性" data-title="04 · 三、Pulsar 核心架构特性" aria-label="三、Pulsar 核心架构特性"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E3%80%81Kafka-vs-Pulsar-%E6%A0%B8%E5%BF%83%E5%AF%B9%E6%AF%94" data-toc-target="四、Kafka-vs-Pulsar-核心对比" data-title="05 · 四、Kafka vs Pulsar 核心对比" aria-label="四、Kafka vs Pulsar 核心对比"></a><a class="toc-strip__dot" href="#%E4%BA%94%E3%80%81%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%B4%9E%E5%AF%9F" data-toc-target="五、关键技术洞察" data-title="06 · 五、关键技术洞察" aria-label="五、关键技术洞察"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-07-Pulsar","title":"高性能中间件：Pulsar","url":"/2026/04/07/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-Pulsar/","path":"cloud-native-platform","index":7,"total":19,"next":{"title":"时序数据库架构选型","url":"/2026/05/12/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-08-%E6%97%B6%E5%BA%8F%E6%95%B0%E6%8D%AE%E5%BA%93/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

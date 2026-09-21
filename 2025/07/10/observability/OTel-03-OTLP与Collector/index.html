@@ -1,0 +1,370 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>OTLP 协议与 Collector 实战 · 飞轮之道</title>
+<meta name="description" content="OTLP 是统一遥测协议，Collector 是统一遥测枢纽。本篇聚焦工程实操：协议怎么选、流水线怎么配、数据怎么加工、采样怎么做。所有配置片段可直接用于文档 04 的部署。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/07/10/observability/OTel-03-OTLP%E4%B8%8ECollector/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="OTLP 协议与 Collector 实战 · 飞轮之道">
+<meta property="og:description" content="OTLP 是统一遥测协议，Collector 是统一遥测枢纽。本篇聚焦工程实操：协议怎么选、流水线怎么配、数据怎么加工、采样怎么做。所有配置片段可直接用于文档 04 的部署。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/07/10/observability/OTel-03-OTLP%E4%B8%8ECollector/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">采集证据</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 3 / 12 篇</a>
+    </div>
+    <h1>OTLP 协议与 Collector 实战</h1>
+    <p class="article-deck">OTLP 是统一遥测协议，Collector 是统一遥测枢纽。本篇聚焦工程实操：协议怎么选、流水线怎么配、数据怎么加工、采样怎么做。所有配置片段可直接用于文档 04 的部署。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>7 分钟</span>
+      <span>发布于 2025.07</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="03-·-OTLP-协议与-Collector-实战"><a href="#03-·-OTLP-协议与-Collector-实战" class="headerlink" title="03 · OTLP 协议与 Collector 实战"></a>03 · OTLP 协议与 Collector 实战</h2><blockquote>
+<p>OTLP 是统一遥测协议，Collector 是统一遥测枢纽。本篇聚焦工程实操：协议怎么选、流水线怎么配、数据怎么加工、采样怎么做。所有配置片段可直接用于文档 04 的部署。</p>
+</blockquote>
+<hr>
+<h2 id="1-OTLP-协议速查"><a href="#1-OTLP-协议速查" class="headerlink" title="1. OTLP 协议速查"></a>1. OTLP 协议速查</h2><table>
+<thead>
+<tr>
+<th>项</th>
+<th>OTLP&#x2F;gRPC</th>
+<th>OTLP&#x2F;HTTP</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>默认端口</td>
+<td>4317</td>
+<td>4318</td>
+</tr>
+<tr>
+<td>编码</td>
+<td>Protobuf（二进制）</td>
+<td>Protobuf（推荐）或 JSON</td>
+</tr>
+<tr>
+<td>路径</td>
+<td>—</td>
+<td><code>/v1/traces</code> <code>/v1/metrics</code> <code>/v1/logs</code> <code>/v1/profiles</code></td>
+</tr>
+<tr>
+<td>适用</td>
+<td>服务间、高 QPS、K8s 内</td>
+<td>浏览器、Serverless、防火墙受限、Langfuse 等仅支持 HTTP 的后端</td>
+</tr>
+</tbody></table>
+<p>信号稳定性：Traces &#x2F; Metrics &#x2F; Logs 均为 Stable；Profiles 仍在演进。</p>
+<p>SDK 侧标准环境变量（所有语言一致，是「零代码切后端」的关键）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> OTEL_SERVICE_NAME=diag-agent</span><br><span class="line"><span class="built_in">export</span> OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317   <span class="comment"># gRPC</span></span><br><span class="line"><span class="built_in">export</span> OTEL_EXPORTER_OTLP_PROTOCOL=grpc                    <span class="comment"># 或 http/protobuf</span></span><br><span class="line"><span class="built_in">export</span> OTEL_RESOURCE_ATTRIBUTES=service.namespace=aits,deployment.environment.name=poc</span><br><span class="line"><span class="comment"># 按信号覆盖（示例：Trace 单独走 HTTP 发 Langfuse）</span></span><br><span class="line"><span class="built_in">export</span> OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:3000/api/public/otel/v1/traces</span><br><span class="line"><span class="built_in">export</span> OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf</span><br></pre></td></tr></table></figure>
+
+<p>数据模型（三信号同构，便于统一加工）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Resource（service.name 等进程级属性）</span><br><span class="line">  └─ Scope（埋点库标识，如 opentelemetry.instrumentation.fastapi）</span><br><span class="line">      ├─ Span（TraceId/SpanId/ParentId/Attributes/Events/Links/Status）</span><br><span class="line">      ├─ Metric（DataPoints + Attributes）</span><br><span class="line">      └─ LogRecord（Body + Attributes + TraceId 关联）</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-Collector-架构与部署模式"><a href="#2-Collector-架构与部署模式" class="headerlink" title="2. Collector 架构与部署模式"></a>2. Collector 架构与部署模式</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Receivers ──► Processors（有序执行）──► Exporters</span><br><span class="line">    │                                        │</span><br><span class="line">    └────────── Extensions（认证/健康检查等，不在数据流中）</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>发行版选择：<code>otelcol</code>（core，精简）vs <code>otelcol-contrib</code>（组件全，含 tail_sampling&#x2F;transform&#x2F;redaction&#x2F;loki 等，<strong>本文档集默认</strong>）。当前版本线 0.156.x。</li>
+<li>部署模式：<ul>
+<li><strong>Agent 模式</strong>：每台主机&#x2F;每个 Pod 一个（DaemonSet&#x2F;Sidecar），负责就近收集、打资源标签；</li>
+<li><strong>Gateway 模式</strong>：集中式集群，负责采样、脱敏、路由与对外认证；</li>
+<li>POC 单机场景两者合一，生产拆分（见文档 10）。</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-完整基准配置（逐段注释）"><a href="#3-完整基准配置（逐段注释）" class="headerlink" title="3. 完整基准配置（逐段注释）"></a>3. 完整基准配置（逐段注释）</h2><p>以下为本文档集使用的中心 Collector 配置骨架（<code>deploy/otel-collector/config.yaml</code>）：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">receivers:</span></span><br><span class="line">  <span class="attr">otlp:</span></span><br><span class="line">    <span class="attr">protocols:</span></span><br><span class="line">      <span class="attr">grpc:</span></span><br><span class="line">        <span class="attr">endpoint:</span> <span class="number">0.0</span><span class="number">.0</span><span class="number">.0</span><span class="string">:4317</span></span><br><span class="line">      <span class="attr">http:</span></span><br><span class="line">        <span class="attr">endpoint:</span> <span class="number">0.0</span><span class="number">.0</span><span class="number">.0</span><span class="string">:4318</span></span><br><span class="line">        <span class="attr">cors:</span>                       <span class="comment"># 允许浏览器端直发（前端 RUM 可选）</span></span><br><span class="line">          <span class="attr">allowed_origins:</span> [<span class="string">&quot;http://localhost:*&quot;</span>]</span><br><span class="line">  <span class="attr">prometheus:</span>                       <span class="comment"># 顺带抓取自身与基础设施 exporter（可选）</span></span><br><span class="line">    <span class="attr">config:</span></span><br><span class="line">      <span class="attr">scrape_configs:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">job_name:</span> <span class="string">otel-collector-self</span></span><br><span class="line">          <span class="attr">scrape_interval:</span> <span class="string">15s</span></span><br><span class="line">          <span class="attr">static_configs:</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">targets:</span> [<span class="string">&quot;localhost:8888&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="attr">processors:</span></span><br><span class="line">  <span class="attr">memory_limiter:</span>                   <span class="comment"># 必须放第一位：内存保护</span></span><br><span class="line">    <span class="attr">check_interval:</span> <span class="string">1s</span></span><br><span class="line">    <span class="attr">limit_percentage:</span> <span class="number">80</span></span><br><span class="line">    <span class="attr">spike_limit_percentage:</span> <span class="number">20</span></span><br><span class="line">  <span class="attr">resourcedetection:</span>                <span class="comment"># 自动补齐 host/os 资源属性</span></span><br><span class="line">    <span class="attr">detectors:</span> [<span class="string">env</span>, <span class="string">system</span>]</span><br><span class="line">  <span class="attr">attributes/scrub:</span>                 <span class="comment"># 通用属性清理示例</span></span><br><span class="line">    <span class="attr">actions:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">key:</span> <span class="string">http.request.header.authorization</span></span><br><span class="line">        <span class="attr">action:</span> <span class="string">delete</span></span><br><span class="line">  <span class="attr">batch:</span>                            <span class="comment"># 必须放最后：批量发送</span></span><br><span class="line">    <span class="attr">send_batch_size:</span> <span class="number">1024</span></span><br><span class="line">    <span class="attr">timeout:</span> <span class="string">5s</span></span><br><span class="line"></span><br><span class="line"><span class="attr">exporters:</span></span><br><span class="line">  <span class="attr">otlp/tempo:</span>                       <span class="comment"># Traces → Tempo（gRPC）</span></span><br><span class="line">    <span class="attr">endpoint:</span> <span class="string">tempo:4317</span></span><br><span class="line">    <span class="attr">tls:</span> &#123; <span class="attr">insecure:</span> <span class="literal">true</span> &#125;</span><br><span class="line">  <span class="attr">otlphttp/prometheus:</span>              <span class="comment"># Metrics → Prometheus 3.x 原生 OTLP 接收</span></span><br><span class="line">    <span class="attr">endpoint:</span> <span class="string">http://prometheus:9090/api/v1/otlp</span></span><br><span class="line">  <span class="attr">otlphttp/loki:</span>                    <span class="comment"># Logs → Loki 3.x 原生 OTLP 接收</span></span><br><span class="line">    <span class="attr">endpoint:</span> <span class="string">http://loki:3100/otlp</span></span><br><span class="line">  <span class="attr">debug:</span>                            <span class="comment"># 排障时打开 verbosity: detailed</span></span><br><span class="line">    <span class="attr">verbosity:</span> <span class="string">basic</span></span><br><span class="line"></span><br><span class="line"><span class="attr">extensions:</span></span><br><span class="line">  <span class="attr">health_check:</span></span><br><span class="line">    <span class="attr">endpoint:</span> <span class="number">0.0</span><span class="number">.0</span><span class="number">.0</span><span class="string">:13133</span></span><br><span class="line"></span><br><span class="line"><span class="attr">service:</span></span><br><span class="line">  <span class="attr">extensions:</span> [<span class="string">health_check</span>]</span><br><span class="line">  <span class="attr">telemetry:</span></span><br><span class="line">    <span class="attr">metrics:</span> &#123; <span class="attr">level:</span> <span class="string">normal</span> &#125;      <span class="comment"># Collector 自身指标 :8888/metrics</span></span><br><span class="line">  <span class="attr">pipelines:</span></span><br><span class="line">    <span class="attr">traces:</span></span><br><span class="line">      <span class="attr">receivers:</span> [<span class="string">otlp</span>]</span><br><span class="line">      <span class="attr">processors:</span> [<span class="string">memory_limiter</span>, <span class="string">resourcedetection</span>, <span class="string">attributes/scrub</span>, <span class="string">batch</span>]</span><br><span class="line">      <span class="attr">exporters:</span> [<span class="string">otlp/tempo</span>]</span><br><span class="line">    <span class="attr">metrics:</span></span><br><span class="line">      <span class="attr">receivers:</span> [<span class="string">otlp</span>, <span class="string">prometheus</span>]</span><br><span class="line">      <span class="attr">processors:</span> [<span class="string">memory_limiter</span>, <span class="string">resourcedetection</span>, <span class="string">batch</span>]</span><br><span class="line">      <span class="attr">exporters:</span> [<span class="string">otlphttp/prometheus</span>]</span><br><span class="line">    <span class="attr">logs:</span></span><br><span class="line">      <span class="attr">receivers:</span> [<span class="string">otlp</span>]</span><br><span class="line">      <span class="attr">processors:</span> [<span class="string">memory_limiter</span>, <span class="string">resourcedetection</span>, <span class="string">batch</span>]</span><br><span class="line">      <span class="attr">exporters:</span> [<span class="string">otlphttp/loki</span>]</span><br></pre></td></tr></table></figure>
+
+<p>要点：</p>
+<ol>
+<li><strong>处理器顺序</strong>：<code>memory_limiter</code> 永远第一，<code>batch</code> 永远最后；</li>
+<li>Prometheus 3.x &#x2F; Loki 3.x 均已支持 OTLP 原生写入，不再需要 <code>prometheusremotewrite</code> &#x2F; <code>loki</code> 专用 exporter（旧集群则用后者）；</li>
+<li>Collector 自身也是被观测对象：<code>:8888/metrics</code> 关注 <code>otelcol_exporter_send_failed_*</code>、<code>otelcol_processor_dropped_*</code>、队列长度。</li>
+</ol>
+<h2 id="4-采样策略实战"><a href="#4-采样策略实战" class="headerlink" title="4. 采样策略实战"></a>4. 采样策略实战</h2><h3 id="4-1-头部采样（Head-Sampling，SDK-侧）"><a href="#4-1-头部采样（Head-Sampling，SDK-侧）" class="headerlink" title="4.1 头部采样（Head Sampling，SDK 侧）"></a>4.1 头部采样（Head Sampling，SDK 侧）</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> OTEL_TRACES_SAMPLER=parentbased_traceidratio</span><br><span class="line"><span class="built_in">export</span> OTEL_TRACES_SAMPLER_ARG=0.2        <span class="comment"># 20% 采样，POC 建议 1.0</span></span><br></pre></td></tr></table></figure>
+
+<p>优点：省下游带宽；缺点：决策时不知道链路是否出错——错误链路可能被丢。</p>
+<h3 id="4-2-尾部采样（Tail-Sampling，Collector-侧，生产推荐）"><a href="#4-2-尾部采样（Tail-Sampling，Collector-侧，生产推荐）" class="headerlink" title="4.2 尾部采样（Tail Sampling，Collector 侧，生产推荐）"></a>4.2 尾部采样（Tail Sampling，Collector 侧，生产推荐）</h3><p>缓冲完整 Trace 后按规则决策，”错误全留、慢请求全留、正常流量抽样”：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">processors:</span></span><br><span class="line">  <span class="attr">tail_sampling:</span></span><br><span class="line">    <span class="attr">decision_wait:</span> <span class="string">15s</span>              <span class="comment"># 等待 Trace 完整（Agent 链路较长，适当放大）</span></span><br><span class="line">    <span class="attr">num_traces:</span> <span class="number">50000</span></span><br><span class="line">    <span class="attr">policies:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">keep-errors</span></span><br><span class="line">        <span class="attr">type:</span> <span class="string">status_code</span></span><br><span class="line">        <span class="attr">status_code:</span> &#123; <span class="attr">status_codes:</span> [<span class="string">ERROR</span>] &#125;</span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">keep-slow</span></span><br><span class="line">        <span class="attr">type:</span> <span class="string">latency</span></span><br><span class="line">        <span class="attr">latency:</span> &#123; <span class="attr">threshold_ms:</span> <span class="number">8000</span> &#125;        <span class="comment"># LLM 场景阈值放宽</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">keep-llm-heavy</span>                   <span class="comment"># Token 消耗异常的链路全留</span></span><br><span class="line">        <span class="attr">type:</span> <span class="string">numeric_attribute</span></span><br><span class="line">        <span class="attr">numeric_attribute:</span></span><br><span class="line">          <span class="attr">key:</span> <span class="string">gen_ai.usage.output_tokens</span></span><br><span class="line">          <span class="attr">min_value:</span> <span class="number">4000</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">baseline</span></span><br><span class="line">        <span class="attr">type:</span> <span class="string">probabilistic</span></span><br><span class="line">        <span class="attr">probabilistic:</span> &#123; <span class="attr">sampling_percentage:</span> <span class="number">10</span> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意：尾采样要求同一 Trace 的所有 Span 到达<strong>同一个 Collector 实例</strong>（多副本需 loadbalancing exporter 按 traceID 分片，见文档 10）。</p>
+<h2 id="5-OTTL-加工：脱敏与语义约定版本兜底"><a href="#5-OTTL-加工：脱敏与语义约定版本兜底" class="headerlink" title="5. OTTL 加工：脱敏与语义约定版本兜底"></a>5. OTTL 加工：脱敏与语义约定版本兜底</h2><p><code>transform</code> 处理器使用 OTTL 语言做模式化改写：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">processors:</span></span><br><span class="line">  <span class="attr">transform/pii:</span></span><br><span class="line">    <span class="attr">error_mode:</span> <span class="string">ignore</span></span><br><span class="line">    <span class="attr">trace_statements:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">context:</span> <span class="string">span</span></span><br><span class="line">        <span class="attr">statements:</span></span><br><span class="line">          <span class="comment"># 手机号脱敏</span></span><br><span class="line">          <span class="bullet">-</span> <span class="string">replace_pattern(attributes[&quot;gen_ai.input.messages&quot;],</span> <span class="string">&quot;1[3-9]\\d&#123;9&#125;&quot;</span><span class="string">,</span> <span class="string">&quot;1**********&quot;</span><span class="string">)</span></span><br><span class="line">          <span class="comment"># VIN 脱敏（17 位车架号）</span></span><br><span class="line">          <span class="bullet">-</span> <span class="string">replace_pattern(attributes[&quot;gen_ai.input.messages&quot;],</span> <span class="string">&quot;[A-HJ-NPR-Z0-9]&#123;17&#125;&quot;</span><span class="string">,</span> <span class="string">&quot;VIN-MASKED&quot;</span><span class="string">)</span></span><br><span class="line">  <span class="attr">transform/semconv-compat:</span></span><br><span class="line">    <span class="attr">trace_statements:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">context:</span> <span class="string">span</span></span><br><span class="line">        <span class="attr">statements:</span></span><br><span class="line">          <span class="comment"># 旧属性 → 新属性兜底映射（多语言 SDK 版本漂移时保证查询一致）</span></span><br><span class="line">          <span class="bullet">-</span> <span class="string">set(attributes[&quot;gen_ai.provider.name&quot;],</span> <span class="string">attributes[&quot;gen_ai.system&quot;])</span> <span class="string">where</span> <span class="string">attributes[&quot;gen_ai.provider.name&quot;]</span> <span class="string">==</span> <span class="string">nil</span> <span class="string">and</span> <span class="string">attributes[&quot;gen_ai.system&quot;]</span> <span class="type">!=</span> <span class="string">nil</span></span><br><span class="line">          <span class="bullet">-</span> <span class="string">set(attributes[&quot;gen_ai.usage.input_tokens&quot;],</span> <span class="string">attributes[&quot;gen_ai.usage.prompt_tokens&quot;])</span> <span class="string">where</span> <span class="string">attributes[&quot;gen_ai.usage.input_tokens&quot;]</span> <span class="string">==</span> <span class="string">nil</span> <span class="string">and</span> <span class="string">attributes[&quot;gen_ai.usage.prompt_tokens&quot;]</span> <span class="type">!=</span> <span class="string">nil</span></span><br><span class="line">          <span class="bullet">-</span> <span class="string">set(attributes[&quot;gen_ai.usage.output_tokens&quot;],</span> <span class="string">attributes[&quot;gen_ai.usage.completion_tokens&quot;])</span> <span class="string">where</span> <span class="string">attributes[&quot;gen_ai.usage.output_tokens&quot;]</span> <span class="string">==</span> <span class="string">nil</span> <span class="string">and</span> <span class="string">attributes[&quot;gen_ai.usage.completion_tokens&quot;]</span> <span class="type">!=</span> <span class="string">nil</span></span><br><span class="line">  <span class="attr">redaction/allowlist:</span>              <span class="comment"># 白名单模式：只放行已知安全属性（强合规场景）</span></span><br><span class="line">    <span class="attr">allow_all_keys:</span> <span class="literal">false</span></span><br><span class="line">    <span class="attr">allowed_keys:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">service.name</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">gen_ai.operation.name</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">gen_ai.provider.name</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">gen_ai.request.model</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">gen_ai.usage.input_tokens</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">gen_ai.usage.output_tokens</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="6-Connector：Trace-派生指标"><a href="#6-Connector：Trace-派生指标" class="headerlink" title="6. Connector：Trace 派生指标"></a>6. Connector：Trace 派生指标</h2><p><code>spanmetrics</code> connector 可在 Collector 内直接从 Span 生成 RED 指标（与 Tempo metrics-generator 二选一即可，避免重复）：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">connectors:</span></span><br><span class="line">  <span class="attr">spanmetrics:</span></span><br><span class="line">    <span class="attr">dimensions:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">gen_ai.request.model</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">gen_ai.operation.name</span></span><br><span class="line"><span class="attr">service:</span></span><br><span class="line">  <span class="attr">pipelines:</span></span><br><span class="line">    <span class="attr">traces:</span></span><br><span class="line">      <span class="attr">receivers:</span> [<span class="string">otlp</span>]</span><br><span class="line">      <span class="attr">processors:</span> [<span class="string">memory_limiter</span>, <span class="string">batch</span>]</span><br><span class="line">      <span class="attr">exporters:</span> [<span class="string">otlp/tempo</span>, <span class="string">spanmetrics</span>]</span><br><span class="line">    <span class="attr">metrics:</span></span><br><span class="line">      <span class="attr">receivers:</span> [<span class="string">otlp</span>, <span class="string">spanmetrics</span>]</span><br><span class="line">      <span class="attr">processors:</span> [<span class="string">memory_limiter</span>, <span class="string">batch</span>]</span><br><span class="line">      <span class="attr">exporters:</span> [<span class="string">otlphttp/prometheus</span>]</span><br></pre></td></tr></table></figure>
+
+<h2 id="7-验证与排障手册"><a href="#7-验证与排障手册" class="headerlink" title="7. 验证与排障手册"></a>7. 验证与排障手册</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1. 健康检查</span></span><br><span class="line">curl -s http://localhost:13133 | jq .</span><br><span class="line"></span><br><span class="line"><span class="comment"># 2. 用 telemetrygen 造数（traces/metrics/logs 均可）</span></span><br><span class="line">docker run --<span class="built_in">rm</span> --network otel-net \</span><br><span class="line">  ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest \</span><br><span class="line">  traces --otlp-endpoint otel-collector:4317 --otlp-insecure --traces 5</span><br><span class="line"></span><br><span class="line"><span class="comment"># 3. HTTP 通道连通性（返回 200 且 body 为 &#123;&#125; 即成功）</span></span><br><span class="line">curl -sS -X POST http://localhost:4318/v1/traces \</span><br><span class="line">  -H <span class="string">&quot;Content-Type: application/json&quot;</span> -d <span class="string">&#x27;&#123;&quot;resourceSpans&quot;:[]&#125;&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 4. 观察 Collector 自身指标</span></span><br><span class="line">curl -s http://localhost:8888/metrics | grep -E <span class="string">&quot;otelcol_(exporter|receiver)_&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>常见故障对照表：</p>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>高频原因</th>
+<th>处置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SDK 报 <code>connection refused</code></td>
+<td>端口&#x2F;协议错配（gRPC 发到 4318）</td>
+<td>核对 <code>OTEL_EXPORTER_OTLP_PROTOCOL</code></td>
+</tr>
+<tr>
+<td>Trace 缺一段</td>
+<td>中间服务未透传 <code>traceparent</code></td>
+<td>检查网关&#x2F;HTTP 客户端埋点（文档 06&#x2F;07）</td>
+</tr>
+<tr>
+<td>指标有值、Grafana 无图</td>
+<td>Prometheus 未开 OTLP 接收</td>
+<td>启动参数加 <code>--web.enable-otlp-receiver</code></td>
+</tr>
+<tr>
+<td>内存暴涨</td>
+<td>未配 memory_limiter &#x2F; 尾采样缓冲过大</td>
+<td>补处理器、下调 <code>num_traces</code></td>
+</tr>
+<tr>
+<td>Langfuse 收不到</td>
+<td>用了 gRPC（其仅支持 OTLP&#x2F;HTTP）</td>
+<td>走 <code>otlphttp</code> exporter（文档 08）</td>
+</tr>
+</tbody></table>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/09/04/observability/OTel-04-%E8%87%AA%E6%89%98%E7%AE%A1%E9%83%A8%E7%BD%B2/">OpenTelemetry 自托管部署</a></h3>
+        <p>本篇产出一套可长期使用的本地观测底座：OTel Collector + Prometheus + Loki + Tempo + Grafan…</p>
+        <a class="btn primary" href="/2025/09/04/observability/OTel-04-%E8%87%AA%E6%89%98%E7%AE%A1%E9%83%A8%E7%BD%B2/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/05/08/observability/OTel-02-GenAI%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：GenAI 语义约定与 AI 可观测标准</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#03-%C2%B7-OTLP-%E5%8D%8F%E8%AE%AE%E4%B8%8E-Collector-%E5%AE%9E%E6%88%98" data-toc-target="03-·-OTLP-协议与-Collector-实战"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">03 · OTLP 协议与 Collector 实战</span></a><a class="toc-level-2" href="#1-OTLP-%E5%8D%8F%E8%AE%AE%E9%80%9F%E6%9F%A5" data-toc-target="1-OTLP-协议速查"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. OTLP 协议速查</span></a><a class="toc-level-2" href="#2-Collector-%E6%9E%B6%E6%9E%84%E4%B8%8E%E9%83%A8%E7%BD%B2%E6%A8%A1%E5%BC%8F" data-toc-target="2-Collector-架构与部署模式"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. Collector 架构与部署模式</span></a><a class="toc-level-2" href="#3-%E5%AE%8C%E6%95%B4%E5%9F%BA%E5%87%86%E9%85%8D%E7%BD%AE%EF%BC%88%E9%80%90%E6%AE%B5%E6%B3%A8%E9%87%8A%EF%BC%89" data-toc-target="3-完整基准配置（逐段注释）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 完整基准配置（逐段注释）</span></a><a class="toc-level-2" href="#4-%E9%87%87%E6%A0%B7%E7%AD%96%E7%95%A5%E5%AE%9E%E6%88%98" data-toc-target="4-采样策略实战"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 采样策略实战</span></a><a class="toc-level-3" href="#4-1-%E5%A4%B4%E9%83%A8%E9%87%87%E6%A0%B7%EF%BC%88Head-Sampling%EF%BC%8CSDK-%E4%BE%A7%EF%BC%89" data-toc-target="4-1-头部采样（Head-Sampling，SDK-侧）"><span class="toc-text">4.1 头部采样（Head Sampling，SDK 侧）</span></a><a class="toc-level-3" href="#4-2-%E5%B0%BE%E9%83%A8%E9%87%87%E6%A0%B7%EF%BC%88Tail-Sampling%EF%BC%8CCollector-%E4%BE%A7%EF%BC%8C%E7%94%9F%E4%BA%A7%E6%8E%A8%E8%8D%90%EF%BC%89" data-toc-target="4-2-尾部采样（Tail-Sampling，Collector-侧，生产推荐）"><span class="toc-text">4.2 尾部采样（Tail Sampling，Collector 侧，生产推荐）</span></a><a class="toc-level-2" href="#5-OTTL-%E5%8A%A0%E5%B7%A5%EF%BC%9A%E8%84%B1%E6%95%8F%E4%B8%8E%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A%E7%89%88%E6%9C%AC%E5%85%9C%E5%BA%95" data-toc-target="5-OTTL-加工：脱敏与语义约定版本兜底"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. OTTL 加工：脱敏与语义约定版本兜底</span></a><a class="toc-level-2" href="#6-Connector%EF%BC%9ATrace-%E6%B4%BE%E7%94%9F%E6%8C%87%E6%A0%87" data-toc-target="6-Connector：Trace-派生指标"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. Connector：Trace 派生指标</span></a><a class="toc-level-2" href="#7-%E9%AA%8C%E8%AF%81%E4%B8%8E%E6%8E%92%E9%9A%9C%E6%89%8B%E5%86%8C" data-toc-target="7-验证与排障手册"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 验证与排障手册</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 25%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">3 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#03-%C2%B7-OTLP-%E5%8D%8F%E8%AE%AE%E4%B8%8E-Collector-%E5%AE%9E%E6%88%98" data-toc-target="03-·-OTLP-协议与-Collector-实战" data-title="01 · 03 · OTLP 协议与 Collector 实战" aria-label="03 · OTLP 协议与 Collector 实战"></a><a class="toc-strip__dot" href="#1-OTLP-%E5%8D%8F%E8%AE%AE%E9%80%9F%E6%9F%A5" data-toc-target="1-OTLP-协议速查" data-title="02 · 1. OTLP 协议速查" aria-label="1. OTLP 协议速查"></a><a class="toc-strip__dot" href="#2-Collector-%E6%9E%B6%E6%9E%84%E4%B8%8E%E9%83%A8%E7%BD%B2%E6%A8%A1%E5%BC%8F" data-toc-target="2-Collector-架构与部署模式" data-title="03 · 2. Collector 架构与部署模式" aria-label="2. Collector 架构与部署模式"></a><a class="toc-strip__dot" href="#3-%E5%AE%8C%E6%95%B4%E5%9F%BA%E5%87%86%E9%85%8D%E7%BD%AE%EF%BC%88%E9%80%90%E6%AE%B5%E6%B3%A8%E9%87%8A%EF%BC%89" data-toc-target="3-完整基准配置（逐段注释）" data-title="04 · 3. 完整基准配置（逐段注释）" aria-label="3. 完整基准配置（逐段注释）"></a><a class="toc-strip__dot" href="#4-%E9%87%87%E6%A0%B7%E7%AD%96%E7%95%A5%E5%AE%9E%E6%88%98" data-toc-target="4-采样策略实战" data-title="05 · 4. 采样策略实战" aria-label="4. 采样策略实战"></a><a class="toc-strip__dot" href="#5-OTTL-%E5%8A%A0%E5%B7%A5%EF%BC%9A%E8%84%B1%E6%95%8F%E4%B8%8E%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A%E7%89%88%E6%9C%AC%E5%85%9C%E5%BA%95" data-toc-target="5-OTTL-加工：脱敏与语义约定版本兜底" data-title="06 · 5. OTTL 加工：脱敏与语义约定版本兜底" aria-label="5. OTTL 加工：脱敏与语义约定版本兜底"></a><a class="toc-strip__dot" href="#6-Connector%EF%BC%9ATrace-%E6%B4%BE%E7%94%9F%E6%8C%87%E6%A0%87" data-toc-target="6-Connector：Trace-派生指标" data-title="07 · 6. Connector：Trace 派生指标" aria-label="6. Connector：Trace 派生指标"></a><a class="toc-strip__dot" href="#7-%E9%AA%8C%E8%AF%81%E4%B8%8E%E6%8E%92%E9%9A%9C%E6%89%8B%E5%86%8C" data-toc-target="7-验证与排障手册" data-title="08 · 7. 验证与排障手册" aria-label="7. 验证与排障手册"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-03-OTLP与Collector","title":"OTLP 协议与 Collector 实战","url":"/2025/07/10/observability/OTel-03-OTLP%E4%B8%8ECollector/","path":"agent-observability","index":2,"total":12,"next":{"title":"OpenTelemetry 自托管部署","url":"/2025/09/04/observability/OTel-04-%E8%87%AA%E6%89%98%E7%AE%A1%E9%83%A8%E7%BD%B2/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

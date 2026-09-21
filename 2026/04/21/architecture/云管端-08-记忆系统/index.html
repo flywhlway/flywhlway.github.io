@@ -1,0 +1,1186 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端记忆系统设计 · 飞轮之道</title>
+<meta name="description" content="实体表是防止信息丢失的关键。自然语言摘要必然丢失具体实体（”上周三”变成”最近”，”3 号充电桩”变成”某个充电桩”）。维护一份键值实体表随上下文传递，可在压缩率与信息完整性之间取得平衡。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/04/21/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-08-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端记忆系统设计 · 飞轮之道">
+<meta property="og:description" content="实体表是防止信息丢失的关键。自然语言摘要必然丢失具体实体（”上周三”变成”最近”，”3 号充电桩”变成”某个充电桩”）。维护一份键值实体表随上下文传递，可在压缩率与信息完整性之间取得平衡。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/04/21/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-08-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">走向生产</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 9 / 20 篇</a>
+    </div>
+    <h1>云管端记忆系统设计</h1>
+    <p class="article-deck">实体表是防止信息丢失的关键。自然语言摘要必然丢失具体实体（”上周三”变成”最近”，”3 号充电桩”变成”某个充电桩”）。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>10 分钟</span>
+      <span>发布于 2026.04</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="08-·-记忆系统（Memory-System）"><a href="#08-·-记忆系统（Memory-System）" class="headerlink" title="08 · 记忆系统（Memory System）"></a>08 · 记忆系统（Memory System）</h2><blockquote>
+<p>文档类型：技术白皮书 · 记忆架构专章<br>对应图示：记忆中心（短期记忆 &#x2F; 长期记忆 &#x2F; 用户画像 &#x2F; <strong>可视化</strong> &#x2F; <strong>回溯干预</strong>）+ 端侧记忆 + 端侧长短记忆<br>说明：图中「可视化」与「回溯干预」被显式圈注，本文将其作为核心设计而非附属功能</p>
+</blockquote>
+<hr>
+<h2 id="1-记忆系统总览"><a href="#1-记忆系统总览" class="headerlink" title="1. 记忆系统总览"></a>1. 记忆系统总览</h2><pre class="mermaid">flowchart TB
+    subgraph WRITE["写入路径（异步）"]
+        W1["会话结束事件"] --&gt; W2["记忆抽取&lt;br/&gt;小模型提取候选事实"]
+        W2 --&gt; W3["去重与冲突检测"]
+        W3 --&gt; W4&#123;"冲突?"&#125;
+        W4 --&gt;|无| W5["写入 + 事件记录"]
+        W4 --&gt;|有| W6["冲突解决策略"] --&gt; W5
+        W5 --&gt; W7["高风险项进人工复核队列"]
+    end
+    subgraph STORE["存储层"]
+        S1[("短期记忆&lt;br/&gt;Redis · TTL")]
+        S2[("长期记忆&lt;br/&gt;PG + 向量库")]
+        S3[("用户画像&lt;br/&gt;特征表")]
+        S4[("记忆事件日志&lt;br/&gt;不可变 · 追加写")]
+    end
+    subgraph READ["读取路径（同步）"]
+        R1["查询"] --&gt; R2["短期记忆直读"]
+        R1 --&gt; R3["长期记忆向量召回"]
+        R1 --&gt; R4["画像按意图切片"]
+        R2 &amp; R3 &amp; R4 --&gt; R5["时效衰减 + 置信度加权"]
+        R5 --&gt; R6["Token 预算裁剪"]
+        R6 --&gt; R7["记忆切片"]
+    end
+    subgraph GOV["治理面（图示圈注）"]
+        G1["可视化&lt;br/&gt;记忆全景 + 来源溯源"]
+        G2["回溯干预&lt;br/&gt;单条失效 / 修正 / 批量清空"]
+    end
+    W5 --&gt; S1 &amp; S2 &amp; S3
+    W5 --&gt; S4
+    S1 &amp; S2 &amp; S3 --&gt; R2 &amp; R3 &amp; R4
+    S4 --&gt; G1
+    G1 --&gt; G2 --&gt; S4
+    subgraph EDGE["端侧记忆"]
+        E1["端侧短期"]
+        E2["端侧长期/偏好"]
+        E3["隐私区（不出端）"]
+    end
+    E1 &amp; E2 -.-&gt;|"经双向认证网关同步"| S1 &amp; S2</pre>
+
+
+<hr>
+<h2 id="2-三层记忆模型"><a href="#2-三层记忆模型" class="headerlink" title="2. 三层记忆模型"></a>2. 三层记忆模型</h2><h3 id="2-1-短期记忆（Short-Term-Memory）"><a href="#2-1-短期记忆（Short-Term-Memory）" class="headerlink" title="2.1 短期记忆（Short-Term Memory）"></a>2.1 短期记忆（Short-Term Memory）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>定义</strong></td>
+<td>当前会话内的对话历史与临时状态</td>
+</tr>
+<tr>
+<td><strong>存储</strong></td>
+<td>Redis（Hash + List），TTL &#x3D; 会话周期（建议 30 min 空闲过期）</td>
+</tr>
+<tr>
+<td><strong>内容</strong></td>
+<td>最近 N 轮原文（建议 N&#x3D;3）+ 滚动摘要 + <strong>结构化实体表</strong></td>
+</tr>
+<tr>
+<td><strong>Token 预算</strong></td>
+<td>≤ 1500</td>
+</tr>
+<tr>
+<td><strong>写入时机</strong></td>
+<td>每轮同步写入（轻量，仅追加）</td>
+</tr>
+<tr>
+<td><strong>读取</strong></td>
+<td>直读，延迟 &lt; 10 ms</td>
+</tr>
+</tbody></table>
+<p><strong>滚动摘要机制</strong>：</p>
+<pre class="mermaid">flowchart LR
+    T1["轮1原文"] --&gt; T2["轮2原文"] --&gt; T3["轮3原文"] --&gt; T4["轮4"]
+    T4 --&gt; C["轮1压缩入摘要"]
+    C --&gt; SUM["滚动摘要"]
+    T2 &amp; T3 &amp; T4 --&gt; KEEP["保留最近3轮原文"]
+    SUM &amp; KEEP --&gt; CTX["短期记忆输出"]
+    ENT["结构化实体表&lt;br/&gt;车型/日期/地点/金额&lt;br/&gt;不参与摘要压缩"] --&gt; CTX</pre>
+
+
+<blockquote>
+<p><strong>实体表是防止信息丢失的关键</strong>。自然语言摘要必然丢失具体实体（”上周三”变成”最近”，”3 号充电桩”变成”某个充电桩”）。维护一份键值实体表随上下文传递，可在压缩率与信息完整性之间取得平衡。</p>
+</blockquote>
+<h3 id="2-2-长期记忆（Long-Term-Memory）"><a href="#2-2-长期记忆（Long-Term-Memory）" class="headerlink" title="2.2 长期记忆（Long-Term Memory）"></a>2.2 长期记忆（Long-Term Memory）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>定义</strong></td>
+<td>跨会话持久化的用户事实、偏好、经历</td>
+</tr>
+<tr>
+<td><strong>存储</strong></td>
+<td>PG（结构化字段 + 事件日志）+ 向量库（语义召回）</td>
+</tr>
+<tr>
+<td><strong>内容</strong></td>
+<td>事实条目（陈述句形式）+ 元数据</td>
+</tr>
+<tr>
+<td><strong>Token 预算</strong></td>
+<td>≤ 800</td>
+</tr>
+<tr>
+<td><strong>写入时机</strong></td>
+<td>异步（会话结束触发抽取）</td>
+</tr>
+<tr>
+<td><strong>读取</strong></td>
+<td>向量召回 + 时效衰减加权</td>
+</tr>
+</tbody></table>
+<p><strong>记忆条目数据结构</strong>（推断设计）：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>memory_id</code></td>
+<td>string</td>
+<td>主键</td>
+</tr>
+<tr>
+<td><code>user_ref</code></td>
+<td>string</td>
+<td>用户匿名标识</td>
+</tr>
+<tr>
+<td><code>namespace</code></td>
+<td>string</td>
+<td>命名空间（共享区&#x2F;Agent 私有区&#x2F;隐私区）</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td>text</td>
+<td>事实陈述（”偏好安静的驾驶环境”）</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>enum</td>
+<td>偏好 &#x2F; 事实 &#x2F; 经历 &#x2F; 约束</td>
+</tr>
+<tr>
+<td><code>confidence</code></td>
+<td>float</td>
+<td>置信度 0–1</td>
+</tr>
+<tr>
+<td><code>source_trace_id</code></td>
+<td>string</td>
+<td><strong>来源轮次，支撑回溯干预</strong></td>
+</tr>
+<tr>
+<td><code>source_quote</code></td>
+<td>text</td>
+<td>原始表述片段（供人工核对）</td>
+</tr>
+<tr>
+<td><code>created_at</code> &#x2F; <code>updated_at</code></td>
+<td>ts</td>
+<td></td>
+</tr>
+<tr>
+<td><code>valid_until</code></td>
+<td>ts</td>
+<td>时效边界（可空&#x3D;长期有效）</td>
+</tr>
+<tr>
+<td><code>access_count</code> &#x2F; <code>last_access</code></td>
+<td>int&#x2F;ts</td>
+<td>用于热度衰减</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>enum</td>
+<td>active &#x2F; superseded &#x2F; invalidated</td>
+</tr>
+<tr>
+<td><code>superseded_by</code></td>
+<td>string</td>
+<td>被哪条记忆取代</td>
+</tr>
+<tr>
+<td><code>embedding_version</code></td>
+<td>string</td>
+<td>向量模型版本</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong><code>source_trace_id</code> 与 <code>source_quote</code> 是”回溯干预”能力的技术前提</strong>。没有它们，运营人员看到一条错误记忆时无法判断它从哪来、是否该删。这两个字段的成本极低，价值极高。</p>
+</blockquote>
+<h3 id="2-3-用户画像（User-Profile）"><a href="#2-3-用户画像（User-Profile）" class="headerlink" title="2.3 用户画像（User Profile）"></a>2.3 用户画像（User Profile）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>定义</strong></td>
+<td>由行为数据离线聚合的统计特征</td>
+</tr>
+<tr>
+<td><strong>存储</strong></td>
+<td>特征表（PG &#x2F; 特征平台）</td>
+</tr>
+<tr>
+<td><strong>内容</strong></td>
+<td>稳定倾向类字段（活跃时段、内容偏好类型、交互风格、常用能力）</td>
+</tr>
+<tr>
+<td><strong>Token 预算</strong></td>
+<td>≤ 300（<strong>按意图只取相关字段</strong>）</td>
+</tr>
+<tr>
+<td><strong>更新</strong></td>
+<td>离线批处理（日级）</td>
+</tr>
+</tbody></table>
+<h3 id="2-4-三者对比"><a href="#2-4-三者对比" class="headerlink" title="2.4 三者对比"></a>2.4 三者对比</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>短期记忆</th>
+<th>长期记忆</th>
+<th>用户画像</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>时间尺度</td>
+<td>分钟~小时</td>
+<td>周~年</td>
+<td>周~年</td>
+</tr>
+<tr>
+<td>数据形态</td>
+<td>对话文本</td>
+<td>事实陈述</td>
+<td>结构化特征</td>
+</tr>
+<tr>
+<td>生成方式</td>
+<td>直接追加</td>
+<td>模型抽取</td>
+<td>统计聚合</td>
+</tr>
+<tr>
+<td>精度</td>
+<td>高（原文）</td>
+<td>中（抽取有误差）</td>
+<td>高（统计）</td>
+</tr>
+<tr>
+<td>可解释性</td>
+<td>高</td>
+<td>中（需溯源）</td>
+<td>高</td>
+</tr>
+<tr>
+<td>主要风险</td>
+<td>压缩丢失</td>
+<td><strong>污染</strong></td>
+<td>更新延迟、冷启动</td>
+</tr>
+<tr>
+<td>是否需人工干预</td>
+<td>否</td>
+<td><strong>是</strong></td>
+<td>否</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="3-记忆召回（Memory-Recall）"><a href="#3-记忆召回（Memory-Recall）" class="headerlink" title="3. 记忆召回（Memory Recall）"></a>3. 记忆召回（Memory Recall）</h2><pre class="mermaid">flowchart TB
+    Q["查询 + 意图"] --&gt; QR["查询改写&lt;br/&gt;提取记忆相关要素"]
+    QR --&gt; P1["并行检索"]
+    P1 --&gt; V["向量召回 Top-20"]
+    P1 --&gt; F["元数据过滤&lt;br/&gt;namespace + status=active + 未过期"]
+    P1 --&gt; C["类别定向召回&lt;br/&gt;按意图取相关 category"]
+    V &amp; F &amp; C --&gt; FU["融合去重"]
+    FU --&gt; W["加权重排"]
+    W --&gt; W1["相关性分数 × 0.5"]
+    W --&gt; W2["置信度 × 0.2"]
+    W --&gt; W3["时效衰减因子 × 0.2"]
+    W --&gt; W4["访问热度 × 0.1"]
+    W1 &amp; W2 &amp; W3 &amp; W4 --&gt; TK["Top-K 截断（建议 K=5）"]
+    TK --&gt; BD["Token 预算裁剪"]
+    BD --&gt; OUT["记忆切片 + 来源标记"]</pre>
+
+
+<h3 id="3-1-时效衰减函数（推断设计）"><a href="#3-1-时效衰减函数（推断设计）" class="headerlink" title="3.1 时效衰减函数（推断设计）"></a>3.1 时效衰减函数（推断设计）</h3><table>
+<thead>
+<tr>
+<th>记忆类别</th>
+<th>半衰期</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>基础事实（长期不变的偏好倾向）</td>
+<td>无衰减</td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>一般偏好</td>
+<td>180 天</td>
+<td>会变化</td>
+</tr>
+<tr>
+<td>短期意图（”最近在找充电桩”）</td>
+<td>7 天</td>
+<td>时效性强</td>
+</tr>
+<tr>
+<td>情境状态</td>
+<td>1 天</td>
+<td>极易过期</td>
+</tr>
+</tbody></table>
+<p>衰减因子 &#x3D; <code>0.5 ^ (age_days / half_life_days)</code>，与置信度共同作为加权项。</p>
+<h3 id="3-2-召回质量的三个陷阱"><a href="#3-2-召回质量的三个陷阱" class="headerlink" title="3.2 召回质量的三个陷阱"></a>3.2 召回质量的三个陷阱</h3><table>
+<thead>
+<tr>
+<th>陷阱</th>
+<th>表现</th>
+<th>解决</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>召回过多</strong></td>
+<td>记忆挤占知识空间，回答被无关个人信息干扰</td>
+<td>硬 K 值上限 + Token 预算 + 相关性阈值</td>
+</tr>
+<tr>
+<td><strong>召回错误记忆</strong></td>
+<td>比没有记忆更糟（”你说过你不喜欢这个”——但用户从未说过）</td>
+<td>置信度阈值（建议 ≥0.7 才注入）+ 抽取质量把控</td>
+</tr>
+<tr>
+<td><strong>召回过期记忆</strong></td>
+<td>用旧偏好回答新需求</td>
+<td>时效衰减 + <code>valid_until</code> + 情境类记忆短 TTL</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>宁少勿错</strong>：一条错误记忆造成的信任损伤，远大于十条缺失记忆带来的体验缺失。置信度阈值应设得保守。</p>
+</blockquote>
+<hr>
+<h2 id="4-记忆写入与演化"><a href="#4-记忆写入与演化" class="headerlink" title="4. 记忆写入与演化"></a>4. 记忆写入与演化</h2><h3 id="4-1-抽取流程"><a href="#4-1-抽取流程" class="headerlink" title="4.1 抽取流程"></a>4.1 抽取流程</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant EV as 会话结束事件
+    participant EX as 抽取器（小模型）
+    participant DD as 去重/冲突检测
+    participant MG as 记忆管理器
+    participant ST as 存储
+    participant HR as 人工复核队列
+
+    EV-&gt;&gt;EX: 完整会话轨迹
+    EX-&gt;&gt;EX: 抽取候选事实（结构化输出）
+    EX--&gt;&gt;DD: 候选列表（含置信度与原文引用）
+    DD-&gt;&gt;ST: 检索既有相关记忆
+    ST--&gt;&gt;DD: 相关记忆集
+    DD-&gt;&gt;DD: 判定：新增 / 更新 / 冲突 / 丢弃（重复）
+    alt 冲突
+        DD-&gt;&gt;MG: 应用冲突策略
+        MG-&gt;&gt;ST: 旧记忆标记 superseded + 写新记忆
+    else 新增
+        DD-&gt;&gt;ST: 直接写入
+    end
+    alt 高风险类别 或 置信度中等
+        MG-&gt;&gt;HR: 进人工复核（默认不生效）
+    end
+    MG-&gt;&gt;ST: 追加记忆事件日志</pre>
+
+
+<h3 id="4-2-抽取提示词设计要点（推断设计）"><a href="#4-2-抽取提示词设计要点（推断设计）" class="headerlink" title="4.2 抽取提示词设计要点（推断设计）"></a>4.2 抽取提示词设计要点（推断设计）</h3><table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>只抽取用户明确表达的内容</td>
+<td>禁止推断（”用户提到堵车” ≠ “用户讨厌堵车”）</td>
+</tr>
+<tr>
+<td>输出结构化</td>
+<td>每条含 content &#x2F; category &#x2F; confidence &#x2F; source_quote</td>
+</tr>
+<tr>
+<td>明确禁止类别</td>
+<td>敏感类别不抽取（健康、财务、身份特征等，按合规要求定义）</td>
+</tr>
+<tr>
+<td>时效判定</td>
+<td>抽取时即判定是否为情境性（短 TTL）</td>
+</tr>
+<tr>
+<td>置信度校准</td>
+<td>明确陈述&#x3D;高；含”可能&#x2F;也许”&#x3D;中；间接推断&#x3D;不抽取</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>抽取的第一原则是保守</strong>。宁可漏抽，不可错抽。记忆污染的修复成本远高于漏抽的体验损失，因为错误记忆会在后续所有会话中持续产生错误影响。</p>
+</blockquote>
+<h3 id="4-3-冲突解决策略"><a href="#4-3-冲突解决策略" class="headerlink" title="4.3 冲突解决策略"></a>4.3 冲突解决策略</h3><table>
+<thead>
+<tr>
+<th>冲突类型</th>
+<th>示例</th>
+<th>策略</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>直接矛盾</td>
+<td>旧：”偏好 A”；新：”偏好 B”</td>
+<td>新的取代旧的（旧记 superseded），保留历史用于溯源</td>
+</tr>
+<tr>
+<td>程度变化</td>
+<td>旧：”偶尔用 X”；新：”经常用 X”</td>
+<td>更新程度，保留同一条</td>
+</tr>
+<tr>
+<td>范围细化</td>
+<td>旧：”偏好安静”；新：”通话时偏好安静”</td>
+<td>保留细化版，旧的降级为一般规则</td>
+</tr>
+<tr>
+<td>时效过期</td>
+<td>旧情境记忆已过 TTL</td>
+<td>自动失效，不视为冲突</td>
+</tr>
+<tr>
+<td>来源可信度差异</td>
+<td>明确陈述 vs 间接推断</td>
+<td>高置信度优先，不因时间新旧覆盖</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="5-可视化与回溯干预（图示圈注核心能力）"><a href="#5-可视化与回溯干预（图示圈注核心能力）" class="headerlink" title="5. 可视化与回溯干预（图示圈注核心能力）"></a>5. 可视化与回溯干预（图示圈注核心能力）</h2><h3 id="5-1-为什么这是差异化能力"><a href="#5-1-为什么这是差异化能力" class="headerlink" title="5.1 为什么这是差异化能力"></a>5.1 为什么这是差异化能力</h3><p>绝大多数 AI 产品的记忆是<strong>黑盒</strong>：用户不知道系统记住了什么，运营无法查看与修正。这带来三个无法解决的问题：</p>
+<ol>
+<li>用户投诉”你怎么会这么说”，客服无法定位原因。</li>
+<li>一条错误记忆持续污染所有后续会话，无法止损。</li>
+<li>合规要求”可查询、可删除个人数据”无法满足。</li>
+</ol>
+<p>原图把「可视化」与「回溯干预」与短期&#x2F;长期记忆并列并圈注，说明该架构已经把记忆治理视为<strong>一等能力</strong>。</p>
+<h3 id="5-2-可视化能力设计"><a href="#5-2-可视化能力设计" class="headerlink" title="5.2 可视化能力设计"></a>5.2 可视化能力设计</h3><pre class="mermaid">flowchart TB
+    subgraph UI["记忆可视化视图"]
+        V1["记忆全景&lt;br/&gt;按类别/命名空间分组&lt;br/&gt;置信度与时效标注"]
+        V2["单条溯源&lt;br/&gt;来自哪次会话哪一轮&lt;br/&gt;原始表述片段&lt;br/&gt;抽取模型与版本"]
+        V3["记忆时间线&lt;br/&gt;创建/更新/取代/失效 全历史"]
+        V4["影响分析&lt;br/&gt;该记忆被哪些会话召回过&lt;br/&gt;影响了哪些回答"]
+        V5["冲突视图&lt;br/&gt;当前存在的矛盾记忆对"]
+    end
+    EV[("记忆事件日志")] --&gt; V2 &amp; V3
+    TR[("Trace 数据")] --&gt; V4</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>视图</th>
+<th>面向</th>
+<th>数据来源</th>
+<th>价值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>记忆全景</td>
+<td>用户 + 运营</td>
+<td>记忆表</td>
+<td>透明度、合规</td>
+</tr>
+<tr>
+<td>单条溯源</td>
+<td>运营 + 客服</td>
+<td>事件日志 + <code>source_trace_id</code></td>
+<td>问题定位</td>
+</tr>
+<tr>
+<td>记忆时间线</td>
+<td>运营</td>
+<td>事件日志</td>
+<td>演化审计</td>
+</tr>
+<tr>
+<td><strong>影响分析</strong></td>
+<td>运营</td>
+<td>Trace（记忆召回埋点）</td>
+<td>评估错误记忆的影响面</td>
+</tr>
+<tr>
+<td>冲突视图</td>
+<td>运营</td>
+<td>冲突检测结果</td>
+<td>主动质量治理</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>「影响分析」是最容易被忽略但价值最高的视图</strong>。发现一条错误记忆后，第一个问题是”它已经影响了多少次回答”。这需要在召回时埋点记录 <code>memory_hits</code> 中的具体 memory_id，成本很低但事后无法补齐。</p>
+</blockquote>
+<h3 id="5-3-回溯干预能力设计"><a href="#5-3-回溯干预能力设计" class="headerlink" title="5.3 回溯干预能力设计"></a>5.3 回溯干预能力设计</h3><table>
+<thead>
+<tr>
+<th>干预动作</th>
+<th>效果</th>
+<th>权限</th>
+<th>是否可逆</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>单条失效</td>
+<td>状态置 invalidated，不再召回</td>
+<td>运营 &#x2F; 用户</td>
+<td>可逆（事件日志保留）</td>
+</tr>
+<tr>
+<td>单条修正</td>
+<td>写新记忆取代旧记忆</td>
+<td>运营（需审核）</td>
+<td>可逆</td>
+</tr>
+<tr>
+<td>置信度调整</td>
+<td>手工调整置信度</td>
+<td>运营</td>
+<td>可逆</td>
+</tr>
+<tr>
+<td>类别重划</td>
+<td>修正 category 与 TTL</td>
+<td>运营</td>
+<td>可逆</td>
+</tr>
+<tr>
+<td>批量清空</td>
+<td>清空某用户&#x2F;某命名空间全部记忆</td>
+<td>用户请求 &#x2F; 合规流程</td>
+<td><strong>不可逆（合规要求硬删除）</strong></td>
+</tr>
+<tr>
+<td>抽取回滚</td>
+<td>撤销某次抽取产生的全部记忆</td>
+<td>运营</td>
+<td>可逆</td>
+</tr>
+<tr>
+<td>黑名单规则</td>
+<td>禁止抽取某类内容（全局生效）</td>
+<td>平台管理员</td>
+<td>可逆</td>
+</tr>
+</tbody></table>
+<p><strong>干预流程</strong>：</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; 发现问题: 用户投诉 / 冲突检测 / 抽检
+    发现问题 --&gt; 定位: 可视化溯源
+    定位 --&gt; 影响评估: 影响分析视图
+    影响评估 --&gt; 立即止损: 单条失效（秒级生效）
+    立即止损 --&gt; 根因分析: 抽取提示词 / 模型 / 会话本身
+    根因分析 --&gt; 规则加固: 加入黑名单规则或调整抽取策略
+    规则加固 --&gt; 批量修复: 同模式记忆批量扫描处理
+    批量修复 --&gt; 回归验证
+    回归验证 --&gt; [*]</pre>
+
+
+<blockquote>
+<p><strong>止损必须秒级生效</strong>。这要求失效操作直接作用于在线读路径（缓存同步失效），而不是等下一次批处理。</p>
+</blockquote>
+<hr>
+<h2 id="6-端侧记忆与端云同步"><a href="#6-端侧记忆与端云同步" class="headerlink" title="6. 端侧记忆与端云同步"></a>6. 端侧记忆与端云同步</h2><h3 id="6-1-端侧记忆的三个分区"><a href="#6-1-端侧记忆的三个分区" class="headerlink" title="6.1 端侧记忆的三个分区"></a>6.1 端侧记忆的三个分区</h3><table>
+<thead>
+<tr>
+<th>分区</th>
+<th>内容</th>
+<th>是否同步</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>端侧短期</td>
+<td>当前会话</td>
+<td>不同步</td>
+<td>生命周期短，同步无价值</td>
+</tr>
+<tr>
+<td>端侧长期&#x2F;偏好</td>
+<td>设备级偏好、常用操作</td>
+<td>双向同步</td>
+<td>跨设备一致性</td>
+</tr>
+<tr>
+<td><strong>隐私区</strong></td>
+<td>用户标记为不上云的内容</td>
+<td><strong>永不同步</strong></td>
+<td>隐私承诺</td>
+</tr>
+</tbody></table>
+<h3 id="6-2-同步与冲突（详见-05-文档-6-1）"><a href="#6-2-同步与冲突（详见-05-文档-6-1）" class="headerlink" title="6.2 同步与冲突（详见 05 文档 6.1）"></a>6.2 同步与冲突（详见 05 文档 6.1）</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant E as 端侧记忆
+    participant SY as 同步服务
+    participant MG as 双向认证网关
+    participant C as 云端记忆中心
+    E-&gt;&gt;SY: 变更集（含变更序号 + 版本向量）
+    SY-&gt;&gt;MG: mTLS 提交
+    MG-&gt;&gt;C: 幂等写入（幂等键=设备ID+序号）
+    C-&gt;&gt;C: 版本向量比对
+    alt 无冲突
+        C--&gt;&gt;MG: 接受
+    else 冲突
+        C-&gt;&gt;C: 按策略解决（事实类云端优先；设置类晚者胜；隐私类不接收）
+        C--&gt;&gt;MG: 解决结果 + 权威版本
+    end
+    MG--&gt;&gt;SY: 确认 + 下发权威版本
+    SY-&gt;&gt;E: 应用权威版本 + 更新水位</pre>
+
+
+<h3 id="6-3-单写者原则"><a href="#6-3-单写者原则" class="headerlink" title="6.3 单写者原则"></a>6.3 单写者原则</h3><table>
+<thead>
+<tr>
+<th>记忆域</th>
+<th>唯一写权威</th>
+<th>另一端角色</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>长期事实记忆</td>
+<td>云端 Memory Agent</td>
+<td>端侧提交候选，不直接写</td>
+</tr>
+<tr>
+<td>设备级设置偏好</td>
+<td>端侧</td>
+<td>云端仅备份</td>
+</tr>
+<tr>
+<td>用户画像</td>
+<td>云端离线任务</td>
+<td>端侧只读缓存</td>
+</tr>
+<tr>
+<td>隐私区记忆</td>
+<td>端侧</td>
+<td>云端无感知</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>违反单写者原则的后果无法通过增加逻辑修复</strong>。若端云都能直接写同一条长期记忆，则必然出现不一致，且随着记忆条数增长，冲突数量呈非线性上升。这是必须在阶段一确定的设计决策。</p>
+</blockquote>
+<hr>
+<h2 id="7-记忆压缩"><a href="#7-记忆压缩" class="headerlink" title="7. 记忆压缩"></a>7. 记忆压缩</h2><table>
+<thead>
+<tr>
+<th>压缩层次</th>
+<th>对象</th>
+<th>方法</th>
+<th>触发条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L1 轮次压缩</td>
+<td>单轮对话</td>
+<td>保留意图与实体，丢弃寒暄</td>
+<td>每轮</td>
+</tr>
+<tr>
+<td>L2 滚动摘要</td>
+<td>超过窗口的轮次</td>
+<td>生成式摘要 + 实体表保护</td>
+<td>窗口满</td>
+</tr>
+<tr>
+<td>L3 二次压缩</td>
+<td>长会话的摘要</td>
+<td>摘要的摘要</td>
+<td>摘要超预算</td>
+</tr>
+<tr>
+<td>L4 长期记忆归并</td>
+<td>同类记忆条目</td>
+<td>归并为更一般的陈述</td>
+<td>同类条目 &gt; 阈值</td>
+</tr>
+<tr>
+<td>L5 冷记忆归档</td>
+<td>长期未召回的记忆</td>
+<td>移出在线索引，保留可查</td>
+<td>半年未召回</td>
+</tr>
+</tbody></table>
+<p><strong>L4 归并示例</strong>（推断设计）：三条记忆”偏好 X 类内容””偏好 Y 类内容””偏好 Z 类内容”（同属一大类）可归并为”偏好该大类内容，尤以 X 为主”。归并需保留原条目引用以支持溯源。</p>
+<blockquote>
+<p><strong>压缩必须保留溯源链</strong>。压缩后若丢失原始来源，回溯干预能力立即失效。事件日志的价值在此体现：物化视图可以压缩，事件日志不可变。</p>
+</blockquote>
+<hr>
+<h2 id="8-技术选型"><a href="#8-技术选型" class="headerlink" title="8. 技术选型"></a>8. 技术选型</h2><table>
+<thead>
+<tr>
+<th>需求</th>
+<th>推荐方案</th>
+<th>备选</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>短期记忆存储</td>
+<td>Redis</td>
+<td>内存 + 持久化</td>
+<td>TTL 与高频读写</td>
+</tr>
+<tr>
+<td>长期记忆结构化存储</td>
+<td>PostgreSQL</td>
+<td>MySQL</td>
+<td>需事件日志与事务</td>
+</tr>
+<tr>
+<td>长期记忆语义检索</td>
+<td>pgvector（复用 PG）</td>
+<td>Qdrant &#x2F; Milvus</td>
+<td>记忆规模通常远小于知识库，pgvector 足够且运维简单</td>
+</tr>
+<tr>
+<td>记忆框架</td>
+<td>自研（PG + pgvector + 事件表）</td>
+<td>Mem0 &#x2F; Zep</td>
+<td>自研的理由：回溯干预与命名空间隔离是强定制需求，现成框架难以满足</td>
+</tr>
+<tr>
+<td>端侧记忆存储</td>
+<td>SQLite + 嵌入式向量（sqlite-vec &#x2F; usearch）</td>
+<td>纯 SQLite + FTS</td>
+<td>端侧规模小，量化向量 256 维足够</td>
+</tr>
+<tr>
+<td>抽取模型</td>
+<td>小模型（成本 1&#x2F;20）</td>
+<td>大模型</td>
+<td>抽取是结构化任务，小模型足够</td>
+</tr>
+<tr>
+<td>画像特征存储</td>
+<td>PG 特征表</td>
+<td>Feast &#x2F; HBase</td>
+<td>按规模选择</td>
+</tr>
+</tbody></table>
+<h3 id="8-1-为什么建议自研记忆层"><a href="#8-1-为什么建议自研记忆层" class="headerlink" title="8.1 为什么建议自研记忆层"></a>8.1 为什么建议自研记忆层</h3><table>
+<thead>
+<tr>
+<th>需求</th>
+<th>现成框架支持度</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>命名空间隔离与私有区</td>
+<td>弱</td>
+<td>多数框架单一记忆空间</td>
+</tr>
+<tr>
+<td>事件溯源 + 回溯干预</td>
+<td>弱</td>
+<td>多数框架只存最终状态</td>
+</tr>
+<tr>
+<td>端云同步与单写者</td>
+<td>无</td>
+<td>完全是本架构特有需求</td>
+</tr>
+<tr>
+<td>置信度与时效衰减</td>
+<td>部分</td>
+<td>需定制权重</td>
+</tr>
+<tr>
+<td>合规硬删除</td>
+<td>部分</td>
+<td>需贯穿向量索引</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>结论：<strong>用现成框架快速验证效果，用自研方案承载生产</strong>。这也符合原图把记忆中心做成完整子系统（含可视化与干预）而非引入一个库的判断。</p>
+</blockquote>
+<hr>
+<h2 id="9-记忆系统评测"><a href="#9-记忆系统评测" class="headerlink" title="9. 记忆系统评测"></a>9. 记忆系统评测</h2><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>定义</th>
+<th>目标（推断设计）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>抽取准确率</td>
+<td>抽取事实与人工标注一致比例</td>
+<td>≥ 90%</td>
+</tr>
+<tr>
+<td>抽取错误率（严重）</td>
+<td>抽出用户未表达内容的比例</td>
+<td>≤ 1%</td>
+</tr>
+<tr>
+<td>召回相关率</td>
+<td>召回记忆与当前查询相关的比例</td>
+<td>≥ 80%</td>
+</tr>
+<tr>
+<td>召回错误影响率</td>
+<td>因错误记忆导致回答错误的比例</td>
+<td>≤ 0.5%</td>
+</tr>
+<tr>
+<td>冲突检出率</td>
+<td>矛盾记忆被检出的比例</td>
+<td>≥ 95%</td>
+</tr>
+<tr>
+<td>干预生效延迟</td>
+<td>失效操作到在线不再召回</td>
+<td>≤ 5 s</td>
+</tr>
+<tr>
+<td>个性化增益</td>
+<td>有记忆 vs 无记忆的满意度差</td>
+<td>≥ +15%</td>
+</tr>
+<tr>
+<td>记忆规模</td>
+<td>单用户活跃记忆条数</td>
+<td>50–300（超出需归并）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>“记忆规模”是健康度指标</strong>。单用户记忆超过数百条通常意味着抽取过于宽松或归并缺失，此时召回精度会显著下降。</p>
+</blockquote>
+<hr>
+<h2 id="10-风险与治理"><a href="#10-风险与治理" class="headerlink" title="10. 风险与治理"></a>10. 风险与治理</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>影响</th>
+<th>治理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>记忆污染</strong></td>
+<td>错误记忆持续影响所有后续会话</td>
+<td>保守抽取 + 置信度阈值 + 冲突检测 + 回溯干预 + 抽检</td>
+</tr>
+<tr>
+<td>隐私越界</td>
+<td>敏感内容被其他 Agent 读取或进入训练</td>
+<td>命名空间隔离 + 隐私区不出端 + 抽取黑名单 + 训练集过滤</td>
+</tr>
+<tr>
+<td>端云不一致</td>
+<td>回答自相矛盾</td>
+<td>单写者 + 版本向量 + 冲突策略表</td>
+</tr>
+<tr>
+<td>召回噪声</td>
+<td>无关个人信息干扰回答</td>
+<td>K 值上限 + 相关性阈值 + Token 预算</td>
+</tr>
+<tr>
+<td>Embedding 版本混用</td>
+<td>召回精度悄然下降</td>
+<td><code>embedding_version</code> 字段 + 灰度重建 + 双索引验证</td>
+</tr>
+<tr>
+<td>合规删除不彻底</td>
+<td>向量索引仍可召回已删除内容</td>
+<td>删除需级联到向量索引与缓存，并有验证流程</td>
+</tr>
+<tr>
+<td>记忆规模膨胀</td>
+<td>精度下降、成本上升</td>
+<td>归并 + 冷归档 + 规模监控告警</td>
+</tr>
+<tr>
+<td>抽取成本</td>
+<td>每次会话都调模型</td>
+<td>小模型 + 批量处理 + 无新信息则跳过</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="11-演进路线"><a href="#11-演进路线" class="headerlink" title="11. 演进路线"></a>11. 演进路线</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>记忆系统演进</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>阶段一</strong></td>
+<td>三层记忆基础能力；事件日志与 <code>source_trace_id</code> 落地；命名空间隔离；保守抽取策略；单写者原则确定</td>
+</tr>
+<tr>
+<td><strong>阶段二</strong></td>
+<td>可视化与回溯干预上线（含影响分析视图）；冲突检测自动化；时效衰减与置信度加权召回；端云同步完善</td>
+</tr>
+<tr>
+<td><strong>阶段三</strong></td>
+<td>记忆归并与冷归档自动化；抽取质量自动评测与提示词自优化；记忆对效果的因果归因分析（哪些记忆真正提升了满意度）</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端 Agent 运行时架构 · <strong>下一篇</strong>：云管端 RAG 系统设计</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/05/26/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-09-RAG%E7%B3%BB%E7%BB%9F/">云管端 RAG 系统设计</a></h3>
+        <p>绝大多数 RAG 项目失败于缺少后两层：底座能跑通 Demo，但知识接入依赖研发排期、参数调整凭感觉、效果好坏靠抽查。</p>
+        <a class="btn primary" href="/2026/05/26/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-09-RAG%E7%B3%BB%E7%BB%9F/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/03/10/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-07-Agent%E6%9E%B6%E6%9E%84/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端 Agent 运行时架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#08-%C2%B7-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F%EF%BC%88Memory-System%EF%BC%89" data-toc-target="08-·-记忆系统（Memory-System）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">08 · 记忆系统（Memory System）</span></a><a class="toc-level-2" href="#1-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F%E6%80%BB%E8%A7%88" data-toc-target="1-记忆系统总览"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 记忆系统总览</span></a><a class="toc-level-2" href="#2-%E4%B8%89%E5%B1%82%E8%AE%B0%E5%BF%86%E6%A8%A1%E5%9E%8B" data-toc-target="2-三层记忆模型"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 三层记忆模型</span></a><a class="toc-level-3" href="#2-1-%E7%9F%AD%E6%9C%9F%E8%AE%B0%E5%BF%86%EF%BC%88Short-Term-Memory%EF%BC%89" data-toc-target="2-1-短期记忆（Short-Term-Memory）"><span class="toc-text">2.1 短期记忆（Short-Term Memory）</span></a><a class="toc-level-3" href="#2-2-%E9%95%BF%E6%9C%9F%E8%AE%B0%E5%BF%86%EF%BC%88Long-Term-Memory%EF%BC%89" data-toc-target="2-2-长期记忆（Long-Term-Memory）"><span class="toc-text">2.2 长期记忆（Long-Term Memory）</span></a><a class="toc-level-3" href="#2-3-%E7%94%A8%E6%88%B7%E7%94%BB%E5%83%8F%EF%BC%88User-Profile%EF%BC%89" data-toc-target="2-3-用户画像（User-Profile）"><span class="toc-text">2.3 用户画像（User Profile）</span></a><a class="toc-level-3" href="#2-4-%E4%B8%89%E8%80%85%E5%AF%B9%E6%AF%94" data-toc-target="2-4-三者对比"><span class="toc-text">2.4 三者对比</span></a><a class="toc-level-2" href="#3-%E8%AE%B0%E5%BF%86%E5%8F%AC%E5%9B%9E%EF%BC%88Memory-Recall%EF%BC%89" data-toc-target="3-记忆召回（Memory-Recall）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 记忆召回（Memory Recall）</span></a><a class="toc-level-3" href="#3-1-%E6%97%B6%E6%95%88%E8%A1%B0%E5%87%8F%E5%87%BD%E6%95%B0%EF%BC%88%E6%8E%A8%E6%96%AD%E8%AE%BE%E8%AE%A1%EF%BC%89" data-toc-target="3-1-时效衰减函数（推断设计）"><span class="toc-text">3.1 时效衰减函数（推断设计）</span></a><a class="toc-level-3" href="#3-2-%E5%8F%AC%E5%9B%9E%E8%B4%A8%E9%87%8F%E7%9A%84%E4%B8%89%E4%B8%AA%E9%99%B7%E9%98%B1" data-toc-target="3-2-召回质量的三个陷阱"><span class="toc-text">3.2 召回质量的三个陷阱</span></a><a class="toc-level-2" href="#4-%E8%AE%B0%E5%BF%86%E5%86%99%E5%85%A5%E4%B8%8E%E6%BC%94%E5%8C%96" data-toc-target="4-记忆写入与演化"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 记忆写入与演化</span></a><a class="toc-level-3" href="#4-1-%E6%8A%BD%E5%8F%96%E6%B5%81%E7%A8%8B" data-toc-target="4-1-抽取流程"><span class="toc-text">4.1 抽取流程</span></a><a class="toc-level-3" href="#4-2-%E6%8A%BD%E5%8F%96%E6%8F%90%E7%A4%BA%E8%AF%8D%E8%AE%BE%E8%AE%A1%E8%A6%81%E7%82%B9%EF%BC%88%E6%8E%A8%E6%96%AD%E8%AE%BE%E8%AE%A1%EF%BC%89" data-toc-target="4-2-抽取提示词设计要点（推断设计）"><span class="toc-text">4.2 抽取提示词设计要点（推断设计）</span></a><a class="toc-level-3" href="#4-3-%E5%86%B2%E7%AA%81%E8%A7%A3%E5%86%B3%E7%AD%96%E7%95%A5" data-toc-target="4-3-冲突解决策略"><span class="toc-text">4.3 冲突解决策略</span></a><a class="toc-level-2" href="#5-%E5%8F%AF%E8%A7%86%E5%8C%96%E4%B8%8E%E5%9B%9E%E6%BA%AF%E5%B9%B2%E9%A2%84%EF%BC%88%E5%9B%BE%E7%A4%BA%E5%9C%88%E6%B3%A8%E6%A0%B8%E5%BF%83%E8%83%BD%E5%8A%9B%EF%BC%89" data-toc-target="5-可视化与回溯干预（图示圈注核心能力）"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 可视化与回溯干预（图示圈注核心能力）</span></a><a class="toc-level-3" href="#5-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%98%AF%E5%B7%AE%E5%BC%82%E5%8C%96%E8%83%BD%E5%8A%9B" data-toc-target="5-1-为什么这是差异化能力"><span class="toc-text">5.1 为什么这是差异化能力</span></a><a class="toc-level-3" href="#5-2-%E5%8F%AF%E8%A7%86%E5%8C%96%E8%83%BD%E5%8A%9B%E8%AE%BE%E8%AE%A1" data-toc-target="5-2-可视化能力设计"><span class="toc-text">5.2 可视化能力设计</span></a><a class="toc-level-3" href="#5-3-%E5%9B%9E%E6%BA%AF%E5%B9%B2%E9%A2%84%E8%83%BD%E5%8A%9B%E8%AE%BE%E8%AE%A1" data-toc-target="5-3-回溯干预能力设计"><span class="toc-text">5.3 回溯干预能力设计</span></a><a class="toc-level-2" href="#6-%E7%AB%AF%E4%BE%A7%E8%AE%B0%E5%BF%86%E4%B8%8E%E7%AB%AF%E4%BA%91%E5%90%8C%E6%AD%A5" data-toc-target="6-端侧记忆与端云同步"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 端侧记忆与端云同步</span></a><a class="toc-level-3" href="#6-1-%E7%AB%AF%E4%BE%A7%E8%AE%B0%E5%BF%86%E7%9A%84%E4%B8%89%E4%B8%AA%E5%88%86%E5%8C%BA" data-toc-target="6-1-端侧记忆的三个分区"><span class="toc-text">6.1 端侧记忆的三个分区</span></a><a class="toc-level-3" href="#6-2-%E5%90%8C%E6%AD%A5%E4%B8%8E%E5%86%B2%E7%AA%81%EF%BC%88%E8%AF%A6%E8%A7%81-05-%E6%96%87%E6%A1%A3-6-1%EF%BC%89" data-toc-target="6-2-同步与冲突（详见-05-文档-6-1）"><span class="toc-text">6.2 同步与冲突（详见 05 文档 6.1）</span></a><a class="toc-level-3" href="#6-3-%E5%8D%95%E5%86%99%E8%80%85%E5%8E%9F%E5%88%99" data-toc-target="6-3-单写者原则"><span class="toc-text">6.3 单写者原则</span></a><a class="toc-level-2" href="#7-%E8%AE%B0%E5%BF%86%E5%8E%8B%E7%BC%A9" data-toc-target="7-记忆压缩"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 记忆压缩</span></a><a class="toc-level-2" href="#8-%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B" data-toc-target="8-技术选型"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 技术选型</span></a><a class="toc-level-3" href="#8-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BB%BA%E8%AE%AE%E8%87%AA%E7%A0%94%E8%AE%B0%E5%BF%86%E5%B1%82" data-toc-target="8-1-为什么建议自研记忆层"><span class="toc-text">8.1 为什么建议自研记忆层</span></a><a class="toc-level-2" href="#9-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F%E8%AF%84%E6%B5%8B" data-toc-target="9-记忆系统评测"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 记忆系统评测</span></a><a class="toc-level-2" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 风险与治理</span></a><a class="toc-level-2" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 演进路线</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 45%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">9 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#08-%C2%B7-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F%EF%BC%88Memory-System%EF%BC%89" data-toc-target="08-·-记忆系统（Memory-System）" data-title="01 · 08 · 记忆系统（Memory System）" aria-label="08 · 记忆系统（Memory System）"></a><a class="toc-strip__dot" href="#1-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F%E6%80%BB%E8%A7%88" data-toc-target="1-记忆系统总览" data-title="02 · 1. 记忆系统总览" aria-label="1. 记忆系统总览"></a><a class="toc-strip__dot" href="#2-%E4%B8%89%E5%B1%82%E8%AE%B0%E5%BF%86%E6%A8%A1%E5%9E%8B" data-toc-target="2-三层记忆模型" data-title="03 · 2. 三层记忆模型" aria-label="2. 三层记忆模型"></a><a class="toc-strip__dot" href="#3-%E8%AE%B0%E5%BF%86%E5%8F%AC%E5%9B%9E%EF%BC%88Memory-Recall%EF%BC%89" data-toc-target="3-记忆召回（Memory-Recall）" data-title="04 · 3. 记忆召回（Memory Recall）" aria-label="3. 记忆召回（Memory Recall）"></a><a class="toc-strip__dot" href="#4-%E8%AE%B0%E5%BF%86%E5%86%99%E5%85%A5%E4%B8%8E%E6%BC%94%E5%8C%96" data-toc-target="4-记忆写入与演化" data-title="05 · 4. 记忆写入与演化" aria-label="4. 记忆写入与演化"></a><a class="toc-strip__dot" href="#5-%E5%8F%AF%E8%A7%86%E5%8C%96%E4%B8%8E%E5%9B%9E%E6%BA%AF%E5%B9%B2%E9%A2%84%EF%BC%88%E5%9B%BE%E7%A4%BA%E5%9C%88%E6%B3%A8%E6%A0%B8%E5%BF%83%E8%83%BD%E5%8A%9B%EF%BC%89" data-toc-target="5-可视化与回溯干预（图示圈注核心能力）" data-title="06 · 5. 可视化与回溯干预（图示圈注核心能力）" aria-label="5. 可视化与回溯干预（图示圈注核心能力）"></a><a class="toc-strip__dot" href="#6-%E7%AB%AF%E4%BE%A7%E8%AE%B0%E5%BF%86%E4%B8%8E%E7%AB%AF%E4%BA%91%E5%90%8C%E6%AD%A5" data-toc-target="6-端侧记忆与端云同步" data-title="07 · 6. 端侧记忆与端云同步" aria-label="6. 端侧记忆与端云同步"></a><a class="toc-strip__dot" href="#7-%E8%AE%B0%E5%BF%86%E5%8E%8B%E7%BC%A9" data-toc-target="7-记忆压缩" data-title="08 · 7. 记忆压缩" aria-label="7. 记忆压缩"></a><a class="toc-strip__dot" href="#8-%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B" data-toc-target="8-技术选型" data-title="09 · 8. 技术选型" aria-label="8. 技术选型"></a><a class="toc-strip__dot" href="#9-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F%E8%AF%84%E6%B5%8B" data-toc-target="9-记忆系统评测" data-title="10 · 9. 记忆系统评测" aria-label="9. 记忆系统评测"></a><a class="toc-strip__dot" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理" data-title="11 · 10. 风险与治理" aria-label="10. 风险与治理"></a><a class="toc-strip__dot" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线" data-title="12 · 11. 演进路线" aria-label="11. 演进路线"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-08-记忆系统","title":"云管端记忆系统设计","url":"/2026/04/21/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-08-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F/","path":"cloud-pipe-edge-agent-platform","index":8,"total":20,"next":{"title":"云管端 RAG 系统设计","url":"/2026/05/26/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-09-RAG%E7%B3%BB%E7%BB%9F/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

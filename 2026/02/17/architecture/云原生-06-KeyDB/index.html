@@ -1,0 +1,407 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>高性能中间件：KeyDB · 飞轮之道</title>
+<meta name="description" content="本文档描述了基础平台（BP）中高性能分布式缓存中间件KeyDB的预研与应用方案。核心目标是预研新一代高性能分布式缓存中间件KeyDB，升级更新当前Redis缓存中间件，提升系统QPS，降低系统时延，提升系统吞吐量。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/02/17/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-KeyDB/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="高性能中间件：KeyDB · 飞轮之道">
+<meta property="og:description" content="本文档描述了基础平台（BP）中高性能分布式缓存中间件KeyDB的预研与应用方案。核心目标是预研新一代高性能分布式缓存中间件KeyDB，升级更新当前Redis缓存中间件，提升系统QPS，降低系统时延，提升系统吞吐量。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/02/17/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-KeyDB/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">数据与中间件</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 7 / 19 篇</a>
+    </div>
+    <h1>高性能中间件：KeyDB</h1>
+    <p class="article-deck">本文档描述了基础平台（BP）中高性能分布式缓存中间件KeyDB的预研与应用方案。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>4 分钟</span>
+      <span>发布于 2026.02</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="BP关键技术方案-高性能中间件KeyDB应用"><a href="#BP关键技术方案-高性能中间件KeyDB应用" class="headerlink" title="BP关键技术方案 - 高性能中间件KeyDB应用"></a>BP关键技术方案 - 高性能中间件KeyDB应用</h2><blockquote>
+<p>📷 原始图片：</p>
+</blockquote>
+<h2 id="一、概述"><a href="#一、概述" class="headerlink" title="一、概述"></a>一、概述</h2><p>本文档描述了基础平台（BP）中高性能分布式缓存中间件KeyDB的预研与应用方案。核心目标是预研新一代高性能分布式缓存中间件KeyDB，升级更新当前Redis缓存中间件，提升系统QPS，降低系统时延，提升系统吞吐量。</p>
+<h2 id="二、Redis-vs-KeyDB-架构对比"><a href="#二、Redis-vs-KeyDB-架构对比" class="headerlink" title="二、Redis vs KeyDB 架构对比"></a>二、Redis vs KeyDB 架构对比</h2><h3 id="2-1-Redis-架构"><a href="#2-1-Redis-架构" class="headerlink" title="2.1 Redis 架构"></a>2.1 Redis 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">客户端1  客户端2  ... 客户端n</span><br><span class="line">    │       │          │</span><br><span class="line">    └───────┼──────────┘</span><br><span class="line">            │</span><br><span class="line">         Redis</span><br><span class="line">            │</span><br><span class="line">    ┌───────────────┐</span><br><span class="line">    │   主线程 ★     │ ← 单线程瓶颈</span><br><span class="line">    │               │</span><br><span class="line">    ├── 监听        │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    ├── 接收请求     │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    ├── 数据读取     │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    ├── 解析协议     │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    └── DB（主线程） │</span><br><span class="line">        └── 主线程   │</span><br><span class="line">    └───────────────┘</span><br></pre></td></tr></table></figure>
+
+<p><strong>Redis 问题</strong>：</p>
+<ul>
+<li>❌ 单线程模型，提升吞吐量需做横向扩容，增加运营成本</li>
+<li>❌ 高并发场景下将有高延迟风险</li>
+<li>❌ CPU多核利用率低</li>
+</ul>
+<h3 id="2-2-KeyDB-架构"><a href="#2-2-KeyDB-架构" class="headerlink" title="2.2 KeyDB 架构"></a>2.2 KeyDB 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">客户端1  客户端2  ... 客户端n</span><br><span class="line">    │       │          │</span><br><span class="line">    └───────┼──────────┘</span><br><span class="line">            │</span><br><span class="line">         KeyDB</span><br><span class="line">            │</span><br><span class="line">    ┌───────────────────────────────┐</span><br><span class="line">    │        多线程并行 ★             │</span><br><span class="line">    │                               │</span><br><span class="line">    ├── 监听                         │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    ├── 接收请求                      │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    ├── 数据读取                      │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    ├── 解析协议                      │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    └── DB                          │</span><br><span class="line">        │ 数据锁 │                   │</span><br><span class="line">        ├── 工作线程1                 │</span><br><span class="line">        ├── 工作线程2                 │</span><br><span class="line">        └── 工作线程n                 │</span><br><span class="line">    └───────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<p><strong>KeyDB 优势</strong>：</p>
+<ul>
+<li>✅ 多线程模型，提升了内存效率和吞吐量，能在不横向扩容的情况下提升吞吐量，降低运营硬件成本投入</li>
+<li>✅ 相同硬件KeyDB的QPS是Redis的<strong>两倍</strong>，延迟降低<strong>60%</strong></li>
+<li>✅ 兼容性好，<strong>完全兼容Redis API</strong></li>
+</ul>
+<h2 id="三、核心架构差异"><a href="#三、核心架构差异" class="headerlink" title="三、核心架构差异"></a>三、核心架构差异</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>Redis</th>
+<th>KeyDB</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>线程模型</td>
+<td>单线程（主线程处理所有I&#x2F;O）</td>
+<td>多线程（每个工作线程独立处理）</td>
+</tr>
+<tr>
+<td>监听</td>
+<td>主线程分发</td>
+<td>多线程并行监听</td>
+</tr>
+<tr>
+<td>请求接收</td>
+<td>主线程串行</td>
+<td>多线程并行接收</td>
+</tr>
+<tr>
+<td>数据读取</td>
+<td>工作线程读取，主线程调度</td>
+<td>多线程直接并行读取</td>
+</tr>
+<tr>
+<td>协议解析</td>
+<td>工作线程解析，主线程调度</td>
+<td>多线程直接并行解析</td>
+</tr>
+<tr>
+<td>DB操作</td>
+<td>主线程串行执行</td>
+<td>多线程+数据锁并行执行</td>
+</tr>
+<tr>
+<td>扩容方式</td>
+<td>横向扩容（增加实例）</td>
+<td>纵向扩容（增加线程）</td>
+</tr>
+</tbody></table>
+<h2 id="四、性能对比"><a href="#四、性能对比" class="headerlink" title="四、性能对比"></a>四、性能对比</h2><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>Redis</th>
+<th>KeyDB</th>
+<th>提升</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>QPS</td>
+<td>基准值</td>
+<td>2x</td>
+<td>100%提升</td>
+</tr>
+<tr>
+<td>延迟</td>
+<td>基准值</td>
+<td>0.4x</td>
+<td>降低60%</td>
+</tr>
+<tr>
+<td>CPU利用率</td>
+<td>低（单线程）</td>
+<td>高（多线程）</td>
+<td>多核充分利用</td>
+</tr>
+<tr>
+<td>扩容成本</td>
+<td>高（需增加实例）</td>
+<td>低（增加线程）</td>
+<td>显著降低</td>
+</tr>
+<tr>
+<td>API兼容</td>
+<td>-</td>
+<td>100%</td>
+<td>无缝迁移</td>
+</tr>
+</tbody></table>
+<h2 id="五、应用场景"><a href="#五、应用场景" class="headerlink" title="五、应用场景"></a>五、应用场景</h2><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>选择</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>高并发产业物联网Session</td>
+<td>KeyDB</td>
+<td>数十万车辆同时在线，高QPS需求</td>
+</tr>
+<tr>
+<td>实时计算中间缓存</td>
+<td>KeyDB</td>
+<td>大量实时信号数据缓存</td>
+</tr>
+<tr>
+<td>车辆状态缓存</td>
+<td>KeyDB</td>
+<td>高频读写，低延迟要求</td>
+</tr>
+<tr>
+<td>配置缓存（低频）</td>
+<td>Redis</td>
+<td>访问频率低，迁移优先级低</td>
+</tr>
+</tbody></table>
+<h2 id="六、迁移策略"><a href="#六、迁移策略" class="headerlink" title="六、迁移策略"></a>六、迁移策略</h2><ol>
+<li><strong>API兼容性验证</strong>：KeyDB完全兼容Redis API，理论上可无缝切换</li>
+<li><strong>小范围试点</strong>：选择非核心业务先行试点</li>
+<li><strong>性能压测</strong>：在试点环境进行充分的性能压测</li>
+<li><strong>灰度迁移</strong>：按业务优先级逐步迁移</li>
+<li><strong>监控保障</strong>：建立完善的监控告警，确保迁移安全</li>
+</ol>
+<h2 id="七、关键技术洞察"><a href="#七、关键技术洞察" class="headerlink" title="七、关键技术洞察"></a>七、关键技术洞察</h2><ol>
+<li><strong>多线程革命</strong>：KeyDB通过多线程彻底解决Redis单线程瓶颈</li>
+<li><strong>零迁移成本</strong>：完全兼容Redis API，应用层无需任何改造</li>
+<li><strong>纵向扩展</strong>：通过增加线程代替增加实例，大幅降低运维复杂度</li>
+<li><strong>数据锁设计</strong>：通过精细化数据锁实现多线程安全的DB操作</li>
+<li><strong>成本效益</strong>：同等硬件下获得2倍性能，直接降低50%硬件投入</li>
+</ol>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/04/07/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-Pulsar/">高性能中间件：Pulsar</a></h3>
+        <p>本文档描述了基础平台（BP）中下一代云原生分布式消息流平台Pulsar的预研与应用方案。</p>
+        <a class="btn primary" href="/2026/04/07/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-Pulsar/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/12/25/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：实时计算平台架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#BP%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%96%B9%E6%A1%88-%E9%AB%98%E6%80%A7%E8%83%BD%E4%B8%AD%E9%97%B4%E4%BB%B6KeyDB%E5%BA%94%E7%94%A8" data-toc-target="BP关键技术方案-高性能中间件KeyDB应用"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">BP关键技术方案 - 高性能中间件KeyDB应用</span></a><a class="toc-level-2" href="#%E4%B8%80%E3%80%81%E6%A6%82%E8%BF%B0" data-toc-target="一、概述"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">一、概述</span></a><a class="toc-level-2" href="#%E4%BA%8C%E3%80%81Redis-vs-KeyDB-%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94" data-toc-target="二、Redis-vs-KeyDB-架构对比"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">二、Redis vs KeyDB 架构对比</span></a><a class="toc-level-3" href="#2-1-Redis-%E6%9E%B6%E6%9E%84" data-toc-target="2-1-Redis-架构"><span class="toc-text">2.1 Redis 架构</span></a><a class="toc-level-3" href="#2-2-KeyDB-%E6%9E%B6%E6%9E%84" data-toc-target="2-2-KeyDB-架构"><span class="toc-text">2.2 KeyDB 架构</span></a><a class="toc-level-2" href="#%E4%B8%89%E3%80%81%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%E5%B7%AE%E5%BC%82" data-toc-target="三、核心架构差异"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">三、核心架构差异</span></a><a class="toc-level-2" href="#%E5%9B%9B%E3%80%81%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94" data-toc-target="四、性能对比"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">四、性能对比</span></a><a class="toc-level-2" href="#%E4%BA%94%E3%80%81%E5%BA%94%E7%94%A8%E5%9C%BA%E6%99%AF" data-toc-target="五、应用场景"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">五、应用场景</span></a><a class="toc-level-2" href="#%E5%85%AD%E3%80%81%E8%BF%81%E7%A7%BB%E7%AD%96%E7%95%A5" data-toc-target="六、迁移策略"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">六、迁移策略</span></a><a class="toc-level-2" href="#%E4%B8%83%E3%80%81%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%B4%9E%E5%AF%9F" data-toc-target="七、关键技术洞察"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">七、关键技术洞察</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 37%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">7 / 19</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#BP%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%96%B9%E6%A1%88-%E9%AB%98%E6%80%A7%E8%83%BD%E4%B8%AD%E9%97%B4%E4%BB%B6KeyDB%E5%BA%94%E7%94%A8" data-toc-target="BP关键技术方案-高性能中间件KeyDB应用" data-title="01 · BP关键技术方案 - 高性能中间件KeyDB应用" aria-label="BP关键技术方案 - 高性能中间件KeyDB应用"></a><a class="toc-strip__dot" href="#%E4%B8%80%E3%80%81%E6%A6%82%E8%BF%B0" data-toc-target="一、概述" data-title="02 · 一、概述" aria-label="一、概述"></a><a class="toc-strip__dot" href="#%E4%BA%8C%E3%80%81Redis-vs-KeyDB-%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94" data-toc-target="二、Redis-vs-KeyDB-架构对比" data-title="03 · 二、Redis vs KeyDB 架构对比" aria-label="二、Redis vs KeyDB 架构对比"></a><a class="toc-strip__dot" href="#%E4%B8%89%E3%80%81%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%E5%B7%AE%E5%BC%82" data-toc-target="三、核心架构差异" data-title="04 · 三、核心架构差异" aria-label="三、核心架构差异"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E3%80%81%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94" data-toc-target="四、性能对比" data-title="05 · 四、性能对比" aria-label="四、性能对比"></a><a class="toc-strip__dot" href="#%E4%BA%94%E3%80%81%E5%BA%94%E7%94%A8%E5%9C%BA%E6%99%AF" data-toc-target="五、应用场景" data-title="06 · 五、应用场景" aria-label="五、应用场景"></a><a class="toc-strip__dot" href="#%E5%85%AD%E3%80%81%E8%BF%81%E7%A7%BB%E7%AD%96%E7%95%A5" data-toc-target="六、迁移策略" data-title="07 · 六、迁移策略" aria-label="六、迁移策略"></a><a class="toc-strip__dot" href="#%E4%B8%83%E3%80%81%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E6%B4%9E%E5%AF%9F" data-toc-target="七、关键技术洞察" data-title="08 · 七、关键技术洞察" aria-label="七、关键技术洞察"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-06-KeyDB","title":"高性能中间件：KeyDB","url":"/2026/02/17/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-KeyDB/","path":"cloud-native-platform","index":6,"total":19,"next":{"title":"高性能中间件：Pulsar","url":"/2026/04/07/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-Pulsar/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

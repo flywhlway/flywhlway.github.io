@@ -1,0 +1,1099 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端 AI 网关架构 · 飞轮之道</title>
+<meta name="description" content="核心判断：网关的分离依据是流量特征与故障域，不是功能。四种流量的资源模型完全不同，任意两者合并都会导致故障传播。原图把三个网关并列画在「管」层、LLM 网关画在云内，正是这一判断的体现。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/07/02/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-11-AI%E7%BD%91%E5%85%B3/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端 AI 网关架构 · 飞轮之道">
+<meta property="og:description" content="核心判断：网关的分离依据是流量特征与故障域，不是功能。四种流量的资源模型完全不同，任意两者合并都会导致故障传播。原图把三个网关并列画在「管」层、LLM 网关画在云内，正是这一判断的体现。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/07/02/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-11-AI%E7%BD%91%E5%85%B3/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">走向生产</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 12 / 20 篇</a>
+    </div>
+    <h1>云管端 AI 网关架构</h1>
+    <p class="article-deck">核心判断：网关的分离依据是流量特征与故障域，不是功能。四种流量的资源模型完全不同，任意两者合并都会导致故障传播。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>9 分钟</span>
+      <span>发布于 2026.07</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="11-·-AI-网关体系（AI-Gateway）"><a href="#11-·-AI-网关体系（AI-Gateway）" class="headerlink" title="11 · AI 网关体系（AI Gateway）"></a>11 · AI 网关体系（AI Gateway）</h2><blockquote>
+<p>文档类型：架构设计说明书 · 网关专章<br>对应图示：<strong>Agent 网关</strong>（SSE 流式 &#x2F; A2A 桥接 &#x2F; 内容安全）+ 语音网关 + 双向认证网关 + LLM 网关<br>说明：本架构有 <strong>4 个网关</strong>，职责严格分离。把它们合并成一个”大网关”是最常见的架构错误</p>
+</blockquote>
+<hr>
+<h2 id="1-四网关拓扑"><a href="#1-四网关拓扑" class="headerlink" title="1. 四网关拓扑"></a>1. 四网关拓扑</h2><pre class="mermaid">flowchart TB
+    subgraph EDGE["端侧"]
+        AS["音频服务"]
+        SA["System Agent"]
+        EAI["边缘 AI 基础能力"]
+    end
+    subgraph GATEWAYS["网关层"]
+        VGW["① 语音网关&lt;br/&gt;音频流 · 长连接"]
+        AGW["② Agent 网关&lt;br/&gt;请求流 · SSE · A2A · 内容安全"]
+        MGW["③ 双向认证网关&lt;br/&gt;同步流 · mTLS"]
+    end
+    subgraph CLOUD["云内"]
+        NLU["NLU"]
+        PL["Planner"]
+        FND["基础能力层"]
+        AGT["Cloud Agents"]
+        LGW["④ LLM 网关&lt;br/&gt;模型出口 · 缓存 · Token 治理"]
+        POOL["模型池"]
+    end
+    AS --&gt;|"音频流"| VGW --&gt; NLU --&gt; PL
+    SA --&gt;|"请求 + SSE 回传"| AGW --&gt; PL
+    EAI &lt;--&gt;|"状态同步"| MGW &lt;--&gt; FND
+    PL --&gt; AGT
+    PL &amp; AGT &amp; FND --&gt; LGW --&gt; POOL</pre>
+
+
+<h3 id="1-1-为什么必须分开"><a href="#1-1-为什么必须分开" class="headerlink" title="1.1 为什么必须分开"></a>1.1 为什么必须分开</h3><table>
+<thead>
+<tr>
+<th>网关</th>
+<th>流量特征</th>
+<th>资源模型</th>
+<th>合并后的问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>① 语音网关</td>
+<td>高带宽长连接、持续流</td>
+<td>连接数与带宽受限</td>
+<td>音频占满连接池 → API 请求排队</td>
+</tr>
+<tr>
+<td>② Agent 网关</td>
+<td>请求响应 + 长耗时流式</td>
+<td>CPU 与连接双约束</td>
+<td>与音频混部互相拖垮</td>
+</tr>
+<tr>
+<td>③ 双向认证网关</td>
+<td>大批量、低频、可延迟</td>
+<td>带宽突发</td>
+<td>同步大包挤占交互带宽</td>
+</tr>
+<tr>
+<td>④ LLM 网关</td>
+<td>内网出口、极长耗时</td>
+<td>上游依赖不可控</td>
+<td>外部模型故障影响端侧接入</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>核心判断</strong>：网关的分离依据是<strong>流量特征与故障域</strong>，不是功能。四种流量的资源模型完全不同，任意两者合并都会导致故障传播。原图把三个网关并列画在「管」层、LLM 网关画在云内，正是这一判断的体现。</p>
+</blockquote>
+<hr>
+<h2 id="2-Agent-网关（图示圈注核心）"><a href="#2-Agent-网关（图示圈注核心）" class="headerlink" title="2. Agent 网关（图示圈注核心）"></a>2. Agent 网关（图示圈注核心）</h2><h3 id="2-1-处理流水线"><a href="#2-1-处理流水线" class="headerlink" title="2.1 处理流水线"></a>2.1 处理流水线</h3><pre class="mermaid">flowchart LR
+    IN["端侧请求"] --&gt; A1["① TLS 终止"]
+    A1 --&gt; A2["② 身份认证&lt;br/&gt;证书派生身份"]
+    A2 --&gt; A3["③ 入站内容安全&lt;br/&gt;规则同步 + 模型异步"]
+    A3 --&gt; A4["④ 授权&lt;br/&gt;能力 ID 校验 + 权限"]
+    A4 --&gt; A5["⑤ 限流配额&lt;br/&gt;四维"]
+    A5 --&gt; A6["⑥ 流量染色&lt;br/&gt;灰度标记"]
+    A6 --&gt; A7["⑦ A2A 寻址&lt;br/&gt;目标解析 + 权限交集"]
+    A7 --&gt; A8["⑧ 协议转换&lt;br/&gt;HTTP → 内部 RPC"]
+    A8 --&gt; OUT["Planner"]
+    OUT -.-&gt;|"流式结果"| A9["⑨ SSE 封装&lt;br/&gt;分片 + id + 心跳"]
+    A9 -.-&gt; IN</pre>
+
+
+<p><strong>顺序不可调换的三条约束</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>约束</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>内容安全在授权与转发之前</td>
+<td>违规请求越早拒绝，消耗的下游资源越少</td>
+</tr>
+<tr>
+<td>能力 ID 校验在限流之前</td>
+<td>未注册能力应直接拒绝，不占用配额</td>
+</tr>
+<tr>
+<td>SSE 封装在最后</td>
+<td>只有拿到结果流才能封装；且需与内容安全分段校验协同</td>
+</tr>
+</tbody></table>
+<h3 id="2-2-认证与身份"><a href="#2-2-认证与身份" class="headerlink" title="2.2 认证与身份"></a>2.2 认证与身份</h3><table>
+<thead>
+<tr>
+<th>身份类型</th>
+<th>来源</th>
+<th>是否可自报</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>设备&#x2F;车辆身份</td>
+<td>mTLS 客户端证书派生</td>
+<td><strong>否</strong></td>
+<td>设备级限流、能力可见性、审计</td>
+</tr>
+<tr>
+<td>用户身份</td>
+<td>OIDC 令牌 &#x2F; 会话票据</td>
+<td>否</td>
+<td>记忆命名空间、权限、画像</td>
+</tr>
+<tr>
+<td>Agent 身份</td>
+<td>注册中心签发的 Agent 凭据</td>
+<td>否</td>
+<td>A2A 鉴权、能力权限</td>
+</tr>
+<tr>
+<td>会话标识</td>
+<td>网关签发</td>
+<td>否</td>
+<td>短期记忆边界、限流粒度</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>绝对禁止业务层自报身份</strong>。若请求体中的 <code>user_id</code> 被信任，则任何设备都可冒充任意用户读取其记忆。身份必须由传输层凭据派生。</p>
+</blockquote>
+<h3 id="2-3-限流与配额（四维模型）"><a href="#2-3-限流与配额（四维模型）" class="headerlink" title="2.3 限流与配额（四维模型）"></a>2.3 限流与配额（四维模型）</h3><pre class="mermaid">flowchart TB
+    R["请求"] --&gt; D1&#123;"维度1: 设备&lt;br/&gt;防单车异常"&#125;
+    D1 --&gt; D2&#123;"维度2: 用户&lt;br/&gt;防单用户滥用"&#125;
+    D2 --&gt; D3&#123;"维度3: Agent&lt;br/&gt;防单业务打满"&#125;
+    D3 --&gt; D4&#123;"维度4: 意图/Skill&lt;br/&gt;防单能力雪崩"&#125;
+    D4 --&gt; P["通过"]
+    D1 &amp; D2 &amp; D3 &amp; D4 --&gt;|"超限"| L["排队 / 拒绝 / 降级"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>限流单位</th>
+<th>建议策略</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>设备</td>
+<td>请求数&#x2F;分钟 + Token&#x2F;分钟</td>
+<td>宽松（正常用户不会触发），异常值告警</td>
+</tr>
+<tr>
+<td>用户</td>
+<td>Token&#x2F;小时</td>
+<td>中等，防滥用</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td><strong>Token&#x2F;s + 并发数</strong></td>
+<td>严格，按 Agent 独立配额</td>
+</tr>
+<tr>
+<td>意图&#x2F;Skill</td>
+<td>并发数</td>
+<td>保护下游脆弱能力（如三方 MCP）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>AI 网关与传统 API 网关最本质的差异</strong>：限流单位必须是 <strong>Token&#x2F;s</strong> 而非 QPS。一个 100k token 的请求与一个 100 token 的请求，QPS 相同但资源消耗差 1000 倍。仅按 QPS 限流的网关在 AI 场景下几乎无效。</p>
+</blockquote>
+<h3 id="2-4-SSE-流式实现要点"><a href="#2-4-SSE-流式实现要点" class="headerlink" title="2.4 SSE 流式实现要点"></a>2.4 SSE 流式实现要点</h3><table>
+<thead>
+<tr>
+<th>要点</th>
+<th>实现</th>
+<th>不做的后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>首包快返</td>
+<td>立即发送 <code>event: start</code>（含 trace_id）</td>
+<td>客户端不知道是否已连上</td>
+</tr>
+<tr>
+<td>事件 id</td>
+<td>每个分片带自增 <code>id</code></td>
+<td>断线无法续传</td>
+</tr>
+<tr>
+<td>断线续传</td>
+<td>支持 <code>Last-Event-ID</code> 请求头</td>
+<td>弱网下用户看到内容重来</td>
+</tr>
+<tr>
+<td>心跳</td>
+<td>每 15 s 发送注释行保活</td>
+<td>中间设备超时断连</td>
+</tr>
+<tr>
+<td>背压</td>
+<td>客户端消费慢时缓冲上限 + 丢弃策略</td>
+<td>网关内存被拖垮</td>
+</tr>
+<tr>
+<td>结束事件</td>
+<td><code>event: done</code> 含统计信息（token、耗时、引用）</td>
+<td>客户端不知道何时结束</td>
+</tr>
+<tr>
+<td>错误事件</td>
+<td><code>event: error</code> 含可读原因与是否可重试</td>
+<td>客户端无法正确处理失败</td>
+</tr>
+<tr>
+<td>分段安全校验</td>
+<td>与围栏协同，逐片放行</td>
+<td>违规内容已经推给用户</td>
+</tr>
+</tbody></table>
+<p><strong>SSE 事件设计</strong>（推断设计）：</p>
+<table>
+<thead>
+<tr>
+<th>事件类型</th>
+<th>载荷</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>start</code></td>
+<td>trace_id、预计能力</td>
+<td>建连确认</td>
+</tr>
+<tr>
+<td><code>delta</code></td>
+<td>文本增量</td>
+<td>主内容流</td>
+</tr>
+<tr>
+<td><code>tool</code></td>
+<td>工具名、状态</td>
+<td>让用户看到”正在查询…”</td>
+</tr>
+<tr>
+<td><code>citation</code></td>
+<td>引用元数据</td>
+<td>知识来源</td>
+</tr>
+<tr>
+<td><code>degraded</code></td>
+<td>降级原因</td>
+<td>明确告知能力受限</td>
+</tr>
+<tr>
+<td><code>done</code></td>
+<td>token 统计、耗时</td>
+<td>结束</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>错误码、可重试标记</td>
+<td>失败</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong><code>tool</code> 事件对体验影响很大</strong>：工具调用可能耗时数秒，若期间没有任何反馈，用户会认为卡死。推送”正在查询充电桩信息…”可显著改善感知延迟。</p>
+</blockquote>
+<h3 id="2-5-A2A-桥接（安全模型见-07-文档-4-1）"><a href="#2-5-A2A-桥接（安全模型见-07-文档-4-1）" class="headerlink" title="2.5 A2A 桥接（安全模型见 07 文档 4.1）"></a>2.5 A2A 桥接（安全模型见 07 文档 4.1）</h3><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>目标寻址</td>
+<td>Agent ID → 实际服务端点（经注册中心解析）</td>
+</tr>
+<tr>
+<td>权限交集</td>
+<td>有效权限 &#x3D; 调用方权限 ∩ 目标权限 ∩ 用户授权</td>
+</tr>
+<tr>
+<td>深度限制</td>
+<td>A2A 调用链深度 ≤ 3，防循环</td>
+</tr>
+<tr>
+<td>环检测</td>
+<td>调用链记录，检测 A→B→A</td>
+</tr>
+<tr>
+<td>协议协商</td>
+<td>版本兼容检查</td>
+</tr>
+<tr>
+<td>超时传递</td>
+<td>剩余预算随调用传递，防总耗时失控</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="3-语音网关"><a href="#3-语音网关" class="headerlink" title="3. 语音网关"></a>3. 语音网关</h2><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>长连接管理</td>
+<td>连接数配额、空闲回收、优雅重启（不断连）</td>
+</tr>
+<tr>
+<td>编解码协商</td>
+<td>支持多编码，按带宽自适应</td>
+</tr>
+<tr>
+<td>会话粘性</td>
+<td>同一音频会话固定到同一 NLU 实例（流式 ASR 有状态）</td>
+</tr>
+<tr>
+<td>抖动缓冲</td>
+<td>平滑网络抖动，避免识别中断</td>
+</tr>
+<tr>
+<td>带宽自适应</td>
+<td>弱网降码率而非断连</td>
+</tr>
+<tr>
+<td>独立限流</td>
+<td>与 API 配额池分离</td>
+</tr>
+</tbody></table>
+<h3 id="3-1-SLI-定义"><a href="#3-1-SLI-定义" class="headerlink" title="3.1 SLI 定义"></a>3.1 SLI 定义</h3><table>
+<thead>
+<tr>
+<th>SLI</th>
+<th>目标</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>首字识别延迟 P95</td>
+<td>≤ 400 ms</td>
+<td>从用户开口到首个识别字返回</td>
+</tr>
+<tr>
+<td>音频链路断连率</td>
+<td>≤ 0.5%</td>
+<td></td>
+</tr>
+<tr>
+<td>丢包重传率</td>
+<td>≤ 2%</td>
+<td></td>
+</tr>
+<tr>
+<td>连接建立成功率</td>
+<td>≥ 99.9%</td>
+<td></td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="4-双向认证网关"><a href="#4-双向认证网关" class="headerlink" title="4. 双向认证网关"></a>4. 双向认证网关</h2><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>mTLS</td>
+<td>双向证书校验，客户端证书由制造阶段注入根证书派生</td>
+</tr>
+<tr>
+<td>证书生命周期</td>
+<td>短周期证书 + 自动轮转；吊销校验（CRL&#x2F;OCSP）</td>
+</tr>
+<tr>
+<td>防重放</td>
+<td>nonce + 时间窗（建议 ±5 min）+ 已用 nonce 缓存</td>
+</tr>
+<tr>
+<td>幂等</td>
+<td>幂等键 &#x3D; 设备 ID + 变更序号</td>
+</tr>
+<tr>
+<td>断点续传</td>
+<td>大批量同步支持分片与续传</td>
+</tr>
+<tr>
+<td>带宽治理</td>
+<td>同步流独立带宽配额；行驶中抑制大包</td>
+</tr>
+<tr>
+<td>身份到租户映射</td>
+<td>设备身份 → 数据分区，防跨车数据访问</td>
+</tr>
+</tbody></table>
+<h3 id="4-1-证书管理是最易失守的环节"><a href="#4-1-证书管理是最易失守的环节" class="headerlink" title="4.1 证书管理是最易失守的环节"></a>4.1 证书管理是最易失守的环节</h3><pre class="mermaid">flowchart TB
+    M["制造阶段&lt;br/&gt;注入设备根证书 + 私钥（HSM 保护）"] --&gt; A["激活阶段&lt;br/&gt;派生业务证书"]
+    A --&gt; R["运行阶段&lt;br/&gt;定期自动轮转（如 90 天）"]
+    R --&gt; E&#123;"轮转失败?"&#125;
+    E --&gt;|是| E1["告警 + 宽限期&lt;br/&gt;宽限期内仍可用"]
+    E1 --&gt; E2&#123;"宽限期内恢复?"&#125;
+    E2 --&gt;|否| E3["降级为只读同步 + 强制告警"]
+    E --&gt;|否| R
+    R --&gt; RV["吊销场景&lt;br/&gt;设备被盗/私钥泄露/报废"]
+    RV --&gt; RVL["加入吊销列表&lt;br/&gt;网关实时校验"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>风险</th>
+<th>治理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>私钥泄露</td>
+<td>HSM&#x2F;TEE 保护，不可导出</td>
+</tr>
+<tr>
+<td>证书过期未轮转</td>
+<td>提前 30 天开始轮转尝试 + 宽限期 + 告警</td>
+</tr>
+<tr>
+<td>吊销不及时</td>
+<td>吊销列表实时生效（缓存 TTL ≤ 5 min）</td>
+</tr>
+<tr>
+<td>无法批量吊销</td>
+<td>支持按批次&#x2F;型号批量吊销能力</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="5-LLM-网关"><a href="#5-LLM-网关" class="headerlink" title="5. LLM 网关"></a>5. LLM 网关</h2><blockquote>
+<p>模型路由、缓存、Fallback 的详细设计见 10 文档。本节聚焦其<strong>网关属性</strong>。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>网关能力</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>统一出口</td>
+<td>所有模型调用的唯一出口（P2），禁止业务直连</td>
+</tr>
+<tr>
+<td>凭据托管</td>
+<td>供应商 API Key 集中管理，业务不接触</td>
+</tr>
+<tr>
+<td>Prompt 审计</td>
+<td>全量记录（采样存储）Prompt 与响应，供合规与排查</td>
+</tr>
+<tr>
+<td>Token 计量</td>
+<td>唯一权威计量口径</td>
+</tr>
+<tr>
+<td>内容安全联动</td>
+<td>出站结果送安全围栏</td>
+</tr>
+<tr>
+<td>出网管控</td>
+<td>出网白名单（只允许访问已审核的模型端点）</td>
+</tr>
+<tr>
+<td>成本归因</td>
+<td><code>cost_tag</code> 强制</td>
+</tr>
+<tr>
+<td>配额与熔断</td>
+<td>见 10 文档</td>
+</tr>
+</tbody></table>
+<h3 id="5-1-为什么凭据必须托管在网关"><a href="#5-1-为什么凭据必须托管在网关" class="headerlink" title="5.1 为什么凭据必须托管在网关"></a>5.1 为什么凭据必须托管在网关</h3><table>
+<thead>
+<tr>
+<th>若业务持有 Key</th>
+<th>后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Key 散落在各服务配置中</td>
+<td>泄露风险高、轮转困难</td>
+</tr>
+<tr>
+<td>无法统一计量</td>
+<td>成本无法归因</td>
+</tr>
+<tr>
+<td>无法统一审计</td>
+<td>合规无法满足</td>
+</tr>
+<tr>
+<td>可绕过网关直连</td>
+<td>安全围栏、缓存、限流全部失效</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>判定平台是否真正收口的唯一标准</strong>：搜索全部代码库，是否存在除网关外的任何组件持有模型供应商凭据。若有，收口是名义上的。</p>
+</blockquote>
+<hr>
+<h2 id="6-MCP-网关能力（能力中心内嵌）"><a href="#6-MCP-网关能力（能力中心内嵌）" class="headerlink" title="6. MCP 网关能力（能力中心内嵌）"></a>6. MCP 网关能力（能力中心内嵌）</h2><p>MCP 工具调用虽不经独立网关，但需具备网关级治理（推断设计）：</p>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>凭据托管</td>
+<td>每个 MCP Server 独立凭据，由平台托管</td>
+</tr>
+<tr>
+<td>出网白名单</td>
+<td>只允许访问已审核的 MCP 端点</td>
+</tr>
+<tr>
+<td>权限最小化</td>
+<td>按 Agent × Server 授予最小工具集</td>
+</tr>
+<tr>
+<td>超时与重试</td>
+<td>独立超时（建议 3 s），非幂等操作不重试</td>
+</tr>
+<tr>
+<td>结果校验</td>
+<td>按声明 Schema 校验</td>
+</tr>
+<tr>
+<td>结果隔离</td>
+<td>标记为不可信外部数据</td>
+</tr>
+<tr>
+<td>调用审计</td>
+<td>全量记录调用方、参数、结果摘要</td>
+</tr>
+<tr>
+<td>熔断</td>
+<td>单 Server 故障不影响其他</td>
+</tr>
+<tr>
+<td>版本锁定</td>
+<td>Server 声明变更需重新审核</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="7-网关可观测"><a href="#7-网关可观测" class="headerlink" title="7. 网关可观测"></a>7. 网关可观测</h2><table>
+<thead>
+<tr>
+<th>层</th>
+<th>指标</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>连接层</td>
+<td>连接数、建连成功率、断连率、TLS 握手耗时</td>
+</tr>
+<tr>
+<td>认证层</td>
+<td>认证成功&#x2F;失败率、证书即将过期数、吊销命中</td>
+</tr>
+<tr>
+<td>安全层</td>
+<td>入站拦截率、拦截原因分布、误拦截反馈数</td>
+</tr>
+<tr>
+<td>限流层</td>
+<td>各维度触发次数、排队时长、拒绝率</td>
+</tr>
+<tr>
+<td>路由层</td>
+<td>各目标分流比例、<code>route_reason</code> 分布</td>
+</tr>
+<tr>
+<td>流式层</td>
+<td>首包延迟、SSE 事件数、重连次数、背压丢弃数</td>
+</tr>
+<tr>
+<td>成本层</td>
+<td>Token&#x2F;s、成本、缓存命中率、Top 消耗方</td>
+</tr>
+</tbody></table>
+<h3 id="7-1-网关必备的三个告警"><a href="#7-1-网关必备的三个告警" class="headerlink" title="7.1 网关必备的三个告警"></a>7.1 网关必备的三个告警</h3><table>
+<thead>
+<tr>
+<th>告警</th>
+<th>阈值</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>认证失败率突增</td>
+<td>&gt; 基线 3×</td>
+<td>可能是证书批量过期或攻击</td>
+</tr>
+<tr>
+<td>首包延迟 P95 劣化</td>
+<td>&gt; 目标 1.5×</td>
+<td>直接影响用户感知</td>
+</tr>
+<tr>
+<td>降级率持续升高</td>
+<td>&gt; 1% 持续 5 min</td>
+<td>隐性故障（可用但一直降级）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="8-网关部署与容量"><a href="#8-网关部署与容量" class="headerlink" title="8. 网关部署与容量"></a>8. 网关部署与容量</h2><table>
+<thead>
+<tr>
+<th>网关</th>
+<th>部署形态</th>
+<th>弹性</th>
+<th>关键容量约束</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>语音网关</td>
+<td>独立集群，就近 POP</td>
+<td>按连接数扩容</td>
+<td>连接数、带宽</td>
+</tr>
+<tr>
+<td>Agent 网关</td>
+<td>独立集群，多 AZ</td>
+<td>HPA（并发 + Token&#x2F;s）</td>
+<td>并发连接、CPU</td>
+</tr>
+<tr>
+<td>双向认证网关</td>
+<td>独立集群</td>
+<td>按同步流量扩容</td>
+<td>带宽、TLS 握手 CPU</td>
+</tr>
+<tr>
+<td>LLM 网关</td>
+<td>K8s 独立 namespace</td>
+<td>HPA + 连接池预热</td>
+<td>上游并发上限、缓存内存</td>
+</tr>
+</tbody></table>
+<h3 id="8-1-优雅重启（长连接场景的关键）"><a href="#8-1-优雅重启（长连接场景的关键）" class="headerlink" title="8.1 优雅重启（长连接场景的关键）"></a>8.1 优雅重启（长连接场景的关键）</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant LB as 负载均衡
+    participant OLD as 旧实例
+    participant NEW as 新实例
+    participant C as 客户端
+    LB-&gt;&gt;NEW: 启动并就绪探测通过
+    LB-&gt;&gt;OLD: 摘除新流量（保留存量连接）
+    OLD-&gt;&gt;C: 现有 SSE 流继续直到完成
+    OLD-&gt;&gt;C: 新请求返回 503 + 重定向提示
+    Note over OLD: 等待存量连接自然结束（上限 60 s）
+    OLD-&gt;&gt;OLD: 强制关闭剩余连接（发送 error 事件）
+    OLD-&gt;&gt;LB: 下线</pre>
+
+
+<blockquote>
+<p><strong>AI 网关的重启比传统网关困难得多</strong>：单个 SSE 流可能持续 30 s+。粗暴重启会导致大量用户回答中断。必须实现”停止接新、等存量结束、超时强关并发送错误事件”三段式优雅下线。</p>
+</blockquote>
+<hr>
+<h2 id="9-技术选型"><a href="#9-技术选型" class="headerlink" title="9. 技术选型"></a>9. 技术选型</h2><table>
+<thead>
+<tr>
+<th>网关</th>
+<th>首选</th>
+<th>备选</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Agent 网关</td>
+<td>Higress &#x2F; Envoy + AI 插件</td>
+<td>Kong &#x2F; APISIX &#x2F; 自研 Go</td>
+<td>需 Token 级限流与 SSE 支持</td>
+</tr>
+<tr>
+<td>语音网关</td>
+<td>自研（Go&#x2F;Rust）或商用 RTC 网关</td>
+<td>gRPC 双向流</td>
+<td>长连接与音频特化</td>
+</tr>
+<tr>
+<td>双向认证网关</td>
+<td>Envoy（mTLS）+ 自研业务层</td>
+<td>Nginx + 自研</td>
+<td>PKI 集成</td>
+</tr>
+<tr>
+<td>LLM 网关</td>
+<td>LiteLLM（起步）→ 自研&#x2F;Higress AI（规模化）</td>
+<td>Portkey</td>
+<td>起步用现成，规模化后自研以承载定制治理</td>
+</tr>
+<tr>
+<td>服务网格（云内）</td>
+<td>Istio &#x2F; Linkerd</td>
+<td>自研 mTLS</td>
+<td>云内服务身份与加密</td>
+</tr>
+<tr>
+<td>工作负载身份</td>
+<td>SPIFFE&#x2F;SPIRE</td>
+<td>云厂商 IAM</td>
+<td>服务间身份</td>
+</tr>
+</tbody></table>
+<h3 id="9-1-自研-vs-开源的决策点"><a href="#9-1-自研-vs-开源的决策点" class="headerlink" title="9.1 自研 vs 开源的决策点"></a>9.1 自研 vs 开源的决策点</h3><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>起步验证（0–6 月）</td>
+<td>用开源（LiteLLM + Higress），快速跑通</td>
+</tr>
+<tr>
+<td>Token 级限流、成本归因、缓存联动等定制治理</td>
+<td>逐步自研插件而非替换整个网关</td>
+</tr>
+<tr>
+<td>语音与端云同步网关</td>
+<td>自研（业务特化程度高，开源方案不匹配）</td>
+</tr>
+<tr>
+<td>完全自研全部网关</td>
+<td>❌ 不推荐（重复造轮子，安全风险高）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="10-风险与治理"><a href="#10-风险与治理" class="headerlink" title="10. 风险与治理"></a>10. 风险与治理</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>影响</th>
+<th>治理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>网关合并导致故障传播</strong></td>
+<td>音频问题影响 API，模型故障影响接入</td>
+<td>四网关物理隔离、独立配额与故障域</td>
+</tr>
+<tr>
+<td>身份可自报</td>
+<td>冒充任意用户读取记忆</td>
+<td>身份仅从传输层凭据派生</td>
+</tr>
+<tr>
+<td>仅按 QPS 限流</td>
+<td>大 Token 请求打满资源</td>
+<td>Token&#x2F;s + 并发双维度</td>
+</tr>
+<tr>
+<td>长连接数耗尽</td>
+<td>无法建连</td>
+<td>连接配额 + 空闲回收 + 就近 POP + 扩容</td>
+</tr>
+<tr>
+<td>粗暴重启中断流式</td>
+<td>大量回答中断</td>
+<td>三段式优雅下线</td>
+</tr>
+<tr>
+<td>入站安全成为瓶颈</td>
+<td>首字延迟劣化</td>
+<td>轻量规则同步 + 模型检测异步 + 流式复检</td>
+</tr>
+<tr>
+<td>证书过期批量失效</td>
+<td>大面积不可用</td>
+<td>提前轮转 + 宽限期 + 到期数监控告警</td>
+</tr>
+<tr>
+<td>业务持有模型凭据</td>
+<td>收口失效</td>
+<td>凭据集中托管 + 代码扫描审计</td>
+</tr>
+<tr>
+<td>SSE 无续传</td>
+<td>弱网体验差</td>
+<td>Last-Event-ID + 幂等续传</td>
+</tr>
+<tr>
+<td>A2A 身份透传越权</td>
+<td>权限提升攻击</td>
+<td>权限交集 + 每跳鉴权 + 深度限制</td>
+</tr>
+<tr>
+<td>误拦截无反馈通道</td>
+<td>正常请求被拦且无人知</td>
+<td>拦截样本抽检 + 用户申诉通道 + 规则调优闭环</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="11-演进路线"><a href="#11-演进路线" class="headerlink" title="11. 演进路线"></a>11. 演进路线</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>网关演进</th>
+<th>退出准则</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>阶段一</strong></td>
+<td>四网关职责分离落地；身份从凭据派生；能力 ID 强制校验；Token&#x2F;s 限流；LLM 网关收口全部模型凭据</td>
+<td>代码库中无旁路调用与散落凭据</td>
+</tr>
+<tr>
+<td><strong>阶段二</strong></td>
+<td>SSE 续传与优雅下线；入站安全异步化；A2A 权限交集模型；语义缓存接入 LLM 网关；成本归因看板</td>
+<td>首字延迟达标；降级率 ≤1%；成本可下钻</td>
+</tr>
+<tr>
+<td><strong>阶段三</strong></td>
+<td>自研治理插件替代通用能力；多区域就近接入；网关侧智能路由（按实时质量与成本动态调权）；MCP 网关能力独立化</td>
+<td>网关成为可持续演进的平台组件而非瓶颈</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端模型平台架构 · <strong>下一篇</strong>：云管端 AI 平台安全体系</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/07/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-12-%E5%AE%89%E5%85%A8%E4%BD%93%E7%B3%BB/">云管端 AI 平台安全体系</a></h3>
+        <p>间接注入是本架构的首要安全风险。原图接入了「第三方 MCP 生态」，意味着外部内容会进入上下文。</p>
+        <a class="btn primary" href="/2026/07/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-12-%E5%AE%89%E5%85%A8%E4%BD%93%E7%B3%BB/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/06/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-10-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端模型平台架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#11-%C2%B7-AI-%E7%BD%91%E5%85%B3%E4%BD%93%E7%B3%BB%EF%BC%88AI-Gateway%EF%BC%89" data-toc-target="11-·-AI-网关体系（AI-Gateway）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">11 · AI 网关体系（AI Gateway）</span></a><a class="toc-level-2" href="#1-%E5%9B%9B%E7%BD%91%E5%85%B3%E6%8B%93%E6%89%91" data-toc-target="1-四网关拓扑"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 四网关拓扑</span></a><a class="toc-level-3" href="#1-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%85%E9%A1%BB%E5%88%86%E5%BC%80" data-toc-target="1-1-为什么必须分开"><span class="toc-text">1.1 为什么必须分开</span></a><a class="toc-level-2" href="#2-Agent-%E7%BD%91%E5%85%B3%EF%BC%88%E5%9B%BE%E7%A4%BA%E5%9C%88%E6%B3%A8%E6%A0%B8%E5%BF%83%EF%BC%89" data-toc-target="2-Agent-网关（图示圈注核心）"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. Agent 网关（图示圈注核心）</span></a><a class="toc-level-3" href="#2-1-%E5%A4%84%E7%90%86%E6%B5%81%E6%B0%B4%E7%BA%BF" data-toc-target="2-1-处理流水线"><span class="toc-text">2.1 处理流水线</span></a><a class="toc-level-3" href="#2-2-%E8%AE%A4%E8%AF%81%E4%B8%8E%E8%BA%AB%E4%BB%BD" data-toc-target="2-2-认证与身份"><span class="toc-text">2.2 认证与身份</span></a><a class="toc-level-3" href="#2-3-%E9%99%90%E6%B5%81%E4%B8%8E%E9%85%8D%E9%A2%9D%EF%BC%88%E5%9B%9B%E7%BB%B4%E6%A8%A1%E5%9E%8B%EF%BC%89" data-toc-target="2-3-限流与配额（四维模型）"><span class="toc-text">2.3 限流与配额（四维模型）</span></a><a class="toc-level-3" href="#2-4-SSE-%E6%B5%81%E5%BC%8F%E5%AE%9E%E7%8E%B0%E8%A6%81%E7%82%B9" data-toc-target="2-4-SSE-流式实现要点"><span class="toc-text">2.4 SSE 流式实现要点</span></a><a class="toc-level-3" href="#2-5-A2A-%E6%A1%A5%E6%8E%A5%EF%BC%88%E5%AE%89%E5%85%A8%E6%A8%A1%E5%9E%8B%E8%A7%81-07-%E6%96%87%E6%A1%A3-4-1%EF%BC%89" data-toc-target="2-5-A2A-桥接（安全模型见-07-文档-4-1）"><span class="toc-text">2.5 A2A 桥接（安全模型见 07 文档 4.1）</span></a><a class="toc-level-2" href="#3-%E8%AF%AD%E9%9F%B3%E7%BD%91%E5%85%B3" data-toc-target="3-语音网关"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 语音网关</span></a><a class="toc-level-3" href="#3-1-SLI-%E5%AE%9A%E4%B9%89" data-toc-target="3-1-SLI-定义"><span class="toc-text">3.1 SLI 定义</span></a><a class="toc-level-2" href="#4-%E5%8F%8C%E5%90%91%E8%AE%A4%E8%AF%81%E7%BD%91%E5%85%B3" data-toc-target="4-双向认证网关"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. 双向认证网关</span></a><a class="toc-level-3" href="#4-1-%E8%AF%81%E4%B9%A6%E7%AE%A1%E7%90%86%E6%98%AF%E6%9C%80%E6%98%93%E5%A4%B1%E5%AE%88%E7%9A%84%E7%8E%AF%E8%8A%82" data-toc-target="4-1-证书管理是最易失守的环节"><span class="toc-text">4.1 证书管理是最易失守的环节</span></a><a class="toc-level-2" href="#5-LLM-%E7%BD%91%E5%85%B3" data-toc-target="5-LLM-网关"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. LLM 网关</span></a><a class="toc-level-3" href="#5-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%87%AD%E6%8D%AE%E5%BF%85%E9%A1%BB%E6%89%98%E7%AE%A1%E5%9C%A8%E7%BD%91%E5%85%B3" data-toc-target="5-1-为什么凭据必须托管在网关"><span class="toc-text">5.1 为什么凭据必须托管在网关</span></a><a class="toc-level-2" href="#6-MCP-%E7%BD%91%E5%85%B3%E8%83%BD%E5%8A%9B%EF%BC%88%E8%83%BD%E5%8A%9B%E4%B8%AD%E5%BF%83%E5%86%85%E5%B5%8C%EF%BC%89" data-toc-target="6-MCP-网关能力（能力中心内嵌）"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. MCP 网关能力（能力中心内嵌）</span></a><a class="toc-level-2" href="#7-%E7%BD%91%E5%85%B3%E5%8F%AF%E8%A7%82%E6%B5%8B" data-toc-target="7-网关可观测"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 网关可观测</span></a><a class="toc-level-3" href="#7-1-%E7%BD%91%E5%85%B3%E5%BF%85%E5%A4%87%E7%9A%84%E4%B8%89%E4%B8%AA%E5%91%8A%E8%AD%A6" data-toc-target="7-1-网关必备的三个告警"><span class="toc-text">7.1 网关必备的三个告警</span></a><a class="toc-level-2" href="#8-%E7%BD%91%E5%85%B3%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%AE%B9%E9%87%8F" data-toc-target="8-网关部署与容量"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 网关部署与容量</span></a><a class="toc-level-3" href="#8-1-%E4%BC%98%E9%9B%85%E9%87%8D%E5%90%AF%EF%BC%88%E9%95%BF%E8%BF%9E%E6%8E%A5%E5%9C%BA%E6%99%AF%E7%9A%84%E5%85%B3%E9%94%AE%EF%BC%89" data-toc-target="8-1-优雅重启（长连接场景的关键）"><span class="toc-text">8.1 优雅重启（长连接场景的关键）</span></a><a class="toc-level-2" href="#9-%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B" data-toc-target="9-技术选型"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 技术选型</span></a><a class="toc-level-3" href="#9-1-%E8%87%AA%E7%A0%94-vs-%E5%BC%80%E6%BA%90%E7%9A%84%E5%86%B3%E7%AD%96%E7%82%B9" data-toc-target="9-1-自研-vs-开源的决策点"><span class="toc-text">9.1 自研 vs 开源的决策点</span></a><a class="toc-level-2" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 风险与治理</span></a><a class="toc-level-2" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 演进路线</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 60%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">12 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#11-%C2%B7-AI-%E7%BD%91%E5%85%B3%E4%BD%93%E7%B3%BB%EF%BC%88AI-Gateway%EF%BC%89" data-toc-target="11-·-AI-网关体系（AI-Gateway）" data-title="01 · 11 · AI 网关体系（AI Gateway）" aria-label="11 · AI 网关体系（AI Gateway）"></a><a class="toc-strip__dot" href="#1-%E5%9B%9B%E7%BD%91%E5%85%B3%E6%8B%93%E6%89%91" data-toc-target="1-四网关拓扑" data-title="02 · 1. 四网关拓扑" aria-label="1. 四网关拓扑"></a><a class="toc-strip__dot" href="#2-Agent-%E7%BD%91%E5%85%B3%EF%BC%88%E5%9B%BE%E7%A4%BA%E5%9C%88%E6%B3%A8%E6%A0%B8%E5%BF%83%EF%BC%89" data-toc-target="2-Agent-网关（图示圈注核心）" data-title="03 · 2. Agent 网关（图示圈注核心）" aria-label="2. Agent 网关（图示圈注核心）"></a><a class="toc-strip__dot" href="#3-%E8%AF%AD%E9%9F%B3%E7%BD%91%E5%85%B3" data-toc-target="3-语音网关" data-title="04 · 3. 语音网关" aria-label="3. 语音网关"></a><a class="toc-strip__dot" href="#4-%E5%8F%8C%E5%90%91%E8%AE%A4%E8%AF%81%E7%BD%91%E5%85%B3" data-toc-target="4-双向认证网关" data-title="05 · 4. 双向认证网关" aria-label="4. 双向认证网关"></a><a class="toc-strip__dot" href="#5-LLM-%E7%BD%91%E5%85%B3" data-toc-target="5-LLM-网关" data-title="06 · 5. LLM 网关" aria-label="5. LLM 网关"></a><a class="toc-strip__dot" href="#6-MCP-%E7%BD%91%E5%85%B3%E8%83%BD%E5%8A%9B%EF%BC%88%E8%83%BD%E5%8A%9B%E4%B8%AD%E5%BF%83%E5%86%85%E5%B5%8C%EF%BC%89" data-toc-target="6-MCP-网关能力（能力中心内嵌）" data-title="07 · 6. MCP 网关能力（能力中心内嵌）" aria-label="6. MCP 网关能力（能力中心内嵌）"></a><a class="toc-strip__dot" href="#7-%E7%BD%91%E5%85%B3%E5%8F%AF%E8%A7%82%E6%B5%8B" data-toc-target="7-网关可观测" data-title="08 · 7. 网关可观测" aria-label="7. 网关可观测"></a><a class="toc-strip__dot" href="#8-%E7%BD%91%E5%85%B3%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%AE%B9%E9%87%8F" data-toc-target="8-网关部署与容量" data-title="09 · 8. 网关部署与容量" aria-label="8. 网关部署与容量"></a><a class="toc-strip__dot" href="#9-%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B" data-toc-target="9-技术选型" data-title="10 · 9. 技术选型" aria-label="9. 技术选型"></a><a class="toc-strip__dot" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理" data-title="11 · 10. 风险与治理" aria-label="10. 风险与治理"></a><a class="toc-strip__dot" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线" data-title="12 · 11. 演进路线" aria-label="11. 演进路线"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-11-AI网关","title":"云管端 AI 网关架构","url":"/2026/07/02/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-11-AI%E7%BD%91%E5%85%B3/","path":"cloud-pipe-edge-agent-platform","index":11,"total":20,"next":{"title":"云管端 AI 平台安全体系","url":"/2026/07/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-12-%E5%AE%89%E5%85%A8%E4%BD%93%E7%B3%BB/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

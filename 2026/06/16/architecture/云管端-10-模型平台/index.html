@@ -1,0 +1,1207 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端模型平台架构 · 飞轮之道</title>
+<meta name="description" content="成本列是最重要的一列。chat.long 的单位成本是 classify.fast 的 30 倍。多数平台把 60%+ 的请求错误地送给了最贵的档位——分级用模是最直接的降本手段，通常一次性降低 40%+ 成本且用户无感。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/06/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-10-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端模型平台架构 · 飞轮之道">
+<meta property="og:description" content="成本列是最重要的一列。chat.long 的单位成本是 classify.fast 的 30 倍。多数平台把 60%+ 的请求错误地送给了最贵的档位——分级用模是最直接的降本手段，通常一次性降低 40%+ 成本且用户无感。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/06/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-10-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">走向生产</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 11 / 20 篇</a>
+    </div>
+    <h1>云管端模型平台架构</h1>
+    <p class="article-deck">成本列是最重要的一列。chat.long 的单位成本是 classify.fast 的 30 倍。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>10 分钟</span>
+      <span>发布于 2026.06</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="10-·-模型平台（Model-Platform）"><a href="#10-·-模型平台（Model-Platform）" class="headerlink" title="10 · 模型平台（Model Platform）"></a>10 · 模型平台（Model Platform）</h2><blockquote>
+<p>文档类型：技术白皮书 · 模型服务专章<br>对应图示：LLM 网关（多模型切换 &#x2F; <strong>语义缓存</strong> &#x2F; <strong>Token 流量治理</strong>）+ 端侧小模型 + 安全围栏<br>说明：本文聚焦”模型作为可替换资源”的平台化设计；网关的接入治理能力见 11 文档</p>
+</blockquote>
+<hr>
+<h2 id="1-模型平台定位"><a href="#1-模型平台定位" class="headerlink" title="1. 模型平台定位"></a>1. 模型平台定位</h2><pre class="mermaid">flowchart TB
+    subgraph CONSUMER["消费方（不感知具体模型）"]
+        C1["Planner&lt;br/&gt;model_intent=classify.fast"]
+        C2["Cloud Agent&lt;br/&gt;model_intent=chat.long"]
+        C3["知识中心&lt;br/&gt;model_intent=embed / rerank"]
+        C4["记忆管理器&lt;br/&gt;model_intent=extract.structured"]
+        C5["安全围栏&lt;br/&gt;model_intent=guard.classify"]
+    end
+    GW["LLM 网关&lt;br/&gt;意图→模型映射 · 缓存 · 治理"]
+    subgraph POOL["模型池"]
+        subgraph SELF["自建推理集群"]
+            S1["主力对话 LLM"]
+            S2["小模型 SLM（分类/抽取/压缩）"]
+            S3["Embedding 模型"]
+            S4["Reranker"]
+            S5["安全判定模型"]
+        end
+        subgraph EXT["外部模型服务"]
+            E1["供应商 A 旗舰模型"]
+            E2["供应商 B 旗舰模型"]
+            E3["多模态 VLM"]
+        end
+    end
+    subgraph EDGE["端侧"]
+        D1["端侧 SLM&lt;br/&gt;意图/抽取/短回答/Embedding"]
+    end
+    C1 &amp; C2 &amp; C3 &amp; C4 &amp; C5 --&gt; GW
+    GW --&gt; SELF &amp; EXT
+    GW -.-&gt;|"降级指令"| D1</pre>
+
+
+<h3 id="1-1-核心设计原则"><a href="#1-1-核心设计原则" class="headerlink" title="1.1 核心设计原则"></a>1.1 核心设计原则</h3><table>
+<thead>
+<tr>
+<th>原则</th>
+<th>含义</th>
+<th>实现</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>意图化调用</strong></td>
+<td>业务声明 <code>model_intent</code>，不指定模型名</td>
+<td>网关维护意图→模型映射表，可热更新</td>
+</tr>
+<tr>
+<td><strong>能力矩阵驱动</strong></td>
+<td>模型选择基于能力矩阵而非硬编码</td>
+<td>模型注册时声明能力、成本、延迟、上下文长度</td>
+</tr>
+<tr>
+<td><strong>分级用模</strong></td>
+<td>任务复杂度决定模型档位</td>
+<td>分类用 SLM、闲聊用中档、复杂推理用旗舰</td>
+</tr>
+<tr>
+<td><strong>多源冗余</strong></td>
+<td>同一能力至少两个可用后端</td>
+<td>自建 + 外部，或两家外部供应商</td>
+</tr>
+<tr>
+<td><strong>成本可归因</strong></td>
+<td>每次调用带成本标签</td>
+<td><code>cost_tag</code>（业务&#x2F;Agent&#x2F;场景&#x2F;用户群）必填</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="2-模型分层与选型"><a href="#2-模型分层与选型" class="headerlink" title="2. 模型分层与选型"></a>2. 模型分层与选型</h2><h3 id="2-1-模型能力矩阵（推断设计模板）"><a href="#2-1-模型能力矩阵（推断设计模板）" class="headerlink" title="2.1 模型能力矩阵（推断设计模板）"></a>2.1 模型能力矩阵（推断设计模板）</h3><table>
+<thead>
+<tr>
+<th>model_intent</th>
+<th>能力要求</th>
+<th>推荐档位</th>
+<th>上下文</th>
+<th>延迟目标</th>
+<th>相对成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>classify.fast</code></td>
+<td>意图分类</td>
+<td>SLM &#x2F; 判别模型</td>
+<td>2k</td>
+<td>≤120 ms</td>
+<td>1×</td>
+</tr>
+<tr>
+<td><code>extract.structured</code></td>
+<td>结构化抽取（记忆&#x2F;槽位）</td>
+<td>SLM</td>
+<td>8k</td>
+<td>≤300 ms</td>
+<td>1×</td>
+</tr>
+<tr>
+<td><code>compress.context</code></td>
+<td>上下文压缩</td>
+<td>SLM</td>
+<td>32k</td>
+<td>≤400 ms</td>
+<td>2×</td>
+</tr>
+<tr>
+<td><code>rewrite.query</code></td>
+<td>查询改写</td>
+<td>SLM</td>
+<td>2k</td>
+<td>≤60 ms</td>
+<td>1×</td>
+</tr>
+<tr>
+<td><code>chat.short</code></td>
+<td>短对话、闲聊</td>
+<td>中档 LLM</td>
+<td>8k</td>
+<td>首字≤250 ms</td>
+<td>8×</td>
+</tr>
+<tr>
+<td><code>chat.long</code></td>
+<td>复杂问答、多轮</td>
+<td>旗舰 LLM</td>
+<td>128k</td>
+<td>首字≤320 ms</td>
+<td>30×</td>
+</tr>
+<tr>
+<td><code>reason.complex</code></td>
+<td>多步推理、规划</td>
+<td>旗舰推理模型</td>
+<td>128k</td>
+<td>首字≤600 ms</td>
+<td>60×</td>
+</tr>
+<tr>
+<td><code>tool.call</code></td>
+<td>函数调用</td>
+<td>函数调用稳定的模型</td>
+<td>32k</td>
+<td>首字≤300 ms</td>
+<td>20×</td>
+</tr>
+<tr>
+<td><code>vision.describe</code></td>
+<td>图像理解</td>
+<td>VLM</td>
+<td>32k + 图像</td>
+<td>≤800 ms</td>
+<td>25×</td>
+</tr>
+<tr>
+<td><code>embed.text</code></td>
+<td>文本向量化</td>
+<td>Embedding 模型</td>
+<td>512</td>
+<td>≤30 ms</td>
+<td>0.1×</td>
+</tr>
+<tr>
+<td><code>rerank.pairs</code></td>
+<td>相关性重排</td>
+<td>Cross-Encoder</td>
+<td>512×50</td>
+<td>≤50 ms</td>
+<td>0.3×</td>
+</tr>
+<tr>
+<td><code>guard.classify</code></td>
+<td>内容安全判定</td>
+<td>安全专用模型</td>
+<td>4k</td>
+<td>≤35 ms</td>
+<td>0.5×</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>成本列是最重要的一列</strong>。<code>chat.long</code> 的单位成本是 <code>classify.fast</code> 的 30 倍。多数平台把 60%+ 的请求错误地送给了最贵的档位——<strong>分级用模是最直接的降本手段，通常一次性降低 40%+ 成本且用户无感</strong>。</p>
+</blockquote>
+<h3 id="2-2-三类模型的定位差异"><a href="#2-2-三类模型的定位差异" class="headerlink" title="2.2 三类模型的定位差异"></a>2.2 三类模型的定位差异</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>LLM（云端旗舰）</th>
+<th>SLM（小模型）</th>
+<th>VLM（多模态）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>主战场</td>
+<td>复杂推理、长上下文、工具编排</td>
+<td>分类、抽取、压缩、改写、端侧</td>
+<td>图像理解、多模态指代</td>
+</tr>
+<tr>
+<td>部署</td>
+<td>外部 API + 自建旗舰</td>
+<td>自建（成本低）+ 端侧</td>
+<td>外部 API 为主</td>
+</tr>
+<tr>
+<td>关键指标</td>
+<td>推理质量、函数调用稳定性、长上下文有效性</td>
+<td>延迟、成本、量化后精度</td>
+<td>图像分辨率、OCR 能力</td>
+</tr>
+<tr>
+<td>主要风险</td>
+<td>成本、供应商依赖</td>
+<td>能力上限</td>
+<td>延迟高、成本高</td>
+</tr>
+<tr>
+<td>优化重点</td>
+<td>缓存、路由、上下文压缩</td>
+<td>蒸馏、量化、多任务复用</td>
+<td>图像预处理、按需触发</td>
+</tr>
+</tbody></table>
+<h3 id="2-3-端侧小模型选型要点"><a href="#2-3-端侧小模型选型要点" class="headerlink" title="2.3 端侧小模型选型要点"></a>2.3 端侧小模型选型要点</h3><table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>一基座多任务</td>
+<td>一个小基座 + 多 LoRA&#x2F;适配器，而非多个独立模型（内存节省显著）</td>
+</tr>
+<tr>
+<td>量化档位</td>
+<td>int4 通常够用于分类&#x2F;抽取；生成任务建议 int8</td>
+</tr>
+<tr>
+<td>分档部署</td>
+<td>按车机算力等级下发不同尺寸（高配 3B、中配 1.5B、低配仅分类模型）</td>
+</tr>
+<tr>
+<td>Embedding 独立</td>
+<td>Embedding 模型小且常驻，与生成模型分开管理</td>
+</tr>
+<tr>
+<td>预热</td>
+<td>冷启动首次推理延迟高，需常驻或预热</td>
+</tr>
+<tr>
+<td>降载</td>
+<td>车机主功能优先，AI 推理可被抢占降级</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="3-模型路由"><a href="#3-模型路由" class="headerlink" title="3. 模型路由"></a>3. 模型路由</h2><pre class="mermaid">flowchart TB
+    REQ["推理请求&lt;br/&gt;model_intent + budget + cost_tag"] --&gt; M1["查能力矩阵&lt;br/&gt;获取候选模型集"]
+    M1 --&gt; M2["过滤：健康状态 + 配额剩余 + 上下文长度足够"]
+    M2 --&gt; M3["策略打分"]
+    M3 --&gt; P1["成本权重"]
+    M3 --&gt; P2["延迟权重（实时 P95）"]
+    M3 --&gt; P3["质量权重（评测得分）"]
+    M3 --&gt; P4["负载权重（未完成请求数）"]
+    P1 &amp; P2 &amp; P3 &amp; P4 --&gt; M4["选定模型 + 记录 route_reason"]
+    M4 --&gt; M5&#123;"灰度实验?"&#125;
+    M5 --&gt;|"是"| M6["按实验分组分流"]
+    M5 --&gt;|"否"| M7["调用"]
+    M6 --&gt; M7</pre>
+
+
+<h3 id="3-1-路由策略类型"><a href="#3-1-路由策略类型" class="headerlink" title="3.1 路由策略类型"></a>3.1 路由策略类型</h3><table>
+<thead>
+<tr>
+<th>策略</th>
+<th>逻辑</th>
+<th>适用</th>
+<th>风险</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>静态映射</td>
+<td>意图 → 固定模型</td>
+<td>起步阶段</td>
+<td>无法优化</td>
+</tr>
+<tr>
+<td>成本优先</td>
+<td>满足质量下限的最便宜模型</td>
+<td>成本压力大</td>
+<td>长尾质量下降</td>
+</tr>
+<tr>
+<td><strong>难度感知</strong>（推荐）</td>
+<td>先用小模型预测难度，简单走小模型</td>
+<td>成熟阶段</td>
+<td>需难度预测准确</td>
+</tr>
+<tr>
+<td>延迟优先</td>
+<td>选当前 P95 最低的后端</td>
+<td>交互敏感场景</td>
+<td>可能选到质量较差模型</td>
+</tr>
+<tr>
+<td>质量优先</td>
+<td>评测得分最高</td>
+<td>高价值场景</td>
+<td>成本高</td>
+</tr>
+<tr>
+<td>混合加权</td>
+<td>上述加权组合</td>
+<td>生产推荐</td>
+<td>权重需调优</td>
+</tr>
+</tbody></table>
+<h3 id="3-2-难度感知路由（Cascade-模式）"><a href="#3-2-难度感知路由（Cascade-模式）" class="headerlink" title="3.2 难度感知路由（Cascade 模式）"></a>3.2 难度感知路由（Cascade 模式）</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant GW as 网关
+    participant SM as 小模型
+    participant LG as 旗舰模型
+    GW-&gt;&gt;SM: 先用小模型尝试（成本 1/30）
+    SM--&gt;&gt;GW: 结果 + 自评置信度
+    alt 置信度 ≥ 阈值
+        GW--&gt;&gt;GW: 采用小模型结果（省 96% 成本）
+    else 置信度 &lt; 阈值
+        GW-&gt;&gt;LG: 升级到旗舰模型
+        LG--&gt;&gt;GW: 结果
+    end</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>小模型采纳率</td>
+<td>目标 40–60%（视场景）</td>
+</tr>
+<tr>
+<td>额外延迟</td>
+<td>未采纳时增加小模型延迟（约 150 ms），需权衡</td>
+</tr>
+<tr>
+<td>成本收益</td>
+<td>采纳率 50% 时约省 45% 成本</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>非流式或可容忍首字略慢的场景；<strong>流式交互场景不适用</strong>（会导致首字延迟翻倍）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>流式交互场景不要用 Cascade</strong>。用户等待首字时，先跑一遍小模型再决定升级会让首字延迟从 320 ms 变成 470 ms+。Cascade 更适合离线批处理、记忆抽取、评测等非交互场景。</p>
+</blockquote>
+<hr>
+<h2 id="4-Fallback-与容错"><a href="#4-Fallback-与容错" class="headerlink" title="4. Fallback 与容错"></a>4. Fallback 与容错</h2><h3 id="4-1-降级链"><a href="#4-1-降级链" class="headerlink" title="4.1 降级链"></a>4.1 降级链</h3><pre class="mermaid">flowchart TB
+    A["主模型调用"] --&gt;|"超时/5xx/限流"| B&#123;"错误类型"&#125;
+    B --&gt;|"限流 429"| C1["同供应商其他实例/区域"]
+    B --&gt;|"服务错误 5xx"| C2["切换备用供应商同档模型"]
+    B --&gt;|"超时"| C3["切换低延迟模型"]
+    C1 &amp; C2 &amp; C3 --&gt;|"仍失败"| D["降档至小模型"]
+    D --&gt;|"仍失败"| E["语义缓存近似回答&lt;br/&gt;阈值可放宽至 0.88"]
+    E --&gt;|"无缓存"| F["指令端侧 SLM 兜底"]
+    F --&gt;|"不可用"| G["显式失败 + 引导重试"]
+    C1 &amp; C2 &amp; C3 &amp; D &amp; E &amp; F &amp; G --&gt; H["降级埋点 + 告警 + 计入 SLO"]</pre>
+
+
+<h3 id="4-2-熔断器配置（推断设计）"><a href="#4-2-熔断器配置（推断设计）" class="headerlink" title="4.2 熔断器配置（推断设计）"></a>4.2 熔断器配置（推断设计）</h3><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>建议值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>熔断粒度</td>
+<td>供应商 × 模型</td>
+<td>单模型故障不影响同供应商其他模型</td>
+</tr>
+<tr>
+<td>错误率阈值</td>
+<td>50%（滑动窗口 30 s）</td>
+<td></td>
+</tr>
+<tr>
+<td>最小请求数</td>
+<td>20</td>
+<td>避免低流量误熔断</td>
+</tr>
+<tr>
+<td>熔断时长</td>
+<td>30 s，指数递增至 300 s</td>
+<td></td>
+</tr>
+<tr>
+<td>半开探测</td>
+<td>每次放行 5 个请求</td>
+<td></td>
+</tr>
+<tr>
+<td>超时设置</td>
+<td>首字 5 s &#x2F; 整体 60 s</td>
+<td>首字超时更敏感</td>
+</tr>
+<tr>
+<td>重试</td>
+<td>仅对幂等且未开始流式输出的请求重试 1 次</td>
+<td><strong>已流式输出不可重试</strong></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>重试的关键约束</strong>：一旦开始向用户流式输出，就不能重试（用户会看到内容突然重新开始）。因此重试窗口只在”首字返回前”。</p>
+</blockquote>
+<hr>
+<h2 id="5-负载均衡"><a href="#5-负载均衡" class="headerlink" title="5. 负载均衡"></a>5. 负载均衡</h2><table>
+<thead>
+<tr>
+<th>策略</th>
+<th>是否适用 AI 场景</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>轮询（Round Robin）</td>
+<td>❌ 不适用</td>
+<td>请求耗时方差极大（短问答 vs 128k 长上下文），轮询会造成严重不均</td>
+</tr>
+<tr>
+<td>随机</td>
+<td>❌ 不适用</td>
+<td>同上</td>
+</tr>
+<tr>
+<td><strong>最少未完成请求数</strong></td>
+<td>✅ <strong>推荐</strong></td>
+<td>自然适配耗时差异</td>
+</tr>
+<tr>
+<td>按预估输出 Token 加权</td>
+<td>✅ 更优</td>
+<td>需预估模型，实现复杂</td>
+</tr>
+<tr>
+<td>一致性哈希（按会话）</td>
+<td>⚠️ 特定场景</td>
+<td>可提升前缀缓存命中，但会造成不均</td>
+</tr>
+</tbody></table>
+<h3 id="5-1-自建推理集群的调度要点"><a href="#5-1-自建推理集群的调度要点" class="headerlink" title="5.1 自建推理集群的调度要点"></a>5.1 自建推理集群的调度要点</h3><pre class="mermaid">flowchart LR
+    Q["请求队列"] --&gt; B["连续批处理&lt;br/&gt;Continuous Batching"]
+    B --&gt; P["Prefix Caching&lt;br/&gt;共享前缀复用"]
+    P --&gt; S["调度器&lt;br/&gt;按 SLA 分优先级队列"]
+    S --&gt; G1["GPU 实例 1"] &amp; G2["GPU 实例 2"] &amp; G3["GPU 实例 N"]
+    S --&gt; PRE["预热与常驻&lt;br/&gt;避免冷启动"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+<th>收益</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>连续批处理</td>
+<td>请求动态加入批次，无需等齐</td>
+<td>吞吐提升数倍</td>
+</tr>
+<tr>
+<td>Prefix Caching</td>
+<td>相同前缀 KV 复用</td>
+<td>首字延迟与算力双降</td>
+</tr>
+<tr>
+<td>优先级队列</td>
+<td>交互请求优先于批处理任务</td>
+<td>保障交互 SLA</td>
+</tr>
+<tr>
+<td>常驻预热</td>
+<td>避免模型加载冷启动</td>
+<td>消除长尾延迟</td>
+</tr>
+<tr>
+<td>显存管理</td>
+<td>合理设置最大批次与序列长度</td>
+<td>避免 OOM</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="6-缓存体系（四层）"><a href="#6-缓存体系（四层）" class="headerlink" title="6. 缓存体系（四层）"></a>6. 缓存体系（四层）</h2><pre class="mermaid">flowchart TB
+    R["请求"] --&gt; L1&#123;"L1 · 精确缓存&lt;br/&gt;完全相同的请求"&#125;
+    L1 --&gt;|"命中"| H1["直接返回&lt;br/&gt;延迟 &lt;5 ms"]
+    L1 --&gt;|"未命中"| L2&#123;"L2 · 语义缓存&lt;br/&gt;向量相似度 ≥0.92"&#125;
+    L2 --&gt;|"命中"| H2["返回缓存答案&lt;br/&gt;延迟 ~25 ms&lt;br/&gt;仍需过围栏"]
+    L2 --&gt;|"未命中"| L3["L3 · 前缀/KV 缓存&lt;br/&gt;推理引擎层"]
+    L3 --&gt; L4["L4 · Token 计量缓存&lt;br/&gt;成本统计与配额"]
+    L3 --&gt; INF["模型推理"]</pre>
+
+
+<h3 id="6-1-L1-精确缓存"><a href="#6-1-L1-精确缓存" class="headerlink" title="6.1 L1 精确缓存"></a>6.1 L1 精确缓存</h3><table>
+<thead>
+<tr>
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>键</td>
+<td>Prompt 完整哈希 + 模型 + 参数（温度等）</td>
+</tr>
+<tr>
+<td>命中率</td>
+<td>5–10%（重复提问、重试）</td>
+</tr>
+<tr>
+<td>TTL</td>
+<td>短（分钟级），时效性意图不缓存</td>
+</tr>
+<tr>
+<td>收益</td>
+<td>延迟几乎为零，成本为零</td>
+</tr>
+</tbody></table>
+<h3 id="6-2-L2-语义缓存（图示圈注核心）"><a href="#6-2-L2-语义缓存（图示圈注核心）" class="headerlink" title="6.2 L2 语义缓存（图示圈注核心）"></a>6.2 L2 语义缓存（图示圈注核心）</h3><table>
+<thead>
+<tr>
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>原理</td>
+<td>查询向量化 → 向量库检索 → 相似度超阈值返回缓存答案</td>
+</tr>
+<tr>
+<td><strong>缓存键维度</strong></td>
+<td>语义向量 + 知识版本 + 车型&#x2F;配置 + 语言 + 用户群 + Skill ID</td>
+</tr>
+<tr>
+<td>相似度阈值</td>
+<td>≥ 0.92（宁高勿低）</td>
+</tr>
+<tr>
+<td>命中率目标</td>
+<td>≥ 25%，问法收敛后可达 35%+</td>
+</tr>
+<tr>
+<td>TTL</td>
+<td>按意图类别设定（稳定知识 7 天，动态内容 bypass）</td>
+</tr>
+<tr>
+<td>失效触发</td>
+<td>知识版本变更、Embedding 版本变更、人工干预</td>
+</tr>
+<tr>
+<td>注意</td>
+<td><strong>缓存答案仍必须过安全围栏</strong>（策略可能已变更）</td>
+</tr>
+</tbody></table>
+<p><strong>收益量化</strong>（基于 01 文档 6.2 容量模型）：</p>
+<table>
+<thead>
+<tr>
+<th>命中率</th>
+<th>节省推理算力</th>
+<th>节省成本（相对）</th>
+<th>平均延迟改善</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>10%</td>
+<td>10%</td>
+<td>10%</td>
+<td>-70 ms</td>
+</tr>
+<tr>
+<td>25%</td>
+<td>25%</td>
+<td>25%</td>
+<td>-175 ms</td>
+</tr>
+<tr>
+<td>35%</td>
+<td>35%</td>
+<td>35%</td>
+<td>-245 ms</td>
+</tr>
+<tr>
+<td>50%</td>
+<td>50%</td>
+<td>50%</td>
+<td>-350 ms</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>语义缓存是本架构 ROI 最高的单项优化</strong>。每提升 5 个百分点命中率 ≈ 省 10% 推理算力预算。车载场景问法高度收敛（”怎么开空调””附近充电桩””续航多少”），是语义缓存的理想场景。</p>
+</blockquote>
+<h3 id="6-3-语义缓存的三个陷阱"><a href="#6-3-语义缓存的三个陷阱" class="headerlink" title="6.3 语义缓存的三个陷阱"></a>6.3 语义缓存的三个陷阱</h3><table>
+<thead>
+<tr>
+<th>陷阱</th>
+<th>表现</th>
+<th>解决</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>误命中</strong></td>
+<td>“A 车型续航” 命中 “B 车型续航” 的缓存</td>
+<td>车型&#x2F;配置必须进缓存键；阈值提高</td>
+</tr>
+<tr>
+<td><strong>时效性内容被缓存</strong></td>
+<td>缓存了”当前剩余电量”</td>
+<td>意图分类标记时效性 → 强制 bypass</td>
+</tr>
+<tr>
+<td><strong>知识更新后缓存未失效</strong></td>
+<td>知识改了但仍返回旧答案</td>
+<td>知识版本进缓存键 + 更新时主动失效</td>
+</tr>
+</tbody></table>
+<h3 id="6-4-L3-前缀-KV-缓存"><a href="#6-4-L3-前缀-KV-缓存" class="headerlink" title="6.4 L3 前缀&#x2F;KV 缓存"></a>6.4 L3 前缀&#x2F;KV 缓存</h3><table>
+<thead>
+<tr>
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>原理</td>
+<td>相同前缀的注意力 KV 复用，仅计算增量部分</td>
+</tr>
+<tr>
+<td>前提</td>
+<td>自建推理（vLLM Automatic Prefix Caching &#x2F; SGLang RadixAttention）或供应商支持</td>
+</tr>
+<tr>
+<td><strong>零成本优化</strong></td>
+<td>Prompt 组织顺序：系统指令 → 工具描述 → 知识 → 记忆 → 用户问题</td>
+</tr>
+<tr>
+<td>收益</td>
+<td>首字延迟显著下降；自建场景算力节省明显</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>Prompt 顺序调整是”改几行代码换来大幅收益”的典型</strong>。把变化最少的内容放最前，前缀缓存命中率可从近乎为零提升到很高。这一优化不需要任何新组件。</p>
+</blockquote>
+<h3 id="6-5-L4-Token-计量与配额"><a href="#6-5-L4-Token-计量与配额" class="headerlink" title="6.5 L4 Token 计量与配额"></a>6.5 L4 Token 计量与配额</h3><table>
+<thead>
+<tr>
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>计量口径</td>
+<td><strong>以网关为唯一权威</strong>，禁止业务侧自报</td>
+</tr>
+<tr>
+<td>归因维度</td>
+<td>业务线 &#x2F; Agent &#x2F; Skill &#x2F; 场景 &#x2F; 用户群 &#x2F; 模型 &#x2F; 缓存命中</td>
+</tr>
+<tr>
+<td>配额层级</td>
+<td>全局 → 业务线 → Agent → 单会话</td>
+</tr>
+<tr>
+<td>限流单位</td>
+<td><strong>Token&#x2F;s + 并发数双维度</strong>（不用 QPS）</td>
+</tr>
+<tr>
+<td>异常熔断</td>
+<td>单会话 Token 超 P99×3 自动熔断</td>
+</tr>
+<tr>
+<td>成本看板</td>
+<td>日&#x2F;周成本趋势 + Top 消耗方 + 单位业务成本</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="7-Prompt-与模型版本管理"><a href="#7-Prompt-与模型版本管理" class="headerlink" title="7. Prompt 与模型版本管理"></a>7. Prompt 与模型版本管理</h2><pre class="mermaid">flowchart LR
+    P1["Prompt 模板&lt;br/&gt;版本化 · 纳入代码评审"] --&gt; P2["与模型族绑定&lt;br/&gt;不同模型族模板不同"]
+    P2 --&gt; P3["灰度发布&lt;br/&gt;按流量比例"]
+    P3 --&gt; P4["评测门禁&lt;br/&gt;回归集必须通过"]
+    P4 --&gt; P5["上线 + 记录 prompt_version"]
+    P5 --&gt; P6["效果监控&lt;br/&gt;按 prompt_version 分组对比"]
+    P6 --&gt;|"劣化"| P7["快速回滚"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>要求</th>
+<th>说明</th>
+<th>不做的后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Prompt 版本化</td>
+<td>等同代码，进版本库与评审</td>
+<td>线上效果波动无法归因</td>
+</tr>
+<tr>
+<td>每次调用记录版本</td>
+<td><code>prompt_version</code> 埋点必填</td>
+<td>无法按版本对比效果</td>
+</tr>
+<tr>
+<td>模型-模板绑定</td>
+<td>不同模型族的函数调用与格式约定不同</td>
+<td>换模型后格式解析失败</td>
+</tr>
+<tr>
+<td>灰度 + 门禁</td>
+<td>变更必须过回归评测</td>
+<td>一次改动全量劣化</td>
+</tr>
+<tr>
+<td>快速回滚</td>
+<td>配置级回滚，不需发版</td>
+<td>故障时间拉长</td>
+</tr>
+</tbody></table>
+<h3 id="7-1-模型上线流程"><a href="#7-1-模型上线流程" class="headerlink" title="7.1 模型上线流程"></a>7.1 模型上线流程</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant ALG as 算法团队
+    participant MR as 模型注册中心
+    participant EV as 评测
+    participant GW as LLM 网关
+    ALG-&gt;&gt;MR: 注册模型（版本 + 能力声明 + 训练血缘）
+    MR-&gt;&gt;EV: 触发评测（回归集 + 盲测集）
+    EV--&gt;&gt;MR: 评测报告（质量/延迟/成本）
+    alt 达标
+        MR-&gt;&gt;GW: 注册到能力矩阵（初始权重 0）
+        GW-&gt;&gt;GW: 影子流量（复制请求不返回，仅对比）
+        GW-&gt;&gt;GW: 灰度 5% → 观察 → 50% → 100%
+        GW-&gt;&gt;GW: 保留上一版本 7 天备回滚
+    else 不达标
+        MR--&gt;&gt;ALG: 打回
+    end</pre>
+
+
+<blockquote>
+<p><strong>影子流量是模型上线的最佳前置手段</strong>：真实请求复制到新模型但不返回给用户，可在零风险下对比真实分布下的质量与延迟。这是评测集无法替代的（评测集永远无法覆盖真实长尾）。</p>
+</blockquote>
+<hr>
+<h2 id="8-上下文长度管理"><a href="#8-上下文长度管理" class="headerlink" title="8. 上下文长度管理"></a>8. 上下文长度管理</h2><table>
+<thead>
+<tr>
+<th>上下文档位</th>
+<th>典型用途</th>
+<th>成本影响</th>
+<th>注意</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2k</td>
+<td>分类、改写</td>
+<td>极低</td>
+<td>够用</td>
+</tr>
+<tr>
+<td>8k</td>
+<td>短对话、抽取</td>
+<td>低</td>
+<td>主流场景</td>
+</tr>
+<tr>
+<td>32k</td>
+<td>多轮 + 工具 + 知识</td>
+<td>中</td>
+<td>需预算管理</td>
+</tr>
+<tr>
+<td>128k+</td>
+<td>长文档分析</td>
+<td><strong>高</strong></td>
+<td>谨慎使用</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>长上下文不是”免费的记忆”</strong>。128k 上下文的成本与延迟远高于 8k，且”中间信息丢失”（lost-in-the-middle）现象使有效利用率下降。<strong>优先用检索与压缩，而非无脑塞长上下文</strong>。这是与”上下文预算硬约束”（01 文档 3.4）一致的判断。</p>
+</blockquote>
+<hr>
+<h2 id="9-模型平台指标体系"><a href="#9-模型平台指标体系" class="headerlink" title="9. 模型平台指标体系"></a>9. 模型平台指标体系</h2><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>指标</th>
+<th>目标（推断设计）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>质量</td>
+<td>回归集通过率</td>
+<td>100%（门禁）</td>
+</tr>
+<tr>
+<td>质量</td>
+<td>盲测集满意度</td>
+<td>逐版本不下降</td>
+</tr>
+<tr>
+<td>延迟</td>
+<td>首字 P95（按 model_intent 分）</td>
+<td>见能力矩阵</td>
+</tr>
+<tr>
+<td>延迟</td>
+<td>整体 P95</td>
+<td>≤ 4 s</td>
+</tr>
+<tr>
+<td>可用性</td>
+<td>模型调用成功率</td>
+<td>≥ 99.9%</td>
+</tr>
+<tr>
+<td>可用性</td>
+<td>降级率</td>
+<td>≤ 1%</td>
+</tr>
+<tr>
+<td>缓存</td>
+<td>L1 + L2 命中率</td>
+<td>≥ 30%</td>
+</tr>
+<tr>
+<td>缓存</td>
+<td>语义缓存误命中率</td>
+<td>≤ 0.1%</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>单会话平均成本</td>
+<td>年度下降 30%</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>分级用模比例（SLM 承载占比）</td>
+<td>≥ 40%</td>
+</tr>
+<tr>
+<td>治理</td>
+<td>无标签调用比例（<code>cost_tag</code> 缺失）</td>
+<td>0%</td>
+</tr>
+<tr>
+<td>治理</td>
+<td>旁路调用（不经网关）</td>
+<td>0%</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="10-风险与治理"><a href="#10-风险与治理" class="headerlink" title="10. 风险与治理"></a>10. 风险与治理</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>影响</th>
+<th>治理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>网关单点</strong></td>
+<td>全平台模型能力不可用</td>
+<td>多副本 + 多区域 + 无状态化 + 健康检查</td>
+</tr>
+<tr>
+<td>供应商依赖</td>
+<td>涨价&#x2F;限流&#x2F;停服</td>
+<td>多源冗余 + 意图化调用（换模型为配置变更）</td>
+</tr>
+<tr>
+<td>成本失控</td>
+<td>账单超预算</td>
+<td>分级用模 + 缓存 + 配额 + 会话熔断 + 成本看板</td>
+</tr>
+<tr>
+<td>语义缓存误命中</td>
+<td>答错且难发现</td>
+<td>维度键完整 + 高阈值 + 命中样本抽检</td>
+</tr>
+<tr>
+<td>模型换代效果劣化</td>
+<td>用户感知下降</td>
+<td>影子流量 + 灰度 + 回归门禁 + 快速回滚</td>
+</tr>
+<tr>
+<td>长上下文滥用</td>
+<td>成本与延迟双升、效果反降</td>
+<td>上下文预算硬约束 + 压缩优先</td>
+</tr>
+<tr>
+<td>端侧模型占用车机资源</td>
+<td>主功能受影响</td>
+<td>资源配额 + 分级降载 + 抢占策略</td>
+</tr>
+<tr>
+<td>Prompt 无版本管理</td>
+<td>效果波动无法归因</td>
+<td>版本化 + 埋点 + 分组对比</td>
+</tr>
+<tr>
+<td>流式已输出后重试</td>
+<td>用户看到内容重来</td>
+<td>重试窗口限定在首字前</td>
+</tr>
+<tr>
+<td>自建集群显存 OOM</td>
+<td>服务不可用</td>
+<td>最大批次与序列长度限制 + 压测定容</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="11-演进路线"><a href="#11-演进路线" class="headerlink" title="11. 演进路线"></a>11. 演进路线</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>模型平台演进</th>
+<th>预期收益</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>阶段一</strong></td>
+<td>意图化调用改造（业务不再指定模型）；能力矩阵建立；多源冗余与熔断降级链；<code>cost_tag</code> 强制；Prompt 版本化</td>
+<td>供应商可替换；故障可降级；成本可归因</td>
+</tr>
+<tr>
+<td><strong>阶段二</strong></td>
+<td>语义缓存上线（含失效联动）；Prompt 顺序优化启用前缀缓存；分级用模落地；影子流量与灰度机制</td>
+<td>成本降 30–40%；命中场景延迟降 700 ms</td>
+</tr>
+<tr>
+<td><strong>阶段三</strong></td>
+<td>难度感知路由（非交互场景）；自建推理集群承接高频固定任务（SLM）；端侧模型分档与自动降载；成本自动优化（按实时价格与质量动态调权重）</td>
+<td>成本持续优化；端侧分流比例提升</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端 RAG 系统设计 · <strong>下一篇</strong>：云管端 AI 网关架构</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/07/02/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-11-AI%E7%BD%91%E5%85%B3/">云管端 AI 网关架构</a></h3>
+        <p>核心判断：网关的分离依据是流量特征与故障域，不是功能。四种流量的资源模型完全不同，任意两者合并都会导致故障传播。</p>
+        <a class="btn primary" href="/2026/07/02/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-11-AI%E7%BD%91%E5%85%B3/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/05/26/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-09-RAG%E7%B3%BB%E7%BB%9F/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端 RAG 系统设计</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#10-%C2%B7-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0%EF%BC%88Model-Platform%EF%BC%89" data-toc-target="10-·-模型平台（Model-Platform）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">10 · 模型平台（Model Platform）</span></a><a class="toc-level-2" href="#1-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0%E5%AE%9A%E4%BD%8D" data-toc-target="1-模型平台定位"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 模型平台定位</span></a><a class="toc-level-3" href="#1-1-%E6%A0%B8%E5%BF%83%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99" data-toc-target="1-1-核心设计原则"><span class="toc-text">1.1 核心设计原则</span></a><a class="toc-level-2" href="#2-%E6%A8%A1%E5%9E%8B%E5%88%86%E5%B1%82%E4%B8%8E%E9%80%89%E5%9E%8B" data-toc-target="2-模型分层与选型"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 模型分层与选型</span></a><a class="toc-level-3" href="#2-1-%E6%A8%A1%E5%9E%8B%E8%83%BD%E5%8A%9B%E7%9F%A9%E9%98%B5%EF%BC%88%E6%8E%A8%E6%96%AD%E8%AE%BE%E8%AE%A1%E6%A8%A1%E6%9D%BF%EF%BC%89" data-toc-target="2-1-模型能力矩阵（推断设计模板）"><span class="toc-text">2.1 模型能力矩阵（推断设计模板）</span></a><a class="toc-level-3" href="#2-2-%E4%B8%89%E7%B1%BB%E6%A8%A1%E5%9E%8B%E7%9A%84%E5%AE%9A%E4%BD%8D%E5%B7%AE%E5%BC%82" data-toc-target="2-2-三类模型的定位差异"><span class="toc-text">2.2 三类模型的定位差异</span></a><a class="toc-level-3" href="#2-3-%E7%AB%AF%E4%BE%A7%E5%B0%8F%E6%A8%A1%E5%9E%8B%E9%80%89%E5%9E%8B%E8%A6%81%E7%82%B9" data-toc-target="2-3-端侧小模型选型要点"><span class="toc-text">2.3 端侧小模型选型要点</span></a><a class="toc-level-2" href="#3-%E6%A8%A1%E5%9E%8B%E8%B7%AF%E7%94%B1" data-toc-target="3-模型路由"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 模型路由</span></a><a class="toc-level-3" href="#3-1-%E8%B7%AF%E7%94%B1%E7%AD%96%E7%95%A5%E7%B1%BB%E5%9E%8B" data-toc-target="3-1-路由策略类型"><span class="toc-text">3.1 路由策略类型</span></a><a class="toc-level-3" href="#3-2-%E9%9A%BE%E5%BA%A6%E6%84%9F%E7%9F%A5%E8%B7%AF%E7%94%B1%EF%BC%88Cascade-%E6%A8%A1%E5%BC%8F%EF%BC%89" data-toc-target="3-2-难度感知路由（Cascade-模式）"><span class="toc-text">3.2 难度感知路由（Cascade 模式）</span></a><a class="toc-level-2" href="#4-Fallback-%E4%B8%8E%E5%AE%B9%E9%94%99" data-toc-target="4-Fallback-与容错"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. Fallback 与容错</span></a><a class="toc-level-3" href="#4-1-%E9%99%8D%E7%BA%A7%E9%93%BE" data-toc-target="4-1-降级链"><span class="toc-text">4.1 降级链</span></a><a class="toc-level-3" href="#4-2-%E7%86%94%E6%96%AD%E5%99%A8%E9%85%8D%E7%BD%AE%EF%BC%88%E6%8E%A8%E6%96%AD%E8%AE%BE%E8%AE%A1%EF%BC%89" data-toc-target="4-2-熔断器配置（推断设计）"><span class="toc-text">4.2 熔断器配置（推断设计）</span></a><a class="toc-level-2" href="#5-%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1" data-toc-target="5-负载均衡"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 负载均衡</span></a><a class="toc-level-3" href="#5-1-%E8%87%AA%E5%BB%BA%E6%8E%A8%E7%90%86%E9%9B%86%E7%BE%A4%E7%9A%84%E8%B0%83%E5%BA%A6%E8%A6%81%E7%82%B9" data-toc-target="5-1-自建推理集群的调度要点"><span class="toc-text">5.1 自建推理集群的调度要点</span></a><a class="toc-level-2" href="#6-%E7%BC%93%E5%AD%98%E4%BD%93%E7%B3%BB%EF%BC%88%E5%9B%9B%E5%B1%82%EF%BC%89" data-toc-target="6-缓存体系（四层）"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 缓存体系（四层）</span></a><a class="toc-level-3" href="#6-1-L1-%E7%B2%BE%E7%A1%AE%E7%BC%93%E5%AD%98" data-toc-target="6-1-L1-精确缓存"><span class="toc-text">6.1 L1 精确缓存</span></a><a class="toc-level-3" href="#6-2-L2-%E8%AF%AD%E4%B9%89%E7%BC%93%E5%AD%98%EF%BC%88%E5%9B%BE%E7%A4%BA%E5%9C%88%E6%B3%A8%E6%A0%B8%E5%BF%83%EF%BC%89" data-toc-target="6-2-L2-语义缓存（图示圈注核心）"><span class="toc-text">6.2 L2 语义缓存（图示圈注核心）</span></a><a class="toc-level-3" href="#6-3-%E8%AF%AD%E4%B9%89%E7%BC%93%E5%AD%98%E7%9A%84%E4%B8%89%E4%B8%AA%E9%99%B7%E9%98%B1" data-toc-target="6-3-语义缓存的三个陷阱"><span class="toc-text">6.3 语义缓存的三个陷阱</span></a><a class="toc-level-3" href="#6-4-L3-%E5%89%8D%E7%BC%80-KV-%E7%BC%93%E5%AD%98" data-toc-target="6-4-L3-前缀-KV-缓存"><span class="toc-text">6.4 L3 前缀/KV 缓存</span></a><a class="toc-level-3" href="#6-5-L4-Token-%E8%AE%A1%E9%87%8F%E4%B8%8E%E9%85%8D%E9%A2%9D" data-toc-target="6-5-L4-Token-计量与配额"><span class="toc-text">6.5 L4 Token 计量与配额</span></a><a class="toc-level-2" href="#7-Prompt-%E4%B8%8E%E6%A8%A1%E5%9E%8B%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86" data-toc-target="7-Prompt-与模型版本管理"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. Prompt 与模型版本管理</span></a><a class="toc-level-3" href="#7-1-%E6%A8%A1%E5%9E%8B%E4%B8%8A%E7%BA%BF%E6%B5%81%E7%A8%8B" data-toc-target="7-1-模型上线流程"><span class="toc-text">7.1 模型上线流程</span></a><a class="toc-level-2" href="#8-%E4%B8%8A%E4%B8%8B%E6%96%87%E9%95%BF%E5%BA%A6%E7%AE%A1%E7%90%86" data-toc-target="8-上下文长度管理"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 上下文长度管理</span></a><a class="toc-level-2" href="#9-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0%E6%8C%87%E6%A0%87%E4%BD%93%E7%B3%BB" data-toc-target="9-模型平台指标体系"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 模型平台指标体系</span></a><a class="toc-level-2" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 风险与治理</span></a><a class="toc-level-2" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 演进路线</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 55%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">11 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#10-%C2%B7-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0%EF%BC%88Model-Platform%EF%BC%89" data-toc-target="10-·-模型平台（Model-Platform）" data-title="01 · 10 · 模型平台（Model Platform）" aria-label="10 · 模型平台（Model Platform）"></a><a class="toc-strip__dot" href="#1-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0%E5%AE%9A%E4%BD%8D" data-toc-target="1-模型平台定位" data-title="02 · 1. 模型平台定位" aria-label="1. 模型平台定位"></a><a class="toc-strip__dot" href="#2-%E6%A8%A1%E5%9E%8B%E5%88%86%E5%B1%82%E4%B8%8E%E9%80%89%E5%9E%8B" data-toc-target="2-模型分层与选型" data-title="03 · 2. 模型分层与选型" aria-label="2. 模型分层与选型"></a><a class="toc-strip__dot" href="#3-%E6%A8%A1%E5%9E%8B%E8%B7%AF%E7%94%B1" data-toc-target="3-模型路由" data-title="04 · 3. 模型路由" aria-label="3. 模型路由"></a><a class="toc-strip__dot" href="#4-Fallback-%E4%B8%8E%E5%AE%B9%E9%94%99" data-toc-target="4-Fallback-与容错" data-title="05 · 4. Fallback 与容错" aria-label="4. Fallback 与容错"></a><a class="toc-strip__dot" href="#5-%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1" data-toc-target="5-负载均衡" data-title="06 · 5. 负载均衡" aria-label="5. 负载均衡"></a><a class="toc-strip__dot" href="#6-%E7%BC%93%E5%AD%98%E4%BD%93%E7%B3%BB%EF%BC%88%E5%9B%9B%E5%B1%82%EF%BC%89" data-toc-target="6-缓存体系（四层）" data-title="07 · 6. 缓存体系（四层）" aria-label="6. 缓存体系（四层）"></a><a class="toc-strip__dot" href="#7-Prompt-%E4%B8%8E%E6%A8%A1%E5%9E%8B%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86" data-toc-target="7-Prompt-与模型版本管理" data-title="08 · 7. Prompt 与模型版本管理" aria-label="7. Prompt 与模型版本管理"></a><a class="toc-strip__dot" href="#8-%E4%B8%8A%E4%B8%8B%E6%96%87%E9%95%BF%E5%BA%A6%E7%AE%A1%E7%90%86" data-toc-target="8-上下文长度管理" data-title="09 · 8. 上下文长度管理" aria-label="8. 上下文长度管理"></a><a class="toc-strip__dot" href="#9-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0%E6%8C%87%E6%A0%87%E4%BD%93%E7%B3%BB" data-toc-target="9-模型平台指标体系" data-title="10 · 9. 模型平台指标体系" aria-label="9. 模型平台指标体系"></a><a class="toc-strip__dot" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理" data-title="11 · 10. 风险与治理" aria-label="10. 风险与治理"></a><a class="toc-strip__dot" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线" data-title="12 · 11. 演进路线" aria-label="11. 演进路线"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-10-模型平台","title":"云管端模型平台架构","url":"/2026/06/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-10-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0/","path":"cloud-pipe-edge-agent-platform","index":10,"total":20,"next":{"title":"云管端 AI 网关架构","url":"/2026/07/02/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-11-AI%E7%BD%91%E5%85%B3/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

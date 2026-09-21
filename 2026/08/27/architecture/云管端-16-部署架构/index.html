@@ -1,0 +1,1366 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端部署架构 · 飞轮之道</title>
+<meta name="description" content="围栏必须与网关同优先级。若围栏被驱逐而网关存活，则会出现”模型可调用但输出无管控”的状态——这比整体不可用更危险。二者必须同生共死（同 PriorityClass + PodDisruptionBudget 联动）。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/08/27/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-16-%E9%83%A8%E7%BD%B2%E6%9E%B6%E6%9E%84/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端部署架构 · 飞轮之道">
+<meta property="og:description" content="围栏必须与网关同优先级。若围栏被驱逐而网关存活，则会出现”模型可调用但输出无管控”的状态——这比整体不可用更危险。二者必须同生共死（同 PriorityClass + PodDisruptionBudget 联动）。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/08/27/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-16-%E9%83%A8%E7%BD%B2%E6%9E%B6%E6%9E%84/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">形成闭环</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 17 / 20 篇</a>
+    </div>
+    <h1>云管端部署架构</h1>
+    <p class="article-deck">围栏必须与网关同优先级。若围栏被驱逐而网关存活，则会出现”模型可调用但输出无管控”的状态——这比整体不可用更危险。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>发布于 2026.08</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="16-·-部署与运维（Deployment）"><a href="#16-·-部署与运维（Deployment）" class="headerlink" title="16 · 部署与运维（Deployment）"></a>16 · 部署与运维（Deployment）</h2><blockquote>
+<p>文档类型：研发交付规范 · 部署与运维专章<br>覆盖：K8s 拓扑、命名空间划分、弹性策略、GPU 调度、多区域、端侧下发、灾备、发布与回滚、运维手册</p>
+</blockquote>
+<hr>
+<h2 id="1-部署总拓扑"><a href="#1-部署总拓扑" class="headerlink" title="1. 部署总拓扑"></a>1. 部署总拓扑</h2><pre class="mermaid">flowchart TB
+    subgraph EDGE["车端 / 边缘设备"]
+        VOS["车机 OS"]
+        VRT["Agent 运行时&lt;br/&gt;System Agent + User Agents"]
+        VSLM["SLM 运行时&lt;br/&gt;量化模型 + NPU"]
+        VSTORE["本地存储&lt;br/&gt;SQLite + 嵌入式向量 + WAL"]
+        VSEC["TEE / 安全存储&lt;br/&gt;证书与密钥"]
+    end
+
+    subgraph POP["边缘接入 POP（多地域）"]
+        GLB["全局负载均衡&lt;br/&gt;DNS / Anycast"]
+        L4["四层负载均衡"]
+        VGW["语音网关集群"]
+        AGW["Agent 网关集群"]
+        MGW["双向认证网关集群"]
+    end
+
+    subgraph K8S["云端 K8s（多可用区）"]
+        subgraph NS1["ns: ingress"]
+            NLU["NLU 服务"]
+        end
+        subgraph NS2["ns: orchestration"]
+            PL["Planner（HPA）"]
+            AG1["Cloud Agent A"]
+            AG2["Cloud Agent B"]
+            AGN["Cloud Agent N"]
+        end
+        subgraph NS3["ns: foundation"]
+            MEM["记忆服务"]
+            KN["知识/RAG 服务"]
+            CAP["能力中心"]
+            EAF["边缘 Agent 框架"]
+        end
+        subgraph NS4["ns: model-gateway"]
+            LGW["LLM 网关"]
+            GD["安全围栏"]
+            SC["语义缓存服务"]
+        end
+        subgraph NS5["ns: governance"]
+            REG["AI 注册中心"]
+            PORTAL["管理门户&lt;br/&gt;RAG门户/记忆干预/能力管理"]
+        end
+        subgraph NS6["ns: inference"]
+            GPU1["推理实例（GPU）"]
+            GPU2["Embedding / Reranker（GPU/CPU）"]
+        end
+    end
+
+    subgraph STORE["数据与中间件"]
+        PG[("PostgreSQL&lt;br/&gt;元数据/注册/记忆/Checkpoint")]
+        VDB[("向量库&lt;br/&gt;知识+记忆+缓存")]
+        RDS[("Redis&lt;br/&gt;会话/短期记忆/限流")]
+        MQ[("Kafka")]
+        OBJ[("对象存储")]
+        ES[("全文索引")]
+    end
+
+    subgraph DATA["数据与训练平台"]
+        DWH[("数仓/数据湖")]
+        TRN["训练集群"]
+        MREG["模型注册中心"]
+    end
+
+    VRT --&gt; VSLM &amp; VSTORE &amp; VSEC
+    VOS --&gt; VRT
+    VRT --&gt; GLB --&gt; L4 --&gt; VGW &amp; AGW &amp; MGW
+    VGW --&gt; NLU --&gt; PL
+    AGW --&gt; PL
+    MGW --&gt; NS3
+    PL --&gt; AG1 &amp; AG2 &amp; AGN
+    PL &amp; AG1 &amp; AG2 &amp; AGN --&gt; LGW --&gt; GD
+    LGW --&gt; SC &amp; GPU1
+    KN --&gt; GPU2
+    PL &amp; AG1 --&gt; MEM &amp; KN &amp; CAP
+    CAP --&gt; REG
+    EAF --&gt; MGW
+    MEM --&gt; PG &amp; RDS &amp; VDB
+    KN --&gt; VDB &amp; ES &amp; OBJ
+    SC --&gt; VDB
+    PL &amp; AG1 &amp; LGW --&gt; MQ --&gt; DWH --&gt; TRN --&gt; MREG -.-&gt; LGW</pre>
+
+
+<hr>
+<h2 id="2-命名空间划分"><a href="#2-命名空间划分" class="headerlink" title="2. 命名空间划分"></a>2. 命名空间划分</h2><table>
+<thead>
+<tr>
+<th>Namespace</th>
+<th>承载</th>
+<th>隔离理由</th>
+<th>资源配额策略</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ingress</code></td>
+<td>NLU</td>
+<td>GPU 需求特殊（ASR），扩缩容特征独立</td>
+<td>GPU 配额独立</td>
+</tr>
+<tr>
+<td><code>orchestration</code></td>
+<td>Planner + 各 Cloud Agent</td>
+<td>业务迭代最频繁，故障域需与平台组件隔离</td>
+<td>每 Agent 独立配额</td>
+</tr>
+<tr>
+<td><code>foundation</code></td>
+<td>记忆&#x2F;知识&#x2F;能力&#x2F;边缘框架</td>
+<td>有状态、共享故障域需可控</td>
+<td>保障型配额（不可被抢占）</td>
+</tr>
+<tr>
+<td><code>model-gateway</code></td>
+<td>LLM 网关 + 围栏 + 缓存</td>
+<td>全平台唯一模型出口，最高优先级</td>
+<td>保障型 + 优先级最高</td>
+</tr>
+<tr>
+<td><code>governance</code></td>
+<td>注册中心 + 管理门户</td>
+<td>低 QPS 高可用，与数据面隔离</td>
+<td>小额固定配额</td>
+</tr>
+<tr>
+<td><code>inference</code></td>
+<td>自建推理实例</td>
+<td>GPU 独占，调度策略特殊</td>
+<td>GPU 独占节点池</td>
+</tr>
+<tr>
+<td><code>observability</code></td>
+<td>采集与看板组件</td>
+<td>观测不应影响业务</td>
+<td>上限配额（防观测挤占业务）</td>
+</tr>
+</tbody></table>
+<h3 id="2-1-优先级与抢占"><a href="#2-1-优先级与抢占" class="headerlink" title="2.1 优先级与抢占"></a>2.1 优先级与抢占</h3><pre class="mermaid">flowchart TB
+    P1["PriorityClass: critical-1000&lt;br/&gt;LLM 网关 · 围栏 · Agent 网关"] --&gt; P2["PriorityClass: high-800&lt;br/&gt;Planner · 记忆 · 知识 · 能力中心"]
+    P2 --&gt; P3["PriorityClass: normal-500&lt;br/&gt;Cloud Agents · NLU"]
+    P3 --&gt; P4["PriorityClass: low-200&lt;br/&gt;管理门户 · 离线任务 · 观测组件"]</pre>
+
+
+<blockquote>
+<p><strong>围栏必须与网关同优先级</strong>。若围栏被驱逐而网关存活，则会出现”模型可调用但输出无管控”的状态——这比整体不可用更危险。二者必须同生共死（同 PriorityClass + PodDisruptionBudget 联动）。</p>
+</blockquote>
+<hr>
+<h2 id="3-弹性策略"><a href="#3-弹性策略" class="headerlink" title="3. 弹性策略"></a>3. 弹性策略</h2><h3 id="3-1-各组件-HPA-配置"><a href="#3-1-各组件-HPA-配置" class="headerlink" title="3.1 各组件 HPA 配置"></a>3.1 各组件 HPA 配置</h3><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>扩缩容指标</th>
+<th>副本范围</th>
+<th>特殊要求</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Agent 网关</td>
+<td>并发连接数 + CPU</td>
+<td>6–60</td>
+<td>优雅下线 60 s（长连接）</td>
+</tr>
+<tr>
+<td>语音网关</td>
+<td>连接数 + 带宽</td>
+<td>4–40</td>
+<td>会话粘性，优雅下线 120 s</td>
+</tr>
+<tr>
+<td>双向认证网关</td>
+<td>TLS 握手 QPS + CPU</td>
+<td>3–20</td>
+<td>—</td>
+</tr>
+<tr>
+<td>NLU</td>
+<td>并发流数 + GPU 利用率</td>
+<td>4–40</td>
+<td>GPU 节点池</td>
+</tr>
+<tr>
+<td>Planner</td>
+<td>QPS + P95 延迟</td>
+<td>6–100</td>
+<td>无状态，快速扩容（预热 &lt; 10 s）</td>
+</tr>
+<tr>
+<td>Cloud Agents</td>
+<td>各自 QPS + 队列长度</td>
+<td>2–30&#x2F;每 Agent</td>
+<td>独立配额，慢启动</td>
+</tr>
+<tr>
+<td>LLM 网关</td>
+<td>Token&#x2F;s + 上游并发</td>
+<td>6–60</td>
+<td>连接池预热</td>
+</tr>
+<tr>
+<td>围栏</td>
+<td>与网关同比例</td>
+<td>6–60</td>
+<td>与网关联动</td>
+</tr>
+<tr>
+<td>记忆服务</td>
+<td>QPS + 读延迟</td>
+<td>4–24</td>
+<td>读写分离</td>
+</tr>
+<tr>
+<td>知识服务</td>
+<td>检索 QPS</td>
+<td>4–30</td>
+<td>向量库连接池</td>
+</tr>
+<tr>
+<td>能力中心</td>
+<td>QPS</td>
+<td>3–12</td>
+<td>强缓存，负载低</td>
+</tr>
+<tr>
+<td>注册中心</td>
+<td>—</td>
+<td>3（固定）</td>
+<td>低 QPS，重可用性</td>
+</tr>
+<tr>
+<td>推理实例</td>
+<td>GPU 利用率 + 队列</td>
+<td>按容量规划</td>
+<td><strong>不宜频繁扩缩</strong>（加载耗时）</td>
+</tr>
+</tbody></table>
+<h3 id="3-2-扩容延迟的应对"><a href="#3-2-扩容延迟的应对" class="headerlink" title="3.2 扩容延迟的应对"></a>3.2 扩容延迟的应对</h3><pre class="mermaid">flowchart LR
+    S["流量突增"] --&gt; D1["检测延迟 30-60 s"]
+    D1 --&gt; D2["Pod 调度 10-30 s"]
+    D2 --&gt; D3["启动与预热 10-60 s"]
+    D3 --&gt; D4["总响应时间 1-2.5 min"]
+    D4 --&gt; R["期间靠什么撑?"]
+    R --&gt; R1["① 预留缓冲副本&lt;br/&gt;常态利用率控制在 60%"]
+    R --&gt; R2["② 限流排队&lt;br/&gt;而非直接拒绝"]
+    R --&gt; R3["③ 语义缓存&lt;br/&gt;突增流量常高度重复"]
+    R --&gt; R4["④ 定时预扩容&lt;br/&gt;早晚高峰前"]</pre>
+
+
+<blockquote>
+<p><strong>AI 平台的扩容比传统服务慢得多</strong>（模型加载、连接池预热）。因此必须依赖预留缓冲 + 定时预扩容，而不能完全依赖 HPA 被动响应。峰均比 4:1 的场景（见 01 文档 6.2）尤其需要定时策略。</p>
+</blockquote>
+<hr>
+<h2 id="4-GPU-调度与推理部署"><a href="#4-GPU-调度与推理部署" class="headerlink" title="4. GPU 调度与推理部署"></a>4. GPU 调度与推理部署</h2><h3 id="4-1-GPU-节点池划分"><a href="#4-1-GPU-节点池划分" class="headerlink" title="4.1 GPU 节点池划分"></a>4.1 GPU 节点池划分</h3><table>
+<thead>
+<tr>
+<th>节点池</th>
+<th>用途</th>
+<th>GPU 类型</th>
+<th>调度策略</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pool-llm-serving</code></td>
+<td>主力 LLM 推理</td>
+<td>高显存</td>
+<td>独占，不与其他负载混部</td>
+</tr>
+<tr>
+<td><code>pool-slm-serving</code></td>
+<td>小模型（分类&#x2F;抽取&#x2F;压缩）</td>
+<td>中等</td>
+<td>可多实例共享单卡（MPS&#x2F;MIG）</td>
+</tr>
+<tr>
+<td><code>pool-embedding</code></td>
+<td>Embedding + Reranker</td>
+<td>低显存或 CPU</td>
+<td>高密度部署</td>
+</tr>
+<tr>
+<td><code>pool-asr</code></td>
+<td>语音识别</td>
+<td>中等</td>
+<td>独立（流式，长连接）</td>
+</tr>
+<tr>
+<td><code>pool-training</code></td>
+<td>训练与蒸馏</td>
+<td>高显存多卡</td>
+<td>与在线推理<strong>物理隔离</strong></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>训练与在线推理必须物理隔离</strong>。共享节点池会导致训练任务抢占显存，引发在线推理 OOM。这是最常见且后果最严重的 GPU 调度错误。</p>
+</blockquote>
+<h3 id="4-2-推理服务部署要点"><a href="#4-2-推理服务部署要点" class="headerlink" title="4.2 推理服务部署要点"></a>4.2 推理服务部署要点</h3><table>
+<thead>
+<tr>
+<th>要点</th>
+<th>配置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>推理引擎</td>
+<td>vLLM &#x2F; SGLang（支持连续批处理与前缀缓存）</td>
+</tr>
+<tr>
+<td>连续批处理</td>
+<td>开启，最大批次按显存与延迟目标调优</td>
+</tr>
+<tr>
+<td>前缀缓存</td>
+<td><strong>必须开启</strong>（见 10 文档 6.4）</td>
+</tr>
+<tr>
+<td>最大序列长度</td>
+<td>显式限制，防单请求撑爆显存</td>
+</tr>
+<tr>
+<td>预热</td>
+<td>启动后跑若干预热请求再加入负载均衡</td>
+</tr>
+<tr>
+<td>探针</td>
+<td>readiness 需实际推理成功才通过（不仅端口存活）</td>
+</tr>
+<tr>
+<td>优雅下线</td>
+<td>等待在途请求完成（最长 60 s）</td>
+</tr>
+<tr>
+<td>显存监控</td>
+<td>显存使用率告警阈值 85%</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="5-存储部署"><a href="#5-存储部署" class="headerlink" title="5. 存储部署"></a>5. 存储部署</h2><table>
+<thead>
+<tr>
+<th>存储</th>
+<th>部署形态</th>
+<th>高可用</th>
+<th>备份</th>
+<th>特殊要求</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PostgreSQL</td>
+<td>主从 + 只读副本</td>
+<td>自动故障切换</td>
+<td>每日全备 + WAL 归档</td>
+<td>记忆事件日志表需长期保留</td>
+</tr>
+<tr>
+<td>向量库</td>
+<td>集群多副本</td>
+<td>副本冗余</td>
+<td>索引可重建（保留源数据）</td>
+<td><strong>索引重建耗时长，需容量规划</strong></td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>主从 + Sentinel&#x2F;Cluster</td>
+<td>自动切换</td>
+<td>RDB + AOF</td>
+<td>会话丢失影响可接受（降级为新会话）</td>
+</tr>
+<tr>
+<td>Kafka</td>
+<td>多副本（ISR ≥2）</td>
+<td>Broker 冗余</td>
+<td>—</td>
+<td>分区键 &#x3D; trace_id</td>
+</tr>
+<tr>
+<td>全文索引</td>
+<td>集群多副本</td>
+<td>副本冗余</td>
+<td>快照</td>
+<td>与向量库同步更新</td>
+</tr>
+<tr>
+<td>对象存储</td>
+<td>企业级</td>
+<td>多副本&#x2F;跨区</td>
+<td>版本化</td>
+<td>生命周期策略（到期清除）</td>
+</tr>
+</tbody></table>
+<h3 id="5-1-向量库容量规划"><a href="#5-1-向量库容量规划" class="headerlink" title="5.1 向量库容量规划"></a>5.1 向量库容量规划</h3><table>
+<thead>
+<tr>
+<th>用途</th>
+<th>规模估算</th>
+<th>向量维度</th>
+<th>索引类型</th>
+<th>内存估算</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>知识库</td>
+<td>百万级 chunk</td>
+<td>768</td>
+<td>HNSW</td>
+<td>约 6–10 GB（含图结构）</td>
+</tr>
+<tr>
+<td>长期记忆</td>
+<td>千万级条目（全用户）</td>
+<td>768</td>
+<td>HNSW + 分片</td>
+<td>需分片</td>
+</tr>
+<tr>
+<td>语义缓存</td>
+<td>百万级问答</td>
+<td>768</td>
+<td>HNSW + TTL</td>
+<td>约 6–10 GB</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>向量库的隐性成本是索引重建</strong>。更换 Embedding 模型需全量重建，百万级 chunk 的重建可能耗时数小时且期间双份存储。容量规划必须预留重建所需的双份空间（见 09 文档 8.1 影子索引流程）。</p>
+</blockquote>
+<hr>
+<h2 id="6-多区域部署"><a href="#6-多区域部署" class="headerlink" title="6. 多区域部署"></a>6. 多区域部署</h2><pre class="mermaid">flowchart TB
+    subgraph GLOBAL["全局"]
+        DNS["全局流量调度&lt;br/&gt;就近接入"]
+        REGGLOBAL["注册中心（全局主）"]
+        MREGG["模型注册中心（全局）"]
+    end
+    subgraph R1["区域 A（主）"]
+        A1["网关集群"]
+        A2["编排与基础能力"]
+        A3["模型网关 + 推理"]
+        A4["存储（主）"]
+    end
+    subgraph R2["区域 B"]
+        B1["网关集群"]
+        B2["编排与基础能力"]
+        B3["模型网关 + 推理"]
+        B4["存储（区域副本）"]
+    end
+    DNS --&gt; A1 &amp; B1
+    REGGLOBAL -.-&gt;|"能力清单同步"| A2 &amp; B2
+    MREGG -.-&gt;|"模型版本同步"| A3 &amp; B3
+    A4 &lt;-.-&gt;|"记忆/知识异步复制"| B4</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>数据</th>
+<th>多区域策略</th>
+<th>一致性</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>能力清单 &#x2F; 注册元数据</td>
+<td>全局主 + 各区只读副本</td>
+<td>最终一致（秒级）</td>
+</tr>
+<tr>
+<td>知识库</td>
+<td>各区全量副本</td>
+<td>最终一致（分钟级）</td>
+</tr>
+<tr>
+<td>长期记忆</td>
+<td>按用户归属区域主写 + 跨区异步复制</td>
+<td>最终一致</td>
+</tr>
+<tr>
+<td>短期记忆 &#x2F; 会话</td>
+<td>区域本地，不跨区</td>
+<td>无需一致</td>
+</tr>
+<tr>
+<td>语义缓存</td>
+<td>区域本地独立</td>
+<td>无需一致</td>
+</tr>
+<tr>
+<td>埋点数据</td>
+<td>各区采集 → 汇总到统一数仓</td>
+<td>最终一致</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>用户归属区域主写</strong>避免了跨区写冲突。若用户跨区（长途行驶跨地域），会话本身在新区域本地完成，记忆异步同步——短暂的记忆滞后对体验影响可接受，远优于引入跨区强一致带来的延迟。</p>
+</blockquote>
+<hr>
+<h2 id="7-端侧部署与下发"><a href="#7-端侧部署与下发" class="headerlink" title="7. 端侧部署与下发"></a>7. 端侧部署与下发</h2><h3 id="7-1-端侧制品类型"><a href="#7-1-端侧制品类型" class="headerlink" title="7.1 端侧制品类型"></a>7.1 端侧制品类型</h3><table>
+<thead>
+<tr>
+<th>制品</th>
+<th>大小量级</th>
+<th>下发通道</th>
+<th>更新频率</th>
+<th>回滚</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Agent 运行时</td>
+<td>数十 MB</td>
+<td>系统级升级通道</td>
+<td>季度</td>
+<td>系统回滚</td>
+</tr>
+<tr>
+<td>Agent manifest &#x2F; 配置</td>
+<td>KB 级</td>
+<td>配置下发</td>
+<td>周</td>
+<td>本地切换（秒级）</td>
+</tr>
+<tr>
+<td>能力清单</td>
+<td>KB 级</td>
+<td>配置下发</td>
+<td>周</td>
+<td>本地切换</td>
+</tr>
+<tr>
+<td>落点决策策略</td>
+<td>KB 级</td>
+<td>配置下发</td>
+<td>周</td>
+<td>本地切换</td>
+</tr>
+<tr>
+<td>端侧知识包</td>
+<td>数 MB~数十 MB</td>
+<td>差分下发</td>
+<td>月</td>
+<td>保留上版本</td>
+</tr>
+<tr>
+<td>端侧模型（SLM）</td>
+<td>数百 MB~GB</td>
+<td>差分下发</td>
+<td>季度</td>
+<td>保留上版本</td>
+</tr>
+<tr>
+<td>安全策略</td>
+<td>KB 级</td>
+<td>配置下发（优先级最高）</td>
+<td>按需</td>
+<td>本地切换</td>
+</tr>
+</tbody></table>
+<h3 id="7-2-下发流程"><a href="#7-2-下发流程" class="headerlink" title="7.2 下发流程"></a>7.2 下发流程</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant EAF as 边缘 Agent 框架
+    participant MG as 双向认证网关
+    participant SA as System Agent
+    participant ST as 本地存储
+    EAF-&gt;&gt;EAF: 按算力等级编译 + 生成差分 + 签名
+    EAF-&gt;&gt;MG: 灰度设备集下发通知
+    MG-&gt;&gt;SA: 版本通知（含差分包地址与签名）
+    SA-&gt;&gt;SA: 条件评估（WiFi优先 / 停车中 / 电量充足 / 存储充足）
+    SA-&gt;&gt;MG: 请求下载（分片，可续传）
+    MG--&gt;&gt;SA: 差分包
+    SA-&gt;&gt;SA: 验签 + 完整性校验 + 与本地基线合并
+    SA-&gt;&gt;ST: 写入新版本（不覆盖旧版本）
+    SA-&gt;&gt;SA: 原子切换（重启运行时或热加载）
+    SA-&gt;&gt;SA: 自检（跑本地冒烟用例）
+    alt 自检通过
+        SA-&gt;&gt;MG: 上报生效成功
+    else 自检失败
+        SA-&gt;&gt;SA: 本地回滚至旧版本
+        SA-&gt;&gt;MG: 上报失败 + 诊断信息
+        MG-&gt;&gt;EAF: 灰度异常计数
+        EAF-&gt;&gt;EAF: 异常率超阈值 → 暂停灰度并告警
+    end</pre>
+
+
+<h3 id="7-3-端侧下发的六条铁律"><a href="#7-3-端侧下发的六条铁律" class="headerlink" title="7.3 端侧下发的六条铁律"></a>7.3 端侧下发的六条铁律</h3><table>
+<thead>
+<tr>
+<th>#</th>
+<th>铁律</th>
+<th>违反后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>先下载校验完整再切换（原子切换）</td>
+<td>半新半旧状态，行为不可预测</td>
+</tr>
+<tr>
+<td>2</td>
+<td>必须验签</td>
+<td>供应链攻击入口</td>
+</tr>
+<tr>
+<td>3</td>
+<td>保留上一版本，回滚不依赖网络</td>
+<td>故障后无法自救</td>
+</tr>
+<tr>
+<td>4</td>
+<td>切换后自检（冒烟用例）</td>
+<td>问题上线后才被用户发现</td>
+</tr>
+<tr>
+<td>5</td>
+<td>灰度分批 + 异常自动暂停</td>
+<td>一次全量事故</td>
+</tr>
+<tr>
+<td>6</td>
+<td>大包避开行驶中与移动网络</td>
+<td>流量成本与体验问题</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="8-发布与回滚"><a href="#8-发布与回滚" class="headerlink" title="8. 发布与回滚"></a>8. 发布与回滚</h2><h3 id="8-1-发布策略矩阵"><a href="#8-1-发布策略矩阵" class="headerlink" title="8.1 发布策略矩阵"></a>8.1 发布策略矩阵</h3><table>
+<thead>
+<tr>
+<th>变更</th>
+<th>策略</th>
+<th>灰度粒度</th>
+<th>回滚方式</th>
+<th>回滚时间</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>云端服务代码</td>
+<td>滚动更新</td>
+<td>副本比例</td>
+<td>镜像回滚</td>
+<td>3–5 min</td>
+</tr>
+<tr>
+<td>Agent 网关</td>
+<td>滚动 + 优雅下线</td>
+<td>副本比例</td>
+<td>镜像回滚</td>
+<td>5–10 min</td>
+</tr>
+<tr>
+<td>Prompt &#x2F; 检索参数 &#x2F; Skill 描述</td>
+<td>配置发布</td>
+<td>流量比例</td>
+<td>配置回滚</td>
+<td><strong>秒级</strong></td>
+</tr>
+<tr>
+<td>模型版本</td>
+<td>网关权重</td>
+<td>流量比例</td>
+<td>权重调零</td>
+<td><strong>秒级</strong></td>
+</tr>
+<tr>
+<td>知识内容</td>
+<td>知识版本</td>
+<td>知识版本灰度</td>
+<td>版本回滚 + 缓存失效</td>
+<td>分钟级</td>
+</tr>
+<tr>
+<td>围栏策略</td>
+<td>配置发布</td>
+<td><strong>可全量</strong></td>
+<td>配置回滚</td>
+<td>秒级</td>
+</tr>
+<tr>
+<td>端侧配置</td>
+<td>分批设备</td>
+<td>设备集</td>
+<td>本地切换</td>
+<td>秒级（端侧）</td>
+</tr>
+<tr>
+<td>端侧模型&#x2F;知识包</td>
+<td>分批设备</td>
+<td>设备集</td>
+<td>本地保留版本</td>
+<td>分钟级（端侧）</td>
+</tr>
+<tr>
+<td>数据库变更</td>
+<td>向后兼容两阶段</td>
+<td>—</td>
+<td>需正向修复</td>
+<td>慎重</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>配置类变更能做到秒级回滚，是 AI 平台最重要的运维能力</strong>。因为大部分效果问题来自配置（提示词、参数、模型选择），秒级回滚意味着故障影响可控制在分钟内。这也是为什么这些变更必须配置化而非硬编码。</p>
+</blockquote>
+<h3 id="8-2-数据库变更的两阶段模式"><a href="#8-2-数据库变更的两阶段模式" class="headerlink" title="8.2 数据库变更的两阶段模式"></a>8.2 数据库变更的两阶段模式</h3><pre class="mermaid">flowchart LR
+    P1["阶段1：加字段（可空）&lt;br/&gt;新旧代码都能跑"] --&gt; P2["部署新代码&lt;br/&gt;双写新旧字段"]
+    P2 --&gt; P3["回填历史数据"]
+    P3 --&gt; P4["切换读取到新字段"]
+    P4 --&gt; P5["阶段2：停止写旧字段"]
+    P5 --&gt; P6["删除旧字段（可延后数周）"]</pre>
+
+
+<hr>
+<h2 id="9-灾备与演练"><a href="#9-灾备与演练" class="headerlink" title="9. 灾备与演练"></a>9. 灾备与演练</h2><h3 id="9-1-故障场景与-RTO-RPO-目标（推断设计）"><a href="#9-1-故障场景与-RTO-RPO-目标（推断设计）" class="headerlink" title="9.1 故障场景与 RTO&#x2F;RPO 目标（推断设计）"></a>9.1 故障场景与 RTO&#x2F;RPO 目标（推断设计）</h3><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>RTO</th>
+<th>RPO</th>
+<th>应对</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>单 Pod 故障</td>
+<td>&lt; 30 s</td>
+<td>0</td>
+<td>K8s 自动重建</td>
+</tr>
+<tr>
+<td>单可用区故障</td>
+<td>&lt; 5 min</td>
+<td>0</td>
+<td>多 AZ 部署，流量切换</td>
+</tr>
+<tr>
+<td>单区域故障</td>
+<td>&lt; 30 min</td>
+<td>&lt; 5 min</td>
+<td>跨区切换（DNS + 存储副本提升）</td>
+</tr>
+<tr>
+<td>外部模型供应商故障</td>
+<td>&lt; 1 min</td>
+<td>0</td>
+<td>Fallback 链（见 10 文档 4.1）</td>
+</tr>
+<tr>
+<td>向量库故障</td>
+<td>&lt; 10 min</td>
+<td>索引可重建</td>
+<td>副本切换；降级跳过 RAG</td>
+</tr>
+<tr>
+<td>PostgreSQL 主库故障</td>
+<td>&lt; 2 min</td>
+<td>&lt; 1 min</td>
+<td>自动故障切换</td>
+</tr>
+<tr>
+<td>Redis 故障</td>
+<td>&lt; 1 min</td>
+<td>会话丢失可接受</td>
+<td>降级为无状态单轮</td>
+</tr>
+<tr>
+<td>Kafka 故障</td>
+<td>&lt; 5 min</td>
+<td>埋点可缓冲</td>
+<td>本地缓冲 + 恢复后补传</td>
+</tr>
+<tr>
+<td>端云网络中断</td>
+<td>0（端侧接管）</td>
+<td>待同步数据保留</td>
+<td>端侧离线闭环</td>
+</tr>
+</tbody></table>
+<h3 id="9-2-必做的故障演练"><a href="#9-2-必做的故障演练" class="headerlink" title="9.2 必做的故障演练"></a>9.2 必做的故障演练</h3><table>
+<thead>
+<tr>
+<th>演练</th>
+<th>频率</th>
+<th>验证目标</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>主模型供应商全故障</td>
+<td>月度</td>
+<td>Fallback 链是否真的通到端侧兜底</td>
+</tr>
+<tr>
+<td>围栏服务不可用</td>
+<td>月度</td>
+<td>是否正确 fail-closed（拒绝输出而非放行）</td>
+</tr>
+<tr>
+<td>Planner 全故障</td>
+<td>季度</td>
+<td>规则兜底路由是否生效</td>
+</tr>
+<tr>
+<td>记忆&#x2F;知识服务熔断</td>
+<td>月度</td>
+<td>降级后是否仍可用且用户可感知</td>
+</tr>
+<tr>
+<td>断网 30 分钟</td>
+<td>月度</td>
+<td>端侧闭环 + 恢复后同步是否正确</td>
+</tr>
+<tr>
+<td>单可用区断电</td>
+<td>季度</td>
+<td>流量切换与容量是否足够</td>
+</tr>
+<tr>
+<td>证书批量过期模拟</td>
+<td>半年</td>
+<td>轮转与宽限期机制</td>
+</tr>
+<tr>
+<td>Agent 死循环</td>
+<td>月度</td>
+<td>三重预算与成本熔断是否触发</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>最重要的演练是”围栏不可用”</strong>。因为它验证的是一个反直觉的行为：系统应当拒绝服务而非降级放行。若演练发现系统”贴心地”跳过了围栏继续输出，那就是一个严重的安全缺陷。</p>
+</blockquote>
+<hr>
+<h2 id="10-运维手册要点"><a href="#10-运维手册要点" class="headerlink" title="10. 运维手册要点"></a>10. 运维手册要点</h2><h3 id="10-1-关键运维原则"><a href="#10-1-关键运维原则" class="headerlink" title="10.1 关键运维原则"></a>10.1 关键运维原则</h3><table>
+<thead>
+<tr>
+<th>#</th>
+<th>原则</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>安全组件不可降级</strong></td>
+<td>围栏、认证故障时拒绝服务，不得为可用性关闭</td>
+</tr>
+<tr>
+<td>2</td>
+<td>性能组件可降级</td>
+<td>缓存、知识、记忆、能力中心可熔断降级</td>
+</tr>
+<tr>
+<td>3</td>
+<td>降级必须可感知</td>
+<td>降级事件告警 + 计入 SLO + 用户明确告知</td>
+</tr>
+<tr>
+<td>4</td>
+<td>配置优先于代码</td>
+<td>能配置化的绝不硬编码（为了秒级回滚）</td>
+</tr>
+<tr>
+<td>5</td>
+<td>端侧 fail-closed</td>
+<td>端侧策略不可达时收紧而非放开</td>
+</tr>
+<tr>
+<td>6</td>
+<td>变更必须有门禁</td>
+<td>包括提示词、知识、参数等非代码变更</td>
+</tr>
+<tr>
+<td>7</td>
+<td>长连接优雅下线</td>
+<td>停止接新 → 等存量 → 超时强关并发错误事件</td>
+</tr>
+<tr>
+<td>8</td>
+<td>训练与推理隔离</td>
+<td>物理隔离 GPU 节点池</td>
+</tr>
+<tr>
+<td>9</td>
+<td>成本熔断常开</td>
+<td>单会话成本上限硬约束</td>
+</tr>
+<tr>
+<td>10</td>
+<td>所有告警带 trace 样例</td>
+<td>便于立即排查</td>
+</tr>
+</tbody></table>
+<h3 id="10-2-常见故障速查"><a href="#10-2-常见故障速查" class="headerlink" title="10.2 常见故障速查"></a>10.2 常见故障速查</h3><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>优先检查</th>
+<th>常见根因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>首字延迟突增</td>
+<td>各 Span 耗时分布</td>
+<td>检索变慢 &#x2F; 模型供应商劣化 &#x2F; 缓存命中率下降</td>
+</tr>
+<tr>
+<td>成本突增</td>
+<td>Top 消耗方 + <code>budget_exhausted</code></td>
+<td>Agent 循环 &#x2F; 缓存失效 &#x2F; 上下文膨胀</td>
+</tr>
+<tr>
+<td>回答质量下降但无技术告警</td>
+<td>最近的配置变更（prompt&#x2F;模型&#x2F;知识版本）</td>
+<td>变更未走门禁</td>
+</tr>
+<tr>
+<td>大量用户认证失败</td>
+<td>证书到期数 + 吊销列表</td>
+<td>证书批量过期</td>
+</tr>
+<tr>
+<td>缓存命中率骤降</td>
+<td>知识版本 &#x2F; Embedding 版本变更</td>
+<td>版本变更触发缓存全失效（预期行为，需容量准备）</td>
+</tr>
+<tr>
+<td>某 Agent 全部失败</td>
+<td>该 Agent 依赖的工具健康度</td>
+<td>MCP Server 故障 &#x2F; 权限变更</td>
+</tr>
+<tr>
+<td>端侧升级失败率高</td>
+<td>自检失败原因分布</td>
+<td>差分包与基线不匹配 &#x2F; 存储不足</td>
+</tr>
+<tr>
+<td>记忆答错</td>
+<td>记忆影响分析视图</td>
+<td>记忆污染 → 回溯干预止损</td>
+</tr>
+<tr>
+<td>SSE 频繁断连</td>
+<td>网关优雅下线日志 &#x2F; 客户端重连</td>
+<td>网关重启 &#x2F; 中间设备超时</td>
+</tr>
+<tr>
+<td>指标为零但有流量</td>
+<td>死信队列 + Trace 完整性</td>
+<td>埋点 Schema 不合规</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="11-环境与配置管理"><a href="#11-环境与配置管理" class="headerlink" title="11. 环境与配置管理"></a>11. 环境与配置管理</h2><table>
+<thead>
+<tr>
+<th>环境</th>
+<th>用途</th>
+<th>数据</th>
+<th>模型</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本地开发</td>
+<td>单机调试</td>
+<td>Mock &#x2F; 少量样例</td>
+<td>小模型或 Mock</td>
+</tr>
+<tr>
+<td>集成测试</td>
+<td>联调</td>
+<td>脱敏样本</td>
+<td>真实模型（低配额）</td>
+</tr>
+<tr>
+<td>预发（Staging）</td>
+<td>发布前验证</td>
+<td>生产脱敏副本</td>
+<td>真实模型</td>
+</tr>
+<tr>
+<td>影子（Shadow）</td>
+<td>真实流量对比</td>
+<td><strong>生产真实流量（只读复制）</strong></td>
+<td>待验证模型</td>
+</tr>
+<tr>
+<td>生产</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th>配置管理要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>配置与代码分离</td>
+<td>配置变更不需重新构建镜像</td>
+</tr>
+<tr>
+<td>环境差异最小化</td>
+<td>仅连接串与配额不同，逻辑配置一致</td>
+</tr>
+<tr>
+<td>敏感配置托管</td>
+<td>密钥进密钥管理系统，不进配置文件与镜像</td>
+</tr>
+<tr>
+<td>配置变更审计</td>
+<td>谁在何时改了什么，可追溯与回滚</td>
+</tr>
+<tr>
+<td>影子环境</td>
+<td>真实流量复制但不返回用户（模型上线验证必需）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="12-风险与治理"><a href="#12-风险与治理" class="headerlink" title="12. 风险与治理"></a>12. 风险与治理</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>影响</th>
+<th>治理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>训练任务抢占推理 GPU</strong></td>
+<td>在线推理 OOM</td>
+<td>物理隔离节点池 + 资源配额</td>
+</tr>
+<tr>
+<td>围栏被驱逐而网关存活</td>
+<td>输出无管控</td>
+<td>同 PriorityClass + PDB 联动</td>
+</tr>
+<tr>
+<td>扩容慢导致高峰不可用</td>
+<td>用户不可用</td>
+<td>预留缓冲 + 定时预扩容 + 限流排队</td>
+</tr>
+<tr>
+<td>粗暴重启中断长连接</td>
+<td>大量回答中断</td>
+<td>优雅下线（60–120 s）</td>
+</tr>
+<tr>
+<td>向量库索引重建无容量</td>
+<td>无法升级 Embedding</td>
+<td>预留双份空间</td>
+</tr>
+<tr>
+<td>端侧下发半新半旧</td>
+<td>行为不可预测</td>
+<td>原子切换 + 自检 + 回滚</td>
+</tr>
+<tr>
+<td>端侧下发未验签</td>
+<td>供应链攻击</td>
+<td>强制签名校验</td>
+</tr>
+<tr>
+<td>数据库变更不兼容</td>
+<td>发布期间报错</td>
+<td>两阶段变更</td>
+</tr>
+<tr>
+<td>观测组件挤占业务资源</td>
+<td>业务受影响</td>
+<td>观测 namespace 上限配额 + 低优先级</td>
+</tr>
+<tr>
+<td>灾备从未演练</td>
+<td>真实故障时方案失效</td>
+<td>月度&#x2F;季度演练清单（9.2）</td>
+</tr>
+<tr>
+<td>配置硬编码</td>
+<td>无法秒级回滚</td>
+<td>配置化原则（10.1 第 4 条）</td>
+</tr>
+<tr>
+<td>跨区强一致引入高延迟</td>
+<td>体验劣化</td>
+<td>用户归属区域主写 + 异步复制</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="13-演进路线"><a href="#13-演进路线" class="headerlink" title="13. 演进路线"></a>13. 演进路线</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>部署运维演进</th>
+<th>退出准则</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>阶段一</strong></td>
+<td>命名空间与优先级划分；围栏与网关联动；配置化改造（提示词&#x2F;参数&#x2F;模型权重）；优雅下线；训练推理隔离；基础灾备</td>
+<td>配置类变更可秒级回滚；无 GPU 抢占</td>
+</tr>
+<tr>
+<td><strong>阶段二</strong></td>
+<td>定时预扩容 + 缓冲副本；影子环境；端侧下发六铁律落地（含自检与自动暂停）；月度演练清单执行；多 AZ 完备</td>
+<td>高峰无扩容不及 P1；端侧升级失败率 ≤1%</td>
+</tr>
+<tr>
+<td><strong>阶段三</strong></td>
+<td>多区域就近接入与故障切换；向量库升级流程标准化（影子索引 + 双份容量）；混沌工程常态化；容量与成本自动规划</td>
+<td>区域级故障 RTO ≤30 min；演练全部通过</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端数据平台架构 · <strong>下一篇</strong>：云管端 AI Agent 最佳实践</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/03/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-17-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">云管端 AI Agent 最佳实践</a></h3>
+        <p>把前 16 篇的分析结论收敛为可执行的落地路径、技术栈选择、反模式清单与优先级排序。</p>
+        <a class="btn primary" href="/2026/09/03/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-17-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/08/18/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-15-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端数据平台架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 14 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#16-%C2%B7-%E9%83%A8%E7%BD%B2%E4%B8%8E%E8%BF%90%E7%BB%B4%EF%BC%88Deployment%EF%BC%89" data-toc-target="16-·-部署与运维（Deployment）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">16 · 部署与运维（Deployment）</span></a><a class="toc-level-2" href="#1-%E9%83%A8%E7%BD%B2%E6%80%BB%E6%8B%93%E6%89%91" data-toc-target="1-部署总拓扑"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 部署总拓扑</span></a><a class="toc-level-2" href="#2-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E5%88%92%E5%88%86" data-toc-target="2-命名空间划分"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 命名空间划分</span></a><a class="toc-level-3" href="#2-1-%E4%BC%98%E5%85%88%E7%BA%A7%E4%B8%8E%E6%8A%A2%E5%8D%A0" data-toc-target="2-1-优先级与抢占"><span class="toc-text">2.1 优先级与抢占</span></a><a class="toc-level-2" href="#3-%E5%BC%B9%E6%80%A7%E7%AD%96%E7%95%A5" data-toc-target="3-弹性策略"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 弹性策略</span></a><a class="toc-level-3" href="#3-1-%E5%90%84%E7%BB%84%E4%BB%B6-HPA-%E9%85%8D%E7%BD%AE" data-toc-target="3-1-各组件-HPA-配置"><span class="toc-text">3.1 各组件 HPA 配置</span></a><a class="toc-level-3" href="#3-2-%E6%89%A9%E5%AE%B9%E5%BB%B6%E8%BF%9F%E7%9A%84%E5%BA%94%E5%AF%B9" data-toc-target="3-2-扩容延迟的应对"><span class="toc-text">3.2 扩容延迟的应对</span></a><a class="toc-level-2" href="#4-GPU-%E8%B0%83%E5%BA%A6%E4%B8%8E%E6%8E%A8%E7%90%86%E9%83%A8%E7%BD%B2" data-toc-target="4-GPU-调度与推理部署"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. GPU 调度与推理部署</span></a><a class="toc-level-3" href="#4-1-GPU-%E8%8A%82%E7%82%B9%E6%B1%A0%E5%88%92%E5%88%86" data-toc-target="4-1-GPU-节点池划分"><span class="toc-text">4.1 GPU 节点池划分</span></a><a class="toc-level-3" href="#4-2-%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E9%83%A8%E7%BD%B2%E8%A6%81%E7%82%B9" data-toc-target="4-2-推理服务部署要点"><span class="toc-text">4.2 推理服务部署要点</span></a><a class="toc-level-2" href="#5-%E5%AD%98%E5%82%A8%E9%83%A8%E7%BD%B2" data-toc-target="5-存储部署"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. 存储部署</span></a><a class="toc-level-3" href="#5-1-%E5%90%91%E9%87%8F%E5%BA%93%E5%AE%B9%E9%87%8F%E8%A7%84%E5%88%92" data-toc-target="5-1-向量库容量规划"><span class="toc-text">5.1 向量库容量规划</span></a><a class="toc-level-2" href="#6-%E5%A4%9A%E5%8C%BA%E5%9F%9F%E9%83%A8%E7%BD%B2" data-toc-target="6-多区域部署"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. 多区域部署</span></a><a class="toc-level-2" href="#7-%E7%AB%AF%E4%BE%A7%E9%83%A8%E7%BD%B2%E4%B8%8E%E4%B8%8B%E5%8F%91" data-toc-target="7-端侧部署与下发"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 端侧部署与下发</span></a><a class="toc-level-3" href="#7-1-%E7%AB%AF%E4%BE%A7%E5%88%B6%E5%93%81%E7%B1%BB%E5%9E%8B" data-toc-target="7-1-端侧制品类型"><span class="toc-text">7.1 端侧制品类型</span></a><a class="toc-level-3" href="#7-2-%E4%B8%8B%E5%8F%91%E6%B5%81%E7%A8%8B" data-toc-target="7-2-下发流程"><span class="toc-text">7.2 下发流程</span></a><a class="toc-level-3" href="#7-3-%E7%AB%AF%E4%BE%A7%E4%B8%8B%E5%8F%91%E7%9A%84%E5%85%AD%E6%9D%A1%E9%93%81%E5%BE%8B" data-toc-target="7-3-端侧下发的六条铁律"><span class="toc-text">7.3 端侧下发的六条铁律</span></a><a class="toc-level-2" href="#8-%E5%8F%91%E5%B8%83%E4%B8%8E%E5%9B%9E%E6%BB%9A" data-toc-target="8-发布与回滚"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 发布与回滚</span></a><a class="toc-level-3" href="#8-1-%E5%8F%91%E5%B8%83%E7%AD%96%E7%95%A5%E7%9F%A9%E9%98%B5" data-toc-target="8-1-发布策略矩阵"><span class="toc-text">8.1 发布策略矩阵</span></a><a class="toc-level-3" href="#8-2-%E6%95%B0%E6%8D%AE%E5%BA%93%E5%8F%98%E6%9B%B4%E7%9A%84%E4%B8%A4%E9%98%B6%E6%AE%B5%E6%A8%A1%E5%BC%8F" data-toc-target="8-2-数据库变更的两阶段模式"><span class="toc-text">8.2 数据库变更的两阶段模式</span></a><a class="toc-level-2" href="#9-%E7%81%BE%E5%A4%87%E4%B8%8E%E6%BC%94%E7%BB%83" data-toc-target="9-灾备与演练"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 灾备与演练</span></a><a class="toc-level-3" href="#9-1-%E6%95%85%E9%9A%9C%E5%9C%BA%E6%99%AF%E4%B8%8E-RTO-RPO-%E7%9B%AE%E6%A0%87%EF%BC%88%E6%8E%A8%E6%96%AD%E8%AE%BE%E8%AE%A1%EF%BC%89" data-toc-target="9-1-故障场景与-RTO-RPO-目标（推断设计）"><span class="toc-text">9.1 故障场景与 RTO/RPO 目标（推断设计）</span></a><a class="toc-level-3" href="#9-2-%E5%BF%85%E5%81%9A%E7%9A%84%E6%95%85%E9%9A%9C%E6%BC%94%E7%BB%83" data-toc-target="9-2-必做的故障演练"><span class="toc-text">9.2 必做的故障演练</span></a><a class="toc-level-2" href="#10-%E8%BF%90%E7%BB%B4%E6%89%8B%E5%86%8C%E8%A6%81%E7%82%B9" data-toc-target="10-运维手册要点"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 运维手册要点</span></a><a class="toc-level-3" href="#10-1-%E5%85%B3%E9%94%AE%E8%BF%90%E7%BB%B4%E5%8E%9F%E5%88%99" data-toc-target="10-1-关键运维原则"><span class="toc-text">10.1 关键运维原则</span></a><a class="toc-level-3" href="#10-2-%E5%B8%B8%E8%A7%81%E6%95%85%E9%9A%9C%E9%80%9F%E6%9F%A5" data-toc-target="10-2-常见故障速查"><span class="toc-text">10.2 常见故障速查</span></a><a class="toc-level-2" href="#11-%E7%8E%AF%E5%A2%83%E4%B8%8E%E9%85%8D%E7%BD%AE%E7%AE%A1%E7%90%86" data-toc-target="11-环境与配置管理"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 环境与配置管理</span></a><a class="toc-level-2" href="#12-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="12-风险与治理"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">12. 风险与治理</span></a><a class="toc-level-2" href="#13-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="13-演进路线"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">13. 演进路线</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 85%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">17 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#16-%C2%B7-%E9%83%A8%E7%BD%B2%E4%B8%8E%E8%BF%90%E7%BB%B4%EF%BC%88Deployment%EF%BC%89" data-toc-target="16-·-部署与运维（Deployment）" data-title="01 · 16 · 部署与运维（Deployment）" aria-label="16 · 部署与运维（Deployment）"></a><a class="toc-strip__dot" href="#1-%E9%83%A8%E7%BD%B2%E6%80%BB%E6%8B%93%E6%89%91" data-toc-target="1-部署总拓扑" data-title="02 · 1. 部署总拓扑" aria-label="1. 部署总拓扑"></a><a class="toc-strip__dot" href="#2-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E5%88%92%E5%88%86" data-toc-target="2-命名空间划分" data-title="03 · 2. 命名空间划分" aria-label="2. 命名空间划分"></a><a class="toc-strip__dot" href="#3-%E5%BC%B9%E6%80%A7%E7%AD%96%E7%95%A5" data-toc-target="3-弹性策略" data-title="04 · 3. 弹性策略" aria-label="3. 弹性策略"></a><a class="toc-strip__dot" href="#4-GPU-%E8%B0%83%E5%BA%A6%E4%B8%8E%E6%8E%A8%E7%90%86%E9%83%A8%E7%BD%B2" data-toc-target="4-GPU-调度与推理部署" data-title="05 · 4. GPU 调度与推理部署" aria-label="4. GPU 调度与推理部署"></a><a class="toc-strip__dot" href="#5-%E5%AD%98%E5%82%A8%E9%83%A8%E7%BD%B2" data-toc-target="5-存储部署" data-title="06 · 5. 存储部署" aria-label="5. 存储部署"></a><a class="toc-strip__dot" href="#6-%E5%A4%9A%E5%8C%BA%E5%9F%9F%E9%83%A8%E7%BD%B2" data-toc-target="6-多区域部署" data-title="07 · 6. 多区域部署" aria-label="6. 多区域部署"></a><a class="toc-strip__dot" href="#7-%E7%AB%AF%E4%BE%A7%E9%83%A8%E7%BD%B2%E4%B8%8E%E4%B8%8B%E5%8F%91" data-toc-target="7-端侧部署与下发" data-title="08 · 7. 端侧部署与下发" aria-label="7. 端侧部署与下发"></a><a class="toc-strip__dot" href="#8-%E5%8F%91%E5%B8%83%E4%B8%8E%E5%9B%9E%E6%BB%9A" data-toc-target="8-发布与回滚" data-title="09 · 8. 发布与回滚" aria-label="8. 发布与回滚"></a><a class="toc-strip__dot" href="#9-%E7%81%BE%E5%A4%87%E4%B8%8E%E6%BC%94%E7%BB%83" data-toc-target="9-灾备与演练" data-title="10 · 9. 灾备与演练" aria-label="9. 灾备与演练"></a><a class="toc-strip__dot" href="#10-%E8%BF%90%E7%BB%B4%E6%89%8B%E5%86%8C%E8%A6%81%E7%82%B9" data-toc-target="10-运维手册要点" data-title="11 · 10. 运维手册要点" aria-label="10. 运维手册要点"></a><a class="toc-strip__dot" href="#11-%E7%8E%AF%E5%A2%83%E4%B8%8E%E9%85%8D%E7%BD%AE%E7%AE%A1%E7%90%86" data-toc-target="11-环境与配置管理" data-title="12 · 11. 环境与配置管理" aria-label="11. 环境与配置管理"></a><a class="toc-strip__dot" href="#12-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="12-风险与治理" data-title="13 · 12. 风险与治理" aria-label="12. 风险与治理"></a><a class="toc-strip__dot" href="#13-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="13-演进路线" data-title="14 · 13. 演进路线" aria-label="13. 演进路线"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-16-部署架构","title":"云管端部署架构","url":"/2026/08/27/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-16-%E9%83%A8%E7%BD%B2%E6%9E%B6%E6%9E%84/","path":"cloud-pipe-edge-agent-platform","index":16,"total":20,"next":{"title":"云管端 AI Agent 最佳实践","url":"/2026/09/03/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-17-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

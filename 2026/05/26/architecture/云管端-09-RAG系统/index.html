@@ -1,0 +1,1052 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>云管端 RAG 系统设计 · 飞轮之道</title>
+<meta name="description" content="绝大多数 RAG 项目失败于缺少后两层：底座能跑通 Demo，但知识接入依赖研发排期、参数调整凭感觉、效果好坏靠抽查。原图把门户与评测圈注为重点，判断是准确的。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/05/26/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-09-RAG%E7%B3%BB%E7%BB%9F/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端 RAG 系统设计 · 飞轮之道">
+<meta property="og:description" content="绝大多数 RAG 项目失败于缺少后两层：底座能跑通 Demo，但知识接入依赖研发排期、参数调整凭感觉、效果好坏靠抽查。原图把门户与评测圈注为重点，判断是准确的。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/05/26/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-09-RAG%E7%B3%BB%E7%BB%9F/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">走向生产</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 10 / 20 篇</a>
+    </div>
+    <h1>云管端 RAG 系统设计</h1>
+    <p class="article-deck">绝大多数 RAG 项目失败于缺少后两层：底座能跑通 Demo，但知识接入依赖研发排期、参数调整凭感觉、效果好坏靠抽查。原图把门户与评测圈注为重点，判断是准确的。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>10 分钟</span>
+      <span>发布于 2026.05</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="09-·-知识与-RAG-系统（Knowledge-RAG-System）"><a href="#09-·-知识与-RAG-系统（Knowledge-RAG-System）" class="headerlink" title="09 · 知识与 RAG 系统（Knowledge &amp; RAG System）"></a>09 · 知识与 RAG 系统（Knowledge &amp; RAG System）</h2><blockquote>
+<p>文档类型：技术白皮书 · 知识检索专章<br>对应图示：知识中心（<strong>RAG 门户</strong> &#x2F; <strong>RAG 评测</strong> &#x2F; RAG 底座）+ 端侧知识库 + 端侧 RAG<br>说明：图中「RAG 门户」与「RAG 评测」被显式圈注 —— 该架构已认定 <strong>RAG 是工程问题而非算法问题</strong></p>
+</blockquote>
+<hr>
+<h2 id="1-三件套架构：为什么这样拆"><a href="#1-三件套架构：为什么这样拆" class="headerlink" title="1. 三件套架构：为什么这样拆"></a>1. 三件套架构：为什么这样拆</h2><p>原图把知识中心拆为「门户 &#x2F; 评测 &#x2F; 底座」三层，这个划分本身就是一个重要的架构判断：</p>
+<pre class="mermaid">flowchart TB
+    subgraph PORTAL["RAG 门户（面向知识运营）"]
+        P1["知识源接入自助化"]
+        P2["切分与检索参数配置"]
+        P3["生效状态与版本查看"]
+        P4["知识缺口工单"]
+    end
+    subgraph EVAL["RAG 评测（面向质量）"]
+        E1["金标问答集管理"]
+        E2["召回率 / 命中率 / 正确率评测"]
+        E3["参数变更 A/B 对比"]
+        E4["回归门禁"]
+    end
+    subgraph BASE["RAG 底座（面向工程）"]
+        B1["接入与解析"]
+        B2["切分"]
+        B3["Embedding 与索引"]
+        B4["混合检索"]
+        B5["Rerank"]
+        B6["引用与溯源"]
+    end
+    PORTAL --&gt;|"配置下发"| BASE
+    BASE --&gt;|"检索结果"| EVAL
+    EVAL --&gt;|"评测结论"| PORTAL
+    EVAL --&gt;|"门禁阻断"| BASE</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>谁在用</th>
+<th>解决什么问题</th>
+<th>不做会怎样</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>底座</strong></td>
+<td>平台研发</td>
+<td>检索能力本身</td>
+<td>无 RAG 能力</td>
+</tr>
+<tr>
+<td><strong>门户</strong></td>
+<td>知识运营 &#x2F; 业务方</td>
+<td>让非研发能接入与调整知识</td>
+<td>每次加知识都要提研发需求，知识永远滞后</td>
+</tr>
+<tr>
+<td><strong>评测</strong></td>
+<td>质量 &#x2F; 算法</td>
+<td>让”改好了没有”可度量</td>
+<td>凭感觉调参数，效果反复</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>绝大多数 RAG 项目失败于缺少后两层</strong>：底座能跑通 Demo，但知识接入依赖研发排期、参数调整凭感觉、效果好坏靠抽查。原图把门户与评测圈注为重点，判断是准确的。</p>
+</blockquote>
+<hr>
+<h2 id="2-RAG-底座：完整链路"><a href="#2-RAG-底座：完整链路" class="headerlink" title="2. RAG 底座：完整链路"></a>2. RAG 底座：完整链路</h2><pre class="mermaid">flowchart TB
+    subgraph ING["接入与预处理（离线）"]
+        I1["知识源&lt;br/&gt;文档/结构化数据/网页/工单"] --&gt; I2["格式解析&lt;br/&gt;PDF/Office/HTML/Markdown"]
+        I2 --&gt; I3["清洗&lt;br/&gt;去页眉页脚/去乱码/表格结构化"]
+        I3 --&gt; I4["结构化切分&lt;br/&gt;按标题层级 + 父子分块"]
+        I4 --&gt; I5["元数据打标&lt;br/&gt;车型/版本/语言/时效/权限/来源"]
+        I5 --&gt; I6["Embedding&lt;br/&gt;记录 embedding_version"]
+        I6 --&gt; I7["双索引写入&lt;br/&gt;向量索引 + 全文索引"]
+    end
+    subgraph RET["在线检索"]
+        Q1["用户查询"] --&gt; Q2["查询改写&lt;br/&gt;口语化→检索友好 + 指代消解"]
+        Q2 --&gt; Q3["元数据过滤&lt;br/&gt;先按车型/版本/权限缩小范围"]
+        Q3 --&gt; Q4a["向量检索 Top-25"]
+        Q3 --&gt; Q4b["BM25 检索 Top-25"]
+        Q4a &amp; Q4b --&gt; Q5["RRF 融合去重"]
+        Q5 --&gt; Q6["Rerank（Cross-Encoder）"]
+        Q6 --&gt; Q7["Top-5 + 父块扩展"]
+        Q7 --&gt; Q8["引用元数据附加"]
+        Q8 --&gt; Q9["Token 预算裁剪"]
+    end
+    I7 --&gt; Q4a &amp; Q4b
+    Q9 --&gt; GEN["生成&lt;br/&gt;强制引用约束"]
+    GEN --&gt; VER["引用校验&lt;br/&gt;无引用支撑则声明不确定"]</pre>
+
+
+<hr>
+<h2 id="3-关键设计决策"><a href="#3-关键设计决策" class="headerlink" title="3. 关键设计决策"></a>3. 关键设计决策</h2><h3 id="3-1-切分：结构化-父子分块"><a href="#3-1-切分：结构化-父子分块" class="headerlink" title="3.1 切分：结构化 + 父子分块"></a>3.1 切分：结构化 + 父子分块</h3><pre class="mermaid">flowchart LR
+    DOC["原文档"] --&gt; H["按标题层级切分&lt;br/&gt;保留 heading_path"]
+    H --&gt; PAR["父块 800-1200 token&lt;br/&gt;提供完整上下文"]
+    PAR --&gt; CHI["子块 200-300 token&lt;br/&gt;用于精确检索"]
+    CHI --&gt; IDX["索引子块"]
+    IDX --&gt; HIT["检索命中子块"]
+    HIT --&gt; RET["返回对应父块"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>优点</th>
+<th>缺点</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>固定长度</td>
+<td>简单</td>
+<td>切断语义</td>
+<td>不推荐</td>
+</tr>
+<tr>
+<td>递归分隔符</td>
+<td>尊重段落</td>
+<td>不理解结构</td>
+<td>一般文本</td>
+</tr>
+<tr>
+<td><strong>结构化（按标题）</strong></td>
+<td>语义完整、可继承标题路径</td>
+<td>依赖文档结构规范</td>
+<td><strong>技术文档、手册（首选）</strong></td>
+</tr>
+<tr>
+<td><strong>父子分块</strong></td>
+<td>检索精确 + 上下文完整</td>
+<td>存储翻倍</td>
+<td><strong>与结构化组合使用（首选）</strong></td>
+</tr>
+<tr>
+<td>语义边界（模型判定）</td>
+<td>效果好</td>
+<td>成本高、离线慢</td>
+<td>高价值知识库</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong><code>heading_path</code> 是低成本高收益的元数据</strong>。把 “车辆设置 &gt; 空调 &gt; 自动模式” 写入 chunk 元数据并在生成时一并提供，可显著减少答案跑偏（模型知道这段话的上下文归属）。</p>
+</blockquote>
+<h3 id="3-2-混合检索：为什么不能只用向量"><a href="#3-2-混合检索：为什么不能只用向量" class="headerlink" title="3.2 混合检索：为什么不能只用向量"></a>3.2 混合检索：为什么不能只用向量</h3><table>
+<thead>
+<tr>
+<th>查询类型</th>
+<th>纯向量表现</th>
+<th>纯 BM25 表现</th>
+<th>混合</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>口语化描述（”车里怎么变凉快”）</td>
+<td>✅ 好</td>
+<td>❌ 差</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>专有功能名（精确名称查询）</td>
+<td>⚠️ 中</td>
+<td>✅ 好</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>型号 &#x2F; 编号 &#x2F; 错误码</td>
+<td>❌ <strong>差</strong></td>
+<td>✅ 好</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>长句复杂意图</td>
+<td>✅ 好</td>
+<td>⚠️ 中</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>否定表述（”不想要 X”）</td>
+<td>❌ 差</td>
+<td>❌ 差</td>
+<td>⚠️（需查询改写）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>纯向量检索在型号与编号上系统性失败</strong>，因为 Embedding 会把 “A-1200” 和 “A-1300” 映射到几乎相同的向量。车载场景大量涉及配置型号、错误码、版本号，混合检索是<strong>必选而非优化</strong>。</p>
+</blockquote>
+<p><strong>RRF 融合公式</strong>：<code>score(d) = Σ 1/(k + rank_i(d))</code>，k 常取 60。优点是无需归一化不同检索器的分数，鲁棒性好。</p>
+<h3 id="3-3-元数据过滤前置"><a href="#3-3-元数据过滤前置" class="headerlink" title="3.3 元数据过滤前置"></a>3.3 元数据过滤前置</h3><pre class="mermaid">flowchart LR
+    W["❌ 错误顺序"] --&gt; W1["全库检索"] --&gt; W2["检索后过滤车型"] --&gt; W3["Top-K 可能全被过滤掉&lt;br/&gt;召回为空"]
+    R["✅ 正确顺序"] --&gt; R1["先按车型/版本/权限过滤"] --&gt; R2["在子集内检索"] --&gt; R3["Top-K 全部有效"]</pre>
+
+
+<blockquote>
+<p>车载知识库最典型的事故是<strong>答错车型</strong>：用户 A 车型的问题，被答了 B 车型的功能。必须把车型&#x2F;配置&#x2F;软件版本作为强制过滤维度，且<strong>过滤在检索之前</strong>。</p>
+</blockquote>
+<h3 id="3-4-查询改写：投入产出比最高的单点优化"><a href="#3-4-查询改写：投入产出比最高的单点优化" class="headerlink" title="3.4 查询改写：投入产出比最高的单点优化"></a>3.4 查询改写：投入产出比最高的单点优化</h3><table>
+<thead>
+<tr>
+<th>改写类型</th>
+<th>原查询</th>
+<th>改写后</th>
+<th>收益</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>口语化归一</td>
+<td>“咋整才能凉快点”</td>
+<td>“如何降低车内温度 空调制冷设置”</td>
+<td>召回率显著提升</td>
+</tr>
+<tr>
+<td>指代消解</td>
+<td>“那第二个怎么弄”</td>
+<td>“（结合上轮）自动模式如何设置”</td>
+<td>多轮场景可用</td>
+</tr>
+<tr>
+<td>拆解多意图</td>
+<td>“怎么开空调还有充电桩在哪”</td>
+<td>两个独立查询</td>
+<td>避免检索混杂</td>
+</tr>
+<tr>
+<td>补全隐含条件</td>
+<td>“续航多少”</td>
+<td>“（补车型&#x2F;配置）续航里程”</td>
+<td>避免答错车型</td>
+</tr>
+<tr>
+<td>生成假设答案（HyDE）</td>
+<td>问题</td>
+<td>生成一段假想答案再检索</td>
+<td>长尾问题召回提升</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>查询改写用小模型即可</strong>（延迟约 60 ms，成本极低），是 RAG 优化清单上应当第一个做的事情，常带来 15–30% 召回率提升。</p>
+</blockquote>
+<h3 id="3-5-Rerank：性价比最高的精度提升"><a href="#3-5-Rerank：性价比最高的精度提升" class="headerlink" title="3.5 Rerank：性价比最高的精度提升"></a>3.5 Rerank：性价比最高的精度提升</h3><table>
+<thead>
+<tr>
+<th>配置</th>
+<th>召回数</th>
+<th>Rerank 后</th>
+<th>准确率变化</th>
+<th>延迟增加</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>无 Rerank</td>
+<td>Top-5 直接用</td>
+<td>—</td>
+<td>基线</td>
+<td>0</td>
+</tr>
+<tr>
+<td>轻量 Rerank</td>
+<td>Top-20 → 5</td>
+<td>✅</td>
+<td>+8~12%</td>
+<td>+30 ms</td>
+</tr>
+<tr>
+<td><strong>标准 Rerank</strong></td>
+<td><strong>Top-50 → 5</strong></td>
+<td>✅</td>
+<td><strong>+10~20%</strong></td>
+<td><strong>+50 ms</strong></td>
+</tr>
+<tr>
+<td>重 Rerank</td>
+<td>Top-100 → 5</td>
+<td>✅</td>
+<td>+12~22%</td>
+<td>+120 ms</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>Top-50 → 5 是甜点配置。继续加大召回数收益递减而延迟线性上升。</p>
+</blockquote>
+<hr>
+<h2 id="4-RAG-门户设计"><a href="#4-RAG-门户设计" class="headerlink" title="4. RAG 门户设计"></a>4. RAG 门户设计</h2><pre class="mermaid">flowchart TB
+    subgraph SELF["自助接入流程"]
+        S1["选择知识源类型"] --&gt; S2["上传/配置连接"]
+        S2 --&gt; S3["解析预览&lt;br/&gt;看到切分结果"]
+        S3 --&gt; S4["元数据打标&lt;br/&gt;车型/权限/时效"]
+        S4 --&gt; S5["试检索&lt;br/&gt;输入样例问题看召回"]
+        S5 --&gt; S6&#123;"效果满意?"&#125;
+        S6 --&gt;|否| S7["调整切分参数"] --&gt; S3
+        S6 --&gt;|是| S8["提交评测"]
+        S8 --&gt; S9["评测通过 → 灰度生效"]
+        S9 --&gt; S10["全量生效 + 版本记录"]
+    end</pre>
+
+
+<h3 id="4-1-门户必备能力"><a href="#4-1-门户必备能力" class="headerlink" title="4.1 门户必备能力"></a>4.1 门户必备能力</h3><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>说明</th>
+<th>缺失后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>解析预览</td>
+<td>上传后立即看到切分结果</td>
+<td>运营不知道切成什么样，全靠上线后发现</td>
+</tr>
+<tr>
+<td>试检索</td>
+<td>输入问题看召回片段与分数</td>
+<td>无法自查，问题都留到线上</td>
+</tr>
+<tr>
+<td>元数据打标</td>
+<td>车型、权限、时效、来源</td>
+<td>答错车型、越权泄露、过期信息</td>
+</tr>
+<tr>
+<td>生效状态</td>
+<td>索引进度、生效版本、覆盖范围</td>
+<td>“我明明加了知识为什么答不出来”</td>
+</tr>
+<tr>
+<td>知识缺口工单</td>
+<td>从 <code>empty_recall</code> 自动生成待补清单</td>
+<td>知识永远滞后于用户需求</td>
+</tr>
+<tr>
+<td>版本与回滚</td>
+<td>知识版本化，可回滚</td>
+<td>错误知识无法快速撤回</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>「知识缺口工单」把闭环自动化了</strong>：线上检索为空的查询自动聚类生成工单，运营按热度补充知识。这是知识库覆盖率持续上升的唯一可持续机制。</p>
+</blockquote>
+<hr>
+<h2 id="5-RAG-评测体系"><a href="#5-RAG-评测体系" class="headerlink" title="5. RAG 评测体系"></a>5. RAG 评测体系</h2><h3 id="5-1-评测指标分层"><a href="#5-1-评测指标分层" class="headerlink" title="5.1 评测指标分层"></a>5.1 评测指标分层</h3><pre class="mermaid">flowchart TB
+    subgraph L1["检索层指标"]
+        R1["召回率 Recall@K&lt;br/&gt;正确片段是否在 Top-K 中"]
+        R2["命中率 Hit Rate&lt;br/&gt;至少一个相关片段"]
+        R3["MRR / NDCG&lt;br/&gt;正确片段的排名质量"]
+        R4["空召回率&lt;br/&gt;知识缺口指标"]
+    end
+    subgraph L2["生成层指标"]
+        G1["答案正确性&lt;br/&gt;与金标答案一致"]
+        G2["忠实度 Faithfulness&lt;br/&gt;答案是否由检索片段支撑"]
+        G3["引用准确率&lt;br/&gt;引用是否真实存在且相关"]
+        G4["拒答准确率&lt;br/&gt;该拒答时是否拒答"]
+    end
+    subgraph L3["体验层指标"]
+        U1["用户满意度"]
+        U2["重问率（隐式负反馈）"]
+        U3["延迟 P95"]
+        U4["单次成本"]
+    end
+    L1 --&gt; L2 --&gt; L3</pre>
+
+
+<h3 id="5-2-三套评测集分离（关键实践）"><a href="#5-2-三套评测集分离（关键实践）" class="headerlink" title="5.2 三套评测集分离（关键实践）"></a>5.2 三套评测集分离（关键实践）</h3><table>
+<thead>
+<tr>
+<th>集合</th>
+<th>规模（推断设计）</th>
+<th>用途</th>
+<th>可否用于调参</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>公开集</strong></td>
+<td>200–500</td>
+<td>日常调参、快速迭代</td>
+<td>✅ 可以</td>
+</tr>
+<tr>
+<td><strong>回归集</strong></td>
+<td>300–800</td>
+<td>发布门禁，每次变更必跑</td>
+<td>❌ 不可（会过拟合门禁）</td>
+</tr>
+<tr>
+<td><strong>盲测集</strong></td>
+<td>200–500</td>
+<td>真实效果评估，定期人工评</td>
+<td>❌ 严格禁止</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>不做三集分离的必然结果</strong>：指标持续上升但线上体验不变甚至变差（过拟合评测集）。盲测集必须由独立角色维护且不对调参人员开放。</p>
+</blockquote>
+<h3 id="5-3-忠实度评测：最重要的指标"><a href="#5-3-忠实度评测：最重要的指标" class="headerlink" title="5.3 忠实度评测：最重要的指标"></a>5.3 忠实度评测：最重要的指标</h3><table>
+<thead>
+<tr>
+<th>判定</th>
+<th>含义</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>完全忠实</td>
+<td>答案每个论断都有片段支撑</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>部分忠实</td>
+<td>部分内容为模型自行补充</td>
+<td>⚠️ 需标注区分（哪些有据、哪些是推测）</td>
+</tr>
+<tr>
+<td>不忠实（幻觉）</td>
+<td>答案与片段矛盾或凭空生成</td>
+<td>❌ 严重缺陷，必须修复</td>
+</tr>
+<tr>
+<td>正确但无据</td>
+<td>答案对但检索片段不支撑</td>
+<td>⚠️ 是知识缺口（碰巧模型知道），需补知识</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>“正确但无据”是最容易被误判为成功的情况</strong>。它意味着系统实际上依赖模型内部知识而非企业知识库——一旦换模型就会失效，且无法保证时效性。评测必须把它单独归类。</p>
+</blockquote>
+<h3 id="5-4-LLM-as-Judge-的正确用法"><a href="#5-4-LLM-as-Judge-的正确用法" class="headerlink" title="5.4 LLM-as-Judge 的正确用法"></a>5.4 LLM-as-Judge 的正确用法</h3><table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>必须校准</td>
+<td>与人工标注做一致性验证（Cohen’s Kappa ≥ 0.7 才可信）</td>
+</tr>
+<tr>
+<td>提供评分标准</td>
+<td>给出明确 rubric 而非”打个分”</td>
+</tr>
+<tr>
+<td>提供参考答案</td>
+<td>有金标答案的对比判定远比开放判定可靠</td>
+</tr>
+<tr>
+<td>用强模型评弱模型</td>
+<td>不要用同一模型自评（有系统性偏袒）</td>
+</tr>
+<tr>
+<td>定期抽检</td>
+<td>每期评测抽 10% 人工复核</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="6-RAG-变体选型"><a href="#6-RAG-变体选型" class="headerlink" title="6. RAG 变体选型"></a>6. RAG 变体选型</h2><table>
+<thead>
+<tr>
+<th>方案</th>
+<th>何时引入</th>
+<th>建设成本</th>
+<th>更新成本</th>
+<th>适用问题类型</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>朴素 RAG + 混合检索 + Rerank</strong></td>
+<td>起步即用</td>
+<td>低</td>
+<td>低</td>
+<td>单点事实查询（通常占 70%+）</td>
+</tr>
+<tr>
+<td><strong>父子分块 + 结构化切分</strong></td>
+<td>起步即用</td>
+<td>低</td>
+<td>低</td>
+<td>技术文档、手册</td>
+</tr>
+<tr>
+<td><strong>HyDE &#x2F; 多查询扩展</strong></td>
+<td>长尾召回不足时</td>
+<td>低</td>
+<td>无</td>
+<td>表述差异大的长尾问题</td>
+</tr>
+<tr>
+<td><strong>GraphRAG</strong></td>
+<td>确认存在多跳需求后</td>
+<td><strong>极高</strong>（大量 LLM 建图）</td>
+<td><strong>高</strong>（难增量）</td>
+<td>跨文档关系推理、全局性总结</td>
+</tr>
+<tr>
+<td><strong>LightRAG</strong></td>
+<td>需关系推理且知识持续更新</td>
+<td>中高</td>
+<td>中（支持增量）</td>
+<td>关系型知识 + 频繁更新</td>
+</tr>
+<tr>
+<td><strong>HybridRAG（图+向量融合）</strong></td>
+<td>成熟阶段优化</td>
+<td>高</td>
+<td>中</td>
+<td>覆盖面最大化</td>
+</tr>
+</tbody></table>
+<h3 id="6-1-演进决策树"><a href="#6-1-演进决策树" class="headerlink" title="6.1 演进决策树"></a>6.1 演进决策树</h3><pre class="mermaid">flowchart TB
+    A["RAG 效果不达标"] --&gt; B&#123;"评测集是否已建立?"&#125;
+    B --&gt;|否| B1["先建评测集&lt;br/&gt;否则无法判断改动有效性"]
+    B --&gt;|是| C&#123;"失败案例主要类型?"&#125;
+    C --&gt;|"召回不到"| D1["查询改写 + 混合检索 + 知识补全"]
+    C --&gt;|"召回到但排序差"| D2["Rerank + 融合权重调整"]
+    C --&gt;|"答错车型/版本"| D3["元数据过滤前置"]
+    C --&gt;|"片段不完整"| D4["父子分块 + 结构化切分"]
+    C --&gt;|"需要多跳推理"| D5&#123;"这类问题占比?"&#125;
+    D5 --&gt;|"&lt; 10%"| D6["先用多轮检索/查询分解&lt;br/&gt;不要上图"]
+    D5 --&gt;|"&gt; 20% 且高价值"| D7["引入 LightRAG 或 GraphRAG&lt;br/&gt;限定在该子域"]
+    C --&gt;|"幻觉"| D8["强制引用 + 忠实度评测 + 拒答策略"]</pre>
+
+
+<blockquote>
+<p><strong>最常见的错误决策是”效果不好 → 上 GraphRAG”</strong>。实际上多数团队在查询改写、混合检索、Rerank、元数据过滤这四项基础工作尚未做扎实时就转向图方案，结果建设成本上升 10 倍而效果提升有限。</p>
+</blockquote>
+<hr>
+<h2 id="7-端侧-RAG"><a href="#7-端侧-RAG" class="headerlink" title="7. 端侧 RAG"></a>7. 端侧 RAG</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>云端 RAG</th>
+<th>端侧 RAG</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>索引规模</td>
+<td>百万~千万 chunk</td>
+<td><strong>万级</strong></td>
+</tr>
+<tr>
+<td>向量维度</td>
+<td>768–1024</td>
+<td><strong>256–384（量化 int8）</strong></td>
+</tr>
+<tr>
+<td>检索方式</td>
+<td>混合 + Rerank</td>
+<td>混合（轻量）+ 无 Rerank 或极轻 Rerank</td>
+</tr>
+<tr>
+<td>Embedding 模型</td>
+<td>云端标准模型</td>
+<td>端侧小模型（需与云端保持语义可比或独立索引）</td>
+</tr>
+<tr>
+<td>知识内容</td>
+<td>全量知识库</td>
+<td><strong>高频稳定子集</strong>（车辆手册、常用设置、常见问答）</td>
+</tr>
+<tr>
+<td>更新方式</td>
+<td>实时&#x2F;准实时</td>
+<td>差分包按需下载</td>
+</tr>
+<tr>
+<td>延迟</td>
+<td>250 ms</td>
+<td><strong>60 ms</strong></td>
+</tr>
+</tbody></table>
+<h3 id="7-1-端侧知识包设计"><a href="#7-1-端侧知识包设计" class="headerlink" title="7.1 端侧知识包设计"></a>7.1 端侧知识包设计</h3><pre class="mermaid">flowchart TB
+    C["云端全量知识库"] --&gt; SEL["子集筛选&lt;br/&gt;按查询频次 + 答案稳定性 + 离线价值"]
+    SEL --&gt; PKG["按场景切分知识包&lt;br/&gt;车辆功能包 / 设置包 / 故障处理包"]
+    PKG --&gt; QNT["量化 Embedding&lt;br/&gt;int8 · 256 维"]
+    QNT --&gt; DIFF["差分包生成&lt;br/&gt;vs 端侧当前版本"]
+    DIFF --&gt; SIGN["签名"]
+    SIGN --&gt; DL["按需下载&lt;br/&gt;WiFi 优先 · 后台低优先级"]
+    DL --&gt; VER["端侧验签 + 原子切换"]</pre>
+
+
+<blockquote>
+<p><strong>端侧知识库的选品原则</strong>：高频 × 答案稳定 × 离线有价值。车辆功能说明完全符合这三条（问得多、答案不变、地库里也需要），是端侧知识库的最佳内容。而”附近充电桩”虽然高频但答案不稳定且离线无意义，不应进端侧。</p>
+</blockquote>
+<hr>
+<h2 id="8-知识治理"><a href="#8-知识治理" class="headerlink" title="8. 知识治理"></a>8. 知识治理</h2><table>
+<thead>
+<tr>
+<th>治理项</th>
+<th>要求</th>
+<th>实现</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>权限</td>
+<td>知识按可见范围分级</td>
+<td>chunk 元数据带权限标签，检索时按用户权限过滤</td>
+</tr>
+<tr>
+<td>时效</td>
+<td>过期知识不得被检索</td>
+<td><code>valid_from</code> &#x2F; <code>valid_until</code> 字段 + 检索时过滤</td>
+</tr>
+<tr>
+<td>来源可信度</td>
+<td>官方文档 &gt; 工单沉淀 &gt; 网页</td>
+<td>来源等级作为 Rerank 加权项</td>
+</tr>
+<tr>
+<td>版本</td>
+<td>知识变更可追溯可回滚</td>
+<td>知识版本号 + 变更日志</td>
+</tr>
+<tr>
+<td>冲突</td>
+<td>同一问题多份矛盾知识</td>
+<td>冲突检测任务 + 人工裁定 + 权威源标记</td>
+</tr>
+<tr>
+<td>Embedding 版本</td>
+<td>换模型必须重建索引</td>
+<td><code>embedding_version</code> 强制字段 + 灰度双索引</td>
+</tr>
+<tr>
+<td>缓存联动</td>
+<td>知识更新使相关语义缓存失效</td>
+<td>知识版本纳入缓存键</td>
+</tr>
+</tbody></table>
+<h3 id="8-1-Embedding-模型更换流程"><a href="#8-1-Embedding-模型更换流程" class="headerlink" title="8.1 Embedding 模型更换流程"></a>8.1 Embedding 模型更换流程</h3><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant OP as 知识运营
+    participant SYS as RAG 底座
+    participant EVAL as 评测
+    OP-&gt;&gt;SYS: 申请更换 Embedding 模型
+    SYS-&gt;&gt;SYS: 用新模型构建影子索引（不对外）
+    SYS-&gt;&gt;EVAL: 在盲测集上双索引对比评测
+    EVAL--&gt;&gt;SYS: 新索引召回率对比结论
+    alt 新索引更优
+        SYS-&gt;&gt;SYS: 灰度切流（5% → 50% → 100%）
+        SYS-&gt;&gt;SYS: 全量后保留旧索引 7 天备回滚
+        SYS-&gt;&gt;SYS: 触发语义缓存全量失效
+    else 不优
+        SYS-&gt;&gt;SYS: 丢弃影子索引
+    end</pre>
+
+
+<blockquote>
+<p><strong>换 Embedding 是高风险操作</strong>：它使全部历史向量失效，且效果变化不易感知（可能某类查询变好、另一类变差）。必须走影子索引 + 盲测对比 + 灰度，且<strong>必须触发语义缓存失效</strong>（旧缓存基于旧知识版本）。</p>
+</blockquote>
+<hr>
+<h2 id="9-技术选型建议"><a href="#9-技术选型建议" class="headerlink" title="9. 技术选型建议"></a>9. 技术选型建议</h2><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>首选</th>
+<th>备选</th>
+<th>决策依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>向量库（≤百万 chunk）</td>
+<td>pgvector &#x2F; LanceDB</td>
+<td>Qdrant</td>
+<td>运维成本最低，能力足够</td>
+</tr>
+<tr>
+<td>向量库（≥千万 chunk）</td>
+<td>Milvus</td>
+<td>Qdrant 集群</td>
+<td>规模与分片能力</td>
+</tr>
+<tr>
+<td>全文检索</td>
+<td>Elasticsearch &#x2F; OpenSearch</td>
+<td>PG 全文索引</td>
+<td>混合检索需要</td>
+</tr>
+<tr>
+<td>Embedding</td>
+<td>中文优化开源模型（BGE &#x2F; GTE &#x2F; Qwen Embedding）</td>
+<td>云厂商 API</td>
+<td>自建可控 + 无调用成本</td>
+</tr>
+<tr>
+<td>Reranker</td>
+<td>BGE-Reranker</td>
+<td>Jina &#x2F; Cohere Rerank</td>
+<td>中文效果与延迟</td>
+</tr>
+<tr>
+<td>RAG 框架</td>
+<td>LlamaIndex &#x2F; 自研</td>
+<td>Haystack &#x2F; RAGFlow &#x2F; Dify</td>
+<td>深度定制需求高则自研底座</td>
+</tr>
+<tr>
+<td>图增强</td>
+<td>LightRAG</td>
+<td>Microsoft GraphRAG</td>
+<td>增量更新能力</td>
+</tr>
+<tr>
+<td>评测</td>
+<td>Ragas + 自建金标集</td>
+<td>DeepEval &#x2F; Promptfoo</td>
+<td>需与业务指标结合</td>
+</tr>
+<tr>
+<td>端侧向量</td>
+<td>sqlite-vec &#x2F; usearch</td>
+<td>自研量化索引</td>
+<td>嵌入式、无服务进程</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="10-风险与治理"><a href="#10-风险与治理" class="headerlink" title="10. 风险与治理"></a>10. 风险与治理</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>影响</th>
+<th>治理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>答错车型&#x2F;版本</strong></td>
+<td>严重误导，可能引发安全问题</td>
+<td>元数据过滤前置 + 强制车型标签 + 评测集覆盖多车型</td>
+</tr>
+<tr>
+<td>幻觉（无据生成）</td>
+<td>信任崩塌</td>
+<td>强制引用 + 忠实度评测 + 无据则拒答</td>
+</tr>
+<tr>
+<td>知识缺口不可见</td>
+<td>覆盖率长期停滞</td>
+<td><code>empty_recall</code> 埋点 + 自动工单</td>
+</tr>
+<tr>
+<td>过期知识</td>
+<td>误导</td>
+<td>时效字段 + 定期复审 + 来源变更监听</td>
+</tr>
+<tr>
+<td>评测集过拟合</td>
+<td>指标涨体验不涨</td>
+<td>三集分离 + 盲测集独立维护</td>
+</tr>
+<tr>
+<td>Embedding 版本混用</td>
+<td>精度悄然下降</td>
+<td>版本字段 + 影子索引 + 灰度</td>
+</tr>
+<tr>
+<td>检索延迟超预算</td>
+<td>首字延迟不达标</td>
+<td>Rerank 轻量化 + 索引优化 + 缓存</td>
+</tr>
+<tr>
+<td>权限泄露</td>
+<td>越权看到受限知识</td>
+<td>chunk 级权限标签 + 检索时强制过滤 + 抽检</td>
+</tr>
+<tr>
+<td>端侧知识包膨胀</td>
+<td>车机存储与下载压力</td>
+<td>场景切分 + 量化 + LRU 淘汰 + 选品原则</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="11-演进路线"><a href="#11-演进路线" class="headerlink" title="11. 演进路线"></a>11. 演进路线</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>RAG 演进动作</th>
+<th>预期收益</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>阶段一</strong></td>
+<td>底座打牢：结构化+父子分块、混合检索、Rerank、元数据过滤前置、强制引用；建立三套评测集；<code>empty_recall</code> 埋点</td>
+<td>召回率与准确率达到可用基线；质量可度量</td>
+</tr>
+<tr>
+<td><strong>阶段二</strong></td>
+<td>门户上线（自助接入 + 试检索 + 知识缺口工单）；查询改写；回归门禁接入 CI；端侧知识包上线</td>
+<td>知识接入不再依赖研发；覆盖率持续上升；端侧离线可答</td>
+</tr>
+<tr>
+<td><strong>阶段三</strong></td>
+<td>对确认需要多跳的子域引入 LightRAG；知识缺口自动闭环（挖掘→补全→验证）；忠实度自动评测常态化；Embedding 升级流程标准化</td>
+<td>复杂问题可答；覆盖率与忠实度双升</td>
+</tr>
+</tbody></table>
+<hr>
+<p><strong>上一篇</strong>：云管端记忆系统设计 · <strong>下一篇</strong>：云管端模型平台架构</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/06/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-10-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0/">云管端模型平台架构</a></h3>
+        <p>成本列是最重要的一列。chat.long 的单位成本是 classify.fast 的 30 倍。</p>
+        <a class="btn primary" href="/2026/06/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-10-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/04/21/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-08-%E8%AE%B0%E5%BF%86%E7%B3%BB%E7%BB%9F/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端记忆系统设计</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#09-%C2%B7-%E7%9F%A5%E8%AF%86%E4%B8%8E-RAG-%E7%B3%BB%E7%BB%9F%EF%BC%88Knowledge-RAG-System%EF%BC%89" data-toc-target="09-·-知识与-RAG-系统（Knowledge-RAG-System）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">09 · 知识与 RAG 系统（Knowledge &amp; RAG System）</span></a><a class="toc-level-2" href="#1-%E4%B8%89%E4%BB%B6%E5%A5%97%E6%9E%B6%E6%9E%84%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E6%8B%86" data-toc-target="1-三件套架构：为什么这样拆"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 三件套架构：为什么这样拆</span></a><a class="toc-level-2" href="#2-RAG-%E5%BA%95%E5%BA%A7%EF%BC%9A%E5%AE%8C%E6%95%B4%E9%93%BE%E8%B7%AF" data-toc-target="2-RAG-底座：完整链路"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. RAG 底座：完整链路</span></a><a class="toc-level-2" href="#3-%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%E5%86%B3%E7%AD%96" data-toc-target="3-关键设计决策"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. 关键设计决策</span></a><a class="toc-level-3" href="#3-1-%E5%88%87%E5%88%86%EF%BC%9A%E7%BB%93%E6%9E%84%E5%8C%96-%E7%88%B6%E5%AD%90%E5%88%86%E5%9D%97" data-toc-target="3-1-切分：结构化-父子分块"><span class="toc-text">3.1 切分：结构化 + 父子分块</span></a><a class="toc-level-3" href="#3-2-%E6%B7%B7%E5%90%88%E6%A3%80%E7%B4%A2%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E5%8F%AA%E7%94%A8%E5%90%91%E9%87%8F" data-toc-target="3-2-混合检索：为什么不能只用向量"><span class="toc-text">3.2 混合检索：为什么不能只用向量</span></a><a class="toc-level-3" href="#3-3-%E5%85%83%E6%95%B0%E6%8D%AE%E8%BF%87%E6%BB%A4%E5%89%8D%E7%BD%AE" data-toc-target="3-3-元数据过滤前置"><span class="toc-text">3.3 元数据过滤前置</span></a><a class="toc-level-3" href="#3-4-%E6%9F%A5%E8%AF%A2%E6%94%B9%E5%86%99%EF%BC%9A%E6%8A%95%E5%85%A5%E4%BA%A7%E5%87%BA%E6%AF%94%E6%9C%80%E9%AB%98%E7%9A%84%E5%8D%95%E7%82%B9%E4%BC%98%E5%8C%96" data-toc-target="3-4-查询改写：投入产出比最高的单点优化"><span class="toc-text">3.4 查询改写：投入产出比最高的单点优化</span></a><a class="toc-level-3" href="#3-5-Rerank%EF%BC%9A%E6%80%A7%E4%BB%B7%E6%AF%94%E6%9C%80%E9%AB%98%E7%9A%84%E7%B2%BE%E5%BA%A6%E6%8F%90%E5%8D%87" data-toc-target="3-5-Rerank：性价比最高的精度提升"><span class="toc-text">3.5 Rerank：性价比最高的精度提升</span></a><a class="toc-level-2" href="#4-RAG-%E9%97%A8%E6%88%B7%E8%AE%BE%E8%AE%A1" data-toc-target="4-RAG-门户设计"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. RAG 门户设计</span></a><a class="toc-level-3" href="#4-1-%E9%97%A8%E6%88%B7%E5%BF%85%E5%A4%87%E8%83%BD%E5%8A%9B" data-toc-target="4-1-门户必备能力"><span class="toc-text">4.1 门户必备能力</span></a><a class="toc-level-2" href="#5-RAG-%E8%AF%84%E6%B5%8B%E4%BD%93%E7%B3%BB" data-toc-target="5-RAG-评测体系"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. RAG 评测体系</span></a><a class="toc-level-3" href="#5-1-%E8%AF%84%E6%B5%8B%E6%8C%87%E6%A0%87%E5%88%86%E5%B1%82" data-toc-target="5-1-评测指标分层"><span class="toc-text">5.1 评测指标分层</span></a><a class="toc-level-3" href="#5-2-%E4%B8%89%E5%A5%97%E8%AF%84%E6%B5%8B%E9%9B%86%E5%88%86%E7%A6%BB%EF%BC%88%E5%85%B3%E9%94%AE%E5%AE%9E%E8%B7%B5%EF%BC%89" data-toc-target="5-2-三套评测集分离（关键实践）"><span class="toc-text">5.2 三套评测集分离（关键实践）</span></a><a class="toc-level-3" href="#5-3-%E5%BF%A0%E5%AE%9E%E5%BA%A6%E8%AF%84%E6%B5%8B%EF%BC%9A%E6%9C%80%E9%87%8D%E8%A6%81%E7%9A%84%E6%8C%87%E6%A0%87" data-toc-target="5-3-忠实度评测：最重要的指标"><span class="toc-text">5.3 忠实度评测：最重要的指标</span></a><a class="toc-level-3" href="#5-4-LLM-as-Judge-%E7%9A%84%E6%AD%A3%E7%A1%AE%E7%94%A8%E6%B3%95" data-toc-target="5-4-LLM-as-Judge-的正确用法"><span class="toc-text">5.4 LLM-as-Judge 的正确用法</span></a><a class="toc-level-2" href="#6-RAG-%E5%8F%98%E4%BD%93%E9%80%89%E5%9E%8B" data-toc-target="6-RAG-变体选型"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. RAG 变体选型</span></a><a class="toc-level-3" href="#6-1-%E6%BC%94%E8%BF%9B%E5%86%B3%E7%AD%96%E6%A0%91" data-toc-target="6-1-演进决策树"><span class="toc-text">6.1 演进决策树</span></a><a class="toc-level-2" href="#7-%E7%AB%AF%E4%BE%A7-RAG" data-toc-target="7-端侧-RAG"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 端侧 RAG</span></a><a class="toc-level-3" href="#7-1-%E7%AB%AF%E4%BE%A7%E7%9F%A5%E8%AF%86%E5%8C%85%E8%AE%BE%E8%AE%A1" data-toc-target="7-1-端侧知识包设计"><span class="toc-text">7.1 端侧知识包设计</span></a><a class="toc-level-2" href="#8-%E7%9F%A5%E8%AF%86%E6%B2%BB%E7%90%86" data-toc-target="8-知识治理"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 知识治理</span></a><a class="toc-level-3" href="#8-1-Embedding-%E6%A8%A1%E5%9E%8B%E6%9B%B4%E6%8D%A2%E6%B5%81%E7%A8%8B" data-toc-target="8-1-Embedding-模型更换流程"><span class="toc-text">8.1 Embedding 模型更换流程</span></a><a class="toc-level-2" href="#9-%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE" data-toc-target="9-技术选型建议"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 技术选型建议</span></a><a class="toc-level-2" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">10. 风险与治理</span></a><a class="toc-level-2" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11. 演进路线</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 50%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">10 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#09-%C2%B7-%E7%9F%A5%E8%AF%86%E4%B8%8E-RAG-%E7%B3%BB%E7%BB%9F%EF%BC%88Knowledge-RAG-System%EF%BC%89" data-toc-target="09-·-知识与-RAG-系统（Knowledge-RAG-System）" data-title="01 · 09 · 知识与 RAG 系统（Knowledge &amp; RAG System）" aria-label="09 · 知识与 RAG 系统（Knowledge &amp; RAG System）"></a><a class="toc-strip__dot" href="#1-%E4%B8%89%E4%BB%B6%E5%A5%97%E6%9E%B6%E6%9E%84%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E6%8B%86" data-toc-target="1-三件套架构：为什么这样拆" data-title="02 · 1. 三件套架构：为什么这样拆" aria-label="1. 三件套架构：为什么这样拆"></a><a class="toc-strip__dot" href="#2-RAG-%E5%BA%95%E5%BA%A7%EF%BC%9A%E5%AE%8C%E6%95%B4%E9%93%BE%E8%B7%AF" data-toc-target="2-RAG-底座：完整链路" data-title="03 · 2. RAG 底座：完整链路" aria-label="2. RAG 底座：完整链路"></a><a class="toc-strip__dot" href="#3-%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%E5%86%B3%E7%AD%96" data-toc-target="3-关键设计决策" data-title="04 · 3. 关键设计决策" aria-label="3. 关键设计决策"></a><a class="toc-strip__dot" href="#4-RAG-%E9%97%A8%E6%88%B7%E8%AE%BE%E8%AE%A1" data-toc-target="4-RAG-门户设计" data-title="05 · 4. RAG 门户设计" aria-label="4. RAG 门户设计"></a><a class="toc-strip__dot" href="#5-RAG-%E8%AF%84%E6%B5%8B%E4%BD%93%E7%B3%BB" data-toc-target="5-RAG-评测体系" data-title="06 · 5. RAG 评测体系" aria-label="5. RAG 评测体系"></a><a class="toc-strip__dot" href="#6-RAG-%E5%8F%98%E4%BD%93%E9%80%89%E5%9E%8B" data-toc-target="6-RAG-变体选型" data-title="07 · 6. RAG 变体选型" aria-label="6. RAG 变体选型"></a><a class="toc-strip__dot" href="#7-%E7%AB%AF%E4%BE%A7-RAG" data-toc-target="7-端侧-RAG" data-title="08 · 7. 端侧 RAG" aria-label="7. 端侧 RAG"></a><a class="toc-strip__dot" href="#8-%E7%9F%A5%E8%AF%86%E6%B2%BB%E7%90%86" data-toc-target="8-知识治理" data-title="09 · 8. 知识治理" aria-label="8. 知识治理"></a><a class="toc-strip__dot" href="#9-%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE" data-toc-target="9-技术选型建议" data-title="10 · 9. 技术选型建议" aria-label="9. 技术选型建议"></a><a class="toc-strip__dot" href="#10-%E9%A3%8E%E9%99%A9%E4%B8%8E%E6%B2%BB%E7%90%86" data-toc-target="10-风险与治理" data-title="11 · 10. 风险与治理" aria-label="10. 风险与治理"></a><a class="toc-strip__dot" href="#11-%E6%BC%94%E8%BF%9B%E8%B7%AF%E7%BA%BF" data-toc-target="11-演进路线" data-title="12 · 11. 演进路线" aria-label="11. 演进路线"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-09-RAG系统","title":"云管端 RAG 系统设计","url":"/2026/05/26/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-09-RAG%E7%B3%BB%E7%BB%9F/","path":"cloud-pipe-edge-agent-platform","index":9,"total":20,"next":{"title":"云管端模型平台架构","url":"/2026/06/16/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-10-%E6%A8%A1%E5%9E%8B%E5%B9%B3%E5%8F%B0/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>

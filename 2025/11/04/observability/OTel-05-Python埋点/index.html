@@ -1,0 +1,367 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<title>Python 埋点：FastAPI、LangGraph 与 mem0 · 飞轮之道</title>
+<meta name="description" content="Python 是 AI 执行面的主语言。本篇产出一个可复用的 telemetry.py 引导模块，实现：HTTP 层自动埋点、LLM 调用（DeepSeek，OpenAI 兼容端点）自动埋点、LangGraph 图执行埋点、mem0 手动埋点、日志与 Trace 关联、自定义业务指标。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/11/04/observability/OTel-05-Python%E5%9F%8B%E7%82%B9/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Python 埋点：FastAPI、LangGraph 与 mem0 · 飞轮之道">
+<meta property="og:description" content="Python 是 AI 执行面的主语言。本篇产出一个可复用的 telemetry.py 引导模块，实现：HTTP 层自动埋点、LLM 调用（DeepSeek，OpenAI 兼容端点）自动埋点、LangGraph 图执行埋点、mem0 手动埋点、日志与 Trace 关联、自定义业务指标。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/11/04/observability/OTel-05-Python%E5%9F%8B%E7%82%B9/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">采集证据</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 5 / 12 篇</a>
+    </div>
+    <h1>Python 埋点：FastAPI、LangGraph 与 mem0</h1>
+    <p class="article-deck">Python 是 AI 执行面的主语言。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>8 分钟</span>
+      <span>发布于 2025.11</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="05-·-Python-侧埋点：FastAPI-LangGraph-DeepAgents-mem0-DeepSeek"><a href="#05-·-Python-侧埋点：FastAPI-LangGraph-DeepAgents-mem0-DeepSeek" class="headerlink" title="05 · Python 侧埋点：FastAPI + LangGraph&#x2F;DeepAgents + mem0 + DeepSeek"></a>05 · Python 侧埋点：FastAPI + LangGraph&#x2F;DeepAgents + mem0 + DeepSeek</h2><blockquote>
+<p>Python 是 AI 执行面的主语言。本篇产出一个可复用的 <code>telemetry.py</code> 引导模块，实现：HTTP 层自动埋点、LLM 调用（DeepSeek，OpenAI 兼容端点）自动埋点、LangGraph 图执行埋点、mem0 手动埋点、日志与 Trace 关联、自定义业务指标。文档 09 的 Demo 直接复用本篇代码。</p>
+</blockquote>
+<hr>
+<h2 id="1-依赖安装（uv）"><a href="#1-依赖安装（uv）" class="headerlink" title="1. 依赖安装（uv）"></a>1. 依赖安装（uv）</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">uv init diag-agent &amp;&amp; <span class="built_in">cd</span> diag-agent</span><br><span class="line">uv add fastapi <span class="string">&quot;uvicorn[standard]&quot;</span> httpx openai langgraph langchain-openai <span class="string">&quot;mem0ai&gt;=2.0&quot;</span></span><br><span class="line">uv add opentelemetry-sdk opentelemetry-exporter-otlp \</span><br><span class="line">       opentelemetry-instrumentation-fastapi \</span><br><span class="line">       opentelemetry-instrumentation-httpx \</span><br><span class="line">       opentelemetry-instrumentation-logging \</span><br><span class="line">       opentelemetry-instrumentation-openai-v2   <span class="comment"># 官方 OpenAI 埋点（GenAI 约定）</span></span><br><span class="line">uv add openinference-instrumentation-langchain   <span class="comment"># LangChain/LangGraph 图执行埋点（OTel 兼容）</span></span><br></pre></td></tr></table></figure>
+
+<p>埋点库选型说明（三选一或组合，本文取 ①+②）：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>覆盖</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>① <code>opentelemetry-instrumentation-openai-v2</code></td>
+<td>OpenAI SDK 调用（DeepSeek 兼容端点同样生效）</td>
+<td>OTel 官方、GenAI 约定最新、支持内容捕获开关</td>
+</tr>
+<tr>
+<td>② <code>openinference-instrumentation-langchain</code></td>
+<td>LangChain&#x2F;LangGraph 链与图节点</td>
+<td>Arize 维护、纯 OTel Span 输出、Langfuse&#x2F;Tempo 均可消费</td>
+</tr>
+<tr>
+<td>③ OpenLLMetry（<code>traceloop-sdk</code>）&#x2F; OpenLIT</td>
+<td>一键覆盖多框架（含 Anthropic&#x2F;Bedrock&#x2F;向量库）</td>
+<td>大而全，注意与 ① 二选一避免重复 Span</td>
+</tr>
+</tbody></table>
+<h2 id="2-引导模块-telemetry-py（核心资产，全项目复用）"><a href="#2-引导模块-telemetry-py（核心资产，全项目复用）" class="headerlink" title="2. 引导模块 telemetry.py（核心资产，全项目复用）"></a>2. 引导模块 <code>telemetry.py</code>（核心资产，全项目复用）</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;OpenTelemetry 引导模块：在应用入口最先 import 并调用 setup_telemetry()。&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> logging</span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line"></span><br><span class="line"><span class="keyword">from</span> opentelemetry <span class="keyword">import</span> metrics, trace</span><br><span class="line"><span class="keyword">from</span> opentelemetry._logs <span class="keyword">import</span> set_logger_provider</span><br><span class="line"><span class="keyword">from</span> opentelemetry.exporter.otlp.proto.grpc._log_exporter <span class="keyword">import</span> OTLPLogExporter</span><br><span class="line"><span class="keyword">from</span> opentelemetry.exporter.otlp.proto.grpc.metric_exporter <span class="keyword">import</span> OTLPMetricExporter</span><br><span class="line"><span class="keyword">from</span> opentelemetry.exporter.otlp.proto.grpc.trace_exporter <span class="keyword">import</span> OTLPSpanExporter</span><br><span class="line"><span class="keyword">from</span> opentelemetry.sdk._logs <span class="keyword">import</span> LoggerProvider, LoggingHandler</span><br><span class="line"><span class="keyword">from</span> opentelemetry.sdk._logs.export <span class="keyword">import</span> BatchLogRecordProcessor</span><br><span class="line"><span class="keyword">from</span> opentelemetry.sdk.metrics <span class="keyword">import</span> MeterProvider</span><br><span class="line"><span class="keyword">from</span> opentelemetry.sdk.metrics.export <span class="keyword">import</span> PeriodicExportingMetricReader</span><br><span class="line"><span class="keyword">from</span> opentelemetry.sdk.resources <span class="keyword">import</span> Resource</span><br><span class="line"><span class="keyword">from</span> opentelemetry.sdk.trace <span class="keyword">import</span> TracerProvider</span><br><span class="line"><span class="keyword">from</span> opentelemetry.sdk.trace.export <span class="keyword">import</span> BatchSpanProcessor</span><br><span class="line"></span><br><span class="line">_ENDPOINT = os.getenv(<span class="string">&quot;OTEL_EXPORTER_OTLP_ENDPOINT&quot;</span>, <span class="string">&quot;http://localhost:4317&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">setup_telemetry</span>(<span class="params">service_name: <span class="built_in">str</span>, service_version: <span class="built_in">str</span> = <span class="string">&quot;0.1.0&quot;</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    resource = Resource.create(&#123;</span><br><span class="line">        <span class="string">&quot;service.name&quot;</span>: service_name,</span><br><span class="line">        <span class="string">&quot;service.version&quot;</span>: service_version,</span><br><span class="line">        <span class="string">&quot;service.namespace&quot;</span>: os.getenv(<span class="string">&quot;OTEL_SERVICE_NAMESPACE&quot;</span>, <span class="string">&quot;aits&quot;</span>),</span><br><span class="line">        <span class="string">&quot;deployment.environment.name&quot;</span>: os.getenv(<span class="string">&quot;DEPLOY_ENV&quot;</span>, <span class="string">&quot;poc&quot;</span>),</span><br><span class="line">    &#125;)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ── Traces ──</span></span><br><span class="line">    tp = TracerProvider(resource=resource)</span><br><span class="line">    tp.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=_ENDPOINT)))</span><br><span class="line">    trace.set_tracer_provider(tp)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ── Metrics ──</span></span><br><span class="line">    mp = MeterProvider(</span><br><span class="line">        resource=resource,</span><br><span class="line">        metric_readers=[PeriodicExportingMetricReader(</span><br><span class="line">            OTLPMetricExporter(endpoint=_ENDPOINT), export_interval_millis=<span class="number">15000</span>)],</span><br><span class="line">    )</span><br><span class="line">    metrics.set_meter_provider(mp)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ── Logs（标准 logging → OTLP → Loki，自动携带 trace_id/span_id）──</span></span><br><span class="line">    lp = LoggerProvider(resource=resource)</span><br><span class="line">    lp.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter(endpoint=_ENDPOINT)))</span><br><span class="line">    set_logger_provider(lp)</span><br><span class="line">    logging.getLogger().addHandler(LoggingHandler(level=logging.INFO, logger_provider=lp))</span><br><span class="line">    logging.getLogger().setLevel(logging.INFO)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ── 自动埋点 ──</span></span><br><span class="line">    <span class="keyword">from</span> opentelemetry.instrumentation.httpx <span class="keyword">import</span> HTTPXClientInstrumentor</span><br><span class="line">    <span class="keyword">from</span> opentelemetry.instrumentation.logging <span class="keyword">import</span> LoggingInstrumentor</span><br><span class="line">    <span class="keyword">from</span> opentelemetry.instrumentation.openai_v2 <span class="keyword">import</span> OpenAIInstrumentor</span><br><span class="line">    <span class="keyword">from</span> openinference.instrumentation.langchain <span class="keyword">import</span> LangChainInstrumentor</span><br><span class="line"></span><br><span class="line">    HTTPXClientInstrumentor().instrument()</span><br><span class="line">    LoggingInstrumentor().instrument(set_logging_format=<span class="literal">True</span>)  <span class="comment"># 日志格式注入 trace_id</span></span><br><span class="line">    OpenAIInstrumentor().instrument()          <span class="comment"># LLM 调用 → gen_ai.* Span</span></span><br><span class="line">    LangChainInstrumentor().instrument()       <span class="comment"># LangGraph 节点 → Span</span></span><br></pre></td></tr></table></figure>
+
+<p>启动环境变量（<code>.env</code>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317</span><br><span class="line">OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental</span><br><span class="line">OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true   # POC 打开，生产按文档 10 评估</span><br><span class="line">DEPLOY_ENV=poc</span><br><span class="line">DEEPSEEK_API_KEY=替换点(项目方)</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-FastAPI-接入（应用侧仅需-3-行）"><a href="#3-FastAPI-接入（应用侧仅需-3-行）" class="headerlink" title="3. FastAPI 接入（应用侧仅需 3 行）"></a>3. FastAPI 接入（应用侧仅需 3 行）</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># main.py</span></span><br><span class="line"><span class="keyword">from</span> telemetry <span class="keyword">import</span> setup_telemetry</span><br><span class="line">setup_telemetry(<span class="string">&quot;diag-agent&quot;</span>)                      <span class="comment"># 必须最先执行</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span><br><span class="line"><span class="keyword">from</span> opentelemetry.instrumentation.fastapi <span class="keyword">import</span> FastAPIInstrumentor</span><br><span class="line"></span><br><span class="line">app = FastAPI(title=<span class="string">&quot;diag-agent&quot;</span>)</span><br><span class="line">FastAPIInstrumentor.instrument_app(app, excluded_urls=<span class="string">&quot;/healthz,/metrics&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>效果：每个 HTTP 请求自动生成 <code>SERVER</code> Span（<code>http.route</code>、状态码、时延），下游 httpx 调用自动生成 <code>CLIENT</code> 子 Span 并注入 <code>traceparent</code> 头——跨服务链路由此串联。</p>
+<h2 id="4-DeepSeek-调用：自动获得-GenAI-Span"><a href="#4-DeepSeek-调用：自动获得-GenAI-Span" class="headerlink" title="4. DeepSeek 调用：自动获得 GenAI Span"></a>4. DeepSeek 调用：自动获得 GenAI Span</h2><p>DeepSeek 走 OpenAI 兼容端点，官方 OpenAI 埋点直接生效：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span><br><span class="line"></span><br><span class="line">client = OpenAI(api_key=os.environ[<span class="string">&quot;DEEPSEEK_API_KEY&quot;</span>],</span><br><span class="line">                base_url=<span class="string">&quot;https://api.deepseek.com&quot;</span>)</span><br><span class="line"></span><br><span class="line">resp = client.chat.completions.create(</span><br><span class="line">    model=<span class="string">&quot;deepseek-chat&quot;</span>,                 <span class="comment"># 非推理端点，避免 &lt;think&gt; 污染</span></span><br><span class="line">    messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;P0301 故障码的含义？&quot;</span>&#125;],</span><br><span class="line">    temperature=<span class="number">0.2</span>,</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>产出的 Span（可在 Tempo 中按属性检索）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Span: chat deepseek-chat            kind=CLIENT</span><br><span class="line">  gen_ai.operation.name  = chat</span><br><span class="line">  gen_ai.provider.name   = openai         # 兼容端点判别为 openai 形态</span><br><span class="line">  gen_ai.request.model   = deepseek-chat</span><br><span class="line">  gen_ai.usage.input_tokens  = 23</span><br><span class="line">  gen_ai.usage.output_tokens = 187</span><br><span class="line">  gen_ai.response.finish_reasons = [&quot;stop&quot;]</span><br><span class="line">  server.address = api.deepseek.com       # 用于区分真实 Provider</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>宿主机 Ollama 场景：<code>base_url=&quot;http://host.docker.internal:11434/v1&quot;</code>（容器内）或 <code>http://localhost:11434/v1</code>（宿主机进程），同样自动埋点。</p>
+</blockquote>
+<h2 id="5-LangGraph-DeepAgents-图执行埋点"><a href="#5-LangGraph-DeepAgents-图执行埋点" class="headerlink" title="5. LangGraph &#x2F; DeepAgents 图执行埋点"></a>5. LangGraph &#x2F; DeepAgents 图执行埋点</h2><p><code>LangChainInstrumentor</code> 会为每次 <code>graph.invoke/astream</code> 生成一棵 Span 树：图 → 节点 → 节点内 LLM&#x2F;工具调用。在此基础上补两类手动增强：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> opentelemetry <span class="keyword">import</span> trace</span><br><span class="line"></span><br><span class="line">tracer = trace.get_tracer(<span class="string">&quot;aits.diag-agent&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ① 给整次 Agent 调用补根 Span 与业务属性</span></span><br><span class="line"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/api/diagnose&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">diagnose</span>(<span class="params">req: DiagnoseRequest</span>):</span><br><span class="line">    <span class="keyword">with</span> tracer.start_as_current_span(</span><br><span class="line">        <span class="string">&quot;invoke_agent vehicle-diag-agent&quot;</span>,</span><br><span class="line">        attributes=&#123;</span><br><span class="line">            <span class="string">&quot;gen_ai.operation.name&quot;</span>: <span class="string">&quot;invoke_agent&quot;</span>,</span><br><span class="line">            <span class="string">&quot;gen_ai.agent.name&quot;</span>: <span class="string">&quot;vehicle-diag-agent&quot;</span>,</span><br><span class="line">            <span class="string">&quot;gen_ai.conversation.id&quot;</span>: req.session_id,</span><br><span class="line">            <span class="string">&quot;aits.vehicle.vin.hash&quot;</span>: sha256_short(req.vin),</span><br><span class="line">        &#125;,</span><br><span class="line">    ):</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">await</span> run_graph(req)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ② 工具函数统一装饰器（execute_tool 约定）</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">traced_tool</span>(<span class="params">tool_name: <span class="built_in">str</span></span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">deco</span>(<span class="params">fn</span>):</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">wrapper</span>(<span class="params">*args, **kwargs</span>):</span><br><span class="line">            <span class="keyword">with</span> tracer.start_as_current_span(</span><br><span class="line">                <span class="string">f&quot;execute_tool <span class="subst">&#123;tool_name&#125;</span>&quot;</span>,</span><br><span class="line">                attributes=&#123;<span class="string">&quot;gen_ai.operation.name&quot;</span>: <span class="string">&quot;execute_tool&quot;</span>,</span><br><span class="line">                            <span class="string">&quot;gen_ai.tool.name&quot;</span>: tool_name&#125;,</span><br><span class="line">            ) <span class="keyword">as</span> span:</span><br><span class="line">                <span class="keyword">try</span>:</span><br><span class="line">                    <span class="keyword">return</span> <span class="keyword">await</span> fn(*args, **kwargs)</span><br><span class="line">                <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">                    span.record_exception(e)</span><br><span class="line">                    span.set_status(trace.StatusCode.ERROR, <span class="built_in">str</span>(e))</span><br><span class="line">                    <span class="keyword">raise</span></span><br><span class="line">        <span class="keyword">return</span> wrapper</span><br><span class="line">    <span class="keyword">return</span> deco</span><br></pre></td></tr></table></figure>
+
+<p>DeepAgents（基于 LangGraph）同理：其内部子 Agent、规划循环均以 LangGraph 节点形式出现在 Span 树中；只需确保 <code>LangChainInstrumentor</code> 在创建 agent 之前完成 instrument。</p>
+<h2 id="6-mem0-记忆层手动埋点"><a href="#6-mem0-记忆层手动埋点" class="headerlink" title="6. mem0 记忆层手动埋点"></a>6. mem0 记忆层手动埋点</h2><p>mem0 2.0.x 无官方埋点库，用工具 Span 模式包裹（注意 2.0 API：<code>filters={&quot;user_id&quot;: ...}</code> &#x2F; <code>top_k=</code>）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> mem0 <span class="keyword">import</span> Memory</span><br><span class="line"></span><br><span class="line">memory = Memory.from_config(MEM0_CONFIG)</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">recall</span>(<span class="params">user_id: <span class="built_in">str</span>, query: <span class="built_in">str</span></span>) -&gt; <span class="built_in">list</span>[<span class="built_in">dict</span>]:</span><br><span class="line">    <span class="keyword">with</span> tracer.start_as_current_span(</span><br><span class="line">        <span class="string">&quot;memory.search&quot;</span>,</span><br><span class="line">        attributes=&#123;<span class="string">&quot;gen_ai.operation.name&quot;</span>: <span class="string">&quot;execute_tool&quot;</span>,</span><br><span class="line">                    <span class="string">&quot;gen_ai.tool.name&quot;</span>: <span class="string">&quot;mem0_search&quot;</span>,</span><br><span class="line">                    <span class="string">&quot;aits.memory.top_k&quot;</span>: <span class="number">5</span>&#125;,</span><br><span class="line">    ) <span class="keyword">as</span> span:</span><br><span class="line">        result = memory.search(query, filters=&#123;<span class="string">&quot;user_id&quot;</span>: user_id&#125;, top_k=<span class="number">5</span>)</span><br><span class="line">        span.set_attribute(<span class="string">&quot;aits.memory.hits&quot;</span>, <span class="built_in">len</span>(result.get(<span class="string">&quot;results&quot;</span>, [])))</span><br><span class="line">        <span class="keyword">return</span> result</span><br></pre></td></tr></table></figure>
+
+<p>mem0 底层的 Milvus&#x2F;PostgreSQL&#x2F;LLM 调用若走 httpx&#x2F;OpenAI SDK，会自动成为子 Span——记忆命中率（<code>aits.memory.hits</code>）与检索耗时由此可观测。</p>
+<h2 id="7-自定义业务指标"><a href="#7-自定义业务指标" class="headerlink" title="7. 自定义业务指标"></a>7. 自定义业务指标</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> opentelemetry <span class="keyword">import</span> metrics</span><br><span class="line"></span><br><span class="line">meter = metrics.get_meter(<span class="string">&quot;aits.diag-agent&quot;</span>)</span><br><span class="line"></span><br><span class="line">diag_counter = meter.create_counter(</span><br><span class="line">    <span class="string">&quot;aits.diagnose.requests&quot;</span>, description=<span class="string">&quot;诊断请求数&quot;</span>)</span><br><span class="line">loop_hist = meter.create_histogram(</span><br><span class="line">    <span class="string">&quot;aits.agent.loop.count&quot;</span>, description=<span class="string">&quot;单次会话 Agent 循环次数&quot;</span>)</span><br><span class="line">token_cost = meter.create_counter(</span><br><span class="line">    <span class="string">&quot;aits.token.cost.cny&quot;</span>, description=<span class="string">&quot;按价目表折算的 Token 成本（分）&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 业务代码中：</span></span><br><span class="line">diag_counter.add(<span class="number">1</span>, &#123;<span class="string">&quot;aits.triage.channel&quot;</span>: <span class="string">&quot;nearline&quot;</span>&#125;)</span><br><span class="line">loop_hist.record(loops, &#123;<span class="string">&quot;gen_ai.agent.name&quot;</span>: <span class="string">&quot;vehicle-diag-agent&quot;</span>&#125;)</span><br><span class="line">token_cost.add(cost_fen, &#123;<span class="string">&quot;gen_ai.request.model&quot;</span>: <span class="string">&quot;deepseek-chat&quot;</span>&#125;)</span><br></pre></td></tr></table></figure>
+
+<p>配合埋点库自动产生的 <code>gen_ai.client.token.usage</code> &#x2F; <code>gen_ai.client.operation.duration</code> 直方图，即可在 Grafana 建立成本与时延大盘（PromQL 示例见文档 09 §6）。</p>
+<h2 id="8-日志与-Trace-关联验证"><a href="#8-日志与-Trace-关联验证" class="headerlink" title="8. 日志与 Trace 关联验证"></a>8. 日志与 Trace 关联验证</h2><p><code>LoggingInstrumentor(set_logging_format=True)</code> 后，标准 logging 输出自动带 <code>trace_id</code>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">2026-07-11 10:23:01 INFO [diag-agent] [trace_id=5f2a... span_id=8c1b...] 诊断完成 dtc=P0301</span><br></pre></td></tr></table></figure>
+
+<p>同时 OTLP Logs 通道把结构化日志送入 Loki。验证互跳：</p>
+<ol>
+<li>Grafana → Explore → Loki：<code>{service_name=&quot;diag-agent&quot;} |= &quot;诊断完成&quot;</code>；</li>
+<li>点击日志行的 <code>trace_id</code> 派生链接 → 直达 Tempo 对应 Trace；</li>
+<li>Tempo Trace 详情 → “Logs for this span” → 反向回到 Loki。</li>
+</ol>
+<h2 id="9-常见坑位"><a href="#9-常见坑位" class="headerlink" title="9. 常见坑位"></a>9. 常见坑位</h2><table>
+<thead>
+<tr>
+<th>坑</th>
+<th>现象</th>
+<th>解法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>setup_telemetry</code> 晚于框架 import</td>
+<td>LLM&#x2F;图 Span 缺失</td>
+<td>引导模块放在入口文件第一行</td>
+</tr>
+<tr>
+<td>uvicorn 多 worker</td>
+<td>指标重复&#x2F;丢失</td>
+<td>每 worker 独立初始化（默认即是）；聚合交给 Prometheus</td>
+</tr>
+<tr>
+<td>①与③方案同装</td>
+<td>每次 LLM 调用出两个 Span</td>
+<td>只保留一套 LLM 埋点</td>
+</tr>
+<tr>
+<td>流式响应 Token 统计缺失</td>
+<td><code>usage</code> 为空</td>
+<td>请求带 <code>stream_options={&quot;include_usage&quot;: True}</code></td>
+</tr>
+<tr>
+<td>asyncio 后台任务丢上下文</td>
+<td>子 Span 变孤儿 Trace</td>
+<td><code>asyncio.create_task</code> 前用 <code>opentelemetry.context.attach</code> 或把 span 上下文显式传入</td>
+</tr>
+<tr>
+<td>忘记优雅退出</td>
+<td>尾部数据丢失</td>
+<td>进程退出前 <code>trace.get_tracer_provider().shutdown()</code></td>
+</tr>
+</tbody></table>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/12/23/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/">Java 埋点：Spring Cloud Gateway 与 Nacos</a></h3>
+        <p>Java 控制面（网关、编排、管理服务）与 Python 执行面必须共享同一条 Trace。</p>
+        <a class="btn primary" href="/2025/12/23/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/09/04/observability/OTel-04-%E8%87%AA%E6%89%98%E7%AE%A1%E9%83%A8%E7%BD%B2/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：OpenTelemetry 自托管部署</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#05-%C2%B7-Python-%E4%BE%A7%E5%9F%8B%E7%82%B9%EF%BC%9AFastAPI-LangGraph-DeepAgents-mem0-DeepSeek" data-toc-target="05-·-Python-侧埋点：FastAPI-LangGraph-DeepAgents-mem0-DeepSeek"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">05 · Python 侧埋点：FastAPI + LangGraph/DeepAgents + mem0 + DeepSeek</span></a><a class="toc-level-2" href="#1-%E4%BE%9D%E8%B5%96%E5%AE%89%E8%A3%85%EF%BC%88uv%EF%BC%89" data-toc-target="1-依赖安装（uv）"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">1. 依赖安装（uv）</span></a><a class="toc-level-2" href="#2-%E5%BC%95%E5%AF%BC%E6%A8%A1%E5%9D%97-telemetry-py%EF%BC%88%E6%A0%B8%E5%BF%83%E8%B5%84%E4%BA%A7%EF%BC%8C%E5%85%A8%E9%A1%B9%E7%9B%AE%E5%A4%8D%E7%94%A8%EF%BC%89" data-toc-target="2-引导模块-telemetry-py（核心资产，全项目复用）"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">2. 引导模块 telemetry.py（核心资产，全项目复用）</span></a><a class="toc-level-2" href="#3-FastAPI-%E6%8E%A5%E5%85%A5%EF%BC%88%E5%BA%94%E7%94%A8%E4%BE%A7%E4%BB%85%E9%9C%80-3-%E8%A1%8C%EF%BC%89" data-toc-target="3-FastAPI-接入（应用侧仅需-3-行）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">3. FastAPI 接入（应用侧仅需 3 行）</span></a><a class="toc-level-2" href="#4-DeepSeek-%E8%B0%83%E7%94%A8%EF%BC%9A%E8%87%AA%E5%8A%A8%E8%8E%B7%E5%BE%97-GenAI-Span" data-toc-target="4-DeepSeek-调用：自动获得-GenAI-Span"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">4. DeepSeek 调用：自动获得 GenAI Span</span></a><a class="toc-level-2" href="#5-LangGraph-DeepAgents-%E5%9B%BE%E6%89%A7%E8%A1%8C%E5%9F%8B%E7%82%B9" data-toc-target="5-LangGraph-DeepAgents-图执行埋点"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5. LangGraph / DeepAgents 图执行埋点</span></a><a class="toc-level-2" href="#6-mem0-%E8%AE%B0%E5%BF%86%E5%B1%82%E6%89%8B%E5%8A%A8%E5%9F%8B%E7%82%B9" data-toc-target="6-mem0-记忆层手动埋点"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6. mem0 记忆层手动埋点</span></a><a class="toc-level-2" href="#7-%E8%87%AA%E5%AE%9A%E4%B9%89%E4%B8%9A%E5%8A%A1%E6%8C%87%E6%A0%87" data-toc-target="7-自定义业务指标"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">7. 自定义业务指标</span></a><a class="toc-level-2" href="#8-%E6%97%A5%E5%BF%97%E4%B8%8E-Trace-%E5%85%B3%E8%81%94%E9%AA%8C%E8%AF%81" data-toc-target="8-日志与-Trace-关联验证"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8. 日志与 Trace 关联验证</span></a><a class="toc-level-2" href="#9-%E5%B8%B8%E8%A7%81%E5%9D%91%E4%BD%8D" data-toc-target="9-常见坑位"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">9. 常见坑位</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 42%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#05-%C2%B7-Python-%E4%BE%A7%E5%9F%8B%E7%82%B9%EF%BC%9AFastAPI-LangGraph-DeepAgents-mem0-DeepSeek" data-toc-target="05-·-Python-侧埋点：FastAPI-LangGraph-DeepAgents-mem0-DeepSeek" data-title="01 · 05 · Python 侧埋点：FastAPI + LangGraph/DeepAgents + mem0 + DeepSeek" aria-label="05 · Python 侧埋点：FastAPI + LangGraph/DeepAgents + mem0 + DeepSeek"></a><a class="toc-strip__dot" href="#1-%E4%BE%9D%E8%B5%96%E5%AE%89%E8%A3%85%EF%BC%88uv%EF%BC%89" data-toc-target="1-依赖安装（uv）" data-title="02 · 1. 依赖安装（uv）" aria-label="1. 依赖安装（uv）"></a><a class="toc-strip__dot" href="#2-%E5%BC%95%E5%AF%BC%E6%A8%A1%E5%9D%97-telemetry-py%EF%BC%88%E6%A0%B8%E5%BF%83%E8%B5%84%E4%BA%A7%EF%BC%8C%E5%85%A8%E9%A1%B9%E7%9B%AE%E5%A4%8D%E7%94%A8%EF%BC%89" data-toc-target="2-引导模块-telemetry-py（核心资产，全项目复用）" data-title="03 · 2. 引导模块 telemetry.py（核心资产，全项目复用）" aria-label="2. 引导模块 telemetry.py（核心资产，全项目复用）"></a><a class="toc-strip__dot" href="#3-FastAPI-%E6%8E%A5%E5%85%A5%EF%BC%88%E5%BA%94%E7%94%A8%E4%BE%A7%E4%BB%85%E9%9C%80-3-%E8%A1%8C%EF%BC%89" data-toc-target="3-FastAPI-接入（应用侧仅需-3-行）" data-title="04 · 3. FastAPI 接入（应用侧仅需 3 行）" aria-label="3. FastAPI 接入（应用侧仅需 3 行）"></a><a class="toc-strip__dot" href="#4-DeepSeek-%E8%B0%83%E7%94%A8%EF%BC%9A%E8%87%AA%E5%8A%A8%E8%8E%B7%E5%BE%97-GenAI-Span" data-toc-target="4-DeepSeek-调用：自动获得-GenAI-Span" data-title="05 · 4. DeepSeek 调用：自动获得 GenAI Span" aria-label="4. DeepSeek 调用：自动获得 GenAI Span"></a><a class="toc-strip__dot" href="#5-LangGraph-DeepAgents-%E5%9B%BE%E6%89%A7%E8%A1%8C%E5%9F%8B%E7%82%B9" data-toc-target="5-LangGraph-DeepAgents-图执行埋点" data-title="06 · 5. LangGraph / DeepAgents 图执行埋点" aria-label="5. LangGraph / DeepAgents 图执行埋点"></a><a class="toc-strip__dot" href="#6-mem0-%E8%AE%B0%E5%BF%86%E5%B1%82%E6%89%8B%E5%8A%A8%E5%9F%8B%E7%82%B9" data-toc-target="6-mem0-记忆层手动埋点" data-title="07 · 6. mem0 记忆层手动埋点" aria-label="6. mem0 记忆层手动埋点"></a><a class="toc-strip__dot" href="#7-%E8%87%AA%E5%AE%9A%E4%B9%89%E4%B8%9A%E5%8A%A1%E6%8C%87%E6%A0%87" data-toc-target="7-自定义业务指标" data-title="08 · 7. 自定义业务指标" aria-label="7. 自定义业务指标"></a><a class="toc-strip__dot" href="#8-%E6%97%A5%E5%BF%97%E4%B8%8E-Trace-%E5%85%B3%E8%81%94%E9%AA%8C%E8%AF%81" data-toc-target="8-日志与-Trace-关联验证" data-title="09 · 8. 日志与 Trace 关联验证" aria-label="8. 日志与 Trace 关联验证"></a><a class="toc-strip__dot" href="#9-%E5%B8%B8%E8%A7%81%E5%9D%91%E4%BD%8D" data-toc-target="9-常见坑位" data-title="10 · 9. 常见坑位" aria-label="9. 常见坑位"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-05-Python埋点","title":"Python 埋点：FastAPI、LangGraph 与 mem0","url":"/2025/11/04/observability/OTel-05-Python%E5%9F%8B%E7%82%B9/","path":"agent-observability","index":4,"total":12,"next":{"title":"Java 埋点：Spring Cloud Gateway 与 Nacos","url":"/2025/12/23/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
+  <script src="/js/observatory.js" defer></script>
+</body>
+</html>
