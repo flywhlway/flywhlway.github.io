@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>LangGraph 服务集成方案 · 飞轮之道</title>
 <meta name="description" content="LangGraph 集成 OpenWebUI、与 Dify 对接、子图编排及服务化部署的完整技术路径。">
 <meta name="author" content="Flywhl">
@@ -107,15 +108,125 @@
 </ul>
 <h2 id="技术内容"><a href="#技术内容" class="headerlink" title="技术内容"></a>技术内容</h2><h3 id="1-方案详述（来源：LangGraph集成OpenWebUI方案）"><a href="#1-方案详述（来源：LangGraph集成OpenWebUI方案）" class="headerlink" title="1. 方案详述（来源：LangGraph集成OpenWebUI方案）"></a>1. 方案详述（来源：LangGraph集成OpenWebUI方案）</h3><p>下面我直接给你一套<strong>生产级可落地的完整工程结构 + 架构设计（含目录、职责、部署拓扑、数据流）</strong>，重点是：<strong>你可以按这个结构直接开工做企业级系统，而不是停留在Demo层</strong>。</p>
 <hr>
-<h2 id="一、整体架构（企业级最终形态）"><a href="#一、整体架构（企业级最终形态）" class="headerlink" title="一、整体架构（企业级最终形态）"></a>一、整体架构（企业级最终形态）</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line">                ┌──────────────────────┐</span><br><span class="line">                │      用户浏览器       │</span><br><span class="line">                └─────────┬────────────┘</span><br><span class="line">                          │</span><br><span class="line">                          ▼</span><br><span class="line">                ┌──────────────────────┐</span><br><span class="line">                │    Open WebUI        │</span><br><span class="line">                │ (前端 + 会话管理)     │</span><br><span class="line">                └─────────┬────────────┘</span><br><span class="line">                          │ HTTP/SSE</span><br><span class="line">                          ▼</span><br><span class="line">                ┌──────────────────────┐</span><br><span class="line">                │   API Gateway        │  ←（强烈建议增加）</span><br><span class="line">                │ (鉴权/限流/路由)       │</span><br><span class="line">                └─────────┬────────────┘</span><br><span class="line">                          │</span><br><span class="line">        ┌─────────────────┴─────────────────┐</span><br><span class="line">        ▼                                   ▼</span><br><span class="line">┌───────────────┐                 ┌──────────────────┐</span><br><span class="line">│ Agent Adapter │                 │  Model Router     │</span><br><span class="line">│(OpenAI兼容层) │                 │(多模型调度/负载)   │</span><br><span class="line">└──────┬────────┘                 └────────┬─────────┘</span><br><span class="line">       │                                   │</span><br><span class="line">       ▼                                   ▼</span><br><span class="line">┌────────────────────────────────────────────────────┐</span><br><span class="line">│                LangGraph Service                   │</span><br><span class="line">│                                                    │</span><br><span class="line">│  ┌──────────────┐   ┌──────────────┐               │</span><br><span class="line">│  │ Agent Graph  │   │ Tool System  │               │</span><br><span class="line">│  │ 多Agent编排   │   │ RAG/SQL/API  │               │</span><br><span class="line">│  └──────┬───────┘   └──────┬───────┘               │</span><br><span class="line">│         │                  │                       │</span><br><span class="line">│         ▼                  ▼                       │</span><br><span class="line">│   ┌──────────────┐   ┌──────────────┐              │</span><br><span class="line">│   │ Memory/State │   │ Task Queue   │              │</span><br><span class="line">│   │ Checkpointer │   │ 异步执行       │              │</span><br><span class="line">│   └──────┬───────┘   └──────┬───────┘              │</span><br><span class="line">│         │                  │                       │</span><br><span class="line">└─────────┼──────────────────┼───────────────────────┘</span><br><span class="line">          ▼                  ▼</span><br><span class="line">   ┌────────────┐    ┌──────────────┐</span><br><span class="line">   │ Postgres   │    │ Redis        │</span><br><span class="line">   │(状态/会话) │    │(缓存/队列)    │</span><br><span class="line">   └────────────┘    └──────────────┘</span><br><span class="line">          │</span><br><span class="line">          ▼</span><br><span class="line">   ┌──────────────┐</span><br><span class="line">   │ PGVector     │</span><br><span class="line">   │(向量检索RAG)  │</span><br><span class="line">   └──────────────┘</span><br></pre></td></tr></table></figure>
+<h2 id="一、整体架构（企业级最终形态）"><a href="#一、整体架构（企业级最终形态）" class="headerlink" title="一、整体架构（企业级最终形态）"></a>一、整体架构（企业级最终形态）</h2><figure class="highlight text cb cb--long" data-lang="text" data-label="Text" data-ext="txt" data-lines="50"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">                ┌──────────────────────┐</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">                │      用户浏览器       │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                └─────────┬────────────┘</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">                          │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">                          ▼</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">                ┌──────────────────────┐</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">                │    Open WebUI        │</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">                │ (前端 + 会话管理)     │</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">                └─────────┬────────────┘</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                          │ HTTP/SSE</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">                          ▼</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">                ┌──────────────────────┐</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">                │   API Gateway        │  ←（强烈建议增加）</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">                │ (鉴权/限流/路由)       │</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">                └─────────┬────────────┘</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">                          │</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        ┌─────────────────┴─────────────────┐</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">        ▼                                   ▼</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">┌───────────────┐                 ┌──────────────────┐</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">│ Agent Adapter │                 │  Model Router     │</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">│(OpenAI兼容层) │                 │(多模型调度/负载)   │</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">└──────┬────────┘                 └────────┬─────────┘</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">       │                                   │</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">       ▼                                   ▼</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">┌────────────────────────────────────────────────────┐</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">│                LangGraph Service                   │</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">│                                                    │</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">│  ┌──────────────┐   ┌──────────────┐               │</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">│  │ Agent Graph  │   │ Tool System  │               │</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">│  │ 多Agent编排   │   │ RAG/SQL/API  │               │</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">│  └──────┬───────┘   └──────┬───────┘               │</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">│         │                  │                       │</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">│         ▼                  ▼                       │</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">│   ┌──────────────┐   ┌──────────────┐              │</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">│   │ Memory/State │   │ Task Queue   │              │</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">│   │ Checkpointer │   │ 异步执行       │              │</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">│   └──────┬───────┘   └──────┬───────┘              │</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">│         │                  │                       │</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">└─────────┼──────────────────┼───────────────────────┘</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">          ▼                  ▼</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">   ┌────────────┐    ┌──────────────┐</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">   │ Postgres   │    │ Redis        │</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">   │(状态/会话) │    │(缓存/队列)    │</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">   └────────────┘    └──────────────┘</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">          │</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">          ▼</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">   ┌──────────────┐</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">   │ PGVector     │</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">   │(向量检索RAG)  │</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">   └──────────────┘</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="二、生产级项目目录结构（核心重点）"><a href="#二、生产级项目目录结构（核心重点）" class="headerlink" title="二、生产级项目目录结构（核心重点）"></a>二、生产级项目目录结构（核心重点）</h2><p>这是你要的<strong>企业级 GitHub 工程结构（推荐拆分为多服务仓库）</strong>：</p>
 <hr>
-<h2 id="1️⃣-backend（LangGraph核心服务）"><a href="#1️⃣-backend（LangGraph核心服务）" class="headerlink" title="1️⃣ backend（LangGraph核心服务）"></a>1️⃣ backend（LangGraph核心服务）</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line">langgraph-backend/</span><br><span class="line">├── app/</span><br><span class="line">│   ├── main.py                      <span class="comment"># FastAPI入口</span></span><br><span class="line">│   ├── core/</span><br><span class="line">│   │   ├── config.py                <span class="comment"># 配置管理（Pydantic）</span></span><br><span class="line">│   │   ├── security.py              <span class="comment"># JWT/Auth</span></span><br><span class="line">│   │   ├── logging.py               <span class="comment"># 日志</span></span><br><span class="line">│   │   └── context.py               <span class="comment"># 请求上下文（tenant/user）</span></span><br><span class="line">│   │</span><br><span class="line">│   ├── api/</span><br><span class="line">│   │   ├── v1/</span><br><span class="line">│   │   │   ├── chat.py              <span class="comment"># OpenAI兼容接口</span></span><br><span class="line">│   │   │   ├── agent.py             <span class="comment"># LangGraph原生接口</span></span><br><span class="line">│   │   │   ├── runs.py              <span class="comment"># 任务查询</span></span><br><span class="line">│   │   │   └── health.py</span><br><span class="line">│   │</span><br><span class="line">│   ├── adapters/</span><br><span class="line">│   │   ├── openai_adapter.py        <span class="comment"># ★关键：WebUI适配层</span></span><br><span class="line">│   │   └── stream_adapter.py        <span class="comment"># SSE封装</span></span><br><span class="line">│   │</span><br><span class="line">│   ├── graph/</span><br><span class="line">│   │   ├── builder.py               <span class="comment"># Graph构建入口</span></span><br><span class="line">│   │   ├── state.py                 <span class="comment"># GraphState定义</span></span><br><span class="line">│   │   ├── nodes/</span><br><span class="line">│   │   │   ├── llm_node.py</span><br><span class="line">│   │   │   ├── tool_node.py</span><br><span class="line">│   │   │   ├── router_node.py</span><br><span class="line">│   │   │   └── rag_node.py</span><br><span class="line">│   │   └── edges/</span><br><span class="line">│   │</span><br><span class="line">│   ├── tools/</span><br><span class="line">│   │   ├── rag/</span><br><span class="line">│   │   ├── sql/</span><br><span class="line">│   │   ├── search/</span><br><span class="line">│   │   └── internal_api/</span><br><span class="line">│   │</span><br><span class="line">│   ├── services/</span><br><span class="line">│   │   ├── agent_service.py         <span class="comment"># 调度LangGraph</span></span><br><span class="line">│   │   ├── memory_service.py</span><br><span class="line">│   │   ├── run_service.py</span><br><span class="line">│   │   └── model_service.py</span><br><span class="line">│   │</span><br><span class="line">│   ├── db/</span><br><span class="line">│   │   ├── postgres.py</span><br><span class="line">│   │   ├── redis.py</span><br><span class="line">│   │   └── vector_store.py</span><br><span class="line">│   │</span><br><span class="line">│   └── schemas/</span><br><span class="line">│       ├── chat.py</span><br><span class="line">│       ├── agent.py</span><br><span class="line">│       └── run.py</span><br><span class="line">│</span><br><span class="line">├── tests/</span><br><span class="line">├── requirements.txt</span><br><span class="line">└── Dockerfile</span><br></pre></td></tr></table></figure>
+<h2 id="1️⃣-backend（LangGraph核心服务）"><a href="#1️⃣-backend（LangGraph核心服务）" class="headerlink" title="1️⃣ backend（LangGraph核心服务）"></a>1️⃣ backend（LangGraph核心服务）</h2><figure class="highlight bash cb cb--long" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="55"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">langgraph-backend/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── app/</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│   ├── main.py                      <span class="comment"># FastAPI入口</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">│   ├── core/</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">│   │   ├── config.py                <span class="comment"># 配置管理（Pydantic）</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">│   │   ├── security.py              <span class="comment"># JWT/Auth</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">│   │   ├── logging.py               <span class="comment"># 日志</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">│   │   └── context.py               <span class="comment"># 请求上下文（tenant/user）</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">│   │</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">│   ├── api/</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">│   │   ├── v1/</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">│   │   │   ├── chat.py              <span class="comment"># OpenAI兼容接口</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">│   │   │   ├── agent.py             <span class="comment"># LangGraph原生接口</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">│   │   │   ├── runs.py              <span class="comment"># 任务查询</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">│   │   │   └── health.py</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">│   │</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">│   ├── adapters/</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">│   │   ├── openai_adapter.py        <span class="comment"># ★关键：WebUI适配层</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">│   │   └── stream_adapter.py        <span class="comment"># SSE封装</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">│   │</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">│   ├── graph/</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">│   │   ├── builder.py               <span class="comment"># Graph构建入口</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">│   │   ├── state.py                 <span class="comment"># GraphState定义</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">│   │   ├── nodes/</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">│   │   │   ├── llm_node.py</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">│   │   │   ├── tool_node.py</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">│   │   │   ├── router_node.py</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">│   │   │   └── rag_node.py</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">│   │   └── edges/</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">│   │</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">│   ├── tools/</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">│   │   ├── rag/</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">│   │   ├── sql/</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">│   │   ├── search/</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">│   │   └── internal_api/</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">│   │</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">│   ├── services/</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">│   │   ├── agent_service.py         <span class="comment"># 调度LangGraph</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">│   │   ├── memory_service.py</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">│   │   ├── run_service.py</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">│   │   └── model_service.py</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">│   │</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">│   ├── db/</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">│   │   ├── postgres.py</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">│   │   ├── redis.py</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">│   │   └── vector_store.py</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">│   │</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">│   └── schemas/</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">│       ├── chat.py</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">│       ├── agent.py</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">│       └── run.py</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">│</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">├── tests/</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">├── requirements.txt</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">└── Dockerfile</span></span></code></pre></div></div></figure>
 
 <hr>
-<h2 id="2️⃣-gateway（推荐，企业级必须）"><a href="#2️⃣-gateway（推荐，企业级必须）" class="headerlink" title="2️⃣ gateway（推荐，企业级必须）"></a>2️⃣ gateway（推荐，企业级必须）</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">api-gateway/</span><br><span class="line">├── nginx/</span><br><span class="line">│   └── nginx.conf</span><br><span class="line">├── kong/traefik/（可选）</span><br><span class="line">└── plugins/</span><br><span class="line">    ├── auth</span><br><span class="line">    ├── rate_limit</span><br><span class="line">    └── logging</span><br></pre></td></tr></table></figure>
+<h2 id="2️⃣-gateway（推荐，企业级必须）"><a href="#2️⃣-gateway（推荐，企业级必须）" class="headerlink" title="2️⃣ gateway（推荐，企业级必须）"></a>2️⃣ gateway（推荐，企业级必须）</h2><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">api-gateway/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── nginx/</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│   └── nginx.conf</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">├── kong/traefik/（可选）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">└── plugins/</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    ├── auth</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    ├── rate_limit</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    └── logging</span></span></code></pre></div></div></figure>
 
 <p>作用：</p>
 <ul>
@@ -125,26 +236,68 @@
 <li>多服务路由</li>
 </ul>
 <hr>
-<h2 id="3️⃣-infra（基础设施）"><a href="#3️⃣-infra（基础设施）" class="headerlink" title="3️⃣ infra（基础设施）"></a>3️⃣ infra（基础设施）</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">infra/</span><br><span class="line">├── docker-compose.yml</span><br><span class="line">├── postgres/</span><br><span class="line">├── redis/</span><br><span class="line">├── pgvector/</span><br><span class="line">├── prometheus/</span><br><span class="line">├── grafana/</span><br><span class="line">└── loki/</span><br></pre></td></tr></table></figure>
+<h2 id="3️⃣-infra（基础设施）"><a href="#3️⃣-infra（基础设施）" class="headerlink" title="3️⃣ infra（基础设施）"></a>3️⃣ infra（基础设施）</h2><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">infra/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── docker-compose.yml</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">├── postgres/</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">├── redis/</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">├── pgvector/</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">├── prometheus/</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">├── grafana/</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">└── loki/</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="4️⃣-open-webui（无需改动源码）"><a href="#4️⃣-open-webui（无需改动源码）" class="headerlink" title="4️⃣ open-webui（无需改动源码）"></a>4️⃣ open-webui（无需改动源码）</h2><p>只需要配置：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">OPENAI_API_BASE_URL=http://gateway/v1</span><br><span class="line">OPENAI_API_KEY=sk-xxx</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">OPENAI_API_BASE_URL=http://gateway/v1</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">OPENAI_API_KEY=sk-xxx</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="三、核心数据流（非常关键）"><a href="#三、核心数据流（非常关键）" class="headerlink" title="三、核心数据流（非常关键）"></a>三、核心数据流（非常关键）</h2><hr>
-<h2 id="1️⃣-用户请求路径"><a href="#1️⃣-用户请求路径" class="headerlink" title="1️⃣ 用户请求路径"></a>1️⃣ 用户请求路径</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">用户输入</span><br><span class="line">  ↓</span><br><span class="line">Open WebUI</span><br><span class="line">  ↓</span><br><span class="line">/v1/chat/completions</span><br><span class="line">  ↓</span><br><span class="line">API Gateway（鉴权）</span><br><span class="line">  ↓</span><br><span class="line">OpenAI Adapter</span><br><span class="line">  ↓</span><br><span class="line">LangGraph Service</span><br><span class="line">  ↓</span><br><span class="line">Graph 执行</span><br><span class="line">  ↓</span><br><span class="line">Tool / RAG / LLM</span><br><span class="line">  ↓</span><br><span class="line">流式返回（SSE）</span><br><span class="line">  ↓</span><br><span class="line">Open WebUI 渲染</span><br></pre></td></tr></table></figure>
+<h2 id="1️⃣-用户请求路径"><a href="#1️⃣-用户请求路径" class="headerlink" title="1️⃣ 用户请求路径"></a>1️⃣ 用户请求路径</h2><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="19"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">用户输入</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">Open WebUI</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">/v1/chat/completions</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">API Gateway（鉴权）</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">OpenAI Adapter</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">LangGraph Service</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">Graph 执行</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">Tool / RAG / LLM</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">流式返回（SSE）</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">Open WebUI 渲染</span></span></code></pre></div></div></figure>
 
 <hr>
-<h2 id="2️⃣-内部执行流（LangGraph）"><a href="#2️⃣-内部执行流（LangGraph）" class="headerlink" title="2️⃣ 内部执行流（LangGraph）"></a>2️⃣ 内部执行流（LangGraph）</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">用户输入</span><br><span class="line">  ↓</span><br><span class="line">Router Node</span><br><span class="line">  ↓</span><br><span class="line">是否需要RAG？</span><br><span class="line">  ├── 是 → RAG Node → LLM Node</span><br><span class="line">  └── 否 → LLM Node</span><br><span class="line">  ↓</span><br><span class="line">是否需要工具？</span><br><span class="line">  ├── 是 → Tool Node → LLM总结</span><br><span class="line">  └── 否</span><br><span class="line">  ↓</span><br><span class="line">输出结果</span><br></pre></td></tr></table></figure>
+<h2 id="2️⃣-内部执行流（LangGraph）"><a href="#2️⃣-内部执行流（LangGraph）" class="headerlink" title="2️⃣ 内部执行流（LangGraph）"></a>2️⃣ 内部执行流（LangGraph）</h2><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">用户输入</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">Router Node</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">是否需要RAG？</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  ├── 是 → RAG Node → LLM Node</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  └── 否 → LLM Node</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">是否需要工具？</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  ├── 是 → Tool Node → LLM总结</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  └── 否</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  ↓</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">输出结果</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="四、关键技术实现细节（决定成败）"><a href="#四、关键技术实现细节（决定成败）" class="headerlink" title="四、关键技术实现细节（决定成败）"></a>四、关键技术实现细节（决定成败）</h2><hr>
 <h2 id="1️⃣-OpenAI-Adapter（最核心）"><a href="#1️⃣-OpenAI-Adapter（最核心）" class="headerlink" title="1️⃣ OpenAI Adapter（最核心）"></a>1️⃣ OpenAI Adapter（最核心）</h2><p>作用：<br>👉 把 Open WebUI 请求 → 转成 LangGraph 输入</p>
-<h3 id="输入转换"><a href="#输入转换" class="headerlink" title="输入转换"></a>输入转换</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">convert_messages</span>(<span class="params">messages</span>):</span><br><span class="line">    <span class="keyword">return</span> &#123;</span><br><span class="line">        <span class="string">&quot;input&quot;</span>: messages[-<span class="number">1</span>][<span class="string">&quot;content&quot;</span>],</span><br><span class="line">        <span class="string">&quot;history&quot;</span>: messages</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="输入转换"><a href="#输入转换" class="headerlink" title="输入转换"></a>输入转换</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">convert_messages</span>(<span class="params">messages</span>):</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="keyword">return</span> &#123;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">        <span class="string">&quot;input&quot;</span>: messages[-<span class="number">1</span>][<span class="string">&quot;content&quot;</span>],</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">        <span class="string">&quot;history&quot;</span>: messages</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    &#125;</span></span></code></pre></div></div></figure>
 
 <hr>
-<h2 id="2️⃣-thread-id-设计（必须正确）"><a href="#2️⃣-thread-id-设计（必须正确）" class="headerlink" title="2️⃣ thread_id 设计（必须正确）"></a>2️⃣ thread_id 设计（必须正确）</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">thread_id = <span class="string">f&quot;<span class="subst">&#123;tenant_id&#125;</span>:<span class="subst">&#123;user_id&#125;</span>:<span class="subst">&#123;chat_id&#125;</span>&quot;</span></span><br></pre></td></tr></table></figure>
+<h2 id="2️⃣-thread-id-设计（必须正确）"><a href="#2️⃣-thread-id-设计（必须正确）" class="headerlink" title="2️⃣ thread_id 设计（必须正确）"></a>2️⃣ thread_id 设计（必须正确）</h2><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">thread_id = <span class="string">f&quot;<span class="subst">&#123;tenant_id&#125;</span>:<span class="subst">&#123;user_id&#125;</span>:<span class="subst">&#123;chat_id&#125;</span>&quot;</span></span></span></code></pre></div></div></figure>
 
 <p>否则你会遇到：</p>
 <ul>
@@ -153,7 +306,7 @@
 </ul>
 <hr>
 <h2 id="3️⃣-Checkpointer（生产必须）"><a href="#3️⃣-Checkpointer（生产必须）" class="headerlink" title="3️⃣ Checkpointer（生产必须）"></a>3️⃣ Checkpointer（生产必须）</h2><p>推荐：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> langgraph.checkpoint.postgres <span class="keyword">import</span> PostgresSaver</span><br></pre></td></tr></table></figure>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">from</span> langgraph.checkpoint.postgres <span class="keyword">import</span> PostgresSaver</span></span></code></pre></div></div></figure>
 
 <p>作用：</p>
 <ul>
@@ -163,31 +316,88 @@
 </ul>
 <hr>
 <h2 id="4️⃣-流式输出（必须兼容Open-WebUI）"><a href="#4️⃣-流式输出（必须兼容Open-WebUI）" class="headerlink" title="4️⃣ 流式输出（必须兼容Open WebUI）"></a>4️⃣ 流式输出（必须兼容Open WebUI）</h2><p>格式必须是：</p>
-<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">data: &#123;&quot;choices&quot;:[&#123;&quot;delta&quot;:&#123;&quot;content&quot;:&quot;你&quot;&#125;&#125;]&#125;</span><br><span class="line"></span><br><span class="line">data: &#123;&quot;choices&quot;:[&#123;&quot;delta&quot;:&#123;&quot;content&quot;:&quot;好&quot;&#125;&#125;]&#125;</span><br><span class="line"></span><br><span class="line">data: [DONE]</span><br></pre></td></tr></table></figure>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">data: &#123;&quot;choices&quot;:[&#123;&quot;delta&quot;:&#123;&quot;content&quot;:&quot;你&quot;&#125;&#125;]&#125;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">data: &#123;&quot;choices&quot;:[&#123;&quot;delta&quot;:&#123;&quot;content&quot;:&quot;好&quot;&#125;&#125;]&#125;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">data: [DONE]</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="5️⃣-Redis-的作用（很多人忽略）"><a href="#5️⃣-Redis-的作用（很多人忽略）" class="headerlink" title="5️⃣ Redis 的作用（很多人忽略）"></a>5️⃣ Redis 的作用（很多人忽略）</h2><p>不仅是缓存：</p>
-<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">用途：</span><br><span class="line">- 流式消息中转</span><br><span class="line">- 任务队列</span><br><span class="line">- 分布式锁</span><br><span class="line">- Agent状态同步</span><br></pre></td></tr></table></figure>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">用途：</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">- 流式消息中转</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">- 任务队列</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">- 分布式锁</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">- Agent状态同步</span></span></code></pre></div></div></figure>
 
 <hr>
-<h2 id="五、Docker-Compose（生产简化版）"><a href="#五、Docker-Compose（生产简化版）" class="headerlink" title="五、Docker Compose（生产简化版）"></a>五、Docker Compose（生产简化版）</h2><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">version:</span> <span class="string">&quot;3.9&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="attr">services:</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">open-webui:</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">ghcr.io/open-webui/open-webui:main</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">&quot;3000:8080&quot;</span></span><br><span class="line">    <span class="attr">environment:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">OPENAI_API_BASE_URL=http://gateway/v1</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">langgraph:</span></span><br><span class="line">    <span class="attr">build:</span> <span class="string">./langgraph-backend</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">&quot;8000:8000&quot;</span></span><br><span class="line">    <span class="attr">depends_on:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">postgres</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">redis</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">postgres:</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">pgvector/pgvector:pg16</span></span><br><span class="line">    <span class="attr">environment:</span></span><br><span class="line">      <span class="attr">POSTGRES_USER:</span> <span class="string">admin</span></span><br><span class="line">      <span class="attr">POSTGRES_PASSWORD:</span> <span class="string">admin</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">&quot;5432:5432&quot;</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">redis:</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">redis:7</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">&quot;6379:6379&quot;</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">gateway:</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">volumes:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">./nginx.conf:/etc/nginx/nginx.conf</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">&quot;8080:80&quot;</span></span><br></pre></td></tr></table></figure>
+<h2 id="五、Docker-Compose（生产简化版）"><a href="#五、Docker-Compose（生产简化版）" class="headerlink" title="五、Docker Compose（生产简化版）"></a>五、Docker Compose（生产简化版）</h2><figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="38"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">version:</span> <span class="string">&quot;3.9&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">services:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">open-webui:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">ghcr.io/open-webui/open-webui:main</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;3000:8080&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="attr">environment:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">OPENAI_API_BASE_URL=http://gateway/v1</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="attr">langgraph:</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">build:</span> <span class="string">./langgraph-backend</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;8000:8000&quot;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="attr">depends_on:</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">postgres</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">redis</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">  <span class="attr">postgres:</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">pgvector/pgvector:pg16</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="attr">environment:</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">      <span class="attr">POSTGRES_USER:</span> <span class="string">admin</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">      <span class="attr">POSTGRES_PASSWORD:</span> <span class="string">admin</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;5432:5432&quot;</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">  <span class="attr">redis:</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">redis:7</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;6379:6379&quot;</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">  <span class="attr">gateway:</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">nginx</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    <span class="attr">volumes:</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">./nginx.conf:/etc/nginx/nginx.conf</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;8080:80&quot;</span></span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="六、生产级增强（你这个项目必须考虑）"><a href="#六、生产级增强（你这个项目必须考虑）" class="headerlink" title="六、生产级增强（你这个项目必须考虑）"></a>六、生产级增强（你这个项目必须考虑）</h2><hr>
 <h2 id="✅-1-多Agent协作（你之前重点提过）"><a href="#✅-1-多Agent协作（你之前重点提过）" class="headerlink" title="✅ 1. 多Agent协作（你之前重点提过）"></a>✅ 1. 多Agent协作（你之前重点提过）</h2><p>建议：</p>
-<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Agent类型：</span><br><span class="line">- 诊断Agent</span><br><span class="line">- RAG Agent</span><br><span class="line">- 工具Agent</span><br><span class="line">- 决策Agent（Router）</span><br></pre></td></tr></table></figure>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Agent类型：</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">- 诊断Agent</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">- RAG Agent</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">- 工具Agent</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">- 决策Agent（Router）</span></span></code></pre></div></div></figure>
 
 <p>用 LangGraph 做：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">router -&gt; specialist_agent -&gt; merge</span><br></pre></td></tr></table></figure>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">router -&gt; specialist_agent -&gt; merge</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="✅-2-可视化执行轨迹（企业级）"><a href="#✅-2-可视化执行轨迹（企业级）" class="headerlink" title="✅ 2. 可视化执行轨迹（企业级）"></a>✅ 2. 可视化执行轨迹（企业级）</h2><p>你可以实现：</p>
-<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">节点执行日志：</span><br><span class="line">- node_start</span><br><span class="line">- node_end</span><br><span class="line">- tool_call</span><br><span class="line">- tool_result</span><br></pre></td></tr></table></figure>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">节点执行日志：</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">- node_start</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">- node_end</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">- tool_call</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">- tool_result</span></span></code></pre></div></div></figure>
 
 <p>然后在 Open WebUI 做：<br>👉 “推理过程面板”</p>
 <hr>
 <h2 id="✅-3-LangSmith-替代（你之前提到）"><a href="#✅-3-LangSmith-替代（你之前提到）" class="headerlink" title="✅ 3. LangSmith 替代（你之前提到）"></a>✅ 3. LangSmith 替代（你之前提到）</h2><p>你可以自建：</p>
-<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">trace_id</span><br><span class="line">run_id</span><br><span class="line">node logs</span><br><span class="line">latency</span><br><span class="line">token usage</span><br></pre></td></tr></table></figure>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">trace_id</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">run_id</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">node logs</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">latency</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">token usage</span></span></code></pre></div></div></figure>
 
 <p>存入：</p>
 <ul>
@@ -195,7 +405,9 @@
 <li>或 Elasticsearch</li>
 </ul>
 <hr>
-<h2 id="✅-4-模型路由（成本优化关键）"><a href="#✅-4-模型路由（成本优化关键）" class="headerlink" title="✅ 4. 模型路由（成本优化关键）"></a>✅ 4. 模型路由（成本优化关键）</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">简单问题 → 小模型</span><br><span class="line">复杂推理 → GPT-4 / DeepSeek</span><br><span class="line">RAG → embedding模型</span><br></pre></td></tr></table></figure>
+<h2 id="✅-4-模型路由（成本优化关键）"><a href="#✅-4-模型路由（成本优化关键）" class="headerlink" title="✅ 4. 模型路由（成本优化关键）"></a>✅ 4. 模型路由（成本优化关键）</h2><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">简单问题 → 小模型</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">复杂推理 → GPT-4 / DeepSeek</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">RAG → embedding模型</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="七、你这个方案的最终定位"><a href="#七、你这个方案的最终定位" class="headerlink" title="七、你这个方案的最终定位"></a>七、你这个方案的最终定位</h2><p>这套架构本质是：</p>
@@ -271,7 +483,21 @@
 <p><strong>“低代码AI应用平台”</strong></p>
 </blockquote>
 <hr>
-<h2 id="二、总体集成架构（企业级推荐）"><a href="#二、总体集成架构（企业级推荐）" class="headerlink" title="二、总体集成架构（企业级推荐）"></a>二、总体集成架构（企业级推荐）</h2><h2 id="✅-推荐：三层解耦架构"><a href="#✅-推荐：三层解耦架构" class="headerlink" title="✅ 推荐：三层解耦架构"></a>✅ 推荐：三层解耦架构</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">                ┌──────────────────────────┐</span><br><span class="line">                │      Open WebUI          │</span><br><span class="line">                │ (统一入口 / UI / API网关) │</span><br><span class="line">                └──────────┬───────────────┘</span><br><span class="line">                           │</span><br><span class="line">        ┌──────────────────┼──────────────────┐</span><br><span class="line">        │                  │                  │</span><br><span class="line">        ▼                  ▼                  ▼</span><br><span class="line">┌───────────────┐  ┌───────────────┐  ┌───────────────┐</span><br><span class="line">│ LangGraph API │  │ Dify API      │  │ LLM Provider  │</span><br><span class="line">│ (Agent引擎)   │  │ (应用平台)    │  │ (OpenAI等)    │</span><br><span class="line">└───────────────┘  └───────────────┘  └───────────────┘</span><br><span class="line"></span><br><span class="line">               ↓（统一通过）</span><br><span class="line">        OpenAI-Compatible Layer</span><br></pre></td></tr></table></figure>
+<h2 id="二、总体集成架构（企业级推荐）"><a href="#二、总体集成架构（企业级推荐）" class="headerlink" title="二、总体集成架构（企业级推荐）"></a>二、总体集成架构（企业级推荐）</h2><h2 id="✅-推荐：三层解耦架构"><a href="#✅-推荐：三层解耦架构" class="headerlink" title="✅ 推荐：三层解耦架构"></a>✅ 推荐：三层解耦架构</h2><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">                ┌──────────────────────────┐</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">                │      Open WebUI          │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                │ (统一入口 / UI / API网关) │</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">                └──────────┬───────────────┘</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">                           │</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        ┌──────────────────┼──────────────────┐</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        │                  │                  │</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        ▼                  ▼                  ▼</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">┌───────────────┐  ┌───────────────┐  ┌───────────────┐</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">│ LangGraph API │  │ Dify API      │  │ LLM Provider  │</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">│ (Agent引擎)   │  │ (应用平台)    │  │ (OpenAI等)    │</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">└───────────────┘  └───────────────┘  └───────────────┘</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">               ↓（统一通过）</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        OpenAI-Compatible Layer</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="🔥-核心原则（非常重要）"><a href="#🔥-核心原则（非常重要）" class="headerlink" title="🔥 核心原则（非常重要）"></a>🔥 核心原则（非常重要）</h2><ol>
@@ -281,15 +507,41 @@
 </ol>
 <p>👉 这是成功关键</p>
 <hr>
-<h2 id="三、LangGraph-集成方案（重点）"><a href="#三、LangGraph-集成方案（重点）" class="headerlink" title="三、LangGraph 集成方案（重点）"></a>三、LangGraph 集成方案（重点）</h2><h2 id="✅-方案一（推荐）：OpenAI兼容-API（最佳实践）"><a href="#✅-方案一（推荐）：OpenAI兼容-API（最佳实践）" class="headerlink" title="✅ 方案一（推荐）：OpenAI兼容 API（最佳实践）"></a>✅ 方案一（推荐）：OpenAI兼容 API（最佳实践）</h2><h3 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Open WebUI</span><br><span class="line">   ↓</span><br><span class="line">Custom OpenAI API</span><br><span class="line">   ↓</span><br><span class="line">LangGraph Server</span><br></pre></td></tr></table></figure>
+<h2 id="三、LangGraph-集成方案（重点）"><a href="#三、LangGraph-集成方案（重点）" class="headerlink" title="三、LangGraph 集成方案（重点）"></a>三、LangGraph 集成方案（重点）</h2><h2 id="✅-方案一（推荐）：OpenAI兼容-API（最佳实践）"><a href="#✅-方案一（推荐）：OpenAI兼容-API（最佳实践）" class="headerlink" title="✅ 方案一（推荐）：OpenAI兼容 API（最佳实践）"></a>✅ 方案一（推荐）：OpenAI兼容 API（最佳实践）</h2><h3 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Open WebUI</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">   ↓</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">Custom OpenAI API</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">   ↓</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">LangGraph Server</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="1-LangGraph-服务封装"><a href="#1-LangGraph-服务封装" class="headerlink" title="1. LangGraph 服务封装"></a>1. LangGraph 服务封装</h2><p>用 FastAPI 封装：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span><br><span class="line"><span class="keyword">from</span> langgraph.graph <span class="keyword">import</span> StateGraph</span><br><span class="line"></span><br><span class="line">app = FastAPI()</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/v1/chat/completions&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">req: <span class="built_in">dict</span></span>):</span><br><span class="line">    user_input = req[<span class="string">&quot;messages&quot;</span>][-<span class="number">1</span>][<span class="string">&quot;content&quot;</span>]</span><br><span class="line"></span><br><span class="line">    result = graph.invoke(&#123;</span><br><span class="line">        <span class="string">&quot;input&quot;</span>: user_input</span><br><span class="line">    &#125;)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> &#123;</span><br><span class="line">        <span class="string">&quot;choices&quot;</span>: [&#123;</span><br><span class="line">            <span class="string">&quot;message&quot;</span>: &#123;</span><br><span class="line">                <span class="string">&quot;role&quot;</span>: <span class="string">&quot;assistant&quot;</span>,</span><br><span class="line">                <span class="string">&quot;content&quot;</span>: result[<span class="string">&quot;output&quot;</span>]</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;]</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="21"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">from</span> langgraph.graph <span class="keyword">import</span> StateGraph</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">app = FastAPI()</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/v1/chat/completions&quot;</span></span>)</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">req: <span class="built_in">dict</span></span>):</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    user_input = req[<span class="string">&quot;messages&quot;</span>][-<span class="number">1</span>][<span class="string">&quot;content&quot;</span>]</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    result = graph.invoke(&#123;</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        <span class="string">&quot;input&quot;</span>: user_input</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    &#125;)</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="keyword">return</span> &#123;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        <span class="string">&quot;choices&quot;</span>: [&#123;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">            <span class="string">&quot;message&quot;</span>: &#123;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">                <span class="string">&quot;role&quot;</span>: <span class="string">&quot;assistant&quot;</span>,</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">                <span class="string">&quot;content&quot;</span>: result[<span class="string">&quot;output&quot;</span>]</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">        &#125;]</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    &#125;</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="2-Open-WebUI-接入"><a href="#2-Open-WebUI-接入" class="headerlink" title="2. Open WebUI 接入"></a>2. Open WebUI 接入</h2><p>后台设置：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Connection Type: OpenAI</span><br><span class="line">Base URL: http://langgraph:8000/v1</span><br><span class="line">API Key: any</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Connection Type: OpenAI</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">Base URL: http://langgraph:8000/v1</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">API Key: any</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="3-优势"><a href="#3-优势" class="headerlink" title="3. 优势"></a>3. 优势</h2><ul>
@@ -299,7 +551,9 @@
 </ul>
 <hr>
 <h2 id="4-高级增强（企业级）"><a href="#4-高级增强（企业级）" class="headerlink" title="4. 高级增强（企业级）"></a>4. 高级增强（企业级）</h2><h3 id="✅-状态持久化"><a href="#✅-状态持久化" class="headerlink" title="✅ 状态持久化"></a>✅ 状态持久化</h3><p>LangGraph：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">graph = builder.<span class="built_in">compile</span>(</span><br><span class="line">    checkpointer=RedisSaver()</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">graph = builder.<span class="built_in">compile</span>(</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    checkpointer=RedisSaver()</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">)</span></span></code></pre></div></div></figure>
 
 <p>👉 实现：</p>
 <ul>
@@ -307,7 +561,8 @@
 <li>Agent长期记忆</li>
 </ul>
 <hr>
-<h3 id="✅-流式输出（必须做）"><a href="#✅-流式输出（必须做）" class="headerlink" title="✅ 流式输出（必须做）"></a>✅ 流式输出（必须做）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">async</span> <span class="keyword">for</span> event <span class="keyword">in</span> graph.astream_events(...):</span><br><span class="line">    <span class="keyword">yield</span> event</span><br></pre></td></tr></table></figure>
+<h3 id="✅-流式输出（必须做）"><a href="#✅-流式输出（必须做）" class="headerlink" title="✅ 流式输出（必须做）"></a>✅ 流式输出（必须做）</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">for</span> event <span class="keyword">in</span> graph.astream_events(...):</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="keyword">yield</span> event</span></span></code></pre></div></div></figure>
 
 <p>👉 对接 Open WebUI streaming</p>
 <hr>
@@ -316,7 +571,7 @@
 <p>Pipeline &#x2F; Function Pipe 可拦截请求 citeturn0search0  </p>
 </blockquote>
 <p>👉 用法：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">User → Pipe → LangGraph → Pipe → UI</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">User → Pipe → LangGraph → Pipe → UI</span></span></code></pre></div></div></figure>
 
 <p>优势：</p>
 <ul>
@@ -329,7 +584,21 @@
 </ul>
 <p>👉 GitHub已有实践 citeturn0search7  </p>
 <hr>
-<h2 id="6-企业级-LangGraph-架构"><a href="#6-企业级-LangGraph-架构" class="headerlink" title="6. 企业级 LangGraph 架构"></a>6. 企业级 LangGraph 架构</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">                ┌───────────────┐</span><br><span class="line">                │ API Gateway   │</span><br><span class="line">                └──────┬────────┘</span><br><span class="line">                       │</span><br><span class="line">        ┌──────────────┼──────────────┐</span><br><span class="line">        ▼                             ▼</span><br><span class="line">┌───────────────┐            ┌───────────────┐</span><br><span class="line">│ LangGraph Core│            │ Tool Servers  │</span><br><span class="line">│               │            │ (MCP / RAG)   │</span><br><span class="line">└──────┬────────┘            └───────────────┘</span><br><span class="line">       │</span><br><span class="line">┌──────▼────────┐</span><br><span class="line">│ Redis / DB    │</span><br><span class="line">│ State Store   │</span><br><span class="line">└───────────────┘</span><br></pre></td></tr></table></figure>
+<h2 id="6-企业级-LangGraph-架构"><a href="#6-企业级-LangGraph-架构" class="headerlink" title="6. 企业级 LangGraph 架构"></a>6. 企业级 LangGraph 架构</h2><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">                ┌───────────────┐</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">                │ API Gateway   │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                └──────┬────────┘</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">                       │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        ┌──────────────┼──────────────┐</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        ▼                             ▼</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">┌───────────────┐            ┌───────────────┐</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">│ LangGraph Core│            │ Tool Servers  │</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">│               │            │ (MCP / RAG)   │</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">└──────┬────────┘            └───────────────┘</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">       │</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">┌──────▼────────┐</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">│ Redis / DB    │</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">│ State Store   │</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">└───────────────┘</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="四、Dify-集成方案（难点重点）"><a href="#四、Dify-集成方案（难点重点）" class="headerlink" title="四、Dify 集成方案（难点重点）"></a>四、Dify 集成方案（难点重点）</h2><h2 id="⚠️-关键问题"><a href="#⚠️-关键问题" class="headerlink" title="⚠️ 关键问题"></a>⚠️ 关键问题</h2><p>Dify <strong>不是 OpenAI兼容</strong></p>
@@ -340,10 +609,33 @@
 </ul>
 <hr>
 <h2 id="✅-解决方案：三种方式"><a href="#✅-解决方案：三种方式" class="headerlink" title="✅ 解决方案：三种方式"></a>✅ 解决方案：三种方式</h2><hr>
-<h2 id="方案一（推荐）：Adapter适配层"><a href="#方案一（推荐）：Adapter适配层" class="headerlink" title="方案一（推荐）：Adapter适配层"></a>方案一（推荐）：Adapter适配层</h2><h2 id="架构-1"><a href="#架构-1" class="headerlink" title="架构"></a>架构</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Open WebUI</span><br><span class="line">   ↓</span><br><span class="line">Dify Adapter (自建)</span><br><span class="line">   ↓</span><br><span class="line">Dify API</span><br></pre></td></tr></table></figure>
+<h2 id="方案一（推荐）：Adapter适配层"><a href="#方案一（推荐）：Adapter适配层" class="headerlink" title="方案一（推荐）：Adapter适配层"></a>方案一（推荐）：Adapter适配层</h2><h2 id="架构-1"><a href="#架构-1" class="headerlink" title="架构"></a>架构</h2><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Open WebUI</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">   ↓</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">Dify Adapter (自建)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">   ↓</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">Dify API</span></span></code></pre></div></div></figure>
 
 <hr>
-<h2 id="1-Adapter实现"><a href="#1-Adapter实现" class="headerlink" title="1. Adapter实现"></a>1. Adapter实现</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/v1/chat/completions&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">req</span>):</span><br><span class="line">    user_input = req[<span class="string">&quot;messages&quot;</span>][-<span class="number">1</span>][<span class="string">&quot;content&quot;</span>]</span><br><span class="line"></span><br><span class="line">    resp = requests.post(</span><br><span class="line">        <span class="string">&quot;http://dify/v1/workflows/&#123;id&#125;/run&quot;</span>,</span><br><span class="line">        headers=&#123;<span class="string">&quot;Authorization&quot;</span>: <span class="string">&quot;Bearer xxx&quot;</span>&#125;,</span><br><span class="line">        json=&#123;<span class="string">&quot;inputs&quot;</span>: &#123;<span class="string">&quot;query&quot;</span>: user_input&#125;&#125;</span><br><span class="line">    )</span><br><span class="line"></span><br><span class="line">    result = resp.json()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> &#123;</span><br><span class="line">        <span class="string">&quot;choices&quot;</span>: [&#123;</span><br><span class="line">            <span class="string">&quot;message&quot;</span>: &#123;</span><br><span class="line">                <span class="string">&quot;role&quot;</span>: <span class="string">&quot;assistant&quot;</span>,</span><br><span class="line">                <span class="string">&quot;content&quot;</span>: result[<span class="string">&quot;data&quot;</span>][<span class="string">&quot;outputs&quot;</span>][<span class="string">&quot;text&quot;</span>]</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;]</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<h2 id="1-Adapter实现"><a href="#1-Adapter实现" class="headerlink" title="1. Adapter实现"></a>1. Adapter实现</h2><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="20"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/v1/chat/completions&quot;</span></span>)</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">req</span>):</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    user_input = req[<span class="string">&quot;messages&quot;</span>][-<span class="number">1</span>][<span class="string">&quot;content&quot;</span>]</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    resp = requests.post(</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="string">&quot;http://dify/v1/workflows/&#123;id&#125;/run&quot;</span>,</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        headers=&#123;<span class="string">&quot;Authorization&quot;</span>: <span class="string">&quot;Bearer xxx&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        json=&#123;<span class="string">&quot;inputs&quot;</span>: &#123;<span class="string">&quot;query&quot;</span>: user_input&#125;&#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    )</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    result = resp.json()</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="keyword">return</span> &#123;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="string">&quot;choices&quot;</span>: [&#123;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">            <span class="string">&quot;message&quot;</span>: &#123;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">                <span class="string">&quot;role&quot;</span>: <span class="string">&quot;assistant&quot;</span>,</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">                <span class="string">&quot;content&quot;</span>: result[<span class="string">&quot;data&quot;</span>][<span class="string">&quot;outputs&quot;</span>][<span class="string">&quot;text&quot;</span>]</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">        &#125;]</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    &#125;</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="2-关键适配点"><a href="#2-关键适配点" class="headerlink" title="2. 关键适配点"></a>2. 关键适配点</h2><h2 id="3-优势-1"><a href="#3-优势-1" class="headerlink" title="3. 优势"></a>3. 优势</h2><ul>
@@ -353,7 +645,7 @@
 </ul>
 <hr>
 <h2 id="方案二：直接调用-Workflow-API（简单但弱）"><a href="#方案二：直接调用-Workflow-API（简单但弱）" class="headerlink" title="方案二：直接调用 Workflow API（简单但弱）"></a>方案二：直接调用 Workflow API（简单但弱）</h2><p>Open WebUI 配置：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Base URL: http://dify/v1/workflows/&#123;id&#125;/run</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Base URL: http://dify/v1/workflows/&#123;id&#125;/run</span></span></code></pre></div></div></figure>
 
 <p>但问题：</p>
 <ul>
@@ -361,7 +653,16 @@
 <li>❌ 无法多应用切换</li>
 </ul>
 <hr>
-<h2 id="方案三（企业级）：Dify-Gateway"><a href="#方案三（企业级）：Dify-Gateway" class="headerlink" title="方案三（企业级）：Dify Gateway"></a>方案三（企业级）：Dify Gateway</h2><h2 id="架构-2"><a href="#架构-2" class="headerlink" title="架构"></a>架构</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">        Open WebUI</span><br><span class="line">             ↓</span><br><span class="line">        AI Gateway（你做）</span><br><span class="line">      ┌───────────────┐</span><br><span class="line">      │ Model Router  │</span><br><span class="line">      └──────┬────────┘</span><br><span class="line">             │</span><br><span class="line">   ┌─────────┼─────────┐</span><br><span class="line">   ▼                   ▼</span><br><span class="line">LangGraph          Dify</span><br></pre></td></tr></table></figure>
+<h2 id="方案三（企业级）：Dify-Gateway"><a href="#方案三（企业级）：Dify-Gateway" class="headerlink" title="方案三（企业级）：Dify Gateway"></a>方案三（企业级）：Dify Gateway</h2><h2 id="架构-2"><a href="#架构-2" class="headerlink" title="架构"></a>架构</h2><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">        Open WebUI</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">             ↓</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">        AI Gateway（你做）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      ┌───────────────┐</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      │ Model Router  │</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      └──────┬────────┘</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">             │</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">   ┌─────────┼─────────┐</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">   ▼                   ▼</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">LangGraph          Dify</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="Gateway能力"><a href="#Gateway能力" class="headerlink" title="Gateway能力"></a>Gateway能力</h2><ul>
@@ -371,17 +672,45 @@
 <li>SLA控制</li>
 </ul>
 <hr>
-<h2 id="五、统一集成架构（推荐最终版）"><a href="#五、统一集成架构（推荐最终版）" class="headerlink" title="五、统一集成架构（推荐最终版）"></a>五、统一集成架构（推荐最终版）</h2><h2 id="⭐-企业级最终形态"><a href="#⭐-企业级最终形态" class="headerlink" title="⭐ 企业级最终形态"></a>⭐ 企业级最终形态</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">                  ┌────────────────────┐</span><br><span class="line">                  │    Open WebUI      │</span><br><span class="line">                  │  (统一入口 UI)     │</span><br><span class="line">                  └────────┬───────────┘</span><br><span class="line">                           │</span><br><span class="line">                 ┌─────────▼─────────┐</span><br><span class="line">                 │   AI Gateway      │</span><br><span class="line">                 │ (OpenAI兼容层)    │</span><br><span class="line">                 └──────┬───────┬────┘</span><br><span class="line">                        │       │</span><br><span class="line">        ┌───────────────▼       ▼───────────────┐</span><br><span class="line">        │                                       │</span><br><span class="line">┌───────────────┐                      ┌───────────────┐</span><br><span class="line">│ LangGraph     │                      │ Dify Platform │</span><br><span class="line">│ 多Agent系统   │                      │ 应用编排      │</span><br><span class="line">└───────────────┘                      └───────────────┘</span><br><span class="line"></span><br><span class="line">        │                                       │</span><br><span class="line">        ▼                                       ▼</span><br><span class="line"> Tool Server / RAG                    Vector DB / Prompt</span><br></pre></td></tr></table></figure>
+<h2 id="五、统一集成架构（推荐最终版）"><a href="#五、统一集成架构（推荐最终版）" class="headerlink" title="五、统一集成架构（推荐最终版）"></a>五、统一集成架构（推荐最终版）</h2><h2 id="⭐-企业级最终形态"><a href="#⭐-企业级最终形态" class="headerlink" title="⭐ 企业级最终形态"></a>⭐ 企业级最终形态</h2><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="20"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">                  ┌────────────────────┐</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">                  │    Open WebUI      │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                  │  (统一入口 UI)     │</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">                  └────────┬───────────┘</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">                           │</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">                 ┌─────────▼─────────┐</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">                 │   AI Gateway      │</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">                 │ (OpenAI兼容层)    │</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">                 └──────┬───────┬────┘</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                        │       │</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        ┌───────────────▼       ▼───────────────┐</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        │                                       │</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">┌───────────────┐                      ┌───────────────┐</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">│ LangGraph     │                      │ Dify Platform │</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">│ 多Agent系统   │                      │ 应用编排      │</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">└───────────────┘                      └───────────────┘</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">        │                                       │</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">        ▼                                       ▼</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"> Tool Server / RAG                    Vector DB / Prompt</span></span></code></pre></div></div></figure>
 
 <hr>
-<h2 id="六、关键能力设计（你项目必须做）"><a href="#六、关键能力设计（你项目必须做）" class="headerlink" title="六、关键能力设计（你项目必须做）"></a>六、关键能力设计（你项目必须做）</h2><h2 id="1-模型统一抽象"><a href="#1-模型统一抽象" class="headerlink" title="1. 模型统一抽象"></a>1. 模型统一抽象</h2><figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;model&quot;</span><span class="punctuation">:</span> <span class="string">&quot;langgraph-diagnosis&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;provider&quot;</span><span class="punctuation">:</span> <span class="string">&quot;custom&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;endpoint&quot;</span><span class="punctuation">:</span> <span class="string">&quot;/v1/chat/completions&quot;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<h2 id="六、关键能力设计（你项目必须做）"><a href="#六、关键能力设计（你项目必须做）" class="headerlink" title="六、关键能力设计（你项目必须做）"></a>六、关键能力设计（你项目必须做）</h2><h2 id="1-模型统一抽象"><a href="#1-模型统一抽象" class="headerlink" title="1. 模型统一抽象"></a>1. 模型统一抽象</h2><figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;model&quot;</span><span class="punctuation">:</span> <span class="string">&quot;langgraph-diagnosis&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;provider&quot;</span><span class="punctuation">:</span> <span class="string">&quot;custom&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;endpoint&quot;</span><span class="punctuation">:</span> <span class="string">&quot;/v1/chat/completions&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
 
 <hr>
-<h2 id="2-Agent路由策略"><a href="#2-Agent路由策略" class="headerlink" title="2. Agent路由策略"></a>2. Agent路由策略</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> <span class="string">&quot;诊断&quot;</span> <span class="keyword">in</span> query:</span><br><span class="line">    route = <span class="string">&quot;langgraph&quot;</span></span><br><span class="line"><span class="keyword">elif</span> <span class="string">&quot;问答&quot;</span> <span class="keyword">in</span> query:</span><br><span class="line">    route = <span class="string">&quot;dify&quot;</span></span><br></pre></td></tr></table></figure>
+<h2 id="2-Agent路由策略"><a href="#2-Agent路由策略" class="headerlink" title="2. Agent路由策略"></a>2. Agent路由策略</h2><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">if</span> <span class="string">&quot;诊断&quot;</span> <span class="keyword">in</span> query:</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    route = <span class="string">&quot;langgraph&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">elif</span> <span class="string">&quot;问答&quot;</span> <span class="keyword">in</span> query:</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    route = <span class="string">&quot;dify&quot;</span></span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="3-多Agent可视化（你前面提的）"><a href="#3-多Agent可视化（你前面提的）" class="headerlink" title="3. 多Agent可视化（你前面提的）"></a>3. 多Agent可视化（你前面提的）</h2><p>通过 Pipe 输出：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[Agent1] thinking...</span><br><span class="line">[Tool] calling OBD API</span><br><span class="line">[Agent2] analyzing...</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">[Agent1] thinking...</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">[Tool] calling OBD API</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">[Agent2] analyzing...</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="4-可观测性（强烈建议）"><a href="#4-可观测性（强烈建议）" class="headerlink" title="4. 可观测性（强烈建议）"></a>4. 可观测性（强烈建议）</h2><p>集成：</p>
@@ -389,7 +718,7 @@
 <li>Langfuse（官方支持） citeturn0search0</li>
 </ul>
 <hr>
-<h2 id="七、对比总结（核心区别）"><a href="#七、对比总结（核心区别）" class="headerlink" title="七、对比总结（核心区别）"></a>七、对比总结（核心区别）</h2><h2 id="八、最终落地建议（非常关键）"><a href="#八、最终落地建议（非常关键）" class="headerlink" title="八、最终落地建议（非常关键）"></a>八、最终落地建议（非常关键）</h2><h2 id="✅-推荐组合"><a href="#✅-推荐组合" class="headerlink" title="✅ 推荐组合"></a>✅ 推荐组合</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Open WebUI + AI Gateway + LangGraph + Dify</span><br></pre></td></tr></table></figure>
+<h2 id="七、对比总结（核心区别）"><a href="#七、对比总结（核心区别）" class="headerlink" title="七、对比总结（核心区别）"></a>七、对比总结（核心区别）</h2><h2 id="八、最终落地建议（非常关键）"><a href="#八、最终落地建议（非常关键）" class="headerlink" title="八、最终落地建议（非常关键）"></a>八、最终落地建议（非常关键）</h2><h2 id="✅-推荐组合"><a href="#✅-推荐组合" class="headerlink" title="✅ 推荐组合"></a>✅ 推荐组合</h2><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Open WebUI + AI Gateway + LangGraph + Dify</span></span></code></pre></div></div></figure>
 
 <h3 id="职责划分："><a href="#职责划分：" class="headerlink" title="职责划分："></a>职责划分：</h3><ul>
 <li>Open WebUI → UI入口</li>
@@ -399,7 +728,8 @@
 </ul>
 <hr>
 <h2 id="九、如果你要做“设备诊断专家”"><a href="#九、如果你要做“设备诊断专家”" class="headerlink" title="九、如果你要做“设备诊断专家”"></a>九、如果你要做“设备诊断专家”</h2><p>建议：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LangGraph → 故障诊断核心</span><br><span class="line">Dify → 客服 / FAQ / 报告生成</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">LangGraph → 故障诊断核心</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">Dify → 客服 / FAQ / 报告生成</span></span></code></pre></div></div></figure>
 
 <hr>
 <h2 id="十、如果你要我继续"><a href="#十、如果你要我继续" class="headerlink" title="十、如果你要我继续"></a>十、如果你要我继续</h2><p>我可以直接给你：</p>
@@ -555,19 +885,19 @@
 <h2 id="可选补充：你只想“嵌入到自己网站-业务系统”？"><a href="#可选补充：你只想“嵌入到自己网站-业务系统”？" class="headerlink" title="可选补充：你只想“嵌入到自己网站&#x2F;业务系统”？"></a>可选补充：你只想“嵌入到自己网站&#x2F;业务系统”？</h2><p>如果某些应用只需要“嵌入式聊天窗”，可以用现成的 Dify chat widget 组件（React&#x2F;Widget），把它当局部能力入口。citeturn30search3turn30search11<br>但它解决的是“单入口嵌入”，不是你要的“AI Hub”。</p>
 <hr>
 <p>如果你愿意，我可以按你现有的 Dify 应用清单（比如：问答&#x2F;翻译&#x2F;调研&#x2F;PPT&#x2F;生图&#x2F;格式转换…各对应哪个 Dify App 类型）给你一份 <strong>“Dify App → Hub 前台信息架构 + Gateway 路由设计 + 数据表结构&#x2F;接口草案”</strong>，直接照着开干。</p>
-<h3 id="4-方案详述（来源：Dify-集成前台方案）"><a href="#4-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="4. 方案详述（来源：Dify 集成前台方案）"></a>4. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;LibreChat open source multi-user web UI supports OpenAI compatible endpoint&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Open WebUI open source multi-user supports OpenAI API compatible server&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat open source PWA multi agent plugin system NextAuth multiuser&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;ChatGPTNextWeb NextChat PWA self-hosted open source custom endpoint&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="4-方案详述（来源：Dify-集成前台方案）"><a href="#4-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="4. 方案详述（来源：Dify 集成前台方案）"></a>4. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;LibreChat open source multi-user web UI supports OpenAI compatible endpoint&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Open WebUI open source multi-user supports OpenAI API compatible server&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat open source PWA multi agent plugin system NextAuth multiuser&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;ChatGPTNextWeb NextChat PWA self-hosted open source custom endpoint&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span></span></code></pre></div></div></figure>
 
-<h3 id="5-方案详述（来源：Dify-集成前台方案）"><a href="#5-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="5. 方案详述（来源：Dify 集成前台方案）"></a>5. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;\&quot;OpenAI Compatible Dify App\&quot; endpoint \&quot;/e/\&quot; chat/completions&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;oaicompat_dify_app endpoint url /e/ chat/completions documentation&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;OpenAI Compatible Dify App plugin how to use endpoint name model&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;endpoint plugin openai compatible dify app setup&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="5-方案详述（来源：Dify-集成前台方案）"><a href="#5-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="5. 方案详述（来源：Dify 集成前台方案）"></a>5. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;\&quot;OpenAI Compatible Dify App\&quot; endpoint \&quot;/e/\&quot; chat/completions&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;oaicompat_dify_app endpoint url /e/ chat/completions documentation&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;OpenAI Compatible Dify App plugin how to use endpoint name model&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;endpoint plugin openai compatible dify app setup&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span></span></code></pre></div></div></figure>
 
-<h3 id="6-方案详述（来源：Dify-集成前台方案）"><a href="#6-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="6. 方案详述（来源：Dify 集成前台方案）"></a>6. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;langgenius webapp-conversation dify frontend template GitHub&quot;,&quot;recency&quot;:3650&#125;,&#123;&quot;q&quot;:&quot;dify webapp template webapp-text-generation GitHub langgenius&quot;,&quot;recency&quot;:3650&#125;,&#123;&quot;q&quot;:&quot;Dify docs Re-develop based on frontend templates webapp-conversation&quot;,&quot;recency&quot;:3650&#125;,&#123;&quot;q&quot;:&quot;dify-chat-widget npm dify chat widget&quot;,&quot;recency&quot;:3650&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="6-方案详述（来源：Dify-集成前台方案）"><a href="#6-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="6. 方案详述（来源：Dify 集成前台方案）"></a>6. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;langgenius webapp-conversation dify frontend template GitHub&quot;,&quot;recency&quot;:3650&#125;,&#123;&quot;q&quot;:&quot;dify webapp template webapp-text-generation GitHub langgenius&quot;,&quot;recency&quot;:3650&#125;,&#123;&quot;q&quot;:&quot;Dify docs Re-develop based on frontend templates webapp-conversation&quot;,&quot;recency&quot;:3650&#125;,&#123;&quot;q&quot;:&quot;dify-chat-widget npm dify chat widget&quot;,&quot;recency&quot;:3650&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span></span></code></pre></div></div></figure>
 
-<h3 id="7-方案详述（来源：Dify-集成前台方案）"><a href="#7-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="7. 方案详述（来源：Dify 集成前台方案）"></a>7. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;oaicompat_dify_app plugin Dify OpenAI compatible app API&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;oaicompat_dify_model plugin Dify openai compatible model&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Dify OpenAI compatibility plugin oaicompat_dify_app documentation&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Dify OpenAI compatible service API plugin release&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="7-方案详述（来源：Dify-集成前台方案）"><a href="#7-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="7. 方案详述（来源：Dify 集成前台方案）"></a>7. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;oaicompat_dify_app plugin Dify OpenAI compatible app API&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;oaicompat_dify_model plugin Dify openai compatible model&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Dify OpenAI compatibility plugin oaicompat_dify_app documentation&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Dify OpenAI compatible service API plugin release&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span></span></code></pre></div></div></figure>
 
-<h3 id="8-方案详述（来源：Dify-集成前台方案）"><a href="#8-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="8. 方案详述（来源：Dify 集成前台方案）"></a>8. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;lobehub lobe-chat github repository multi model PWA&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat custom openai endpoint environment variable OPENAI_API_BASE_URL&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat provider configuration openai compatible endpoint&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat Dify2OpenAI integration tutorial&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="8-方案详述（来源：Dify-集成前台方案）"><a href="#8-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="8. 方案详述（来源：Dify 集成前台方案）"></a>8. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;lobehub lobe-chat github repository multi model PWA&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat custom openai endpoint environment variable OPENAI_API_BASE_URL&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat provider configuration openai compatible endpoint&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;LobeChat Dify2OpenAI integration tutorial&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span></span></code></pre></div></div></figure>
 
-<h3 id="9-方案详述（来源：Dify-集成前台方案）"><a href="#9-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="9. 方案详述（来源：Dify 集成前台方案）"></a>9. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;NextChat custom endpoint API base URL environment variable BASE_URL OpenAI&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;ChatGPTNextWeb NextChat environment variables OPENAI_API_BASE_URL BASE_URL&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;NextChat deploy env OPENAI_API_BASE&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;NextChat proxy api url settings openai&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="9-方案详述（来源：Dify-集成前台方案）"><a href="#9-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="9. 方案详述（来源：Dify 集成前台方案）"></a>9. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;NextChat custom endpoint API base URL environment variable BASE_URL OpenAI&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;ChatGPTNextWeb NextChat environment variables OPENAI_API_BASE_URL BASE_URL&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;NextChat deploy env OPENAI_API_BASE&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;NextChat proxy api url settings openai&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span></span></code></pre></div></div></figure>
 
-<h3 id="10-方案详述（来源：Dify-集成前台方案）"><a href="#10-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="10. 方案详述（来源：Dify 集成前台方案）"></a>10. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;Chatbox open source desktop app OpenAI API base URL&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Chatbox AI desktop app github open source custom api base url&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Chatbox Dify integration openai compatible&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;open source desktop chatgpt client custom openai endpoint&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="10-方案详述（来源：Dify-集成前台方案）"><a href="#10-方案详述（来源：Dify-集成前台方案）" class="headerlink" title="10. 方案详述（来源：Dify 集成前台方案）"></a>10. 方案详述（来源：Dify 集成前台方案）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123;&quot;search_query&quot;:[&#123;&quot;q&quot;:&quot;Chatbox open source desktop app OpenAI API base URL&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Chatbox AI desktop app github open source custom api base url&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;Chatbox Dify integration openai compatible&quot;,&quot;recency&quot;:365&#125;,&#123;&quot;q&quot;:&quot;open source desktop chatgpt client custom openai endpoint&quot;,&quot;recency&quot;:365&#125;],&quot;response_length&quot;:&quot;short&quot;&#125;</span></span></code></pre></div></div></figure>
 
 <h2 id="来源对话"><a href="#来源对话" class="headerlink" title="来源对话"></a>来源对话</h2><p><em>自动生成于 2026-05-21 | doc_id: 06</em></p>
 
@@ -731,5 +1061,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

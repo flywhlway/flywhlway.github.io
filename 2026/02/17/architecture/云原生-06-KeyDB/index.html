@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>高性能中间件：KeyDB · 飞轮之道</title>
 <meta name="description" content="本文档描述了基础平台（BP）中高性能分布式缓存中间件KeyDB的预研与应用方案。核心目标是预研新一代高性能分布式缓存中间件KeyDB，升级更新当前Redis缓存中间件，提升系统QPS，降低系统时延，提升系统吞吐量。">
 <meta name="author" content="Flywhl">
@@ -91,7 +92,34 @@
 <p>📷 原始图片：</p>
 </blockquote>
 <h2 id="一、概述"><a href="#一、概述" class="headerlink" title="一、概述"></a>一、概述</h2><p>本文档描述了基础平台（BP）中高性能分布式缓存中间件KeyDB的预研与应用方案。核心目标是预研新一代高性能分布式缓存中间件KeyDB，升级更新当前Redis缓存中间件，提升系统QPS，降低系统时延，提升系统吞吐量。</p>
-<h2 id="二、Redis-vs-KeyDB-架构对比"><a href="#二、Redis-vs-KeyDB-架构对比" class="headerlink" title="二、Redis vs KeyDB 架构对比"></a>二、Redis vs KeyDB 架构对比</h2><h3 id="2-1-Redis-架构"><a href="#2-1-Redis-架构" class="headerlink" title="2.1 Redis 架构"></a>2.1 Redis 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">客户端1  客户端2  ... 客户端n</span><br><span class="line">    │       │          │</span><br><span class="line">    └───────┼──────────┘</span><br><span class="line">            │</span><br><span class="line">         Redis</span><br><span class="line">            │</span><br><span class="line">    ┌───────────────┐</span><br><span class="line">    │   主线程 ★     │ ← 单线程瓶颈</span><br><span class="line">    │               │</span><br><span class="line">    ├── 监听        │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    ├── 接收请求     │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    ├── 数据读取     │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    ├── 解析协议     │</span><br><span class="line">    │   ├── 工作线程1 │</span><br><span class="line">    │   ├── 工作线程2 │</span><br><span class="line">    │   └── 工作线程n │</span><br><span class="line">    └── DB（主线程） │</span><br><span class="line">        └── 主线程   │</span><br><span class="line">    └───────────────┘</span><br></pre></td></tr></table></figure>
+<h2 id="二、Redis-vs-KeyDB-架构对比"><a href="#二、Redis-vs-KeyDB-架构对比" class="headerlink" title="二、Redis vs KeyDB 架构对比"></a>二、Redis vs KeyDB 架构对比</h2><h3 id="2-1-Redis-架构"><a href="#2-1-Redis-架构" class="headerlink" title="2.1 Redis 架构"></a>2.1 Redis 架构</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="28"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">客户端1  客户端2  ... 客户端n</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    │       │          │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    └───────┼──────────┘</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">            │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">         Redis</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">            │</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    ┌───────────────┐</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    │   主线程 ★     │ ← 单线程瓶颈</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    │               │</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    ├── 监听        │</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    │   ├── 工作线程1 │</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    │   ├── 工作线程2 │</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    │   └── 工作线程n │</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    ├── 接收请求     │</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    │   ├── 工作线程1 │</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    │   ├── 工作线程2 │</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    │   └── 工作线程n │</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    ├── 数据读取     │</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    │   ├── 工作线程1 │</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    │   ├── 工作线程2 │</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    │   └── 工作线程n │</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    ├── 解析协议     │</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    │   ├── 工作线程1 │</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    │   ├── 工作线程2 │</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    │   └── 工作线程n │</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    └── DB（主线程） │</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        └── 主线程   │</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    └───────────────┘</span></span></code></pre></div></div></figure>
 
 <p><strong>Redis 问题</strong>：</p>
 <ul>
@@ -99,7 +127,29 @@
 <li>❌ 高并发场景下将有高延迟风险</li>
 <li>❌ CPU多核利用率低</li>
 </ul>
-<h3 id="2-2-KeyDB-架构"><a href="#2-2-KeyDB-架构" class="headerlink" title="2.2 KeyDB 架构"></a>2.2 KeyDB 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">客户端1  客户端2  ... 客户端n</span><br><span class="line">    │       │          │</span><br><span class="line">    └───────┼──────────┘</span><br><span class="line">            │</span><br><span class="line">         KeyDB</span><br><span class="line">            │</span><br><span class="line">    ┌───────────────────────────────┐</span><br><span class="line">    │        多线程并行 ★             │</span><br><span class="line">    │                               │</span><br><span class="line">    ├── 监听                         │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    ├── 接收请求                      │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    ├── 数据读取                      │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    ├── 解析协议                      │</span><br><span class="line">    │   ├── 工作线程1 工作线程2 ... n  │</span><br><span class="line">    └── DB                          │</span><br><span class="line">        │ 数据锁 │                   │</span><br><span class="line">        ├── 工作线程1                 │</span><br><span class="line">        ├── 工作线程2                 │</span><br><span class="line">        └── 工作线程n                 │</span><br><span class="line">    └───────────────────────────────┘</span><br></pre></td></tr></table></figure>
+<h3 id="2-2-KeyDB-架构"><a href="#2-2-KeyDB-架构" class="headerlink" title="2.2 KeyDB 架构"></a>2.2 KeyDB 架构</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="23"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">客户端1  客户端2  ... 客户端n</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    │       │          │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    └───────┼──────────┘</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">            │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">         KeyDB</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">            │</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    ┌───────────────────────────────┐</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    │        多线程并行 ★             │</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    │                               │</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    ├── 监听                         │</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    │   ├── 工作线程1 工作线程2 ... n  │</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    ├── 接收请求                      │</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    │   ├── 工作线程1 工作线程2 ... n  │</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    ├── 数据读取                      │</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    │   ├── 工作线程1 工作线程2 ... n  │</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    ├── 解析协议                      │</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    │   ├── 工作线程1 工作线程2 ... n  │</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    └── DB                          │</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">        │ 数据锁 │                   │</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">        ├── 工作线程1                 │</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">        ├── 工作线程2                 │</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        └── 工作线程n                 │</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    └───────────────────────────────┘</span></span></code></pre></div></div></figure>
 
 <p><strong>KeyDB 优势</strong>：</p>
 <ul>
@@ -403,5 +453,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

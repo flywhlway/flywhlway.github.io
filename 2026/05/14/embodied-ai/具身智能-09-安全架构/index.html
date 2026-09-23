@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>机器人安全架构 · 飞轮之道</title>
 <meta name="description" content="平台的能力面已齐，最后补上贯穿一切的底座。本篇以你的安全平台经验（PKI/mTLS/OAuth2/OIDC/RBAC/Prompt Security）为地基，把它扩展到机器人特有的两个维度：物理安全（失控=伤害，第一篇就埋下的伏笔）与供应链/固件信任链（Secure Boot/TEE/SBOM）。">
 <meta name="author" content="Flywhl">
@@ -293,7 +294,21 @@
 <hr>
 <h2 id="9-2-身份与通信安全：从云到-DDS-域"><a href="#9-2-身份与通信安全：从云到-DDS-域" class="headerlink" title="9.2 身份与通信安全：从云到 DDS 域"></a>9.2 身份与通信安全：从云到 DDS 域</h2><h3 id="9-2-1-三层加密边界"><a href="#9-2-1-三层加密边界" class="headerlink" title="9.2.1 三层加密边界"></a>9.2.1 三层加密边界</h3><p>复习并延伸 4.2：<strong>云-端边界</strong>（mTLS，你已精通）+ <strong>端-边边界</strong>（mTLS&#x2F;证书）+ <strong>机内 DDS 域边界</strong>（SROS2&#x2F;DDS-Security——新知识）。三层用<strong>同一套 PKI</strong>（两级 CA，4.2.2）签发不同用途证书：设备证书（云连接）、节点证书（DDS 域内）——<strong>一个信任根，多种终端实体</strong>。</p>
 <h3 id="9-2-2-SROS2-DDS-Security：给机内通信上锁"><a href="#9-2-2-SROS2-DDS-Security：给机内通信上锁" class="headerlink" title="9.2.2 SROS2 &#x2F; DDS-Security：给机内通信上锁"></a>9.2.2 SROS2 &#x2F; DDS-Security：给机内通信上锁</h3><p>DDS-Security 标准提供五个内置插件，SROS2 是 ROS2 对它的封装：<strong>Authentication</strong>（节点用证书互认，防伪节点）、<strong>Access Control</strong>（权限文件规定「谁能发&#x2F;收哪个 Topic」——伪节点即使入网也发不了 <code>/cmd_vel</code>）、<strong>Cryptographic</strong>（DDS 报文加密与完整性）、Logging、Tagging。启用后 SPDP&#x2F;SEDP 发现（2.2.4）本身也被认证保护。</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">title SROS2 安全启用后的节点入域</span><br><span class="line">participant &quot;新节点&quot; as N</span><br><span class="line">participant &quot;DDS 域（已启用 Security）&quot; as D</span><br><span class="line">participant &quot;已在域节点&quot; as E</span><br><span class="line">N -&gt; D : SPDP 公告（携带节点证书）</span><br><span class="line">D -&gt; E : 转发</span><br><span class="line">E -&gt; N : Authentication 握手（互验证书链，CA 4.2.2）</span><br><span class="line">alt 证书无效或权限缺失</span><br><span class="line">  E --&gt; N : 拒绝，节点被隔离在域外</span><br><span class="line">else 通过</span><br><span class="line">  E &lt;-&gt; N : 建立加密通道 + 按 permissions.xml 授权 Topic</span><br><span class="line">  N -&gt; E : 仅能发布被授权的 Topic（如禁发 /cmd_vel）</span><br><span class="line">end</span><br><span class="line">@enduml</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">@startuml</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">title SROS2 安全启用后的节点入域</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">participant &quot;新节点&quot; as N</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">participant &quot;DDS 域（已启用 Security）&quot; as D</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">participant &quot;已在域节点&quot; as E</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">N -&gt; D : SPDP 公告（携带节点证书）</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">D -&gt; E : 转发</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">E -&gt; N : Authentication 握手（互验证书链，CA 4.2.2）</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">alt 证书无效或权限缺失</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  E --&gt; N : 拒绝，节点被隔离在域外</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">else 通过</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  E &lt;-&gt; N : 建立加密通道 + 按 permissions.xml 授权 Topic</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  N -&gt; E : 仅能发布被授权的 Topic（如禁发 /cmd_vel）</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">end</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">@enduml</span></span></code></pre></div></div></figure>
 
 <h3 id="9-2-3-权限设计：最小权限落到-Topic"><a href="#9-2-3-权限设计：最小权限落到-Topic" class="headerlink" title="9.2.3 权限设计：最小权限落到 Topic"></a>9.2.3 权限设计：最小权限落到 Topic</h3><p><code>permissions.xml</code> 按节点声明可发布&#x2F;可订阅的 Topic 白名单。设计纪律：<strong>控制类 Topic（&#x2F;cmd_vel、执行器指令）的发布权限只授予控制节点</strong>；感知节点只读传感器、只写检测结果；云桥只在授权的遥测&#x2F;任务话题上收发——把 4.10.5 的「Agent 只落 L2」纪律延伸到通信层，<strong>即使某节点被攻陷，它能造成的破坏被权限边界锁死</strong>。权限文件由平台生成（从 Device Profile 的话题清单推导，4.2.1）、签名、随身份下发。</p>
 <h3 id="9-2-4-性能权衡（务实提醒）"><a href="#9-2-4-性能权衡（务实提醒）" class="headerlink" title="9.2.4 性能权衡（务实提醒）"></a>9.2.4 性能权衡（务实提醒）</h3><p>DDS-Security 的加密与认证有开销（握手延迟、报文加解密 CPU）。工程做法：<strong>高频大流量的机内传感器 Topic 可评估「认证+完整性、免加密」档</strong>（防注入与篡改即可，明文性能优先），控制与任务类 Topic 全加密——安全档位按 Topic 分级，与 2.14 QoS 分级同一思想。生产务必实测开销对 5.5 延迟预算的影响。</p>
@@ -347,7 +362,20 @@
 <li>安全内建不是后加：第一天启用 SROS2。</li>
 </ul>
 <hr>
-<h2 id="9-3-信任链：从-Secure-Boot-到模型"><a href="#9-3-信任链：从-Secure-Boot-到模型" class="headerlink" title="9.3 信任链：从 Secure Boot 到模型"></a>9.3 信任链：从 Secure Boot 到模型</h2><h3 id="9-3-1-完整信任链"><a href="#9-3-1-完整信任链" class="headerlink" title="9.3.1 完整信任链"></a>9.3.1 完整信任链</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">title 从上电到模型运行的信任链（环环度量）</span><br><span class="line">participant &quot;硬件信任根\n(BootROM/SE)&quot; as HW</span><br><span class="line">participant &quot;Bootloader&quot; as BL</span><br><span class="line">participant &quot;OS 内核&quot; as OS</span><br><span class="line">participant &quot;ROS2 运行时 + Runtime&quot; as ROS</span><br><span class="line">participant &quot;模型 engine&quot; as M</span><br><span class="line">HW -&gt; HW : 固化公钥，不可篡改</span><br><span class="line">HW -&gt; BL : 验签 Bootloader → 通过才执行</span><br><span class="line">BL -&gt; OS : 验签内核/dtb → 通过才加载</span><br><span class="line">OS -&gt; ROS : 校验根文件系统/容器签名（dm-verity 等）</span><br><span class="line">ROS -&gt; M : 加载前验模型四件套签名（6.2.6）</span><br><span class="line">note over HW,M : 任一环验签失败 → 停在安全态，拒绝启动/拒绝加载</span><br><span class="line">@enduml</span><br></pre></td></tr></table></figure>
+<h2 id="9-3-信任链：从-Secure-Boot-到模型"><a href="#9-3-信任链：从-Secure-Boot-到模型" class="headerlink" title="9.3 信任链：从 Secure Boot 到模型"></a>9.3 信任链：从 Secure Boot 到模型</h2><h3 id="9-3-1-完整信任链"><a href="#9-3-1-完整信任链" class="headerlink" title="9.3.1 完整信任链"></a>9.3.1 完整信任链</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">@startuml</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">title 从上电到模型运行的信任链（环环度量）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">participant &quot;硬件信任根\n(BootROM/SE)&quot; as HW</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">participant &quot;Bootloader&quot; as BL</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">participant &quot;OS 内核&quot; as OS</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">participant &quot;ROS2 运行时 + Runtime&quot; as ROS</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">participant &quot;模型 engine&quot; as M</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">HW -&gt; HW : 固化公钥，不可篡改</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">HW -&gt; BL : 验签 Bootloader → 通过才执行</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">BL -&gt; OS : 验签内核/dtb → 通过才加载</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">OS -&gt; ROS : 校验根文件系统/容器签名（dm-verity 等）</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">ROS -&gt; M : 加载前验模型四件套签名（6.2.6）</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">note over HW,M : 任一环验签失败 → 停在安全态，拒绝启动/拒绝加载</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">@enduml</span></span></code></pre></div></div></figure>
 
 <p>一句话：<strong>信任从硅片里的固化公钥开始，逐级验签，链条不断</strong>。这是 4.2.2「信任锚在产线」的纵向延伸——横向锚在产线证书，纵向锚在 Secure Boot 公钥。</p>
 <h3 id="9-3-2-各环节职责"><a href="#9-3-2-各环节职责" class="headerlink" title="9.3.2 各环节职责"></a>9.3.2 各环节职责</h3><p><strong>Secure Boot</strong>（BootROM 固化公钥验 Bootloader，Jetson 支持）；<strong>度量启动&#x2F;dm-verity</strong>（根文件系统只读且完整性校验，防运行时篡改）；<strong>容器签名</strong>（业务容器镜像验签，与你的云原生供应链一致）；<strong>模型验签</strong>（Runtime 加载前验四件套签名，6.2.6）。信任链让「篡改任一层」都会在启动或加载时被拦截。</p>
@@ -857,5 +885,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

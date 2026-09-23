@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>VLA 视觉语言动作模型 · 飞轮之道</title>
 <meta name="description" content="平台的骨架已立（第四篇），现在看它要运送的「大脑」。本篇不讲论文推导，只讲工程：输入输出契约、数据形态、推理流程与延迟预算、失效模式、云边分工与 Scaling。读完你要能与算法团队平等对话，并把 VLA 正确地放进第四篇的模型 OTA、边缘推理与评测体系里。">
 <meta name="author" content="Flywhl">
@@ -720,7 +721,23 @@
 </tr>
 </tbody></table>
 <p><strong>铁律</strong>：<code>推理延迟 + 抖动裕度 &lt; chunk 执行时长</code>，否则动作断流（机器人「卡顿」）。这条不等式就是你与算法团队谈判的语言——它把「模型多大」翻译成了「能不能上线」。</p>
-<h3 id="5-5-2-双频架构：推理与控制解耦"><a href="#5-5-2-双频架构：推理与控制解耦" class="headerlink" title="5.5.2 双频架构：推理与控制解耦"></a>5.5.2 双频架构：推理与控制解耦</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">title 双频架构：5Hz 推理 × 50Hz 执行（chunk 重叠）</span><br><span class="line">participant &quot;感知/观测缓冲&quot; as O</span><br><span class="line">participant &quot;VLA Runtime (GPU)&quot; as V</span><br><span class="line">participant &quot;动作缓冲 Chunk Buffer&quot; as B</span><br><span class="line">participant &quot;控制器 50Hz&quot; as C</span><br><span class="line">participant &quot;安全监控 (快脑)&quot; as S</span><br><span class="line">O -&gt; V : 观测快照 t0（对齐后）</span><br><span class="line">V -&gt; B : chunk a(t0+1..t0+10)</span><br><span class="line">loop 每 20ms</span><br><span class="line">  B -&gt; C : 取下一步动作</span><br><span class="line">  C -&gt; S : 执行前校验（限位/力矩/几何边界）</span><br><span class="line">  S --&gt; C : 放行 / 中断</span><br><span class="line">end</span><br><span class="line">B -&gt; V : 剩余 30% → 触发下一次推理（重叠，避免断流）</span><br><span class="line">V -&gt; B : 新 chunk（与旧 chunk 时序聚合融合）</span><br><span class="line">@enduml</span><br></pre></td></tr></table></figure>
+<h3 id="5-5-2-双频架构：推理与控制解耦"><a href="#5-5-2-双频架构：推理与控制解耦" class="headerlink" title="5.5.2 双频架构：推理与控制解耦"></a>5.5.2 双频架构：推理与控制解耦</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">@startuml</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">title 双频架构：5Hz 推理 × 50Hz 执行（chunk 重叠）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">participant &quot;感知/观测缓冲&quot; as O</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">participant &quot;VLA Runtime (GPU)&quot; as V</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">participant &quot;动作缓冲 Chunk Buffer&quot; as B</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">participant &quot;控制器 50Hz&quot; as C</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">participant &quot;安全监控 (快脑)&quot; as S</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">O -&gt; V : 观测快照 t0（对齐后）</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">V -&gt; B : chunk a(t0+1..t0+10)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">loop 每 20ms</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  B -&gt; C : 取下一步动作</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  C -&gt; S : 执行前校验（限位/力矩/几何边界）</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  S --&gt; C : 放行 / 中断</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">end</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">B -&gt; V : 剩余 30% → 触发下一次推理（重叠，避免断流）</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">V -&gt; B : 新 chunk（与旧 chunk 时序聚合融合）</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">@enduml</span></span></code></pre></div></div></figure>
 
 <p>工程要点：<strong>Chunk Buffer 是解耦点</strong>——推理慢一次不至于立刻断流（缓冲兜底），但连续慢就会耗尽（监控 buffer 水位并上报，这是端侧最重要的健康指标之一）。</p>
 <h3 id="5-5-3-显存、体积与你的-OTA"><a href="#5-5-3-显存、体积与你的-OTA" class="headerlink" title="5.5.3 显存、体积与你的 OTA"></a>5.5.3 显存、体积与你的 OTA</h3><table>
@@ -1307,5 +1324,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

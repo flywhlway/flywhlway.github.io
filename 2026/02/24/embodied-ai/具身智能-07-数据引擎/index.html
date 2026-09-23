@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>机器人数据引擎 · 飞轮之道</title>
 <meta name="description" content="模型（第五篇）与硬件（第六篇）就位后，决定胜负的是燃料供给系统。">
 <meta name="author" content="Flywhl">
@@ -409,7 +410,22 @@
 </tr>
 </tbody></table>
 <p>心法一句：<strong>对象层管字节、表层管事实、服务层管查询、语义层管相似</strong>——你的湖仓方法论原文，机器人只是多了「对象层特别肥」这一个特征。</p>
-<h3 id="7-3-2-Iceberg-上的核心表设计（示意）"><a href="#7-3-2-Iceberg-上的核心表设计（示意）" class="headerlink" title="7.3.2 Iceberg 上的核心表设计（示意）"></a>7.3.2 Iceberg 上的核心表设计（示意）</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 片段元数据表（L3 的账本）</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> lake.clip_meta (</span><br><span class="line">  clip_id STRING, robot_id STRING, site_id STRING,</span><br><span class="line">  trigger_type STRING, task_id STRING, model_ver STRING,</span><br><span class="line">  start_ts <span class="type">TIMESTAMP</span>, duration_s <span class="keyword">DOUBLE</span>,</span><br><span class="line">  topics <span class="keyword">ARRAY</span><span class="operator">&lt;</span>STRING<span class="operator">&gt;</span>, size_bytes <span class="type">BIGINT</span>,</span><br><span class="line">  quality_flags MAP<span class="operator">&lt;</span>STRING,STRING<span class="operator">&gt;</span>,   <span class="comment">-- 质检结果（7.5.3）</span></span><br><span class="line">  storage_uri STRING, status STRING   <span class="comment">-- uploaded/indexed/curated/expired</span></span><br><span class="line">) PARTITIONED <span class="keyword">BY</span> (site_id, days(start_ts));</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 数据集清单表（L4 的账本：一个数据集版本 = 一组 clip 引用 + 处理参数）</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> lake.dataset_manifest (</span><br><span class="line">  dataset_id STRING, version STRING, task_family STRING,</span><br><span class="line">  clip_ids <span class="keyword">ARRAY</span><span class="operator">&lt;</span>STRING<span class="operator">&gt;</span>, transform_cfg STRING,</span><br><span class="line">  created_by STRING, created_at <span class="type">TIMESTAMP</span>, card_uri STRING</span><br><span class="line">) PARTITIONED <span class="keyword">BY</span> (task_family);</span><br></pre></td></tr></table></figure>
+<h3 id="7-3-2-Iceberg-上的核心表设计（示意）"><a href="#7-3-2-Iceberg-上的核心表设计（示意）" class="headerlink" title="7.3.2 Iceberg 上的核心表设计（示意）"></a>7.3.2 Iceberg 上的核心表设计（示意）</h3><figure class="highlight sql cb" data-lang="sql" data-label="SQL" data-ext="sql" data-lines="16"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">-- 片段元数据表（L3 的账本）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">CREATE TABLE</span> lake.clip_meta (</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  clip_id STRING, robot_id STRING, site_id STRING,</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  trigger_type STRING, task_id STRING, model_ver STRING,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  start_ts <span class="type">TIMESTAMP</span>, duration_s <span class="keyword">DOUBLE</span>,</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  topics <span class="keyword">ARRAY</span><span class="operator">&lt;</span>STRING<span class="operator">&gt;</span>, size_bytes <span class="type">BIGINT</span>,</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  quality_flags MAP<span class="operator">&lt;</span>STRING,STRING<span class="operator">&gt;</span>,   <span class="comment">-- 质检结果（7.5.3）</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  storage_uri STRING, status STRING   <span class="comment">-- uploaded/indexed/curated/expired</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">) PARTITIONED <span class="keyword">BY</span> (site_id, days(start_ts));</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="comment">-- 数据集清单表（L4 的账本：一个数据集版本 = 一组 clip 引用 + 处理参数）</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="keyword">CREATE TABLE</span> lake.dataset_manifest (</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  dataset_id STRING, version STRING, task_family STRING,</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  clip_ids <span class="keyword">ARRAY</span><span class="operator">&lt;</span>STRING<span class="operator">&gt;</span>, transform_cfg STRING,</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  created_by STRING, created_at <span class="type">TIMESTAMP</span>, card_uri STRING</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">) PARTITIONED <span class="keyword">BY</span> (task_family);</span></span></code></pre></div></div></figure>
 
 <p>要点：<strong>数据集 &#x3D; 清单 + 变换配置，而非拷贝</strong>——同一批 clip 可组装出多个数据集版本，存储零复制、血缘天然清晰；Iceberg 的时间旅行让「用三个月前的数据集状态复现训练」成为一条 SQL。</p>
 <h3 id="7-3-3-时序对齐：机器人湖仓的特色难题"><a href="#7-3-3-时序对齐：机器人湖仓的特色难题" class="headerlink" title="7.3.3 时序对齐：机器人湖仓的特色难题"></a>7.3.3 时序对齐：机器人湖仓的特色难题</h3><p>多模态训练要求帧级对齐（图像帧 ↔ 关节状态 ↔ 动作标签）。方案：ETL 阶段从 bag 解出<strong>帧级索引表</strong>（<code>clip_id, stream, frame_ts, offset</code>），对齐规则用「最近邻 + 最大偏差阈值」（2.19.3 时间旅行的离线版）；超阈帧标记为 <code>misaligned</code> 并计入质检。<strong>对齐质量是数据集卡片的必填指标</strong>——训练侧最难排查的「玄学不收敛」常源于此。</p>
@@ -936,5 +952,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

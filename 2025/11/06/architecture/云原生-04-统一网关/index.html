@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>云原生统一网关架构 · 飞轮之道</title>
 <meta name="description" content="本文档描述了基础平台（BP）中云原生网关的技术方案——基于Higress构建三合一云原生网关架构。Higress融合安全（WAF）+流量调度+微服务治理三大能力于一体，极大降低网关部署及运维成本。">
 <meta name="author" content="Flywhl">
@@ -91,7 +92,16 @@
 <p>📷 原始图片：</p>
 </blockquote>
 <h2 id="一、概述"><a href="#一、概述" class="headerlink" title="一、概述"></a>一、概述</h2><p>本文档描述了基础平台（BP）中云原生网关的技术方案——基于Higress构建三合一云原生网关架构。Higress融合安全（WAF）+流量调度+微服务治理三大能力于一体，极大降低网关部署及运维成本。</p>
-<h2 id="二、网关架构演进路径"><a href="#二、网关架构演进路径" class="headerlink" title="二、网关架构演进路径"></a>二、网关架构演进路径</h2><h3 id="2-1-传统网关模式（Phase-1）"><a href="#2-1-传统网关模式（Phase-1）" class="headerlink" title="2.1 传统网关模式（Phase 1）"></a>2.1 传统网关模式（Phase 1）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">客户端请求</span><br><span class="line">  │</span><br><span class="line">  ├── WAF安全网关</span><br><span class="line">  │      │</span><br><span class="line">  │      ▼</span><br><span class="line">  ├── 流量网关</span><br><span class="line">  │      │</span><br><span class="line">  │      ▼</span><br><span class="line">  ├── 微服务网关A ──→ Pod Pod (K8s)</span><br><span class="line">  └── 微服务网关B ──→ Pod Pod (K8s)</span><br></pre></td></tr></table></figure>
+<h2 id="二、网关架构演进路径"><a href="#二、网关架构演进路径" class="headerlink" title="二、网关架构演进路径"></a>二、网关架构演进路径</h2><h3 id="2-1-传统网关模式（Phase-1）"><a href="#2-1-传统网关模式（Phase-1）" class="headerlink" title="2.1 传统网关模式（Phase 1）"></a>2.1 传统网关模式（Phase 1）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">客户端请求</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  ├── WAF安全网关</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  │      │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  │      ▼</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  ├── 流量网关</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  │      │</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  │      ▼</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  ├── 微服务网关A ──→ Pod Pod (K8s)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  └── 微服务网关B ──→ Pod Pod (K8s)</span></span></code></pre></div></div></figure>
 
 <p><strong>问题</strong>：</p>
 <ul>
@@ -99,10 +109,20 @@
 <li>运维、研发工作复杂</li>
 <li>部署成本高，资源利用率低</li>
 </ul>
-<h3 id="2-2-流量-微服务网关二合一（Phase-2）"><a href="#2-2-流量-微服务网关二合一（Phase-2）" class="headerlink" title="2.2 流量+微服务网关二合一（Phase 2）"></a>2.2 流量+微服务网关二合一（Phase 2）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">客户端请求</span><br><span class="line">  │</span><br><span class="line">  ├── WAF安全网关</span><br><span class="line">  │      │</span><br><span class="line">  │      ▼</span><br><span class="line">  └── 云原生网关（流量+微服务网关） ──→ Pod Pod Pod (K8s)</span><br></pre></td></tr></table></figure>
+<h3 id="2-2-流量-微服务网关二合一（Phase-2）"><a href="#2-2-流量-微服务网关二合一（Phase-2）" class="headerlink" title="2.2 流量+微服务网关二合一（Phase 2）"></a>2.2 流量+微服务网关二合一（Phase 2）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">客户端请求</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  ├── WAF安全网关</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  │      │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  │      ▼</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  └── 云原生网关（流量+微服务网关） ──→ Pod Pod Pod (K8s)</span></span></code></pre></div></div></figure>
 
 <p><strong>改进</strong>：合并流量网关与微服务网关</p>
-<h3 id="2-3-安全-流量-微服务网关三合一（Phase-3-目标架构）"><a href="#2-3-安全-流量-微服务网关三合一（Phase-3-目标架构）" class="headerlink" title="2.3 安全+流量+微服务网关三合一（Phase 3 - 目标架构）"></a>2.3 安全+流量+微服务网关三合一（Phase 3 - 目标架构）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">客户端请求</span><br><span class="line">  │</span><br><span class="line">  └── 云原生网关（安全+流量+微服务网关）</span><br><span class="line">       │  WAF模块（内置）</span><br><span class="line">       │</span><br><span class="line">       └── Pod Pod Pod Pod (K8s)</span><br></pre></td></tr></table></figure>
+<h3 id="2-3-安全-流量-微服务网关三合一（Phase-3-目标架构）"><a href="#2-3-安全-流量-微服务网关三合一（Phase-3-目标架构）" class="headerlink" title="2.3 安全+流量+微服务网关三合一（Phase 3 - 目标架构）"></a>2.3 安全+流量+微服务网关三合一（Phase 3 - 目标架构）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">客户端请求</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  └── 云原生网关（安全+流量+微服务网关）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">       │  WAF模块（内置）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">       │</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">       └── Pod Pod Pod Pod (K8s)</span></span></code></pre></div></div></figure>
 
 <p><strong>核心价值</strong>：三合一高度集成，单一入口统一处理</p>
 <h2 id="三、Higress-架构详解"><a href="#三、Higress-架构详解" class="headerlink" title="三、Higress 架构详解"></a>三、Higress 架构详解</h2><h3 id="3-1-OPS-Plane（运维面）"><a href="#3-1-OPS-Plane（运维面）" class="headerlink" title="3.1 OPS Plane（运维面）"></a>3.1 OPS Plane（运维面）</h3><table>
@@ -125,7 +145,22 @@
 <td>Kubernetes原生管理</td>
 </tr>
 </tbody></table>
-<h3 id="3-2-Control-Plane（控制面）"><a href="#3-2-Control-Plane（控制面）" class="headerlink" title="3.2 Control Plane（控制面）"></a>3.2 Control Plane（控制面）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">Higress Control Plane</span><br><span class="line">├── Storage Layer</span><br><span class="line">│   ├── Kubernetes (K8s Deployment)</span><br><span class="line">│   └── NACOS (Traditional Deployment)</span><br><span class="line">│</span><br><span class="line">├── Core Components</span><br><span class="line">│   ├── Multi K8s Remote Cluster</span><br><span class="line">│   ├── Config Controller</span><br><span class="line">│   ├── MultiServiceRegistry</span><br><span class="line">│   ├── Nginx Ingress Adapter</span><br><span class="line">│   ├── Abstract Model</span><br><span class="line">│   ├── xDS Server</span><br><span class="line">│   └── Plugins Manager</span><br><span class="line">│</span><br><span class="line">└── Optional Components</span><br><span class="line">    └── Istiod（可选）</span><br></pre></td></tr></table></figure>
+<h3 id="3-2-Control-Plane（控制面）"><a href="#3-2-Control-Plane（控制面）" class="headerlink" title="3.2 Control Plane（控制面）"></a>3.2 Control Plane（控制面）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="16"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Higress Control Plane</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── Storage Layer</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│   ├── Kubernetes (K8s Deployment)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">│   └── NACOS (Traditional Deployment)</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">│</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">├── Core Components</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">│   ├── Multi K8s Remote Cluster</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">│   ├── Config Controller</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">│   ├── MultiServiceRegistry</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">│   ├── Nginx Ingress Adapter</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">│   ├── Abstract Model</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">│   ├── xDS Server</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">│   └── Plugins Manager</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">│</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">└── Optional Components</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    └── Istiod（可选）</span></span></code></pre></div></div></figure>
 
 <ul>
 <li><strong>双存储支持</strong>：同时支持Kubernetes原生和Nacos传统部署</li>
@@ -133,7 +168,19 @@
 <li><strong>xDS协议</strong>：与数据面通过xDS协议通信</li>
 <li><strong>插件管理</strong>：统一的插件生命周期管理</li>
 </ul>
-<h3 id="3-3-Data-Plane（数据面）"><a href="#3-3-Data-Plane（数据面）" class="headerlink" title="3.3 Data Plane（数据面）"></a>3.3 Data Plane（数据面）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">Higress Data Plane（基于Envoy）</span><br><span class="line">├── Extension（扩展）</span><br><span class="line">│   ├── Sentinel（流控）</span><br><span class="line">│   ├── Dubbo Transcoder（协议转换）</span><br><span class="line">│   └── ModSecurity（WAF引擎）</span><br><span class="line">│</span><br><span class="line">├── Filter Pipeline</span><br><span class="line">│   ├── Wasm Route Base Filter</span><br><span class="line">│   └── External Host Filter</span><br><span class="line">│</span><br><span class="line">└── External Filter Process</span><br><span class="line">    ├── Custom Filter (Java)</span><br><span class="line">    └── Custom Filter (Golang)</span><br></pre></td></tr></table></figure>
+<h3 id="3-3-Data-Plane（数据面）"><a href="#3-3-Data-Plane（数据面）" class="headerlink" title="3.3 Data Plane（数据面）"></a>3.3 Data Plane（数据面）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Higress Data Plane（基于Envoy）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── Extension（扩展）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│   ├── Sentinel（流控）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">│   ├── Dubbo Transcoder（协议转换）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">│   └── ModSecurity（WAF引擎）</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">│</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">├── Filter Pipeline</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">│   ├── Wasm Route Base Filter</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">│   └── External Host Filter</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">│</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">└── External Filter Process</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    ├── Custom Filter (Java)</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    └── Custom Filter (Golang)</span></span></code></pre></div></div></figure>
 
 <h2 id="四、主要优势"><a href="#四、主要优势" class="headerlink" title="四、主要优势"></a>四、主要优势</h2><table>
 <thead>
@@ -379,5 +426,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

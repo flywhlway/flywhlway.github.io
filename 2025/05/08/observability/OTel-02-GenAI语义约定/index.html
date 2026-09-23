@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>GenAI 语义约定与 AI 可观测标准 · 飞轮之道</title>
 <meta name="description" content="genai. 语义约定是整个 AI 可观测体系的数据契约：SDK 按它埋点，Collector 按它路由脱敏，Tempo/Langfuse/Grafana 按它检索与算成本。本篇给出 2026-07 时点的权威属性清单、Span 建模方式与版本迁移策略。">
 <meta name="author" content="Flywhl">
@@ -102,7 +103,8 @@
 <li>截至 2026-05，GenAI 与 MCP 约定<strong>仍处于 Development（实验）状态</strong>，属性名仍可能调整；但客户端 Span 与 Token 指标在实践中已高度稳定，Datadog&#x2F;Honeycomb&#x2F;Grafana&#x2F;Langfuse 均已原生消费。</li>
 <li><strong>v1.36.0 是迁移基线</strong>：既有埋点库默认继续输出旧版属性；通过环境变量切换到最新版：</li>
 </ul>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 让埋点库输出最新版 GenAI 约定（而非 v1.36 及之前的旧属性）</span></span><br><span class="line"><span class="built_in">export</span> OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 让埋点库输出最新版 GenAI 约定（而非 v1.36 及之前的旧属性）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">export</span> OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental</span></span></code></pre></div></div></figure>
 
 <p>新旧属性对照（工程中最常踩坑的三组）：</p>
 <table>
@@ -186,7 +188,9 @@
 <li>Embedding：<code>gen_ai.operation.name=embeddings</code>，附 <code>gen_ai.request.encoding_formats</code>；</li>
 <li>RAG 检索：<code>gen_ai.data_source.id</code> 标识数据源（Milvus collection、文档库等），<code>gen_ai.retrieval.documents</code> 以结构化形式记录召回文档（必须遵循官方 JSON schema）。</li>
 </ul>
-<h3 id="2-3-工具执行-Span（execute-tool）"><a href="#2-3-工具执行-Span（execute-tool）" class="headerlink" title="2.3 工具执行 Span（execute_tool）"></a>2.3 工具执行 Span（execute_tool）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">属性：gen_ai.operation.name = execute_tool</span><br><span class="line">     gen_ai.tool.name      = query_dtc_knowledge</span><br><span class="line">     gen_ai.tool.call.id   = call_abc123</span><br></pre></td></tr></table></figure>
+<h3 id="2-3-工具执行-Span（execute-tool）"><a href="#2-3-工具执行-Span（execute-tool）" class="headerlink" title="2.3 工具执行 Span（execute_tool）"></a>2.3 工具执行 Span（execute_tool）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">属性：gen_ai.operation.name = execute_tool</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">     gen_ai.tool.name      = query_dtc_knowledge</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">     gen_ai.tool.call.id   = call_abc123</span></span></code></pre></div></div></figure>
 
 <p>注意：工具内部的真实动作（HTTP 调用、SQL、向量检索）应作为<strong>子 Span</strong> 由常规埋点产生，而不是塞进工具 Span 属性里——这样服务拓扑图才能反映工具的真实依赖。</p>
 <h3 id="2-4-Agent-Span（invoke-agent-编排层）"><a href="#2-4-Agent-Span（invoke-agent-编排层）" class="headerlink" title="2.4 Agent Span（invoke_agent &#x2F; 编排层）"></a>2.4 Agent Span（invoke_agent &#x2F; 编排层）</h3><table>
@@ -241,10 +245,13 @@
 </tr>
 </tbody></table>
 <p>配套自定义指标建议（平台私有命名空间，避免与未来官方属性冲突）：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">aits.agent.loop.count        # Agent 循环次数（防失控）</span><br><span class="line">aits.tool.failure.total      # 工具失败计数</span><br><span class="line">aits.token.cost.cny          # 按价格表折算的成本（Counter）</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">aits.agent.loop.count        # Agent 循环次数（防失控）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">aits.tool.failure.total      # 工具失败计数</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">aits.token.cost.cny          # 按价格表折算的成本（Counter）</span></span></code></pre></div></div></figure>
 
 <h2 id="4-内容捕获（Prompt-Completion）与隐私"><a href="#4-内容捕获（Prompt-Completion）与隐私" class="headerlink" title="4. 内容捕获（Prompt&#x2F;Completion）与隐私"></a>4. 内容捕获（Prompt&#x2F;Completion）与隐私</h2><p>默认<strong>不捕获</strong>消息内容，只记录元数据（模型、Token、耗时）。按需开启：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 各官方埋点库通用开关（true 后 gen_ai.input.messages / gen_ai.output.messages 落到 Span）</span></span><br><span class="line"><span class="built_in">export</span> OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=<span class="literal">true</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 各官方埋点库通用开关（true 后 gen_ai.input.messages / gen_ai.output.messages 落到 Span）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">export</span> OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=<span class="literal">true</span></span></span></code></pre></div></div></figure>
 
 <p>内容捕获的三种落地形态（约定均支持）：</p>
 <ol>
@@ -259,7 +266,17 @@
 <li>后端层：Tempo&#x2F;Langfuse 访问控制，缩小泄露爆炸半径。</li>
 </ul>
 <h2 id="5-与本平台技术栈的属性映射约定"><a href="#5-与本平台技术栈的属性映射约定" class="headerlink" title="5. 与本平台技术栈的属性映射约定"></a>5. 与本平台技术栈的属性映射约定</h2><p>结合 示例业务平台&#x2F;AIDO 类设备诊断平台，推荐统一 Resource 与业务属性规范：</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Resource 属性（进程级，一次配置）</span></span><br><span class="line"><span class="attr">service.name:</span> <span class="string">diag-agent</span>            <span class="comment"># 必填，服务拓扑的主键</span></span><br><span class="line"><span class="attr">service.version:</span> <span class="number">1.4</span><span class="number">.0</span></span><br><span class="line"><span class="attr">service.namespace:</span> <span class="string">aits</span>             <span class="comment"># 平台/产品线</span></span><br><span class="line"><span class="attr">deployment.environment.name:</span> <span class="string">poc</span>    <span class="comment"># poc / staging / prod</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 业务属性（Span 级，经 Baggage 传播，详见文档 08）</span></span><br><span class="line"><span class="attr">user.id:</span> <span class="string">&lt;脱敏后的用户标识&gt;</span></span><br><span class="line"><span class="attr">session.id:</span> <span class="string">&lt;会话</span> <span class="string">ID，对齐</span> <span class="string">gen_ai.conversation.id&gt;</span></span><br><span class="line"><span class="attr">aits.vehicle.vin.hash:</span> <span class="string">&lt;VIN</span> <span class="string">哈希，禁止明文&gt;</span></span><br><span class="line"><span class="attr">aits.triage.channel:</span> <span class="string">realtime|nearline|offline</span>   <span class="comment"># 三通道分诊策略标签</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># Resource 属性（进程级，一次配置）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">service.name:</span> <span class="string">diag-agent</span>            <span class="comment"># 必填，服务拓扑的主键</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">service.version:</span> <span class="number">1.4</span><span class="number">.0</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">service.namespace:</span> <span class="string">aits</span>             <span class="comment"># 平台/产品线</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">deployment.environment.name:</span> <span class="string">poc</span>    <span class="comment"># poc / staging / prod</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># 业务属性（Span 级，经 Baggage 传播，详见文档 08）</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">user.id:</span> <span class="string">&lt;脱敏后的用户标识&gt;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">session.id:</span> <span class="string">&lt;会话</span> <span class="string">ID，对齐</span> <span class="string">gen_ai.conversation.id&gt;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">aits.vehicle.vin.hash:</span> <span class="string">&lt;VIN</span> <span class="string">哈希，禁止明文&gt;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">aits.triage.channel:</span> <span class="string">realtime|nearline|offline</span>   <span class="comment"># 三通道分诊策略标签</span></span></span></code></pre></div></div></figure>
 
 <h2 id="6-本章小结与自查清单"><a href="#6-本章小结与自查清单" class="headerlink" title="6. 本章小结与自查清单"></a>6. 本章小结与自查清单</h2><ul>
 <li><input disabled="" type="checkbox"> 全平台锁定 GenAI 约定版本（建议 <code>OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental</code>）；</li>
@@ -437,5 +454,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

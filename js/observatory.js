@@ -237,9 +237,7 @@
     tools: '<path d="m14.5 4.5 5 5L9 20H4v-5z"/><path d="m12.5 6.5 5 5"/>',
     practice: '<path d="M4 20 20 4"/><path d="M14 4h6v6"/><path d="M4 14v6h6"/>',
     file: '<path d="M6 2h8l4 4v16H6z"></path><path d="M14 2v5h5M9 12h6M9 16h6"></path>',
-    mindset: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>',
-    copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path>',
-    check: '<path d="m5 12 4 4L19 6"></path>'
+    mindset: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>'
   };
   function iconHtml(name) {
     return '<span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' + (ICON_PATH[name] || ICON_PATH.file) + '</svg></span>';
@@ -959,7 +957,6 @@
       });
     });
 
-    enhanceCodeBlocks(content);
     renderMermaid(content);
   }
 
@@ -973,50 +970,6 @@
     ta.select();
     try { document.execCommand('copy'); } catch (e) { /* 忽略 */ }
     ta.remove();
-  }
-
-  function enhanceCodeBlocks(content) {
-    if (!content) return;
-    $$('figure.highlight', content).forEach(function (fig) {
-      var lang = (fig.className.match(/highlight\s+([a-z0-9#+_-]+)/i) || [])[1] || 'code';
-      if (lang === 'plaintext' || lang === 'plain') lang = 'text';
-      var table = fig.querySelector('table');
-      if (!table) return;
-      var body = document.createElement('div');
-      body.className = 'code-body';
-      table.parentNode.insertBefore(body, table);
-      body.appendChild(table);
-      var head = document.createElement('div');
-      head.className = 'code-head';
-      head.innerHTML = '<span>' + esc(lang.toUpperCase()) + '</span>';
-      var copy = document.createElement('button');
-      copy.type = 'button';
-      copy.className = 'code-copy';
-      copy.innerHTML = iconHtml('copy') + '<span>复制</span>';
-      on(copy, 'click', function () {
-        var lines = $$('.code .line', table).map(function (l) { return l.textContent; });
-        var text = lines.length ? lines.join('\n') : table.textContent;
-        var done = function () { copy.innerHTML = iconHtml('check') + '<span>已复制</span>'; setTimeout(function () { copy.innerHTML = iconHtml('copy') + '<span>复制</span>'; }, 1600); };
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
-        else { fallbackCopy(text); done(); }
-      });
-      head.appendChild(copy);
-      fig.insertBefore(head, fig.firstChild);
-      var lineCount = $$('.code .line', table).length;
-      if (body.scrollHeight > 520) {
-        fig.classList.add('collapsible', 'collapsed');
-        var expand = document.createElement('button');
-        expand.type = 'button';
-        expand.className = 'code-expand';
-        expand.textContent = '展开全部 ' + lineCount + ' 行';
-        on(expand, 'click', function () {
-          var collapsed = fig.classList.toggle('collapsed');
-          expand.textContent = collapsed ? '展开全部 ' + lineCount + ' 行' : '收起代码';
-          if (collapsed) smoothScrollTo(fig);
-        });
-        fig.appendChild(expand);
-      }
-    });
   }
 
   function renderMermaid(content) {

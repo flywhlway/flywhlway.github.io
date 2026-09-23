@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>高性能中间件：Pulsar · 飞轮之道</title>
 <meta name="description" content="本文档描述了基础平台（BP）中下一代云原生分布式消息流平台Pulsar的预研与应用方案。Pulsar采用计算与存储分离架构，可根据业务发展需要动态扩容，支持多租户和命名空间，同时具备跨地域复制功能，进一步提升系统性能及部署运维效率。">
 <meta name="author" content="Flywhl">
@@ -91,7 +92,22 @@
 <p>📷 原始图片：</p>
 </blockquote>
 <h2 id="一、概述"><a href="#一、概述" class="headerlink" title="一、概述"></a>一、概述</h2><p>本文档描述了基础平台（BP）中下一代云原生分布式消息流平台Pulsar的预研与应用方案。Pulsar采用计算与存储分离架构，可根据业务发展需要动态扩容，支持多租户和命名空间，同时具备跨地域复制功能，进一步提升系统性能及部署运维效率。</p>
-<h2 id="二、Kafka-vs-Pulsar-架构对比"><a href="#二、Kafka-vs-Pulsar-架构对比" class="headerlink" title="二、Kafka vs Pulsar 架构对比"></a>二、Kafka vs Pulsar 架构对比</h2><h3 id="2-1-Kafka-架构"><a href="#2-1-Kafka-架构" class="headerlink" title="2.1 Kafka 架构"></a>2.1 Kafka 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">Producer Producer Producer Producer</span><br><span class="line">   │        │        │        │</span><br><span class="line">   push     push     push     push    ──→ register ──→ ZooKeeper Cluster</span><br><span class="line">   │        │        │        │                            │</span><br><span class="line">   ▼        ▼        ▼        ▼                         register</span><br><span class="line">┌──────────────────────────────────┐</span><br><span class="line">│          Kafka Cluster            │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐    │</span><br><span class="line">│  │Kafka │ │Kafka │ │Kafka │    │</span><br><span class="line">│  │Broker│ │Broker│ │Broker│    │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘    │</span><br><span class="line">└──────────────────────────────────┘</span><br><span class="line">   │        │        │        │</span><br><span class="line">   pull     pull     pull     pull</span><br><span class="line">   ▼        ▼        ▼        ▼</span><br><span class="line">Consumer Consumer Consumer Consumer</span><br></pre></td></tr></table></figure>
+<h2 id="二、Kafka-vs-Pulsar-架构对比"><a href="#二、Kafka-vs-Pulsar-架构对比" class="headerlink" title="二、Kafka vs Pulsar 架构对比"></a>二、Kafka vs Pulsar 架构对比</h2><h3 id="2-1-Kafka-架构"><a href="#2-1-Kafka-架构" class="headerlink" title="2.1 Kafka 架构"></a>2.1 Kafka 架构</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="16"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Producer Producer Producer Producer</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">   │        │        │        │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">   push     push     push     push    ──→ register ──→ ZooKeeper Cluster</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">   │        │        │        │                            │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">   ▼        ▼        ▼        ▼                         register</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">┌──────────────────────────────────┐</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">│          Kafka Cluster            │</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">│  ┌──────┐ ┌──────┐ ┌──────┐    │</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">│  │Kafka │ │Kafka │ │Kafka │    │</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">│  │Broker│ │Broker│ │Broker│    │</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">│  └──────┘ └──────┘ └──────┘    │</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">└──────────────────────────────────┘</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">   │        │        │        │</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">   pull     pull     pull     pull</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">   ▼        ▼        ▼        ▼</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">Consumer Consumer Consumer Consumer</span></span></code></pre></div></div></figure>
 
 <p><strong>Kafka 痛点</strong>：</p>
 <ul>
@@ -99,7 +115,35 @@
 <li>❌ 容量规划困难，水平扩展需全量复制分区数据，影响业务稳定运行</li>
 <li>❌ 无租户概念，资源环境利用率低、成本高</li>
 </ul>
-<h3 id="2-2-Pulsar-架构"><a href="#2-2-Pulsar-架构" class="headerlink" title="2.2 Pulsar 架构"></a>2.2 Pulsar 架构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────┐</span><br><span class="line">│  客户端                                       │</span><br><span class="line">│  Producer                    Consumer        │</span><br><span class="line">├─────────────────────────────────────────────┤</span><br><span class="line">│  服务端                                       │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐                │</span><br><span class="line">│  │ 租户 │ │命名空间│ │ Topic│                │ ──→ Broker 集群</span><br><span class="line">│  │      │ │      │ │      │                │</span><br><span class="line">│  │ 同步 │ │ 同步 │ │ 异步 │   消息持久化模式   │</span><br><span class="line">│  │      │ │      │ │      │                │</span><br><span class="line">│  │独享模式│ │共享模式│ │灾备模式│  消息订阅模式    │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘                │</span><br><span class="line">├─────────────────────────────────────────────┤</span><br><span class="line">│  存储端                                       │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐  │ ──→ Bookie 集群</span><br><span class="line">│  │分片存储│ │水平扩展│ │自动重载│ │消息存储    │  │</span><br><span class="line">│  │      │ │      │ │      │ │          │  │</span><br><span class="line">│  │副本机制│ │quorum│ │异地复制│ │消息可靠性  │  │</span><br><span class="line">│  │      │ │机制   │ │      │ │          │  │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘ └──────────┘  │</span><br><span class="line">├─────────────────────────────────────────────┤</span><br><span class="line">│  元数据管理                                    │</span><br><span class="line">│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐      │ ──→ ZK集群</span><br><span class="line">│  │集群配置│ │租户数据│ │Topic │ │服务发现│      │</span><br><span class="line">│  │      │ │      │ │分配  │ │      │      │</span><br><span class="line">│  │元数据 │ │协调器 │ │用户  │ │       │      │</span><br><span class="line">│  │管理  │ │      │ │资源  │ │       │      │</span><br><span class="line">│  └──────┘ └──────┘ └──────┘ └──────┘      │</span><br><span class="line">└─────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+<h3 id="2-2-Pulsar-架构"><a href="#2-2-Pulsar-架构" class="headerlink" title="2.2 Pulsar 架构"></a>2.2 Pulsar 架构</h3><figure class="highlight plaintext cb cb--long" data-lang="text" data-label="Text" data-ext="txt" data-lines="29"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">┌─────────────────────────────────────────────┐</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">│  客户端                                       │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│  Producer                    Consumer        │</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">├─────────────────────────────────────────────┤</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">│  服务端                                       │</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">│  ┌──────┐ ┌──────┐ ┌──────┐                │</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">│  │ 租户 │ │命名空间│ │ Topic│                │ ──→ Broker 集群</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">│  │      │ │      │ │      │                │</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">│  │ 同步 │ │ 同步 │ │ 异步 │   消息持久化模式   │</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">│  │      │ │      │ │      │                │</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">│  │独享模式│ │共享模式│ │灾备模式│  消息订阅模式    │</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">│  └──────┘ └──────┘ └──────┘                │</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">├─────────────────────────────────────────────┤</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">│  存储端                                       │</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐  │ ──→ Bookie 集群</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">│  │分片存储│ │水平扩展│ │自动重载│ │消息存储    │  │</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">│  │      │ │      │ │      │ │          │  │</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">│  │副本机制│ │quorum│ │异地复制│ │消息可靠性  │  │</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">│  │      │ │机制   │ │      │ │          │  │</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">│  └──────┘ └──────┘ └──────┘ └──────────┘  │</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">├─────────────────────────────────────────────┤</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">│  元数据管理                                    │</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐      │ ──→ ZK集群</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">│  │集群配置│ │租户数据│ │Topic │ │服务发现│      │</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">│  │      │ │      │ │分配  │ │      │      │</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">│  │元数据 │ │协调器 │ │用户  │ │       │      │</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">│  │管理  │ │      │ │资源  │ │       │      │</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">│  └──────┘ └──────┘ └──────┘ └──────┘      │</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">└─────────────────────────────────────────────┘</span></span></code></pre></div></div></figure>
 
 <p><strong>Pulsar 优势</strong>：</p>
 <ul>
@@ -131,7 +175,17 @@
 <td>集群配置、服务发现、元数据管理</td>
 </tr>
 </tbody></table>
-<h3 id="3-2-多租户支持"><a href="#3-2-多租户支持" class="headerlink" title="3.2 多租户支持"></a>3.2 多租户支持</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Pulsar Instance</span><br><span class="line">├── Tenant A（租户A）</span><br><span class="line">│   ├── Namespace 1</span><br><span class="line">│   │   ├── Topic 1</span><br><span class="line">│   │   └── Topic 2</span><br><span class="line">│   └── Namespace 2</span><br><span class="line">│       └── Topic 3</span><br><span class="line">└── Tenant B（租户B）</span><br><span class="line">    └── Namespace 3</span><br><span class="line">        ├── Topic 4</span><br><span class="line">        └── Topic 5</span><br></pre></td></tr></table></figure>
+<h3 id="3-2-多租户支持"><a href="#3-2-多租户支持" class="headerlink" title="3.2 多租户支持"></a>3.2 多租户支持</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Pulsar Instance</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── Tenant A（租户A）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│   ├── Namespace 1</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">│   │   ├── Topic 1</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">│   │   └── Topic 2</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">│   └── Namespace 2</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">│       └── Topic 3</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">└── Tenant B（租户B）</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    └── Namespace 3</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        ├── Topic 4</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        └── Topic 5</span></span></code></pre></div></div></figure>
 
 <ul>
 <li>租户级别的资源隔离</li>
@@ -424,5 +478,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

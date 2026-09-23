@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>Token 经济学：AI 原生架构的成本工程 · 飞轮之道</title>
 <meta name="description" content="《复杂性的驯兽师》系列 · 第四篇 上一篇建好了质量防线，末尾抛出一个更冷峻的问题：证明了系统&#34;好&#34;，还要证明它&#34;值&#34;。这一篇算这笔账。大模型让边际成本归零的时代终结，token、GPU、上下文成为新的稀缺资源，成本第一次重新成为一等架构约束。">
 <meta name="author" content="Flywhl">
@@ -170,7 +171,10 @@
 <p><strong>第二步，从吞吐推导卡数。</strong> 单卡的有效吞吐由几个因素共同决定：模型参数量与显存占用、量化方案（降低精度换取更高吞吐和更低显存）、批处理策略（把多个请求合批提升 GPU 利用率）、以及模型服务框架的调度效率。用所需总吞吐除以单卡有效吞吐，得到需要的卡数——这里必须留出余量应对峰值和故障。</p>
 <p><strong>第三步，两种方案的总成本对比。</strong> 自建总成本 &#x3D; GPU 折旧 + 电力与机房 + 运维人力（这一项最容易被漏，见人力账）；API 总成本 &#x3D; 月度调用量 × 单价。两条成本曲线的交点，就是盈亏平衡点。</p>
 <p>可以把它压成一个便于估算的关系：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">自建月成本 ≈ 卡数 × (单卡月折旧 + 运维分摊)   —— 与调用量基本无关，是固定成本</span><br><span class="line">API 月成本  ≈ 月 token 量 × 单价              —— 随调用量线性增长</span><br><span class="line"></span><br><span class="line">盈亏平衡点：当 月 token 量 × 单价 &gt; 自建月成本 时，自建更划算</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">自建月成本 ≈ 卡数 × (单卡月折旧 + 运维分摊)   —— 与调用量基本无关，是固定成本</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">API 月成本  ≈ 月 token 量 × 单价              —— 随调用量线性增长</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">盈亏平衡点：当 月 token 量 × 单价 &gt; 自建月成本 时，自建更划算</span></span></code></pre></div></div></figure>
 
 <p>这个关系揭示了一条清晰的规律：<strong>自建是”高固定成本、低边际成本”，API 是”零固定成本、高边际成本”。</strong> 因此调用量越大越稳定，自建越有利；调用量小或波动剧烈，API 越有利。盈亏平衡点通常落在一个明确的日调用量区间——低于它，养 GPU 的钱还不如直接买 API；高于它，API 账单会超过自建总成本。</p>
 <h3 id="3-2-决策不只看平衡点"><a href="#3-2-决策不只看平衡点" class="headerlink" title="3.2 决策不只看平衡点"></a>3.2 决策不只看平衡点</h3><p>平衡点是核心，但真实决策还要叠加几个因素，构成一张完整的决策表：</p>
@@ -225,7 +229,7 @@
 <p><strong>自研组件的隐性维护成本。</strong> 一个诱人的决策是”自己写一个，省掉许可费&#x2F;订阅费”。但这笔账通常只算了眼前：省下的许可费，够不够付它未来三年的维护人力？一个自研组件需要人持续修 bug、跟进依赖升级、适配新需求、写文档、答疑——这些人力成本摊到三年，往往远超当初省下的那点许可费。<strong>软件的成本大头从来不是构建，而是维护；自研省的是构建成本，却把维护成本全额扛了下来。</strong></p>
 <p><strong>采买&#x2F;托管的隐性成本。</strong> 反过来，采买也不是没有隐性成本：供应商锁定的退出成本、API 变更被迫跟进的适配成本、以及万一供应商出问题(涨价、停服、安全事件)的风险成本。篇一那个自建 AI 网关的决策之所以成立，正是因为把”供应链风险的期望损失”也计入了总账——不是因为自建的构建成本低，而是因为算上风险后，自建的总成本更优。</p>
 <p><strong>把风险和人力折算进总账。</strong> 成熟的成本决策，总账里必须包含四项而不是一项：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">真实总拥有成本(TCO) = 构建成本 + 运行成本(token/GPU) + 维护人力成本 + 风险期望损失</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">真实总拥有成本(TCO) = 构建成本 + 运行成本(token/GPU) + 维护人力成本 + 风险期望损失</span></span></code></pre></div></div></figure>
 
 <p>大多数失败的成本决策，都是因为只算了前两项。一个只比较”许可费 vs 自研工时”的决策，漏掉了维护人力这本长期账；一个只比较”自建 GPU vs API 单价”的决策，漏掉了 GPU 运维团队这本人力账和供应链这本风险账。<strong>架构师的成本视野，体现在他记得算哪些别人忘了算的账。</strong></p>
 <p>这本账没有公式化的最优解，因为它高度依赖团队现状(有没有相关能力)、组织阶段(现金流状况)、风险偏好(能不能承受供应商风险)。但有一条通用纪律：<strong>任何”自研 vs 采买”的决策，强制在 ADR 里列出四项总账，谁也不许只算构建成本就下结论。</strong></p>
@@ -422,5 +426,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>

@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
 <title>AI Native 接口文档与调试指南 · 飞轮之道</title>
 <meta name="description" content="AI Native 接口文档与调试完整指南：Scalar × Yaak × Bruno">
 <meta name="author" content="Flywhl">
@@ -108,10 +109,10 @@
 <p><strong>约定</strong>：全文出现的命令、代码、运行结果，均在 <code>langgraph-agent-api-poc/</code><br>工程中实测通过（Python 3.12 &#x2F; FastAPI 0.141 &#x2F; LangGraph 1.2 &#x2F; LangChain<br>1.3 &#x2F; Bruno CLI 4.0，2026-08）。如果你按本文操作却得到不同结果，大概率<br>是版本差异，请对照附录 D 的版本清单排查。</p>
 <hr>
 <h2 id="第一部分：背景——为什么-LLM-Agent-API-需要新一代工具"><a href="#第一部分：背景——为什么-LLM-Agent-API-需要新一代工具" class="headerlink" title="第一部分：背景——为什么 LLM &#x2F; Agent API 需要新一代工具"></a>第一部分：背景——为什么 LLM &#x2F; Agent API 需要新一代工具</h2><h3 id="1-1-从”一次性响应”到”事件流”：API-形态的根本变化"><a href="#1-1-从”一次性响应”到”事件流”：API-形态的根本变化" class="headerlink" title="1.1 从”一次性响应”到”事件流”：API 形态的根本变化"></a>1.1 从”一次性响应”到”事件流”：API 形态的根本变化</h3><p>传统 REST API 的心智模型很简单：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Request → (等待) → 完整 Response</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Request → (等待) → 完整 Response</span></span></code></pre></div></div></figure>
 
 <p>Swagger UI 的 “Try it out” 就是照着这个模型设计的：发请求、转圈、拿到<br>一整个 Body、格式化展示。这套模型服务了 REST API 十几年，问题不出在<br>它本身，而出在 LLM &#x2F; Agent API 完全不是这个形状：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Request → thinking → tool_call → tool_result → reasoning(继续思考) → token → token → ... → finish</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Request → thinking → tool_call → tool_result → reasoning(继续思考) → token → token → ... → finish</span></span></code></pre></div></div></figure>
 
 <p>画成时序图更直观——这也是本文配套 POC 工程里 <code>/api/v1/chat/stream</code><br>端点的真实事件序列（第三部分会给出这条时序对应的完整 curl 实测输出）：</p>
 <pre class="mermaid">sequenceDiagram
@@ -252,10 +253,25 @@
 <hr>
 <h2 id="第二部分：Scalar-——-从入门到企业级"><a href="#第二部分：Scalar-——-从入门到企业级" class="headerlink" title="第二部分：Scalar —— 从入门到企业级"></a>第二部分：Scalar —— 从入门到企业级</h2><h3 id="2-1-Scalar-是什么"><a href="#2-1-Scalar-是什么" class="headerlink" title="2.1 Scalar 是什么"></a>2.1 Scalar 是什么</h3><p>Scalar 是一套开源 API 平台，核心是”用一份 OpenAPI&#x2F;Swagger 文档，渲染出<br>现代化的交互式参考文档”，同时自带一个可独立使用的 API 测试客户端<br>（<code>@scalar/api-client</code>）。它常被拿来直接替换 Swagger UI，原因很直接：<br>同样吃一份 <code>openapi.json</code>，渲染出来的文档在排版、代码生成、搜索、暗色<br>模式这些维度上普遍被认为优于原生 Swagger UI，而接入成本只有几行代码。</p>
 <h3 id="2-2-5-分钟上手：接入-FastAPI"><a href="#2-2-5-分钟上手：接入-FastAPI" class="headerlink" title="2.2 5 分钟上手：接入 FastAPI"></a>2.2 5 分钟上手：接入 FastAPI</h3><p>安装：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install scalar-fastapi</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">pip install scalar-fastapi</span></span></code></pre></div></div></figure>
 
 <p>接入代码（摘自 POC 工程 <code>app/main.py</code>，已实测跑通）：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span><br><span class="line"><span class="keyword">from</span> scalar_fastapi <span class="keyword">import</span> Layout, Theme, get_scalar_api_reference</span><br><span class="line"></span><br><span class="line">app = FastAPI(title=<span class="string">&quot;LangGraph Agent API POC&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.get(<span class="params"><span class="string">&quot;/scalar&quot;</span>, include_in_schema=<span class="literal">False</span></span>)</span></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">scalar_html</span>():</span><br><span class="line">    <span class="keyword">return</span> get_scalar_api_reference(</span><br><span class="line">        openapi_url=app.openapi_url,</span><br><span class="line">        title=<span class="string">&quot;LangGraph Agent API POC · Scalar&quot;</span>,</span><br><span class="line">        layout=Layout.MODERN,</span><br><span class="line">        theme=Theme.DEFAULT,</span><br><span class="line">        dark_mode=<span class="literal">True</span>,</span><br><span class="line">        default_open_all_tags=<span class="literal">True</span>,</span><br><span class="line">        scalar_proxy_url=<span class="string">&quot;&quot;</span>,   <span class="comment"># 本地直连；跨域时可改回官方代理，见 2.7</span></span><br><span class="line">    )</span><br></pre></td></tr></table></figure>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="16"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">from</span> scalar_fastapi <span class="keyword">import</span> Layout, Theme, get_scalar_api_reference</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">app = FastAPI(title=<span class="string">&quot;LangGraph Agent API POC&quot;</span>)</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="meta">@app.get(<span class="params"><span class="string">&quot;/scalar&quot;</span>, include_in_schema=<span class="literal">False</span></span>)</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">scalar_html</span>():</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="keyword">return</span> get_scalar_api_reference(</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        openapi_url=app.openapi_url,</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        title=<span class="string">&quot;LangGraph Agent API POC · Scalar&quot;</span>,</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        layout=Layout.MODERN,</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        theme=Theme.DEFAULT,</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        dark_mode=<span class="literal">True</span>,</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        default_open_all_tags=<span class="literal">True</span>,</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        scalar_proxy_url=<span class="string">&quot;&quot;</span>,   <span class="comment"># 本地直连；跨域时可改回官方代理，见 2.7</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    )</span></span></code></pre></div></div></figure>
 
 <p>启动 POC 服务后访问 <code>http://localhost:8000/scalar</code>，会看到一个左侧带<br>分组导航（<code>system</code> &#x2F; <code>chat</code> 两个 tag）、右侧带请求&#x2F;响应 Schema 和示例的<br>文档页面——这些分组和示例，全部来自 <code>app/schemas.py</code> 里 Pydantic 模型上<br>的 <code>Field(description=..., examples=[...])</code>，也就是说<strong>你只要把类型和<br>Docstring 写规范，文档质量是自动跟着代码走的</strong>，不需要手动维护一份<br>独立的文档。</p>
 <h3 id="2-3-深度定制"><a href="#2-3-深度定制" class="headerlink" title="2.3 深度定制"></a>2.3 深度定制</h3><p><code>get_scalar_api_reference()</code> 暴露的可配置项相当丰富，这里列出实测过的<br>几个高价值选项：</p>
@@ -300,7 +316,17 @@
 </tr>
 </tbody></table>
 <p>一个更贴近企业场景的配置示例：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> get_scalar_api_reference(</span><br><span class="line">    openapi_url=app.openapi_url,</span><br><span class="line">    title=<span class="string">&quot;内部 Agent 平台 API&quot;</span>,</span><br><span class="line">    layout=Layout.MODERN,</span><br><span class="line">    hidden_clients=[<span class="string">&quot;node&quot;</span>, <span class="string">&quot;php&quot;</span>, <span class="string">&quot;java&quot;</span>],   <span class="comment"># 只保留 Python / curl / JS</span></span><br><span class="line">    servers=[</span><br><span class="line">        &#123;<span class="string">&quot;url&quot;</span>: <span class="string">&quot;https://agent-api-staging.internal&quot;</span>, <span class="string">&quot;description&quot;</span>: <span class="string">&quot;预发&quot;</span>&#125;,</span><br><span class="line">        &#123;<span class="string">&quot;url&quot;</span>: <span class="string">&quot;https://agent-api.internal&quot;</span>, <span class="string">&quot;description&quot;</span>: <span class="string">&quot;生产&quot;</span>&#125;,</span><br><span class="line">    ],</span><br><span class="line">    authentication=&#123;<span class="string">&quot;bearerAuth&quot;</span>: <span class="string">&quot;在此粘贴你的临时 Token&quot;</span>&#125;,</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">return</span> get_scalar_api_reference(</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    openapi_url=app.openapi_url,</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    title=<span class="string">&quot;内部 Agent 平台 API&quot;</span>,</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    layout=Layout.MODERN,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    hidden_clients=[<span class="string">&quot;node&quot;</span>, <span class="string">&quot;php&quot;</span>, <span class="string">&quot;java&quot;</span>],   <span class="comment"># 只保留 Python / curl / JS</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    servers=[</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        &#123;<span class="string">&quot;url&quot;</span>: <span class="string">&quot;https://agent-api-staging.internal&quot;</span>, <span class="string">&quot;description&quot;</span>: <span class="string">&quot;预发&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        &#123;<span class="string">&quot;url&quot;</span>: <span class="string">&quot;https://agent-api.internal&quot;</span>, <span class="string">&quot;description&quot;</span>: <span class="string">&quot;生产&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    ],</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    authentication=&#123;<span class="string">&quot;bearerAuth&quot;</span>: <span class="string">&quot;在此粘贴你的临时 Token&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">)</span></span></code></pre></div></div></figure>
 
 <h3 id="2-4-把-OpenAPI-版本讲清楚：3-1-现状与-3-2-的流式新特性"><a href="#2-4-把-OpenAPI-版本讲清楚：3-1-现状与-3-2-的流式新特性" class="headerlink" title="2.4 把 OpenAPI 版本讲清楚：3.1 现状与 3.2 的流式新特性"></a>2.4 把 OpenAPI 版本讲清楚：3.1 现状与 3.2 的流式新特性</h3><p>这里有个容易踩的认知误区，值得单独展开。</p>
 <p><strong>FastAPI 目前（<code>fastapi==0.141.1</code> 实测）默认且只会生成 OpenAPI<br>3.1.0</strong>。<code>FastAPI(openapi_version=...)</code> 这个参数确实存在，但它只是把<br>生成结果里 <code>&quot;openapi&quot;: &quot;3.1.0&quot;</code> 这行字符串替换掉，<strong>不会</strong>让 Schema<br>结构真的符合你指定的目标版本——FastAPI 核心维护者在官方 GitHub<br>讨论里把这种做法直接称为”hack”，滥用它可能生成不合法的 OAS 文档。</p>
@@ -311,7 +337,15 @@
 <li>用标准的 <code>responses</code> + <code>text/event-stream</code> 内容类型，把这是一个流<br>描述清楚；</li>
 <li>额外挂一个 <code>x-sse-events</code> <strong>vendor extension</strong>（<code>x-</code> 前缀是 OpenAPI<br>官方预留给扩展字段的约定，Scalar &#x2F; Redocly 等工具都会原样保留展示），<br>结构化列出这个流会推送哪几类事件：</li>
 </ol>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">SSE_EVENTS_EXTENSION = &#123;</span><br><span class="line">    <span class="string">&quot;thinking&quot;</span>: <span class="string">&quot;模型开始新一轮推理 / 生成。&quot;</span>,</span><br><span class="line">    <span class="string">&quot;token&quot;</span>: <span class="string">&quot;模型输出的增量文本片段（增量 token）。&quot;</span>,</span><br><span class="line">    <span class="string">&quot;tool_start&quot;</span>: <span class="string">&quot;开始调用某个工具，data 中带有工具名与入参。&quot;</span>,</span><br><span class="line">    <span class="string">&quot;tool_end&quot;</span>: <span class="string">&quot;工具调用结束，data 中带有工具名与出参。&quot;</span>,</span><br><span class="line">    <span class="string">&quot;finish&quot;</span>: <span class="string">&quot;整个 Agent 运行结束，data 中带有最终答案与完整工具调用轨迹。&quot;</span>,</span><br><span class="line">    <span class="string">&quot;error&quot;</span>: <span class="string">&quot;运行期发生异常时的错误事件。&quot;</span>,</span><br><span class="line">&#125;</span><br><span class="line">stream_path[<span class="string">&quot;post&quot;</span>][<span class="string">&quot;x-sse-events&quot;</span>] = SSE_EVENTS_EXTENSION</span><br></pre></td></tr></table></figure>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">SSE_EVENTS_EXTENSION = &#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="string">&quot;thinking&quot;</span>: <span class="string">&quot;模型开始新一轮推理 / 生成。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="string">&quot;token&quot;</span>: <span class="string">&quot;模型输出的增量文本片段（增量 token）。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="string">&quot;tool_start&quot;</span>: <span class="string">&quot;开始调用某个工具，data 中带有工具名与入参。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="string">&quot;tool_end&quot;</span>: <span class="string">&quot;工具调用结束，data 中带有工具名与出参。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="string">&quot;finish&quot;</span>: <span class="string">&quot;整个 Agent 运行结束，data 中带有最终答案与完整工具调用轨迹。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="string">&quot;error&quot;</span>: <span class="string">&quot;运行期发生异常时的错误事件。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">stream_path[<span class="string">&quot;post&quot;</span>][<span class="string">&quot;x-sse-events&quot;</span>] = SSE_EVENTS_EXTENSION</span></span></code></pre></div></div></figure>
 
 <p>打开 <code>/scalar</code> 页面对应端点，就能在文档里直接看到这份事件说明——<br>这比”祈祷调用方去读你写在 Wiki 里的另一份说明”可靠得多。如果你的<br>团队想要更严格的 3.2 <code>itemSchema</code> 语义（比如要生成强类型 SDK），<br>目前现实的做法是：用一个构建期脚本读出 FastAPI 生成的 <code>openapi.json</code>，<br>在其基础上补丁式地把 <code>text/event-stream</code> 部分改写成 3.2 语法后再发布，<br>而不是等 FastAPI 官方支持——这个脚本本身不复杂，但已经超出本文范围。</p>
 <h3 id="2-5-已知限制：Scalar-调试-FastAPI-SSE-流的现状"><a href="#2-5-已知限制：Scalar-调试-FastAPI-SSE-流的现状" class="headerlink" title="2.5 已知限制：Scalar 调试 FastAPI SSE 流的现状"></a>2.5 已知限制：Scalar 调试 FastAPI SSE 流的现状</h3><p>这一点非常重要，直接关系到你该拿 Scalar 干什么、不该指望它干什么。</p>
@@ -338,7 +372,26 @@
 <p><code>yaak/langgraph-agent-poc.postman_collection.json</code> 是一份标准的<br><strong>Postman Collection v2.1</strong> 文件——选择这个格式而不是 Yaak 私有的工作区<br>导出格式，是因为 v2.1 是 Yaak 官方明确支持导入、同时被 Bruno &#x2F; Insomnia<br>等几乎所有主流客户端通用识别的”最小公分母”格式，可移植性最好。<br>Import → From File，选中该文件即可，导入后已经预置好天气 &#x2F; 计算两条<br>工具调用路径的示例请求体，以及 <code>baseUrl</code> 环境变量。</p>
 <h3 id="3-4-SSE-流式调试实战"><a href="#3-4-SSE-流式调试实战" class="headerlink" title="3.4 SSE 流式调试实战"></a>3.4 SSE 流式调试实战</h3><p>这是 Yaak 相对 Scalar 的核心差异点。打开导入后的”Chat SSE 流式调用”<br>请求并发送：Yaak 识别到响应头 <code>Content-Type: text/event-stream</code> 后，<br>会自动切换到<strong>流式响应视图</strong>——<code>thinking</code> &#x2F; <code>tool_start</code> &#x2F; <code>tool_end</code> &#x2F;<br><code>token</code> &#x2F; <code>finish</code> 五类事件会像日志一样逐条追加显示，你可以清楚看到<br>“模型先调用了 get_weather，拿到结果后又开始逐 token 吐出最终答案”这个<br>完整过程，而不是等连接关闭后才看到一整块文本。</p>
 <p>对照实测的 curl 输出（POC 工程 <code>curl -N</code> 得到的真实结果片段）：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">event: thinking</span><br><span class="line">data: &#123;&quot;run_id&quot;: &quot;019fdcef-...&quot;&#125;</span><br><span class="line"></span><br><span class="line">event: tool_start</span><br><span class="line">data: &#123;&quot;tool&quot;: &quot;get_weather&quot;, &quot;input&quot;: &#123;&quot;city&quot;: &quot;北京&quot;&#125;&#125;</span><br><span class="line"></span><br><span class="line">event: tool_end</span><br><span class="line">data: &#123;&quot;tool&quot;: &quot;get_weather&quot;, &quot;output&quot;: &quot;北京当前天气：晴，气温约 24°C...&quot;&#125;</span><br><span class="line"></span><br><span class="line">event: thinking</span><br><span class="line">data: &#123;&quot;run_id&quot;: &quot;019fdcef-...&quot;&#125;</span><br><span class="line"></span><br><span class="line">event: token</span><br><span class="line">data: &#123;&quot;content&quot;: &quot;根&quot;&#125;</span><br><span class="line"></span><br><span class="line">event: token</span><br><span class="line">data: &#123;&quot;content&quot;: &quot;据&quot;&#125;</span><br><span class="line">...</span><br><span class="line">event: finish</span><br><span class="line">data: &#123;&quot;answer&quot;: &quot;...&quot;, &quot;tool_calls&quot;: [...], &quot;session_id&quot;: &quot;...&quot;&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="20"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">event: thinking</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">data: &#123;&quot;run_id&quot;: &quot;019fdcef-...&quot;&#125;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">event: tool_start</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">data: &#123;&quot;tool&quot;: &quot;get_weather&quot;, &quot;input&quot;: &#123;&quot;city&quot;: &quot;北京&quot;&#125;&#125;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">event: tool_end</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">data: &#123;&quot;tool&quot;: &quot;get_weather&quot;, &quot;output&quot;: &quot;北京当前天气：晴，气温约 24°C...&quot;&#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">event: thinking</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">data: &#123;&quot;run_id&quot;: &quot;019fdcef-...&quot;&#125;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">event: token</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">data: &#123;&quot;content&quot;: &quot;根&quot;&#125;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">event: token</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">data: &#123;&quot;content&quot;: &quot;据&quot;&#125;</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">...</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">event: finish</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">data: &#123;&quot;answer&quot;: &quot;...&quot;, &quot;tool_calls&quot;: [...], &quot;session_id&quot;: &quot;...&quot;&#125;</span></span></code></pre></div></div></figure>
 
 <p>在 Yaak 里，这些帧会在你发送请求后的几百毫秒到几秒内逐条出现在响应<br>面板里——这正是本文开头强调的”过程可见性”，也是传统 Swagger UI 完全<br>给不了的体验。</p>
 <h3 id="3-5-环境变量与请求链"><a href="#3-5-环境变量与请求链" class="headerlink" title="3.5 环境变量与请求链"></a>3.5 环境变量与请求链</h3><p>Yaak 支持在多个 Workspace &#x2F; Environment 之间切换 <code>baseUrl</code> 等变量<br>（<code>&#123;&#123;baseUrl&#125;&#125;</code> 模板语法），也支持”请求链”——把上一个请求的响应字段<br>引用到下一个请求里，适合”先登录拿 Token，再用 Token 调用业务接口”这类<br>场景。本 POC 没有鉴权环节，暂时用不上，但企业内部接入真实网关时通常会<br>用到。</p>
@@ -354,11 +407,43 @@
 </ol>
 <hr>
 <h2 id="第四部分：Bruno-——-从入门到企业级"><a href="#第四部分：Bruno-——-从入门到企业级" class="headerlink" title="第四部分：Bruno —— 从入门到企业级"></a>第四部分：Bruno —— 从入门到企业级</h2><h3 id="4-1-Bruno-是什么"><a href="#4-1-Bruno-是什么" class="headerlink" title="4.1 Bruno 是什么"></a>4.1 Bruno 是什么</h3><p>Bruno 是一款开源、Git-First 的 API 客户端，和 Yaak 最大的理念差异在于：<br><strong>每个请求都是磁盘上的一个纯文本文件</strong>（<code>.bru</code> 格式，使用专门设计的<br>Bru DSL），Collection 就是一个普通文件夹，可以原样提交进你的 Git<br>仓库、走 PR review、和业务代码同一个生命周期管理。这也是它被称为<br>“Git-Friendly API Client”的原因——不是”支持导出到 Git”，而是它本身<br>就没有别的存储形式。</p>
-<h3 id="4-2-安装与创建第一个-Collection"><a href="#4-2-安装与创建第一个-Collection" class="headerlink" title="4.2 安装与创建第一个 Collection"></a>4.2 安装与创建第一个 Collection</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># macOS</span></span><br><span class="line">brew install bruno</span><br><span class="line"><span class="comment"># Windows / Linux：从 usebruno.com 下载安装包，或用 AppImage / snap</span></span><br></pre></td></tr></table></figure>
+<h3 id="4-2-安装与创建第一个-Collection"><a href="#4-2-安装与创建第一个-Collection" class="headerlink" title="4.2 安装与创建第一个 Collection"></a>4.2 安装与创建第一个 Collection</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># macOS</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">brew install bruno</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># Windows / Linux：从 usebruno.com 下载安装包，或用 AppImage / snap</span></span></span></code></pre></div></div></figure>
 
 <p>打开 Bruno 桌面版，New Collection，选择一个本地目录——Bruno 会在这个<br>目录下生成一个 <code>bruno.json</code> 文件，这个文件的存在与否是 Bruno 判断<br>“这是不是一个合法 Collection”的依据。</p>
 <h3 id="4-3-Bru-语言语法精讲"><a href="#4-3-Bru-语言语法精讲" class="headerlink" title="4.3 Bru 语言语法精讲"></a>4.3 Bru 语言语法精讲</h3><p>Bru 是一种块状（block-based）DSL，每个 <code>.bru</code> 文件由若干个块组成，<br>块内是简单的 key-value 或者文本。以 POC 工程里实际使用、并且已经用<br>真实 Bruno CLI 跑通的请求文件为例（<code>bruno/langgraph-agent-poc/02-chat-sync-weather.bru</code>）：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">meta &#123;</span><br><span class="line">  name: Chat 同步调用（天气工具）</span><br><span class="line">  type: http</span><br><span class="line">  seq: 2</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">post &#123;</span><br><span class="line">  url: &#123;&#123;baseUrl&#125;&#125;/api/v1/chat</span><br><span class="line">  body: json</span><br><span class="line">  auth: none</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">headers &#123;</span><br><span class="line">  Content-Type: application/json</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">body:json &#123;</span><br><span class="line">  &#123;</span><br><span class="line">    &quot;message&quot;: &quot;上海今天天气怎么样？&quot;,</span><br><span class="line">    &quot;session_id&quot;: &quot;bruno-demo-sync-weather&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">tests &#123;</span><br><span class="line">  test(&quot;状态码应为 200&quot;, function() &#123;</span><br><span class="line">    expect(res.status).to.equal(200);</span><br><span class="line">  &#125;);</span><br><span class="line">  test(&quot;应触发 get_weather 工具调用&quot;, function() &#123;</span><br><span class="line">    expect(res.body.tool_calls[0].tool).to.equal(&quot;get_weather&quot;);</span><br><span class="line">  &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb cb--long" data-lang="text" data-label="Text" data-ext="txt" data-lines="31"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">meta &#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  name: Chat 同步调用（天气工具）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  type: http</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  seq: 2</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">post &#123;</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  url: &#123;&#123;baseUrl&#125;&#125;/api/v1/chat</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  body: json</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  auth: none</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">headers &#123;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  Content-Type: application/json</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">body:json &#123;</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">  &#123;</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    &quot;message&quot;: &quot;上海今天天气怎么样？&quot;,</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    &quot;session_id&quot;: &quot;bruno-demo-sync-weather&quot;</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">  &#125;</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">tests &#123;</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">  test(&quot;状态码应为 200&quot;, function() &#123;</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    expect(res.status).to.equal(200);</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">  &#125;);</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">  test(&quot;应触发 get_weather 工具调用&quot;, function() &#123;</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    expect(res.body.tool_calls[0].tool).to.equal(&quot;get_weather&quot;);</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">  &#125;);</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
 
 <p>几个关键 Block 的作用：</p>
 <table>
@@ -406,14 +491,30 @@
 </tr>
 </tbody></table>
 <p>环境文件（<code>environments/Local.bru</code>）语法更简单，只有一个 <code>vars</code> 块：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">vars &#123;</span><br><span class="line">  baseUrl: http://localhost:8000</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">vars &#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  baseUrl: http://localhost:8000</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
 
 <p>敏感变量可以用 <code>vars:secret [ apiKey ]</code> 这种数组语法单独声明，桌面版会<br>对其做掩码显示。</p>
 <h3 id="4-4-Collection-组织规范"><a href="#4-4-Collection-组织规范" class="headerlink" title="4.4 Collection 组织规范"></a>4.4 Collection 组织规范</h3><p>一个标准 Bruno Collection 的目录结构：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">langgraph-agent-poc/</span><br><span class="line">├── bruno.json              # 必需：Collection 描述符，标志这是一个合法 Collection</span><br><span class="line">├── collection.bru          # 可选：对该 Collection 下所有请求生效的默认设置</span><br><span class="line">├── environments/</span><br><span class="line">│   └── Local.bru            # 环境变量（也可以有 Staging.bru / Prod.bru 等）</span><br><span class="line">├── 01-health.bru</span><br><span class="line">├── 02-chat-sync-weather.bru</span><br><span class="line">├── 03-chat-sync-calculate.bru</span><br><span class="line">├── 04-chat-stream-sse.bru</span><br><span class="line">└── 05-openapi-spec.bru</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">langgraph-agent-poc/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── bruno.json              # 必需：Collection 描述符，标志这是一个合法 Collection</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">├── collection.bru          # 可选：对该 Collection 下所有请求生效的默认设置</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">├── environments/</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">│   └── Local.bru            # 环境变量（也可以有 Staging.bru / Prod.bru 等）</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">├── 01-health.bru</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">├── 02-chat-sync-weather.bru</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">├── 03-chat-sync-calculate.bru</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">├── 04-chat-stream-sse.bru</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">└── 05-openapi-spec.bru</span></span></code></pre></div></div></figure>
 
 <p><code>bruno.json</code> 本身是标准 JSON（不是 Bru DSL），POC 工程里的内容：</p>
-<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;langgraph-agent-poc&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;collection&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;ignore&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;node_modules&quot;</span><span class="punctuation">,</span> <span class="string">&quot;.git&quot;</span><span class="punctuation">]</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;langgraph-agent-poc&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;collection&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;ignore&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;node_modules&quot;</span><span class="punctuation">,</span> <span class="string">&quot;.git&quot;</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
 
 <blockquote>
 <p><strong>一个格式上的提醒</strong>：Bruno 近期还推出了一种可选的<br>“OpenCollection YAML”格式（<code>opencollection.yml</code>）作为 <code>.bru</code> 的<br>替代表示法。截至本文写作时，这个新格式和 VS Code 插件等周边生态的<br>兼容性还不完整（官方仓库有相关 Issue 在跟踪）。本文和 POC 工程统一<br>使用经典的 <code>bruno.json</code> + <code>.bru</code> 组合——这是兼容性最好、文档最全、<br>也是 CLI &#x2F; Docker 镜像 &#x2F; VS Code 插件都明确支持的形式。</p>
@@ -427,19 +528,60 @@
 </ol>
 <p>这一层业务语义断言，恰恰是 Agent API 测试里最容易被忽略、但又最重要<br>的部分——传统 REST 接口”状态码 200 + 字段存在”往往就够了，但 Agent<br>接口即便状态码和结构都对，也完全可能因为模型没有触发预期的工具调用而<br>在业务上是错的。</p>
 <h3 id="4-7-企业级集成：CLI-Docker-CI"><a href="#4-7-企业级集成：CLI-Docker-CI" class="headerlink" title="4.7 企业级集成：CLI &#x2F; Docker &#x2F; CI"></a>4.7 企业级集成：CLI &#x2F; Docker &#x2F; CI</h3><p>Bruno CLI（<code>@usebruno/cli</code>，命令为 <code>bru</code>）是把 Collection 接入 CI&#x2F;CD<br>的核心工具。安装：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">npm install -g @usebruno/cli</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">npm install -g @usebruno/cli</span></span></code></pre></div></div></figure>
 
 <p>运行本 POC 的完整 Collection（<strong>以下输出为真实执行结果</strong>，<br><code>bru --version</code> 为 <code>4.0.0</code>，服务已在本地 8000 端口启动）：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">$ cd bruno/langgraph-agent-poc &amp;&amp; bru run --env Local</span><br><span class="line"></span><br><span class="line">01-health (200 OK) - 46 ms</span><br><span class="line">Tests</span><br><span class="line">   ✓ 状态码应为 200</span><br><span class="line">   ✓ status 字段应为 ok</span><br><span class="line">02-chat-sync-weather (200 OK) - 59 ms</span><br><span class="line">Tests</span><br><span class="line">   ✓ 状态码应为 200</span><br><span class="line">   ✓ 响应应包含 answer 字段</span><br><span class="line">   ✓ 应触发 get_weather 工具调用</span><br><span class="line">03-chat-sync-calculate (200 OK) - 14 ms</span><br><span class="line">Tests</span><br><span class="line">   ✓ 状态码应为 200</span><br><span class="line">   ✓ 应触发 calculate 工具调用</span><br><span class="line">   ✓ 计算结果应正确</span><br><span class="line">04-chat-stream-sse (200 OK) - 35 ms</span><br><span class="line">05-openapi-spec (200 OK) - 18 ms</span><br><span class="line">Tests</span><br><span class="line">   ✓ 状态码应为 200</span><br><span class="line">   ✓ openapi 版本字段应存在</span><br><span class="line"></span><br><span class="line">📊 Execution Summary</span><br><span class="line">┌───────────────┬──────────────┐</span><br><span class="line">│ Metric        │    Result    │</span><br><span class="line">├───────────────┼──────────────┤</span><br><span class="line">│ Status        │    ✓ PASS    │</span><br><span class="line">├───────────────┼──────────────┤</span><br><span class="line">│ Requests      │ 5 (5 Passed) │</span><br><span class="line">├───────────────┼──────────────┤</span><br><span class="line">│ Tests         │    10/10     │</span><br><span class="line">└───────────────┴──────────────┘</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb cb--long" data-lang="text" data-label="Text" data-ext="txt" data-lines="32"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">$ cd bruno/langgraph-agent-poc &amp;&amp; bru run --env Local</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">01-health (200 OK) - 46 ms</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">Tests</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">   ✓ 状态码应为 200</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">   ✓ status 字段应为 ok</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">02-chat-sync-weather (200 OK) - 59 ms</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">Tests</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">   ✓ 状态码应为 200</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">   ✓ 响应应包含 answer 字段</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">   ✓ 应触发 get_weather 工具调用</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">03-chat-sync-calculate (200 OK) - 14 ms</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">Tests</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">   ✓ 状态码应为 200</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">   ✓ 应触发 calculate 工具调用</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">   ✓ 计算结果应正确</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">04-chat-stream-sse (200 OK) - 35 ms</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">05-openapi-spec (200 OK) - 18 ms</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">Tests</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">   ✓ 状态码应为 200</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">   ✓ openapi 版本字段应存在</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">📊 Execution Summary</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">┌───────────────┬──────────────┐</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">│ Metric        │    Result    │</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">├───────────────┼──────────────┤</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">│ Status        │    ✓ PASS    │</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">├───────────────┼──────────────┤</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">│ Requests      │ 5 (5 Passed) │</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">├───────────────┼──────────────┤</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">│ Tests         │    10/10     │</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">└───────────────┴──────────────┘</span></span></code></pre></div></div></figure>
 
 <p>常用参数：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">bru run request.bru                          <span class="comment"># 只跑单个请求</span></span><br><span class="line">bru run folder --<span class="built_in">env</span> Local                    <span class="comment"># 跑某个子文件夹</span></span><br><span class="line">bru run --<span class="built_in">env</span> prod --reporter-json out.json \</span><br><span class="line">        --reporter-junit out.xml \</span><br><span class="line">        --reporter-html out.html              <span class="comment"># 生成 CI 可消费的报告</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">bru run request.bru                          <span class="comment"># 只跑单个请求</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">bru run folder --<span class="built_in">env</span> Local                    <span class="comment"># 跑某个子文件夹</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">bru run --<span class="built_in">env</span> prod --reporter-json out.json \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">        --reporter-junit out.xml \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        --reporter-html out.html              <span class="comment"># 生成 CI 可消费的报告</span></span></span></code></pre></div></div></figure>
 
 <p><strong>安全提醒</strong>：从 Bruno CLI v3.0.0 起，默认运行模式从 Developer Mode<br>改成了 Safe Mode——如果你的脚本用到了外部 npm 包或文件系统访问，需要<br>显式加 <code>--sandbox=developer</code> 才能跑通，这是一个刻意的安全默认值变更，<br>排查”脚本突然跑不动了”时优先检查这一点。</p>
 <p><strong>接入 CI</strong>：官方提供 Docker 镜像和 GitHub Action 两条路径，二者底层<br>都是同一个 <code>bru run</code>，本地调通的命令原样搬进 CI 即可：</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># GitHub Actions</span></span><br><span class="line"><span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">usebruno/bruno-cli-action@v1</span></span><br><span class="line">  <span class="attr">with:</span></span><br><span class="line">    <span class="attr">working-directory:</span> <span class="string">bruno/langgraph-agent-poc</span></span><br><span class="line">    <span class="attr">command:</span> <span class="string">&#x27;run --env Local&#x27;</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># GitHub Actions</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">usebruno/bruno-cli-action@v1</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">with:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">working-directory:</span> <span class="string">bruno/langgraph-agent-poc</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">command:</span> <span class="string">&#x27;run --env Local&#x27;</span></span></span></code></pre></div></div></figure>
 
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 任意其他 CI（Jenkins / GitLab CI / Azure DevOps）通用的 Docker 方式</span></span><br><span class="line">docker run --<span class="built_in">rm</span> -v $(<span class="built_in">pwd</span>)/bruno/langgraph-agent-poc:/bruno \</span><br><span class="line">  usebruno/cli run --<span class="built_in">env</span> Local</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 任意其他 CI（Jenkins / GitLab CI / Azure DevOps）通用的 Docker 方式</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">docker run --<span class="built_in">rm</span> -v $(<span class="built_in">pwd</span>)/bruno/langgraph-agent-poc:/bruno \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  usebruno/cli run --<span class="built_in">env</span> Local</span></span></code></pre></div></div></figure>
 
 <h3 id="4-8-与-AI-编码-Agent-协同"><a href="#4-8-与-AI-编码-Agent-协同" class="headerlink" title="4.8 与 AI 编码 Agent 协同"></a>4.8 与 AI 编码 Agent 协同</h3><p>Bruno”Collection 即纯文本文件”这个特性，天然适合被 Claude Code &#x2F;<br>Cursor 这类编码 Agent 直接读写——它们不需要理解任何私有二进制格式或<br>调用专门的导出 API，<code>.bru</code> 文件本身就是它们最擅长处理的东西：纯文本、<br>结构清晰、可以用 <code>str_replace</code> 精确修改。</p>
 <p>POC 工程根目录的 <code>AGENTS.md</code>（遵循跨工具通用的 AGENTS.md 约定，Claude<br>Code &#x2F; Cursor &#x2F; Codex 等均会读取）里专门写了一条约束：</p>
@@ -535,20 +677,57 @@
 <li><strong>第三阶段</strong>：把 Bruno Collection（或对应的 Postman 导出）分发给<br>团队，个人偏好用 GUI 调试的同事可以选 Yaak 导入同一份文件——不需要<br>强制统一工具，统一的是”契约”这份文件本身。</li>
 </ol>
 <hr>
-<h2 id="第六部分：POC-项目使用手册"><a href="#第六部分：POC-项目使用手册" class="headerlink" title="第六部分：POC 项目使用手册"></a>第六部分：POC 项目使用手册</h2><h3 id="6-1-项目结构"><a href="#6-1-项目结构" class="headerlink" title="6.1 项目结构"></a>6.1 项目结构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">langgraph-agent-api-poc/</span><br><span class="line">├── app/</span><br><span class="line">│   ├── main.py           FastAPI 入口：/health /api/v1/chat /api/v1/chat/stream /scalar</span><br><span class="line">│   ├── agent.py            LangGraph Agent 构建（create_agent + 两个工具）</span><br><span class="line">│   ├── tools.py             演示工具：get_weather / calculate</span><br><span class="line">│   ├── llm_provider.py      Provider 工厂：stub / anthropic / openai / ollama</span><br><span class="line">│   ├── stub_llm.py          零依赖假模型实现</span><br><span class="line">│   ├── sse.py                astream_events -&gt; 5 类 SSE 事件的映射层</span><br><span class="line">│   ├── schemas.py            Pydantic 请求/响应模型（带 OpenAPI 示例）</span><br><span class="line">│   └── openapi_ext.py        OpenAPI 元数据 + x-sse-events 扩展</span><br><span class="line">├── bruno/langgraph-agent-poc/   Bruno Collection</span><br><span class="line">├── yaak/                          Yaak 可导入的 Postman v2.1 Collection + 说明</span><br><span class="line">├── scripts/smoke_test.py         最小冒烟测试（Python，服务已启动后运行）</span><br><span class="line">├── docker-compose.yml / Dockerfile</span><br><span class="line">├── AGENTS.md                     给 AI 编程助手看的项目说明</span><br><span class="line">└── README.md</span><br></pre></td></tr></table></figure>
+<h2 id="第六部分：POC-项目使用手册"><a href="#第六部分：POC-项目使用手册" class="headerlink" title="第六部分：POC 项目使用手册"></a>第六部分：POC 项目使用手册</h2><h3 id="6-1-项目结构"><a href="#6-1-项目结构" class="headerlink" title="6.1 项目结构"></a>6.1 项目结构</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="16"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">langgraph-agent-api-poc/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── app/</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│   ├── main.py           FastAPI 入口：/health /api/v1/chat /api/v1/chat/stream /scalar</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">│   ├── agent.py            LangGraph Agent 构建（create_agent + 两个工具）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">│   ├── tools.py             演示工具：get_weather / calculate</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">│   ├── llm_provider.py      Provider 工厂：stub / anthropic / openai / ollama</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">│   ├── stub_llm.py          零依赖假模型实现</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">│   ├── sse.py                astream_events -&gt; 5 类 SSE 事件的映射层</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">│   ├── schemas.py            Pydantic 请求/响应模型（带 OpenAPI 示例）</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">│   └── openapi_ext.py        OpenAPI 元数据 + x-sse-events 扩展</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">├── bruno/langgraph-agent-poc/   Bruno Collection</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">├── yaak/                          Yaak 可导入的 Postman v2.1 Collection + 说明</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">├── scripts/smoke_test.py         最小冒烟测试（Python，服务已启动后运行）</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">├── docker-compose.yml / Dockerfile</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">├── AGENTS.md                     给 AI 编程助手看的项目说明</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">└── README.md</span></span></code></pre></div></div></figure>
 
 <p>Agent 内部结构（<code>app/agent.py</code>）值得单独强调一个版本细节：本项目使用<br><code>from langchain.agents import create_agent</code> 而不是很多现存教程里出现的<br><code>langgraph.prebuilt.create_react_agent</code>——后者在 LangGraph v1.0 起已被<br>标记为 Deprecated（计划 v2.0 移除），运行时会看到明确的<br><code>LangGraphDeprecatedSinceV10</code> 警告。两者底层都编译为 LangGraph<br><code>CompiledStateGraph</code>，<code>.astream_events()</code> 等原生能力完全保留，只是<br>官方入口从 <code>langgraph.prebuilt</code> 搬到了 <code>langchain.agents</code>，作为<br>LangChain 1.0 统一 Agent 抽象的一部分。如果你在别的项目里看到旧写法，<br>知道该怎么迁移即可。</p>
-<h3 id="6-2-5-分钟起跑（stub-模式）"><a href="#6-2-5-分钟起跑（stub-模式）" class="headerlink" title="6.2 5 分钟起跑（stub 模式）"></a>6.2 5 分钟起跑（stub 模式）</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">python3 -m venv .venv</span><br><span class="line"><span class="built_in">source</span> .venv/bin/activate        <span class="comment"># Windows: .venv\Scripts\activate</span></span><br><span class="line">pip install -r requirements.txt</span><br><span class="line"></span><br><span class="line"><span class="built_in">cp</span> .env.example .<span class="built_in">env</span>             <span class="comment"># 默认 LLM_PROVIDER=stub，不改也能跑</span></span><br><span class="line">uvicorn app.main:app --reload --port 8000</span><br></pre></td></tr></table></figure>
+<h3 id="6-2-5-分钟起跑（stub-模式）"><a href="#6-2-5-分钟起跑（stub-模式）" class="headerlink" title="6.2 5 分钟起跑（stub 模式）"></a>6.2 5 分钟起跑（stub 模式）</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">python3 -m venv .venv</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">source</span> .venv/bin/activate        <span class="comment"># Windows: .venv\Scripts\activate</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">pip install -r requirements.txt</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="built_in">cp</span> .env.example .<span class="built_in">env</span>             <span class="comment"># 默认 LLM_PROVIDER=stub，不改也能跑</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">uvicorn app.main:app --reload --port 8000</span></span></code></pre></div></div></figure>
 
 <p>打开 <code>http://localhost:8000/scalar</code> 看文档；另开一个终端跑：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">python scripts/smoke_test.py</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">python scripts/smoke_test.py</span></span></code></pre></div></div></figure>
 
 <p>预期输出（实测结果）：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[OK] /health -&gt; &#123;&#x27;status&#x27;: &#x27;ok&#x27;, &#x27;llm_provider&#x27;: &#x27;stub&#x27;, &#x27;version&#x27;: &#x27;1.0.0&#x27;&#125;</span><br><span class="line">[OK] /api/v1/chat -&gt; answer=根据工具返回的结果：上海当前天气：多云转晴，气温约 ...</span><br><span class="line">[OK] /api/v1/chat/stream -&gt; 54 帧, 事件类型: [&#x27;finish&#x27;, &#x27;thinking&#x27;, &#x27;token&#x27;, &#x27;tool_end&#x27;, &#x27;tool_start&#x27;]</span><br><span class="line"></span><br><span class="line">全部检查通过 ✅</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">[OK] /health -&gt; &#123;&#x27;status&#x27;: &#x27;ok&#x27;, &#x27;llm_provider&#x27;: &#x27;stub&#x27;, &#x27;version&#x27;: &#x27;1.0.0&#x27;&#125;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">[OK] /api/v1/chat -&gt; answer=根据工具返回的结果：上海当前天气：多云转晴，气温约 ...</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">[OK] /api/v1/chat/stream -&gt; 54 帧, 事件类型: [&#x27;finish&#x27;, &#x27;thinking&#x27;, &#x27;token&#x27;, &#x27;tool_end&#x27;, &#x27;tool_start&#x27;]</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">全部检查通过 ✅</span></span></code></pre></div></div></figure>
 
 <p><code>stub</code> 模式下的”模型”（<code>app/stub_llm.py</code>）是一个纯规则匹配的假实现——<br>它不理解语义，只是识别”天气””计算”之类的关键词——<strong>目的是让你在还没<br>配置任何 API Key 之前，就能完整看到 Agent 事件链路长什么样</strong>。把<br><code>LLM_PROVIDER</code> 换成下一节的任意一个真实 Provider，Agent 的推理质量会<br>显著提升，但 API 结构和事件语义完全不变。</p>
 <h3 id="6-3-切换到真实模型"><a href="#6-3-切换到真实模型" class="headerlink" title="6.3 切换到真实模型"></a>6.3 切换到真实模型</h3><p>编辑 <code>.env</code>：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 选项 A：Anthropic</span></span><br><span class="line">LLM_PROVIDER=anthropic</span><br><span class="line">ANTHROPIC_API_KEY=sk-ant-...</span><br><span class="line">MODEL_NAME=claude-sonnet-4-6</span><br><span class="line"></span><br><span class="line"><span class="comment"># 选项 B：OpenAI</span></span><br><span class="line">LLM_PROVIDER=openai</span><br><span class="line">OPENAI_API_KEY=sk-...</span><br><span class="line">MODEL_NAME=gpt-4.1-mini</span><br><span class="line"></span><br><span class="line"><span class="comment"># 选项 C：本地 Ollama（完全离线，无需任何云端 Key）</span></span><br><span class="line">LLM_PROVIDER=ollama</span><br><span class="line">OLLAMA_BASE_URL=http://localhost:11434</span><br><span class="line">MODEL_NAME=qwen2.5:7b</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 选项 A：Anthropic</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">LLM_PROVIDER=anthropic</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">ANTHROPIC_API_KEY=sk-ant-...</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">MODEL_NAME=claude-sonnet-4-6</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># 选项 B：OpenAI</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">LLM_PROVIDER=openai</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">OPENAI_API_KEY=sk-...</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">MODEL_NAME=gpt-4.1-mini</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="comment"># 选项 C：本地 Ollama（完全离线，无需任何云端 Key）</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">LLM_PROVIDER=ollama</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">OLLAMA_BASE_URL=http://localhost:11434</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">MODEL_NAME=qwen2.5:7b</span></span></code></pre></div></div></figure>
 
 <p><strong>Ollama 这条路径值得多说几句</strong>，因为它可能是本地开发阶段最顺手的<br>选择：既不需要联网调用付费 API，又能拿到真实的、有语义理解能力的<br>工具调用效果。几个实测有效的注意事项：</p>
 <ul>
@@ -583,10 +762,11 @@
 </tr>
 </tbody></table>
 <p>详细步骤见第二、三、四部分对应小节。</p>
-<h3 id="6-5-Docker-OrbStack-部署"><a href="#6-5-Docker-OrbStack-部署" class="headerlink" title="6.5 Docker &#x2F; OrbStack 部署"></a>6.5 Docker &#x2F; OrbStack 部署</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">docker compose up --build</span><br></pre></td></tr></table></figure>
+<h3 id="6-5-Docker-OrbStack-部署"><a href="#6-5-Docker-OrbStack-部署" class="headerlink" title="6.5 Docker &#x2F; OrbStack 部署"></a>6.5 Docker &#x2F; OrbStack 部署</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">docker compose up --build</span></span></code></pre></div></div></figure>
 
 <p><code>docker-compose.yml</code> 默认 <code>LLM_PROVIDER=stub</code>，可以通过环境变量覆盖：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://host.docker.internal:11434 \</span><br><span class="line">  docker compose up --build</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://host.docker.internal:11434 \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  docker compose up --build</span></span></code></pre></div></div></figure>
 
 <p>本文写作环境下未接入实体 Docker Daemon 做容器级验证，但 <code>Dockerfile</code><br>遵循标准的 <code>python:3.12-slim</code> + <code>pip install -r requirements.txt</code> 模式，<br>与本机 venv 环境完全一致，风险点很低；如果你在 OrbStack 下遇到任何<br>和本文档描述不一致的行为，欢迎对照 <code>requirements.txt</code> 里的版本锁定<br>范围排查。</p>
 <h3 id="6-6-常见问题-FAQ"><a href="#6-6-常见问题-FAQ" class="headerlink" title="6.6 常见问题 FAQ"></a>6.6 常见问题 FAQ</h3><p><strong>Q: <code>stub</code> 模式下换一个问题，Agent 没有调用任何工具就直接回答了？</strong><br>A: 正常现象——<code>app/stub_llm.py</code> 的关键词匹配只覆盖”天气””计算”两类<br>场景，其他问题会走”不调用工具，直接返回一段说明性文字”的分支。想验证<br>更多工具调用场景，直接换成真实模型（6.3 节）。</p>
@@ -920,5 +1100,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"};</script>
   <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
 </body>
 </html>
