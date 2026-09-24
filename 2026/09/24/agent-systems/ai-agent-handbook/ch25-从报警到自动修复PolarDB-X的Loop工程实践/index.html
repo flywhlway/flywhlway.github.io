@@ -1,0 +1,442 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>从报警到自动修复，PolarDB-X 的 Loop 工程实践 · 飞轮之道</title>
+<meta name="description" content="随着 Agent 逐步参与日常研发，编码和测试已经成为常见的应用场景。但研发工作还包括需求形成、方案设计、问题分析、环境准备和结果验证，这些环节同样需要大量投入。">
+<meta name="author" content="阿里云 AI Agent HandBook 编写组">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/24/agent-systems/ai-agent-handbook/ch25-%E4%BB%8E%E6%8A%A5%E8%AD%A6%E5%88%B0%E8%87%AA%E5%8A%A8%E4%BF%AE%E5%A4%8DPolarDB-X%E7%9A%84Loop%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="从报警到自动修复，PolarDB-X 的 Loop 工程实践 · 飞轮之道">
+<meta property="og:description" content="随着 Agent 逐步参与日常研发，编码和测试已经成为常见的应用场景。但研发工作还包括需求形成、方案设计、问题分析、环境准备和结果验证，这些环节同样需要大量投入。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/24/agent-systems/ai-agent-handbook/ch25-%E4%BB%8E%E6%8A%A5%E8%AD%A6%E5%88%B0%E8%87%AA%E5%8A%A8%E4%BF%AE%E5%A4%8DPolarDB-X%E7%9A%84Loop%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/ai-agent-handbook/">实践篇</a><a class="series-chip" href="/paths/ai-agent-handbook/" title="查看学习路径">第 37 / 51 篇</a>
+    </div>
+    <h1>从报警到自动修复，PolarDB-X 的 Loop 工程实践</h1>
+    <p class="article-deck">随着 Agent 逐步参与日常研发，编码和测试已经成为常见的应用场景。但研发工作还包括需求形成、方案设计、问题分析、环境准备和结果验证，这些环节同样需要大量投入。</p>
+    <div class="article-meta">
+      <span>阿里云 AI Agent HandBook 编写组</span>
+      <span>16 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/AI-Agent-HandBook/">#AI Agent HandBook</a><a class="article-meta__tag" href="/tags/%E5%AE%9E%E8%B7%B5%E6%A1%88%E4%BE%8B/">#实践案例</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>本文收录自阿里云开源白皮书《AI Agent HandBook》（<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook">aliyun&#x2F;ai-agent-handbook</a>，Apache-2.0），正文与上游逐字一致，仅适配标题层级、站内链接与图片地址。<br>原文：<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook/blob/main/06-case-study/%E7%AC%AC25%E7%AB%A0%20%E7%A0%94%E5%8F%91%E6%95%88%E8%83%BD/%E4%BB%8E%E6%8A%A5%E8%AD%A6%E5%88%B0%E8%87%AA%E5%8A%A8%E4%BF%AE%E5%A4%8D%EF%BC%8CPolarDB-X%20%E7%9A%84%20Loop%20%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5.md">06-case-study&#x2F;第25章 研发效能&#x2F;从报警到自动修复，PolarDB-X 的 Loop 工程实践.md</a> · 上游版本：<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook/commit/284335f52bce759bff0e63da6b6cccd8e23ad25a"><code>284335f</code></a>（2026-09-22） · 篇章贡献者：杨涛、朱颜、余艾琳、胡峻 · 系列目录：<a href="/paths/ai-agent-handbook/">AI Agent HandBook 白皮书学习路径</a></p>
+</blockquote>
+<h2 id="一、从编码提效到端到端提效"><a href="#一、从编码提效到端到端提效" class="headerlink" title="一、从编码提效到端到端提效"></a>一、从编码提效到端到端提效</h2><p>随着 Agent 逐步参与日常研发，编码和测试已经成为常见的应用场景。但研发工作还包括需求形成、方案设计、问题分析、环境准备和结果验证，这些环节同样需要大量投入。要进一步提升整体效率，就需要让 Agent 从参与编码和测试，扩展到自主推进更完整的研发任务，实现端到端交付，从而减少各环节的人工操作与反复交接，缩短交付周期。</p>
+<p>PolarDB-X 团队也在探索如何通过 Agent 提升研发效率。PolarDB-X 是一款云原生分布式数据库，高度兼容 MySQL 生态，具备高可用、水平扩展和 HTAP（混合事务与分析处理）能力。整体架构如下图所示。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-009.png" alt="image" loading="lazy"></p>
+<p><em>图 1：PolarDB-X 整体架构</em></p>
+<h3 id="1-1-不同研发任务的-Agent-协作方式"><a href="#1-1-不同研发任务的-Agent-协作方式" class="headerlink" title="1.1 不同研发任务的 Agent 协作方式"></a>1.1 不同研发任务的 Agent 协作方式</h3><p>数据库的分布式架构增加了问题定位和验证的复杂度，对正确性、可靠性和稳定性的高要求，也决定了研发成果必须经过充分验证。在满足这些质量要求的前提下，我们针对两类常见研发任务，采用不同的 Agent 协作方式。</p>
+<p><strong>第一类是新功能开发和已有功能优化。</strong> 例如优化分布式事务、实现新的数据压缩功能。这类任务通常需求明确，但实现方案需要综合考虑功能完整性、兼容性、性能和可靠性，难以在开发之初一次确定，需要根据实现和验证结果持续改进。对于这类任务，我们采用研发主导、Agent 执行的协作方式：研发负责方案和关键决策，并在开发、测试过程中持续把关；Agent 则承担具体的编码和测试工作。由于编码和测试原本占据大部分工作量，这种协作方式能够显著提升开发效率，缩短研发周期。</p>
+<p><strong>第二类是报警、工单处理和缺陷修复，这也是团队长期面临的效率痛点。</strong> 在原有处理流程中，研发不仅需要完成编码和测试，还需要承担前期的问题分析、根因定位和修复需求产出。一次修复最终可能只涉及几行代码，但研发需要收集实例信息、监控和日志，结合源码排查原因，并搭建环境、构造触发条件，验证问题能否稳定复现。完成代码修改后，还需要验证修复效果、执行回归测试，并推动修复合并。前期分析和后续验证需要大量投入，仅让 Agent 协助编码，能够节省的时间非常有限。</p>
+<p>好在，第二类任务通常具有具体的故障现象，可以通过复现验证原因假设，再通过修复前后的对照测试检验修改效果。虽然排查过程复杂，但稳定复现和测试结果能够提供明确的验收依据，为 Agent 自主完成分析、修复和验证创造了条件。</p>
+<p>因此，在探索 Agent 端到端自主处理时，我们选择从第二类任务入手，目标是让 Agent 从报警或工单出发，在无需人工干预的情况下，自主完成现场分析、根因验证、稳定复现、代码修复、测试验证和修复提交，仅由研发参与最终审查，大幅提升缺陷处理效率。</p>
+<h2 id="二、从报警到自动修复"><a href="#二、从报警到自动修复" class="headerlink" title="二、从报警到自动修复"></a>二、从报警到自动修复</h2><h3 id="2-1-整体流程"><a href="#2-1-整体流程" class="headerlink" title="2.1 整体流程"></a>2.1 整体流程</h3><p>PolarDB-X Loop 以报警或工单为输入，由 Agent 自主完成问题定位、稳定复现、编码修复和测试验证，最终提交研发进行代码审查。整体流程如下图所示。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-010.png" alt="image" loading="lazy"></p>
+<p><em>图 2：PolarDB-X 缺陷自动修复流程。验证结果决定下一步继续推进，还是返回分析与修改。</em></p>
+<p>在这一流程中，Agent 首先获取现场信息，分析可能的原因，并尝试复现问题。如果实际运行结果与预期不符，就根据新证据调整分析，继续验证；确认原因并稳定复现后，再修改代码，将复现过程固化为测试用例，通过修复前后的对照验证和完整的回归测试后，提交研发评审。</p>
+<p>让 Agent 自主完成流程，还需要解决一个关键问题：如何保证它产出的结果可靠。在引入 Agent 时，我们往往更关注编码阶段，希望通过 Skills 或操作约束保证代码正确性。<strong>但对于缺陷修复，我们认为稳定复现才是整个流程中最重要的一步，因为后续的代码修改和验收，都依赖于对原始问题的准确理解与验证。</strong></p>
+<p>稳定复现因此贯穿三个阶段：在问题分析阶段，Agent 通过复现检验自己的分析；在编码修复阶段，Agent 将复现过程固化为测试用例，验证代码修改的效果；在代码评审阶段，研发以复现用例和验证结果为依据，检查 Agent 是否真正修复了最初的问题。</p>
+<p>要让这一机制落地，Agent 既需要获取完整的现场信息，也需要具备运行、调试和复现问题的能力，并在修复后完成充分的测试验证。下面将分别介绍现场信息获取、运行验证和修复交付三个环节的工程实践。</p>
+<h3 id="2-2-现场还原与问题分析"><a href="#2-2-现场还原与问题分析" class="headerlink" title="2.2 现场还原与问题分析"></a>2.2 现场还原与问题分析</h3><p>报警通常只反映某个指标或某个 SQL 的异常，定位问题还需要关联实例版本、拓扑、监控、日志和源码。多组件协作使同一现象可能对应不同原因；线上多版本并存，也使已在新版本修复的问题可能继续出现在老版本中。因此，排查既要还原故障现场，也要结合实例版本和修复记录识别已知问题。</p>
+<h4 id="从人工整理需求到-Agent-自主分析"><a href="#从人工整理需求到-Agent-自主分析" class="headerlink" title="从人工整理需求到 Agent 自主分析"></a>从人工整理需求到 Agent 自主分析</h4><p>早期，我们先由研发还原现场、分析原因，再将结论整理成修复需求交给 Agent。这样能够利用 Agent 的编码能力，但最耗时的排查工作仍由研发承担。</p>
+<p>随后，我们尝试让 Agent 直接分析现场材料。在我们的实践中，Agent 在现场信息梳理方面往往比人工表现更好：它能够更清楚地梳理问题发生前后的时间线，更擅长从海量日志中检索相关信息，还能发现人工排查时遗漏的关键线索。</p>
+<p>这些表现促使我们将 Agent 的任务起点，从接收人工整理的修复需求，前移到直接接收报警或工单。由 Agent 自主确认问题发生在哪个实例、涉及哪些节点、运行什么版本，以及异常前后发生了什么，将现场还原和问题分析一并纳入自主处理流程。</p>
+<p>自主分析要求 Agent 能沿线索持续查询：发现节点异常后查询同期日志，发现状态变化后检查对应源码，在查询与分析之间不断迭代。</p>
+<p>这一阶段应形成问题现象、时间线、相关证据和待验证的原因假设，为后续复现提供明确的检查目标。</p>
+<h4 id="通过结构化接口支持按需查询"><a href="#通过结构化接口支持按需查询" class="headerlink" title="通过结构化接口支持按需查询"></a>通过结构化接口支持按需查询</h4><p>早期提供给 Agent 的现场材料主要是人工选取的监控截图和日志片段。需要查看其他节点或扩大时间范围时，Agent 只能等待研发补充材料。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-011.png" alt="image" loading="lazy"></p>
+<p><em>图 3：CPU 使用率监控截图。</em></p>
+<p>要让分析过程不再依赖人工补充材料，就需要为 Agent 提供常用平台的结构化接口或 CLI 工具。这样，Agent 在分析中发现信息不足时，可以自主调整查询对象和时间范围，获取所需数据后继续分析。</p>
+<p>为便于这些工具查询和关联现场信息，日志等数据也需要集中管理。如果日志分散在各个生产节点上，查询仍需逐节点访问、检索文件并汇总结果；集中到统一平台后，Agent 就能通过统一入口获取不同节点、不同时间段的数据。</p>
+<p>以阿里云 CLI（<code>aliyun</code>）为例，Agent 可查询指定时段内两个计算节点的 CPU 使用率：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">aliyun polardbx DescribeDBNodePerformance \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --RegionId cn-hangzhou \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  --DBInstanceName pxc-xxxxxxxxx \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --DBNodeIds <span class="string">&quot;pxc-i-xxxxxxx,pxc-i-yyyyyyyy&quot;</span> \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  --CharacterType polarx_cn \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  --Key Cpu_Usage \</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  --StartTime 2026-09-03T03:51Z \</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  --EndTime 2026-09-03T03:53Z</span></span></code></pre></div></div></figure>
+
+<p>查询结果以 JSON 格式返回，包含节点、指标和采样点。以下为简化后的返回结果示例，标识与数值仅用于演示：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="18"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;PerformanceKeys&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">&quot;DBNodeId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;pxc-i-xxxxxxx&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">&quot;Measurement&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Cpu_Usage&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="attr">&quot;Points&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="punctuation">&#123;</span> <span class="attr">&quot;Timestamp&quot;</span><span class="punctuation">:</span> <span class="number">1788407460000</span><span class="punctuation">,</span> <span class="attr">&quot;Value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;92.6&quot;</span> <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="attr">&quot;DBNodeId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;pxc-i-yyyyyyyy&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="attr">&quot;Measurement&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Cpu_Usage&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="attr">&quot;Points&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="punctuation">&#123;</span> <span class="attr">&quot;Timestamp&quot;</span><span class="punctuation">:</span> <span class="number">1788407460000</span><span class="punctuation">,</span> <span class="attr">&quot;Value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;28.3&quot;</span> <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">  <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>Agent 根据返回数据识别异常节点和时段，按需扩大查询范围、关联日志，持续推进分析，无须人工补充现场材料。</p>
+<h4 id="将存量平台封装为-CLI"><a href="#将存量平台封装为-CLI" class="headerlink" title="将存量平台封装为 CLI"></a>将存量平台封装为 CLI</h4><p>不过，有些存量平台缺少维护，也未必有人提供相应的 CLI 工具。对于这类平台，如何让 Agent 获取所需信息？</p>
+<p>先看一个例子。阿里内部有一款很受欢迎的“抢会议室” CLI。</p>
+<p>通过这个工具，一条命令即可预订会议室，还可以配合定时任务自动抢订：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">ali meeting book -r &lt;roomId&gt; -s &lt;start&gt; -e &lt;end&gt;</span></span></code></pre></div></div></figure>
+
+<p>这个工具的作者是一位普通研发人员，在没有平台源码的情况下，就打通了会议室预订的整套操作流程。这给了我们启发：即使平台没有提供现成工具，我们也可以自行将所需功能封装为 CLI。</p>
+<p>我们进一步让 Agent 完成这项工作：参考已有 CLI 实现，自主操作浏览器、使用目标平台功能，分析接口请求和认证方式，再编写代码，将所需功能封装出来。</p>
+<p>通过这一方式，我们用约一周时间，让 Agent 将常用系统的监控、日志和拓扑查询功能封装为 <code>polardbx</code> CLI，供后续排查调用。</p>
+<p><code>polardbx --help</code> 展示的命令分组如下：</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-012.png" alt="image" loading="lazy"></p>
+<p><em>图 4：自建 PolarDB-X CLI 的命令分组。</em></p>
+<p>此外，我们还将诊断方法、CLI 工具说明和排查经验整理为 Skills。例如，<code>polardbx-diagnostics</code> 指导 Agent 确认问题现象、查询拓扑和基础指标、定位异常时段及组件，再根据原因假设选择日志查询、火焰图等手段验证，并据此调整分析方向。该 Skill 还配套提供采集脚本、指标字典、日志查询模板和常见问题诊断参考，供 Agent 按需查阅和调用。</p>
+<h3 id="2-3-通过运行验证分析结论"><a href="#2-3-通过运行验证分析结论" class="headerlink" title="2.3 通过运行验证分析结论"></a>2.3 通过运行验证分析结论</h3><p>“纸上得来终觉浅，绝知此事要躬行。”代码中的可疑路径是否真正触发了故障，需要在实际运行中验证。对于 Agent 而言，提出原因假设之后，还需要能够自行检验、修正判断。下面的 MDL 锁泄漏案例，正是我们补齐这一能力的起点。</p>
+<h4 id="MDL-锁泄漏案例：静态分析与实际执行路径的偏差"><a href="#MDL-锁泄漏案例：静态分析与实际执行路径的偏差" class="headerlink" title="MDL 锁泄漏案例：静态分析与实际执行路径的偏差"></a>MDL 锁泄漏案例：静态分析与实际执行路径的偏差</h4><p>我们曾遇到一个五年前就已出现的 MDL（元数据锁）泄漏问题。该问题在线上环境中低概率发生，会导致后续修改表结构的操作持续阻塞。由于难以复现，多年来始终未能明确根因。</p>
+<p>在一次线上排查中再次遇到该问题后，我们尝试借助 Agent，结合现场信息和源码进一步分析。Agent 很快生成报告，列出代码位置、执行过程和可能原因，并提出了以下关于主线程（ServerExecutor）与 KillExecutor 线程并发时序的解释。该解释随后被人工验证推翻：</p>
+<table>
+<thead>
+<tr>
+<th>时序</th>
+<th>主线程（ServerExecutor）</th>
+<th>KillExecutor 线程</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>获取第一把 MDL 锁，并记录在当前连接的锁记录集合中</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2</td>
+<td>开始获取第二把锁，取得同一个锁记录集合，但尚未写入新记录</td>
+<td>—</td>
+</tr>
+<tr>
+<td>3</td>
+<td>—</td>
+<td>响应用户的 KILL 操作，开始关闭连接</td>
+</tr>
+<tr>
+<td>4</td>
+<td>—</td>
+<td>释放第一把锁，并将已清空的锁记录集合从连接索引中移除</td>
+</tr>
+<tr>
+<td>5</td>
+<td>继续获取第二把锁，将记录写入已脱离索引的集合</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<p>Agent 当时的推测结论是：第二把锁的记录无法再通过连接索引找到，导致锁泄漏。</p>
+<p>研发经过约两小时验证，发现该解释不成立。Agent 根据反馈多次调整分析，但仍未形成可靠结论，期间生成了多份报告和测试文档：</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-013.png" alt="image" loading="lazy"></p>
+<p><em>图 5：Agent 在多轮分析中生成的报告和测试文档。</em></p>
+<p>偏差来自静态推演与实际执行的差异。连接终止的处理路径受程序状态影响，锁也存在多处释放路径。仅阅读代码容易遗漏状态变化的先后顺序，将可能发生的路径误判为实际执行的路径。</p>
+<p>研发验证这些判断时，需要准备环境、设置断点、控制线程执行顺序，必要时还要检查内存中的对象状态。当这些手段只有人能使用时，Agent 每提出一个假设，就需要研发接手验证。</p>
+<p>因此，我们开始把同样的调试与分析能力提供给 Agent，让它能够观察实际运行结果，自行发现假设中的错误，再继续排查。</p>
+<h4 id="通过-JDB-CLI-调试运行中的-Java-程序"><a href="#通过-JDB-CLI-调试运行中的-Java-程序" class="headerlink" title="通过 JDB CLI 调试运行中的 Java 程序"></a>通过 JDB CLI 调试运行中的 Java 程序</h4><p>首先，我们为 Agent 提供了直接调试 Java 程序的能力。JDK 自带的 jdb 主要面向人在终端中的持续交互。Agent 使用它时，需要维护交互进程，不断发送命令、读取输出，并在多次调用之间保持调试状态，使用起来较为繁琐。</p>
+<p>为此，我们基于 Java 调试接口 JDI 重新实现了 JDB CLI，通过后台进程持续维护调试会话。前台每条命令执行后即可退出，下一次调用仍能继续操作同一个调试现场，查看线程、断点和变量。</p>
+<p>这样，Agent 可以先暂停程序、观察状态，再结合源码分析，随后回到同一会话继续执行，将调试过程与分析过程衔接起来。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-014.png" alt="image" loading="lazy"></p>
+<p><em>图 6：前台命令独立调用，后台持续保留调试会话。</em></p>
+<p>另一个关键能力是指定线程断点：只有目标线程会触发断点，命中时也只暂停该线程，其他线程继续运行。配合线程恢复操作，Agent 可以控制相关线程的执行顺序，验证特定时序下的程序行为。</p>
+<p>前述 MDL 低概率并发问题的复现，就用到了这项能力。Agent 能够自行控制线程时序，检查程序是否按分析中预想的路径执行，并根据实际结果修正判断。</p>
+<h4 id="通过-Heap-Dump-查询内存现场"><a href="#通过-Heap-Dump-查询内存现场" class="headerlink" title="通过 Heap Dump 查询内存现场"></a>通过 Heap Dump 查询内存现场</h4><p>除了调试运行中的程序，Agent 还需要检查故障时的内存状态。Heap Dump 是 Java 程序在某一时刻的堆内存快照，研发可以从中查看对象字段的值、引用关系和内存占用。</p>
+<p>以前述 MDL 问题为例，排查时需要通过内存分析确认锁是否泄漏，检查相关锁对象、锁记录及其引用关系。掌握实际的内存状态后，才能结合源码进一步分析泄漏原因。</p>
+<p>Heap Dump 文件通常很大。我们将其放在大内存云服务器上集中加载和处理，并为 Agent 提供查询接口。Agent 可以按需查询对象字段和引用关系，根据返回结果继续检查相关对象，自主验证分析假设，无须由研发逐项查询后再提供材料。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-015.png" alt="image" loading="lazy"></p>
+<p><em>图 7：大内存 ECS 加载 Heap Dump，Agent 通过 HTTP 接口发起 OQL 查询并获取结果。</em></p>
+<p>分析完成后，Agent 还可以将分析记录和最终报告上传至展示平台，供研发后续查阅和复核。实践中，该平台已累计记录两千多份 Heap Dump 处理任务。</p>
+<h4 id="根据故障条件选择复现环境"><a href="#根据故障条件选择复现环境" class="headerlink" title="根据故障条件选择复现环境"></a>根据故障条件选择复现环境</h4><p>具备调试和内存分析工具后，还需要为 Agent 准备能够实际运行和复现问题的环境。我们提供了两类环境，Agent 可以根据问题情况自行选择。</p>
+<table>
+<thead>
+<tr>
+<th>环境</th>
+<th>适用情况</th>
+<th>使用方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PolarDB-X Zero 临时实例</td>
+<td>SQL 报错、功能异常等简单问题的初步复现</td>
+<td>创建最新版本的临时实例，完成验证后释放</td>
+</tr>
+<tr>
+<td>K8s 中的完整复现环境</td>
+<td>依赖历史版本、特定拓扑，或需要控制并发时序的问题</td>
+<td>按问题实例的版本和拓扑搭建，结合调试工具验证</td>
+</tr>
+</tbody></table>
+<p>对于需要控制并发时序的问题，Agent 可以在完整复现环境中配合前述调试工具，设置断点、控制相关线程的执行顺序，验证问题的触发条件。</p>
+<p>这套环境也用于后续的修复验证。代码修改后，Agent 将修复后的版本部署到相应环境中，按照已经确认的复现步骤再次执行，检验原始问题是否得到解决。</p>
+<h4 id="从低概率触发到稳定复现"><a href="#从低概率触发到稳定复现" class="headerlink" title="从低概率触发到稳定复现"></a>从低概率触发到稳定复现</h4><p>具备工具和环境后，Agent 开始自主验证 MDL 问题。初次尝试未触发故障，Agent 根据实际执行路径重新分析线程关系，调整断点和执行顺序。</p>
+<p>经过几轮迭代，Agent 找到了之前遗漏的关键条件：要在连接进入语句执行状态之前发起 KILL，再控制后续关闭连接与获取 MDL 锁的执行顺序。</p>
+<p>Agent 利用指定线程断点，将相关线程停在关键位置，再按需要的顺序恢复执行，最终复现了与原问题一致的锁泄漏和后续阻塞。原本依赖偶然调度的线程交错，被转化为可以主动构造的操作步骤。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-016.png" alt="image" loading="lazy"></p>
+<p><em>图 8：Agent 通过指定线程断点控制执行顺序，复现 MDL 锁泄漏及后续 DDL 阻塞。</em></p>
+<p>明确的触发条件、可重复的操作步骤，以及与原始故障一致的现象，为研发复核提供了运行依据。控制关键时序后，还可在相同条件下对照修复前后的行为，避免因故障未被偶然触发而误判修复效果。</p>
+<p>根因和触发条件得到验证后，Agent 就能明确需要修复的问题，并以复现用例确定验收条件，继续推进代码修改。</p>
+<h3 id="2-4-以稳定复现作为修复交付门禁"><a href="#2-4-以稳定复现作为修复交付门禁" class="headerlink" title="2.4 以稳定复现作为修复交付门禁"></a>2.4 以稳定复现作为修复交付门禁</h3><p>稳定复现用例是修复进入代码评审的必要条件。</p>
+<p>Agent 将稳定复现的过程固化为测试用例。对于前述并发问题，确认触发时序后，可以通过特殊 Hint 在关键位置注入延迟，构造可重复执行的复现用例。<strong>这个用例在修复前必须能触发原来的问题，修复后必须能正常通过。只有完成这组验证，并通过完整的回归测试，代码才能进入评审。</strong> 如果没有通过，就继续分析和修改，直到满足这些要求。</p>
+<h4 id="先审查复现证据，再审查代码修改"><a href="#先审查复现证据，再审查代码修改" class="headerlink" title="先审查复现证据，再审查代码修改"></a>先审查复现证据，再审查代码修改</h4><p>满足上述要求后，Agent 提交合并请求，附带代码修改、复现用例、修复前后验证结果和回归测试结果。</p>
+<p>研发先检查复现用例，对照原始问题确认其覆盖目标故障，再审查代码修改。审查通过后，按既有流程合并。</p>
+<p>现场收集、根因排查、复现和测试验证由 Agent 自主完成后，研发可以围绕提交的证据和代码开展审查，无须再逐项承担前述工作。提效范围由编码环节扩展到完整的缺陷处理过程。</p>
+<h2 id="三、云端运行与实践效果"><a href="#三、云端运行与实践效果" class="headerlink" title="三、云端运行与实践效果"></a>三、云端运行与实践效果</h2><p>为支持 7×24 小时持续处理报警和推进修复，我们基于云端沙箱构建了 PolarDB-X Agent，承载上述流程的持续运行。</p>
+<p>云端沙箱还提供了两方面的安全保障：一是环境隔离，将 Agent 的运行环境与研发的本地电脑隔离，即使沙箱环境被破坏，也不会影响本地开发环境；二是权限最小化，只授予 Agent 完成任务所需的权限，限制它能够访问和操作的范围。</p>
+<p>团队成员可共用云端环境，协同配置和完善工具与流程。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-017.png" alt="image" loading="lazy"></p>
+<p><em>图 9：PolarDB-X Agent 云端平台，承载 Loop 的持续运行。</em></p>
+<p>在本文所述的半年实践中，所有报警先由 Agent 完成首轮处理和分析。团队从上万次报警中识别并记录了两百多个缺陷，其中超过 70% 可以稳定复现，并由 Agent 完成修复后进入代码评审。</p>
+<h2 id="四、面向其他团队的实践建议"><a href="#四、面向其他团队的实践建议" class="headerlink" title="四、面向其他团队的实践建议"></a>四、面向其他团队的实践建议</h2><p>这段实践形成了三条工程经验：</p>
+<ol>
+<li><p><strong>让研发系统可以被 Agent 调用。</strong> 将日志等现场材料集中管理，通过 CLI 或接口提供常用查询能力，并把诊断方法、工具说明和排查经验整理成 Skills，让 Agent 能够按需获取信息，沿着线索继续分析。</p>
+</li>
+<li><p><strong>让研发过程可以验证。</strong> 提供复现环境、调试和内存分析工具，让 Agent 自行检验假设，再将稳定复现的过程固化为测试用例，通过修复前后的对照验证和回归测试检查修改效果。</p>
+</li>
+<li><p><strong>让任务能够持续运行。</strong> 将 Agent 和任务流程放到云端，支持 7×24 小时持续处理报警、推进修复，并通过环境隔离和最小权限控制访问与操作范围。</p>
+</li>
+</ol>
+<p>其他团队可从具有明确验证方法的任务入手，接通所需信息和工具，完成从任务输入到结果交付的全流程，再根据实践逐步完善。Loop 的关键是让 Agent 根据运行结果修正分析、自主推进，并交付可复查的结果。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/24/agent-systems/ai-agent-handbook/ch25-%E4%BB%8E%E7%BC%96%E7%A0%81%E6%8F%90%E6%95%88%E5%88%B0%E7%AB%AF%E5%88%B0%E7%AB%AF%E4%BA%A4%E4%BB%98%E4%BA%91%E9%80%9A%E4%BF%A1%E7%9A%84%E4%BA%BA%E6%9C%BA%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5/">从编码提效到端到端交付，云通信的人机协作实践</a></h3>
+        <p>研发协作，是当前AI落地最关键的方向之一。</p>
+        <a class="btn primary" href="/2026/09/24/agent-systems/ai-agent-handbook/ch25-%E4%BB%8E%E7%BC%96%E7%A0%81%E6%8F%90%E6%95%88%E5%88%B0%E7%AB%AF%E5%88%B0%E7%AB%AF%E4%BA%A4%E4%BB%98%E4%BA%91%E9%80%9A%E4%BF%A1%E7%9A%84%E4%BA%BA%E6%9C%BA%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/24/agent-systems/ai-agent-handbook/ch25-PatchPilot-Agents%E8%AE%A9%E5%86%85%E6%A0%B8%E8%A1%A5%E4%B8%81%E4%BA%A4%E4%BB%98%E6%88%90%E4%B8%BA%E5%8F%AF%E7%BC%96%E6%8E%92%E5%8F%AF%E9%AA%8C%E8%AF%81%E7%9A%84%E5%B7%A5%E7%A8%8B%E9%97%AD%E7%8E%AF/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：PatchPilot Agents：让内核补丁交付成为可编排、可验证的工程闭环</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 4 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#%E4%B8%80%E3%80%81%E4%BB%8E%E7%BC%96%E7%A0%81%E6%8F%90%E6%95%88%E5%88%B0%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%8F%90%E6%95%88" data-toc-target="一、从编码提效到端到端提效"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">一、从编码提效到端到端提效</span></a><a class="toc-level-3" href="#1-1-%E4%B8%8D%E5%90%8C%E7%A0%94%E5%8F%91%E4%BB%BB%E5%8A%A1%E7%9A%84-Agent-%E5%8D%8F%E4%BD%9C%E6%96%B9%E5%BC%8F" data-toc-target="1-1-不同研发任务的-Agent-协作方式"><span class="toc-text">1.1 不同研发任务的 Agent 协作方式</span></a><a class="toc-level-2" href="#%E4%BA%8C%E3%80%81%E4%BB%8E%E6%8A%A5%E8%AD%A6%E5%88%B0%E8%87%AA%E5%8A%A8%E4%BF%AE%E5%A4%8D" data-toc-target="二、从报警到自动修复"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">二、从报警到自动修复</span></a><a class="toc-level-3" href="#2-1-%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B" data-toc-target="2-1-整体流程"><span class="toc-text">2.1 整体流程</span></a><a class="toc-level-3" href="#2-2-%E7%8E%B0%E5%9C%BA%E8%BF%98%E5%8E%9F%E4%B8%8E%E9%97%AE%E9%A2%98%E5%88%86%E6%9E%90" data-toc-target="2-2-现场还原与问题分析"><span class="toc-text">2.2 现场还原与问题分析</span></a><a class="toc-level-3" href="#2-3-%E9%80%9A%E8%BF%87%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81%E5%88%86%E6%9E%90%E7%BB%93%E8%AE%BA" data-toc-target="2-3-通过运行验证分析结论"><span class="toc-text">2.3 通过运行验证分析结论</span></a><a class="toc-level-3" href="#2-4-%E4%BB%A5%E7%A8%B3%E5%AE%9A%E5%A4%8D%E7%8E%B0%E4%BD%9C%E4%B8%BA%E4%BF%AE%E5%A4%8D%E4%BA%A4%E4%BB%98%E9%97%A8%E7%A6%81" data-toc-target="2-4-以稳定复现作为修复交付门禁"><span class="toc-text">2.4 以稳定复现作为修复交付门禁</span></a><a class="toc-level-2" href="#%E4%B8%89%E3%80%81%E4%BA%91%E7%AB%AF%E8%BF%90%E8%A1%8C%E4%B8%8E%E5%AE%9E%E8%B7%B5%E6%95%88%E6%9E%9C" data-toc-target="三、云端运行与实践效果"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">三、云端运行与实践效果</span></a><a class="toc-level-2" href="#%E5%9B%9B%E3%80%81%E9%9D%A2%E5%90%91%E5%85%B6%E4%BB%96%E5%9B%A2%E9%98%9F%E7%9A%84%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="四、面向其他团队的实践建议"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">四、面向其他团队的实践建议</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/ai-agent-handbook/" style="--rail: 73%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">37 / 51</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#%E4%B8%80%E3%80%81%E4%BB%8E%E7%BC%96%E7%A0%81%E6%8F%90%E6%95%88%E5%88%B0%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%8F%90%E6%95%88" data-toc-target="一、从编码提效到端到端提效" data-title="01 · 一、从编码提效到端到端提效" aria-label="一、从编码提效到端到端提效"></a><a class="toc-strip__dot" href="#%E4%BA%8C%E3%80%81%E4%BB%8E%E6%8A%A5%E8%AD%A6%E5%88%B0%E8%87%AA%E5%8A%A8%E4%BF%AE%E5%A4%8D" data-toc-target="二、从报警到自动修复" data-title="02 · 二、从报警到自动修复" aria-label="二、从报警到自动修复"></a><a class="toc-strip__dot" href="#%E4%B8%89%E3%80%81%E4%BA%91%E7%AB%AF%E8%BF%90%E8%A1%8C%E4%B8%8E%E5%AE%9E%E8%B7%B5%E6%95%88%E6%9E%9C" data-toc-target="三、云端运行与实践效果" data-title="03 · 三、云端运行与实践效果" aria-label="三、云端运行与实践效果"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E3%80%81%E9%9D%A2%E5%90%91%E5%85%B6%E4%BB%96%E5%9B%A2%E9%98%9F%E7%9A%84%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE" data-toc-target="四、面向其他团队的实践建议" data-title="04 · 四、面向其他团队的实践建议" aria-label="四、面向其他团队的实践建议"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/ai-agent-handbook/ch25-从报警到自动修复PolarDB-X的Loop工程实践","title":"从报警到自动修复，PolarDB-X 的 Loop 工程实践","url":"/2026/09/24/agent-systems/ai-agent-handbook/ch25-%E4%BB%8E%E6%8A%A5%E8%AD%A6%E5%88%B0%E8%87%AA%E5%8A%A8%E4%BF%AE%E5%A4%8DPolarDB-X%E7%9A%84Loop%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/","path":"ai-agent-handbook","index":36,"total":51,"next":{"title":"从编码提效到端到端交付，云通信的人机协作实践","url":"/2026/09/24/agent-systems/ai-agent-handbook/ch25-%E4%BB%8E%E7%BC%96%E7%A0%81%E6%8F%90%E6%95%88%E5%88%B0%E7%AB%AF%E5%88%B0%E7%AB%AF%E4%BA%A4%E4%BB%98%E4%BA%91%E9%80%9A%E4%BF%A1%E7%9A%84%E4%BA%BA%E6%9C%BA%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

@@ -958,6 +958,7 @@
     });
 
     renderMermaid(content);
+    renderMath(content);
   }
 
   function fallbackCopy(text) {
@@ -996,6 +997,44 @@
       window.mermaid.run({ nodes: nodes }).catch(function () { /* 保留源码作为降级展示 */ });
     };
     document.head.appendChild(script);
+  }
+
+  /* 公式：构建期 scripts/math.js 输出 .math-tex 占位，这里按需加载 KaTeX 渲染；
+     公式独占一行（段落内仅此一项，或两侧是换行）时按块级公式展示 */
+  function renderMath(content) {
+    var cfg = OBS.katex;
+    if (!content || !cfg || !cfg.js) return;
+    var nodes = $$('.math-tex', content);
+    if (!nodes.length) return;
+    if (cfg.css) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = cfg.css;
+      document.head.appendChild(link);
+    }
+    var script = document.createElement('script');
+    script.src = cfg.js;
+    script.async = true;
+    script.onload = function () {
+      if (!window.katex) return;
+      nodes.forEach(function (el) {
+        var display = el.getAttribute('data-display') === '1' || standsAlone(el);
+        try {
+          window.katex.render(el.getAttribute('data-tex') || '', el, { displayMode: display, throwOnError: false, strict: 'ignore' });
+          el.classList.add('math-tex--rendered');
+          if (display) el.classList.add('math-tex--display');
+        } catch (e) { /* 保留公式源码作为降级展示 */ }
+      });
+    };
+    document.head.appendChild(script);
+  }
+
+  function standsAlone(el) {
+    function edge(node, dir) {
+      while (node && node.nodeType === 3 && !node.textContent.trim()) node = node[dir];
+      return !node || node.nodeName === 'BR';
+    }
+    return edge(el.previousSibling, 'previousSibling') && edge(el.nextSibling, 'nextSibling');
   }
 
   /* ------------------------------------------------------------------ 07 归档 */

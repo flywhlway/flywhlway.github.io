@@ -1,0 +1,395 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 22 章 Agent 优化：Badcase · 飞轮之道</title>
+<meta name="description" content="Badcase 发现、归因、修复、回归与实验验证。">
+<meta name="author" content="阿里云 AI Agent HandBook 编写组">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/24/agent-systems/ai-agent-handbook/ch22-Agent%E4%BC%98%E5%8C%96Badcase/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 22 章 Agent 优化：Badcase · 飞轮之道">
+<meta property="og:description" content="Badcase 发现、归因、修复、回归与实验验证。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/24/agent-systems/ai-agent-handbook/ch22-Agent%E4%BC%98%E5%8C%96Badcase/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/ai-agent-handbook/">调优篇</a><a class="series-chip" href="/paths/ai-agent-handbook/" title="查看学习路径">第 30 / 51 篇</a>
+    </div>
+    <h1>第 22 章 Agent 优化：Badcase</h1>
+    <p class="article-deck">Badcase 发现、归因、修复、回归与实验验证。</p>
+    <div class="article-meta">
+      <span>阿里云 AI Agent HandBook 编写组</span>
+      <span>14 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/AI-Agent-HandBook/">#AI Agent HandBook</a><a class="article-meta__tag" href="/tags/Agent%E8%B0%83%E4%BC%98/">#Agent调优</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>本文收录自阿里云开源白皮书《AI Agent HandBook》（<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook">aliyun&#x2F;ai-agent-handbook</a>，Apache-2.0），正文与上游逐字一致，仅适配标题层级、站内链接与图片地址。<br>原文：<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook/blob/main/05-optimization/%E7%AC%AC%2022%20%E7%AB%A0%E3%80%80Agent%20%E4%BC%98%E5%8C%96%EF%BC%9ABadcase.md">05-optimization&#x2F;第 22 章　Agent 优化：Badcase.md</a> · 上游版本：<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook/commit/d7ad342ef6656ab488a7891b8198c74a60d9ba23"><code>d7ad342</code></a>（2026-09-23） · 篇章贡献者：张寒萌、李盛荣、王亚宁、孙坚运、马云雷、王桢、郑前祎、刘航、陈新 · 系列目录：<a href="/paths/ai-agent-handbook/">AI Agent HandBook 白皮书学习路径</a></p>
+</blockquote>
+<p>上一章中已经把业务问题和判断依据准备好。业务团队接下来需要做的是：让评估持续发现回答和执行过程中的问题，再用同一批题目验证修改是否有效。</p>
+<p>本章沿用产品客服 Agent 的实践：用户会问“Agent 观测与优化有哪些功能”“如何做评估”，团队希望回答既准确，也能指导用户完成操作。评估检查已经发生的执行；实验则让修改后的 Agent 重新回答，产生新的输出和轨迹。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-22/image-001.png" alt="image" loading="lazy"></p>
+<h2 id="22-1-先选一个业务问题，做出能用的评估器"><a href="#22-1-先选一个业务问题，做出能用的评估器" class="headerlink" title="22.1 先选一个业务问题，做出能用的评估器"></a>22.1 先选一个业务问题，做出能用的评估器</h2><p>第一次建立评估，不必同时覆盖所有业务。产品客服团队可以先选“回答了相关概念，却没有解决用户的问题”这一类投诉，拿出几条专家认可的回答和几条明显有缺陷的回答，讨论差别在哪里。</p>
+<p>例如，“有哪些功能”需要覆盖主要能力并说清用途；“如何做评估”需要说明准备数据、配置标准、运行评估和查看结果的过程。两者都要求准确，但对完整性的要求不同。团队先写通用标准，再为已经进入实验集的题目补充各自的 Rubric，具体录入方法见上一章。</p>
+<p>一份可开始试用的通用标准，可以要求评估器检查三件事：是否回应了用户的实际问题；关键说法是否有材料支持；需要操作的任务是否提供了足以继续执行的步骤。每项写清满足、部分满足和不满足的条件，并要求给出扣分原因。涉及退款、权限变更等操作时，再增加业务结果检查，避免只评价回复是否礼貌。</p>
+<p>进入控制台“评估 → 评估器”，先查看预置评估器是否覆盖目标。已有任务完成度等指标能够满足需求时，可以先复用；需要产品知识或特定服务标准时，再创建自定义评估器。在 Prompt 中写入评判标准，声明所需的用户输入、Agent 输出和轨迹变量，在输出定义中配置分数、判断与解释。场景分类、逐项得分等字段按实际分析需要增加，不必把所有可能用到的字段一次填满。</p>
+<p>评估方式也按业务选择：</p>
+<table>
+<thead>
+<tr>
+<th>需要判断的问题</th>
+<th>可以怎样选择</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>输出是否符合 JSON 格式、必填字段是否存在</td>
+<td>采用 Code 规则，先解决确定条件的检查</td>
+</tr>
+<tr>
+<td>回答是否切题、是否遗漏必要信息</td>
+<td>使用 LLM 评估，把参考材料和评分细则给齐</td>
+</tr>
+<tr>
+<td>是否完成多步骤任务、工具结果与最终回复是否一致</td>
+<td>使用 Agent 评估，结合轨迹检查；需要领域知识时可挂载相应 Skill</td>
+</tr>
+</tbody></table>
+<p>一个任务可以选择多个评估器。例如，把“回答质量”和“业务操作是否完成”分别评估，后续能直接看出是哪一项下降。若需要总分，在评分标准中明确计算方式；不能把多个评估器的结果简单平均，就默认代表业务质量。</p>
+<h2 id="22-2-用几条真实样本试评，再启动第一批历史评估"><a href="#22-2-用几条真实样本试评，再启动第一批历史评估" class="headerlink" title="22.2 用几条真实样本试评，再启动第一批历史评估"></a>22.2 用几条真实样本试评，再启动第一批历史评估</h2><p>评估器保存后，进入“评估 → 评估任务”，点击“创建评估任务”。这一步要把评分标准接到真实数据上，最有价值的检查是确认评估器看到了完整的问题、回答和执行过程。</p>
+<p><strong>先选对数据和范围。</strong> 要评新接入 Agent 的表现，可选择“Agent 轨迹”；数据已经经过 Pipeline 清洗、聚合并补齐业务字段时，选择相应数据集。使用轨迹或 Trace 来源时，按对应入口选择“单轮对话”或“多轮对话”；多轮会话还需配置“对话结束判断”，让任务完成后再评价。使用 Dataset 时，直接选择集合并映射字段，一行代表什么已经由前面的数据加工决定，无需再寻找单轮、多轮开关。</p>
+<p>第一次运行可以开启“基于历史数据评估”，选择一段已知包含目标业务的时间，例如最近四小时，再点击“数据预览”。确认其中确实有需要调查的问题，而不是其他 Agent 或无关调用。若多轮会话预览为空，检查时间范围内的会话是否已达到设定的结束条件。</p>
+<p><strong>把试运行规模控制在能逐条看完的范围。</strong> 在“采样配置”中设置采样比例和最大样本数。操作演示使用 100% 采样、最多 100 条：它限制的是候选数据量，不能保证得到 100 条 Badcase。刚开始也可以只取更小的一批，先由业务人员看完解释，再扩大范围。</p>
+<p><strong>接好字段，再运行测试。</strong> 选择评估器后，界面会展示预览样本和“字段映射”。按样本中实际存在的字段配置：用户问题映射到输入变量，最终回答映射到输出变量，需要过程判断时再映射完整轨迹。变量名称可以自定义，但内容必须对应。例如，需要“最终回答”的位置不能误接到某次工具调用的输出。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-22/image-002.png" alt="image" loading="lazy"></p>
+<p><em>操作演示：将评估器的 input、output、agent_trajectory 分别接到预览数据中的问题、回答和轨迹，再进行测试。</em></p>
+<p>点击“运行测试”，阅读评分和解释，然后使用“换一条”继续验证。至少覆盖一条已知好回答、一条已知坏回答，以及一条信息不完整的样本。检查时可以直接问：扣分依据是否真的出现在这条回答中？评估器是否引用了正确的工具结果？缺少证据时是否说明无法判断？</p>
+<p>如果坏回答被判高分，先看收到的输入，再看评分条款。比如评估器只检查是否提到“评估器”这个词，就可能把泛泛介绍当作操作指导，需要补充“能否让用户完成下一步”的标准。调整后重评同一批样本，确认原来的好回答没有被一并误判。</p>
+<p>图片、音频或文档任务也按这个顺序试评。先确认评估器能读取对应材料，再核对它引用的页码、片段或字段。例如，判断报销金额是否正确，需要看到票据和填报结果；仅收到文件链接或一句“已完成”不足以作出判断。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-22/image-003.png" alt="image" loading="lazy"></p>
+<p>正式创建前，可以在“评估结果输出”中打开“写入评估结果数据集”。首次使用可留空结果数据集，由系统创建；已有明确用途的目标数据集时，也可选择追加写入。通过“透传源数据字段”保留用户问题、原回答、场景标记等后续复核所需材料。结果数据集配置在任务创建后不可修改，应在这里一并安排好。</p>
+<p>最后点击“保存并运行”。任务结束后，先检查实际处理数量和失败记录，再开始分析得分。预览成功说明单条配置可用，第一批正式运行才会暴露是否选错范围、部分样本缺字段等问题。</p>
+<h2 id="22-3-从结果里选出值得修复的-Badcase"><a href="#22-3-从结果里选出值得修复的-Badcase" class="headerlink" title="22.3 从结果里选出值得修复的 Badcase"></a>22.3 从结果里选出值得修复的 Badcase</h2><p>进入评估任务结果，先看整体分布，再打开具体样本。需要跨任务分析时，可进入“分析洞察”，按评估器、数据来源和分数范围筛选。查看低分时还要带上任务和时间范围，避免把不同标准、不同业务的数据混在一起比较。</p>
+<p>一条结果至少要把原始问题、Agent 回答、分项判断和解释放在一起读。总分告诉团队先看哪里；解释帮助判断问题是否成立；轨迹则用于确认为什么出现这个问题。不要看到低分便立即改 Prompt。</p>
+<p>以“如何做评估”这道题为例，可以按下面的顺序处理。这里的判断方式同样适用于客服、数据分析和代码任务。</p>
+<table>
+<thead>
+<tr>
+<th>读到的现象</th>
+<th>继续查看什么</th>
+<th>本轮应采取的动作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>回答介绍了概念，却缺少运行和结果分析步骤</td>
+<td>评分条款是否要求操作指导，回答是否确实遗漏</td>
+<td>确认为回答完整性问题，纳入调优样本</td>
+</tr>
+<tr>
+<td>回答已有关键步骤，解释却说没有</td>
+<td>映射后的输出是否完整，是否用了另一道题的标准</td>
+<td>修正评估器或映射，重评受影响样本</td>
+</tr>
+<tr>
+<td>Agent 声称操作完成，轨迹显示工具失败</td>
+<td>失败后的处理和最终业务状态</td>
+<td>保留为任务执行问题，交给负责该行为的团队</td>
+</tr>
+<tr>
+<td>结果显示执行异常或材料缺失</td>
+<td>任务错误、采集范围、附件可读性</td>
+<td>先补齐执行条件或材料，再判断 Agent 质量</td>
+</tr>
+</tbody></table>
+<p>在操作演示的一次实验回测中，“有哪些功能”和“如何做评估”分别得到 0.25 和 0.5。这两个分数对应当次回答与当时的 Rubric；真正有用的是逐项解释指出了哪些能力点没有覆盖。团队因此能够检查缺的是知识、回答组织还是题目标准，而不是笼统认为模型不够强。</p>
+<p>结果写入 Dataset 后，可以按实际输出的分数字段或判断字段筛选候选，再由业务人员复核。保留确认的问题、预期行为和依据，形成后续实验用题。最初不需要收入所有低分样本：同一种遗漏选择有代表性的几条，同时保留边界场景和一部分原本正常的任务，才能验证修复是否带来退化。</p>
+<p>人工发现评估器误判的样本也很有价值，应留作校准材料。这样下一轮既能检查 Agent 是否改善，也能检查评估器是否仍在犯同样的错误。高分样本要适当抽检，避免只看低分而漏掉评估器未识别的严重问题。</p>
+<p>历史评估得到稳定判断后，再开启“基于新数据持续评估”，配置间隔和采样。日常优先看关键指标下降、反复出现的问题及新场景，每次选一小组明确问题进入实验。大流量下可以降低采样比例，再用专项历史评估补查重点场景。</p>
+<h2 id="22-4-把确认的问题配成实验，评估这次新生成的答案"><a href="#22-4-把确认的问题配成实验，评估这次新生成的答案" class="headerlink" title="22.4 把确认的问题配成实验，评估这次新生成的答案"></a>22.4 把确认的问题配成实验，评估这次新生成的答案</h2><p>回到“有哪些功能”和“如何做评估”两道题，团队可以提出一个具体改进：补齐产品知识，并要求回答操作问题时给出步骤。先记录当前方案作为 Baseline，再准备候选方案。若同时换模型、改 Prompt、增添 Skill，分数变化就难以解释；第一轮可以先只改变最有依据的一项。</p>
+<p>进入“实验 → 实验计划”，点击“新建计划”，选择数据集和实验类型。“在线实验”用于在平台配置模型并直接运行；测试企业自己的 Agent 时，可以选择通过 SDK 执行的“本地实验”。这里的在线实验不等同于向生产用户做 A&#x2F;B 分流。</p>
+<p>随后配置需要使用的评估器和变量映射。实验与前面的历史评估有一个关键区别：被评分的必须是本次生成的新回答和新轨迹。</p>
+<table>
+<thead>
+<tr>
+<th>评估变量</th>
+<th>实验中应接入的内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用户输入</td>
+<td>本次实际发给模型或 Agent 的问题</td>
+</tr>
+<tr>
+<td>Agent 输出</td>
+<td>本次执行生成的新答案</td>
+</tr>
+<tr>
+<td>运行轨迹</td>
+<td>本次实验关联的执行过程</td>
+</tr>
+<tr>
+<td>参考答案或预期行为</td>
+<td>Dataset 中对应题目的参考字段</td>
+</tr>
+<tr>
+<td><code>rubric</code></td>
+<td>Dataset 中该题的评分细则</td>
+</tr>
+</tbody></table>
+<p>逐题 Rubric 的录入完成后，在评估器中声明 <code>rubric</code> 变量，要求它按传入条款评分；实验侧再把该变量映射到数据集字段。先运行两道题，打开解释，确认“有哪些功能”使用功能覆盖标准，“如何做评估”使用操作步骤标准。若仍评到了旧回答或共用了一份不适用的标准，应先修正映射再重跑。</p>
+<p>实验计划也可以选择 Pipeline。当评分需要工具状态、结构化业务结果或轨迹中提取的字段时，可以让实验新产生的 Trace 经过处理，再将 <code>pipeline.</code> 开头的结果字段映射给评估器。这样，线上样本和实验新结果能够采用一致的加工规则。只需要比较最终回答时，可以先不配置这一步。</p>
+<p>正式比较使用为本轮确认的独立黄金 Dataset 的最新数据，实验期间不再写入或修改，创建的数据版本用于留档；当前界面不支持从历史版本直接发起实验。同步记录评分标准、Agent 或模型版本、Prompt 和关键参数，让两版方案面对相同题目与起始条件。</p>
+<h2 id="22-5-把企业自己的-Agent-接进来，先跑通一道题"><a href="#22-5-把企业自己的-Agent-接进来，先跑通一道题" class="headerlink" title="22.5 把企业自己的 Agent 接进来，先跑通一道题"></a>22.5 把企业自己的 Agent 接进来，先跑通一道题</h2><p>不少业务 Agent 需要访问内网知识库或业务系统，可以在能够调用这些服务的环境中执行题目，再把约定的结果回传到 Agent 观测与优化。起点是刚创建的本地实验计划：保存数据集和评估器配置后，点击<strong>获取本地实验配置</strong>，按侧栏指引安装依赖、配置环境变量，并选择“通过 HTTP 执行”“执行本地命令”或“自定义执行”。</p>
+<p>工程师复制与当前计划对应的代码，将服务地址、请求头、问题如何组装成请求和超时设置替换为本地 Agent 的实际配置；自定义执行则补入自己的调用逻辑。业务负责人提供一条典型问题，先验证完整调用过程，再运行数据集。代码执行后，可到“实验记录”查看回传结果。</p>
+<p>操作视频还展示了一个将这套执行过程包装成页面的客户侧实验平台，适合需要管理多个连接和定时任务的团队。使用已经部署的这类执行端时，先配置 AgentSpace、地域和访问凭证，测试连接，再新增目标 Agent 连接。初次接入可直接从上面的 SDK 指引开始，不需要先搭建这套管理页面。</p>
+<p>演示里的 Agent 有会话状态，默认“发一次请求、取一次响应”的调用方式不能直接使用。实际适配成“创建 Session → 向该 Session 发送问题 → 获取最终响应”。如果 API 先返回任务受理信息，还需要继续等待最终回答，不能把受理成功当作题目完成。相互独立的样本应使用独立会话，避免前一道题的上下文影响后一道题。</p>
+<p>完成调用适配后先做单题测试，检查问题确实发出、最终回答完整返回，实验记录能对应到这道题；需要过程评分时，再确认新轨迹已关联。使用客户侧实验平台时，可通过连接页面的单题测试完成同样检查。然后运行前面的小批数据。这个顺序可以把连接适配问题和回答质量问题分开定位。</p>
+<p>Tool、Skill、Workflow 或 Harness 的修改，都可以通过接入修改后的 Agent 版本参与比较。把版本写入实验的上下文或记录中，并确认服务已经使用该版本。仅沿用同一个服务地址，无法说明两次运行的配置相同。</p>
+<h2 id="22-6-查看同一道题的前后差异，决定是否采用候选"><a href="#22-6-查看同一道题的前后差异，决定是否采用候选" class="headerlink" title="22.6 查看同一道题的前后差异，决定是否采用候选"></a>22.6 查看同一道题的前后差异，决定是否采用候选</h2><p>实验完成后进入“实验记录”，选择 Baseline 和候选记录，点击“对比”。“概览对比”帮助观察整体变化，“配置对比”用于核对这轮实际改变了什么，“样本对比”则把相同题目的输出和指标放在一起。先确认使用的是同一批题和同一版标准，再解释分数升降。</p>
+<p>阅读顺序可以从退化题开始，再看改善题，最后检查关键正常场景。对于“如何做评估”，重点核对候选是否补齐配置、运行和结果分析步骤；对于“有哪些功能”，看能力覆盖是否增加，同时有没有编造不支持的功能。输出变长本身不代表改善，新增内容需要对应评分要求。</p>
+<p>在单题详情中结合分项结果、解释和输出差异阅读。若候选总分提高，但关键条款仍未通过，这轮还不适合升级；若只有一题改善而其他题退化，应回到具体修改，检查是否把某种回答格式强加给了所有问题。必要时为不同业务意图采用不同策略，再做下一轮实验。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-22/image-004.png" alt="image" loading="lazy"></p>
+<p>重复运行可以帮助确认改善是否稳定。需要检查评估器时，对同一份固定回答重复评分；需要检查 Agent 稳定性时，让它重新执行同一批题。前者主要观察判断波动，后者还包含回答、工具和环境的变化。看到分数起伏时，先打开对应的回答和运行记录，不能一律归因于 Rubric。</p>
+<p>决定采用候选时，除了平均分，至少再看三件事：严重错误是否消失，原来正常的场景是否退化，耗时与消耗是否可接受。例如，补齐状态查询可能增加一次工具调用，却能避免“操作失败仍告知成功”；这类成本需要结合业务价值判断。反过来，省略必要步骤得到的低耗时不能作为升级理由。</p>
+<p>调用失败、额度不足或没有取得最终答案的题目，应先说明原因。若本轮比较的是回答质量，可以修复执行条件后重跑；若比较整套服务的交付能力，这些失败也属于需要改善的表现。不要在结果出来后临时更改统计方式。</p>
+<p>小批实验通过后，扩大到历史回归集，再验证一批没有参与本轮修改的独立样本。只有目标问题得到改善、关键场景没有不可接受的退化，才进入团队的发布流程。把数据范围、方案版本、评分标准和逐题结果一起留在实验记录中，后续才能解释为什么采用这一版。</p>
+<h2 id="22-7-让下一次修改继续使用这套评估"><a href="#22-7-让下一次修改继续使用这套评估" class="headerlink" title="22.7 让下一次修改继续使用这套评估"></a>22.7 让下一次修改继续使用这套评估</h2><p>一轮实验的价值不仅是选出一个版本，还在于留下可重复的检查。确认有效的题目进入回归集，评估器误判进入校准集，尚未解决的问题保留给下一轮。团队以后补知识、改 Prompt、换模型或调整 Skill，都可以从这套材料重新运行。</p>
+<p>需要定期检查内网 Agent 时，使用客户侧实验平台的团队可以选择实验计划、目标 Agent 和调度周期，通过 Launch History 查看触发记录，再到 Agent 观测与优化查看实验结果。直接使用 SDK 的团队则可将已验证的执行脚本接入自己的定时任务或发布检查。演示以五分钟间隔展示连续运行；实际业务按发布频率和预算安排每天或每次变更后的回归。</p>
+<p>日常查看趋势时，先关注连续下降或关键题退化，再下钻到具体执行。某次升级效果不佳，就沿实验记录找回对应版本和变更，决定继续修复还是按既有流程回退。发布后的真实轨迹继续进入评估，新的 Badcase 又成为下一轮实验题目。</p>
+<p>下一章将展开如何从这些问题产生 Skill、Workflow、Experience 或 Harness 等改进，再用实验检验是否值得在更多任务上采用。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/24/agent-systems/ai-agent-handbook/ch23-%E5%8F%97%E6%8E%A7%E8%87%AA%E8%BF%9B%E5%8C%96/">第 23 章 受控自进化</a></h3>
+        <p>把有效经验转化为 Memory、Skill、工具和运行机制，并控制自进化风险。</p>
+        <a class="btn primary" href="/2026/09/24/agent-systems/ai-agent-handbook/ch23-%E5%8F%97%E6%8E%A7%E8%87%AA%E8%BF%9B%E5%8C%96/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/24/agent-systems/ai-agent-handbook/ch21-Agent%E9%BB%84%E9%87%91%E6%95%B0%E6%8D%AE%E9%9B%86/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 21 章 Agent 黄金数据集</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 7 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#22-1-%E5%85%88%E9%80%89%E4%B8%80%E4%B8%AA%E4%B8%9A%E5%8A%A1%E9%97%AE%E9%A2%98%EF%BC%8C%E5%81%9A%E5%87%BA%E8%83%BD%E7%94%A8%E7%9A%84%E8%AF%84%E4%BC%B0%E5%99%A8" data-toc-target="22-1-先选一个业务问题，做出能用的评估器"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">22.1 先选一个业务问题，做出能用的评估器</span></a><a class="toc-level-2" href="#22-2-%E7%94%A8%E5%87%A0%E6%9D%A1%E7%9C%9F%E5%AE%9E%E6%A0%B7%E6%9C%AC%E8%AF%95%E8%AF%84%EF%BC%8C%E5%86%8D%E5%90%AF%E5%8A%A8%E7%AC%AC%E4%B8%80%E6%89%B9%E5%8E%86%E5%8F%B2%E8%AF%84%E4%BC%B0" data-toc-target="22-2-用几条真实样本试评，再启动第一批历史评估"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">22.2 用几条真实样本试评，再启动第一批历史评估</span></a><a class="toc-level-2" href="#22-3-%E4%BB%8E%E7%BB%93%E6%9E%9C%E9%87%8C%E9%80%89%E5%87%BA%E5%80%BC%E5%BE%97%E4%BF%AE%E5%A4%8D%E7%9A%84-Badcase" data-toc-target="22-3-从结果里选出值得修复的-Badcase"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">22.3 从结果里选出值得修复的 Badcase</span></a><a class="toc-level-2" href="#22-4-%E6%8A%8A%E7%A1%AE%E8%AE%A4%E7%9A%84%E9%97%AE%E9%A2%98%E9%85%8D%E6%88%90%E5%AE%9E%E9%AA%8C%EF%BC%8C%E8%AF%84%E4%BC%B0%E8%BF%99%E6%AC%A1%E6%96%B0%E7%94%9F%E6%88%90%E7%9A%84%E7%AD%94%E6%A1%88" data-toc-target="22-4-把确认的问题配成实验，评估这次新生成的答案"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">22.4 把确认的问题配成实验，评估这次新生成的答案</span></a><a class="toc-level-2" href="#22-5-%E6%8A%8A%E4%BC%81%E4%B8%9A%E8%87%AA%E5%B7%B1%E7%9A%84-Agent-%E6%8E%A5%E8%BF%9B%E6%9D%A5%EF%BC%8C%E5%85%88%E8%B7%91%E9%80%9A%E4%B8%80%E9%81%93%E9%A2%98" data-toc-target="22-5-把企业自己的-Agent-接进来，先跑通一道题"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">22.5 把企业自己的 Agent 接进来，先跑通一道题</span></a><a class="toc-level-2" href="#22-6-%E6%9F%A5%E7%9C%8B%E5%90%8C%E4%B8%80%E9%81%93%E9%A2%98%E7%9A%84%E5%89%8D%E5%90%8E%E5%B7%AE%E5%BC%82%EF%BC%8C%E5%86%B3%E5%AE%9A%E6%98%AF%E5%90%A6%E9%87%87%E7%94%A8%E5%80%99%E9%80%89" data-toc-target="22-6-查看同一道题的前后差异，决定是否采用候选"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">22.6 查看同一道题的前后差异，决定是否采用候选</span></a><a class="toc-level-2" href="#22-7-%E8%AE%A9%E4%B8%8B%E4%B8%80%E6%AC%A1%E4%BF%AE%E6%94%B9%E7%BB%A7%E7%BB%AD%E4%BD%BF%E7%94%A8%E8%BF%99%E5%A5%97%E8%AF%84%E4%BC%B0" data-toc-target="22-7-让下一次修改继续使用这套评估"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">22.7 让下一次修改继续使用这套评估</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/ai-agent-handbook/" style="--rail: 59%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">30 / 51</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#22-1-%E5%85%88%E9%80%89%E4%B8%80%E4%B8%AA%E4%B8%9A%E5%8A%A1%E9%97%AE%E9%A2%98%EF%BC%8C%E5%81%9A%E5%87%BA%E8%83%BD%E7%94%A8%E7%9A%84%E8%AF%84%E4%BC%B0%E5%99%A8" data-toc-target="22-1-先选一个业务问题，做出能用的评估器" data-title="01 · 22.1 先选一个业务问题，做出能用的评估器" aria-label="22.1 先选一个业务问题，做出能用的评估器"></a><a class="toc-strip__dot" href="#22-2-%E7%94%A8%E5%87%A0%E6%9D%A1%E7%9C%9F%E5%AE%9E%E6%A0%B7%E6%9C%AC%E8%AF%95%E8%AF%84%EF%BC%8C%E5%86%8D%E5%90%AF%E5%8A%A8%E7%AC%AC%E4%B8%80%E6%89%B9%E5%8E%86%E5%8F%B2%E8%AF%84%E4%BC%B0" data-toc-target="22-2-用几条真实样本试评，再启动第一批历史评估" data-title="02 · 22.2 用几条真实样本试评，再启动第一批历史评估" aria-label="22.2 用几条真实样本试评，再启动第一批历史评估"></a><a class="toc-strip__dot" href="#22-3-%E4%BB%8E%E7%BB%93%E6%9E%9C%E9%87%8C%E9%80%89%E5%87%BA%E5%80%BC%E5%BE%97%E4%BF%AE%E5%A4%8D%E7%9A%84-Badcase" data-toc-target="22-3-从结果里选出值得修复的-Badcase" data-title="03 · 22.3 从结果里选出值得修复的 Badcase" aria-label="22.3 从结果里选出值得修复的 Badcase"></a><a class="toc-strip__dot" href="#22-4-%E6%8A%8A%E7%A1%AE%E8%AE%A4%E7%9A%84%E9%97%AE%E9%A2%98%E9%85%8D%E6%88%90%E5%AE%9E%E9%AA%8C%EF%BC%8C%E8%AF%84%E4%BC%B0%E8%BF%99%E6%AC%A1%E6%96%B0%E7%94%9F%E6%88%90%E7%9A%84%E7%AD%94%E6%A1%88" data-toc-target="22-4-把确认的问题配成实验，评估这次新生成的答案" data-title="04 · 22.4 把确认的问题配成实验，评估这次新生成的答案" aria-label="22.4 把确认的问题配成实验，评估这次新生成的答案"></a><a class="toc-strip__dot" href="#22-5-%E6%8A%8A%E4%BC%81%E4%B8%9A%E8%87%AA%E5%B7%B1%E7%9A%84-Agent-%E6%8E%A5%E8%BF%9B%E6%9D%A5%EF%BC%8C%E5%85%88%E8%B7%91%E9%80%9A%E4%B8%80%E9%81%93%E9%A2%98" data-toc-target="22-5-把企业自己的-Agent-接进来，先跑通一道题" data-title="05 · 22.5 把企业自己的 Agent 接进来，先跑通一道题" aria-label="22.5 把企业自己的 Agent 接进来，先跑通一道题"></a><a class="toc-strip__dot" href="#22-6-%E6%9F%A5%E7%9C%8B%E5%90%8C%E4%B8%80%E9%81%93%E9%A2%98%E7%9A%84%E5%89%8D%E5%90%8E%E5%B7%AE%E5%BC%82%EF%BC%8C%E5%86%B3%E5%AE%9A%E6%98%AF%E5%90%A6%E9%87%87%E7%94%A8%E5%80%99%E9%80%89" data-toc-target="22-6-查看同一道题的前后差异，决定是否采用候选" data-title="06 · 22.6 查看同一道题的前后差异，决定是否采用候选" aria-label="22.6 查看同一道题的前后差异，决定是否采用候选"></a><a class="toc-strip__dot" href="#22-7-%E8%AE%A9%E4%B8%8B%E4%B8%80%E6%AC%A1%E4%BF%AE%E6%94%B9%E7%BB%A7%E7%BB%AD%E4%BD%BF%E7%94%A8%E8%BF%99%E5%A5%97%E8%AF%84%E4%BC%B0" data-toc-target="22-7-让下一次修改继续使用这套评估" data-title="07 · 22.7 让下一次修改继续使用这套评估" aria-label="22.7 让下一次修改继续使用这套评估"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/ai-agent-handbook/ch22-Agent优化Badcase","title":"第 22 章 Agent 优化：Badcase","url":"/2026/09/24/agent-systems/ai-agent-handbook/ch22-Agent%E4%BC%98%E5%8C%96Badcase/","path":"ai-agent-handbook","index":29,"total":51,"next":{"title":"第 23 章 受控自进化","url":"/2026/09/24/agent-systems/ai-agent-handbook/ch23-%E5%8F%97%E6%8E%A7%E8%87%AA%E8%BF%9B%E5%8C%96/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

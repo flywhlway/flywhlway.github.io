@@ -1,0 +1,441 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Kitta：领域专用 Code Review Agent · 飞轮之道</title>
+<meta name="description" content="AI 辅助编程普及后，代码产出呈指数级增长，但审查人力并未同步扩张。内核等基础软件的 PR 体积与评审耗时激增，通用 AI Review 工具因缺乏领域知识与业务理解，难以满足专家级审查需求，研发效能的瓶颈正从“写”快速向“审”转移。">
+<meta name="author" content="阿里云 AI Agent HandBook 编写组">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/24/agent-systems/ai-agent-handbook/ch25-Kitta%E9%A2%86%E5%9F%9F%E4%B8%93%E7%94%A8Code-Review-Agent/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Kitta：领域专用 Code Review Agent · 飞轮之道">
+<meta property="og:description" content="AI 辅助编程普及后，代码产出呈指数级增长，但审查人力并未同步扩张。内核等基础软件的 PR 体积与评审耗时激增，通用 AI Review 工具因缺乏领域知识与业务理解，难以满足专家级审查需求，研发效能的瓶颈正从“写”快速向“审”转移。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/24/agent-systems/ai-agent-handbook/ch25-Kitta%E9%A2%86%E5%9F%9F%E4%B8%93%E7%94%A8Code-Review-Agent/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/ai-agent-handbook/">实践篇</a><a class="series-chip" href="/paths/ai-agent-handbook/" title="查看学习路径">第 35 / 51 篇</a>
+    </div>
+    <h1>Kitta：领域专用 Code Review Agent</h1>
+    <p class="article-deck">AI 辅助编程普及后，代码产出呈指数级增长，但审查人力并未同步扩张。</p>
+    <div class="article-meta">
+      <span>阿里云 AI Agent HandBook 编写组</span>
+      <span>13 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/AI-Agent-HandBook/">#AI Agent HandBook</a><a class="article-meta__tag" href="/tags/%E5%AE%9E%E8%B7%B5%E6%A1%88%E4%BE%8B/">#实践案例</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>本文收录自阿里云开源白皮书《AI Agent HandBook》（<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook">aliyun&#x2F;ai-agent-handbook</a>，Apache-2.0），正文与上游逐字一致，仅适配标题层级、站内链接与图片地址。<br>原文：<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook/blob/main/06-case-study/%E7%AC%AC25%E7%AB%A0%20%E7%A0%94%E5%8F%91%E6%95%88%E8%83%BD/Kitta%EF%BC%9A%E9%A2%86%E5%9F%9F%E4%B8%93%E7%94%A8%20Code%20Review%20Agent.md">06-case-study&#x2F;第25章 研发效能&#x2F;Kitta：领域专用 Code Review Agent.md</a> · 上游版本：<a target="_blank" rel="noopener" href="https://github.com/aliyun/ai-agent-handbook/commit/e5a88173bcd996612f0b75a1e3dca6776032af63"><code>e5a8817</code></a>（2026-09-23） · 篇章贡献者：杨涛、朱颜、余艾琳、胡峻 · 系列目录：<a href="/paths/ai-agent-handbook/">AI Agent HandBook 白皮书学习路径</a></p>
+</blockquote>
+<h2 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h2><p>AI 辅助编程普及后，代码产出呈指数级增长，但审查人力并未同步扩张。内核等基础软件的 PR 体积与评审耗时激增，通用 AI Review 工具因缺乏领域知识与业务理解，难以满足专家级审查需求，研发效能的瓶颈正从“写”快速向“审”转移。</p>
+<p>本白皮书将介绍 Kitta，一套面向领域深度定制的 Code Review Agent。它将通用智能体领域化，通过沉淀项目级专家资产、定制审查流程与领域知识库，并构建在线离线协同进化闭环，精准解决领域特定的代码问题。</p>
+<p>Kitta 在龙蜥社区线上运行至今，累计完成超 7 万个补丁的审查，门禁准确率达 97%，合入率稳定在 62%。其领域定制方法论已在操作系统内核、编译器、云原生平台等六大领域验证，实现 17.0%–31.6% 的审查质量提升，成功将 Maintainer 的精力从逐行审查释放至关键争议裁决。</p>
+<hr>
+<h3 id="背景与现状"><a href="#背景与现状" class="headerlink" title="背景与现状"></a>背景与现状</h3><h4 id="1-1-代码量暴涨之后，质量压力剧增"><a href="#1-1-代码量暴涨之后，质量压力剧增" class="headerlink" title="1.1 代码量暴涨之后，质量压力剧增"></a>1.1 代码量暴涨之后，质量压力剧增</h4><p>先看几组数字。</p>
+<p>Linux 内核上游修复 CVE 的数量正在快速攀升：内核 6.9 到 6.19 各版本大致还在四五百的区间，到 7.0 已跳升至约 1250，7.2 更是逼近 1900，预估 7.3 版本时数字将超过 2000。放大到全行业，CVE 同比增长更为夸张——全部 +394%，高危 +811%（数据来源：Linux Foundation《The CRA Readiness Reality: What Changed and What Didn’t Between 2025 and 2026》）。这组增长暴露了现状的代码质量压力：代码缺陷暴露的量和危害程度均在持续增加。随之而来地，开源软件项目需要合入的代码量也随之骤增。以龙蜥社区 ANCK 内核仓库为例，两个主流版本的分支合入 PR 在 AI Agent 引入后持续攀升。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-001.png" alt="image.png" loading="lazy"></p>
+<p>研发效能侧的数据同样印证这一趋势。DORA（Google Cloud 旗下的研发效能研究项目）发布的年度报告《State of AI-assisted Software Development》显示：AI 深度参与开发的同时，代码 Bug 率 +9%，代码评审时间 +91%，平均 PR 体积 +154%（该版受访者约 5,000 人，数字为相关性口径而非因果结论）。</p>
+<p>综上，在 AI Coding 人机共写的时代之下，编码已不再受人力限制，但审查的人力并没有同步增长。产能的瓶颈，正在从”写”转移到”审”。</p>
+<h4 id="1-2-Agentic-CI-中的代码评审意义"><a href="#1-2-Agentic-CI-中的代码评审意义" class="headerlink" title="1.2 Agentic CI 中的代码评审意义"></a>1.2 Agentic CI 中的代码评审意义</h4><p>面对这个趋势，龙蜥社区在探索 AI Native 研发组织的形态，把持续集成升级为智能化持续集成（Agentic Continuous Integration），整个流水线分为四个环节：</p>
+<ol>
+<li><p>AI 协同编程——研发产能普遍激增，人机共写，编码已不再受人力限制；</p>
+</li>
+<li><p>智能化代码评审——需要检查研发规范与流程、架构与设计一致性、变更完整性与前置依赖、缺陷与安全风险；但人工审查资源不足，AI 评审势在必行；</p>
+</li>
+<li><p>智能化测试——包括深度漏洞挖掘、补丁定向测试、安全补丁验证、回归与性能测试，以及进一步验证测试；</p>
+</li>
+<li><p>社区审核合入——人来做最终的决定。</p>
+</li>
+</ol>
+<p>可以看到，AI 评审处在承上启下的位置：上游的 AI 协同编程把代码产量抬了上去，下游的智能化测试和社区合入又都建立在”进入测试和合入环节的代码是靠谱的”这个前提上。如果评审环节失守，要么缺陷漏到下游，要么 Maintainer 被人机共写产出的 PR 洪流淹没。这就是 Kitta 要解决的问题。</p>
+<h3 id="AI-Code-Review-的深层挑战"><a href="#AI-Code-Review-的深层挑战" class="headerlink" title="AI Code Review 的深层挑战"></a>AI Code Review 的深层挑战</h3><p>AI Code Review 带来了一些显而易见的红利，例如显著提升的响应速度、对基础缺陷问题的自动化拦截等等。然而，通用 AI Review 工具在核心业务里往往达不到专家级可用的审查需求。</p>
+<p>拆开来看，当前通用 Code Review 方案在两个维度上都存在明显局限。一是<strong>工程行为约束不足</strong>：覆盖不全、位置漂移、效果不稳定——变更较大时倾向于只评审部分文件导致遗漏，报告的问题与实际代码位置对不上，评审质量随提示词的细微差异大幅波动。二是<strong>检查深度不足</strong>：缺乏对审查项目的语义理解，规则浮于表面——对每个项目、每次评审一视同仁，只能扫描代码本身的缺陷，感知不到项目特有的审查需求。具体表现为三个深层挑战：</p>
+<p><strong>领域知识匮乏。</strong> 跨领域技术栈差异大，且知识体系需要动态更新。通用模型见过很多代码，但未必懂内核的锁语义，也未必懂编译器的中间表示约定——而这些恰恰是评审结论对错的关键。</p>
+<p><strong>业务理解不足。</strong> 项目开发模式多样，审查的定位与功能需要贴合业务场景。对社区开源项目、企业内部仓库、发行版维护来说，”什么算问题、问题有多严重”的标准截然不同。</p>
+<p><strong>信任边界模糊。</strong> 缺乏客观的质量评估标准，以及难以对齐用户需求的进化机制。用户说”好”不一定是真的好，Agent 自我感觉良好更是靠不住——没有客观的评估与进化闭环，信任就无从建立。</p>
+<p>一句话概括：当 AI 深度介入核心业务时，AI 能”看懂”代码，却未必”看懂”项目。</p>
+<h3 id="Kitta-Code-Review-Agent-技术实践"><a href="#Kitta-Code-Review-Agent-技术实践" class="headerlink" title="Kitta Code Review Agent 技术实践"></a>Kitta Code Review Agent 技术实践</h3><p>针对这三个挑战，Kitta 的实践方案是把通用 Agent 领域化，通过”三步走”构建真正懂行的专家级 Code Review Agent。</p>
+<h4 id="3-1-第一步：项目级专家资产管理"><a href="#3-1-第一步：项目级专家资产管理" class="headerlink" title="3.1 第一步：项目级专家资产管理"></a>3.1 第一步：项目级专家资产管理</h4><p>领域知识不是凭空来的，而是从真实历史中提炼的。Kitta 从社区研发历史中的真实评审与缺陷记录出发，覆盖项目 GitHub 仓库等多源数据。原始记录经过采集关联、规整去噪、语义解析、隔离复现，沉淀为项目级专家资产；其中”隔离复现”是为了让每一条缺陷模式与预期结论都可验证、经得起追问，而不是把噪音当经验。这份资产包含两类核心内容：</p>
+<ul>
+<li><p><strong>评判标准</strong>——评审原则、缺陷模式、项目惯例，回答”按什么标准判”；</p>
+</li>
+<li><p><strong>验证样本</strong>——问题样本、正常样本、预期结论，回答”判得对不对如何度量”。</p>
+</li>
+</ul>
+<p>这些资产可验证、可沉淀、可复用：换一个新项目，同样的管线可以把它的真实历史重新提炼成新的专家资产。这一步的本质，是让”懂行”从一种个人经验变成一种组织能力。</p>
+<h4 id="3-2-第二步：双轮驱动的代码审查定制"><a href="#3-2-第二步：双轮驱动的代码审查定制" class="headerlink" title="3.2 第二步：双轮驱动的代码审查定制"></a>3.2 第二步：双轮驱动的代码审查定制</h4><p>有了专家资产，接下来要解决”怎么看”的问题。Kitta 的做法是双轮驱动——流程定义看哪里，知识决定怎么看。下面以龙蜥社区 ANCK 的落地为例，看这两个轮子分别做了什么。</p>
+<p><strong>审查流程定制，让 AI 看得全</strong>：定义审查要看哪里，包括语义一致性、回合完整性、发行版规范、集成风险等维度——语义一致性防止补丁行为与预期背离；回合完整性盯住跨版本补丁序列是否完整、有无遗漏；发行版规范把关是否符合发行版的合入要求；集成风险评估变更进入代码库后的连带影响。四个维度确保该看的都看到，不漏项。</p>
+<p>在 ANCK，流程定制的重点是<strong>回合补丁 Code Review</strong>。补丁回合是下游内核社区维护的高频操作：把上游补丁回合到下游时，往往要根据下游上下文做适配，既要准确判断适配是否正确，也要确认回合是否完整、有没有把上游后续的修复一并带回来。围绕这个场景，Kitta 定制了两项内核特定审查视角：</p>
+<ul>
+<li><p><strong>补丁语义一致性检查</strong>——识别回合补丁与上游原补丁的差异，并结合语义判断补丁功能的一致性。方案上先微观溯源、比对补丁级差异，再宏观评估整体功能是否一致，避免”逐行都对、整体变了”的漏判。</p>
+</li>
+<li><p><strong>补丁完整性检查</strong>——智能追踪回合补丁的上游依赖链，自动识别上游对应的 Fixes 补丁，采用四阶段遗漏 Fixes 检索流程，杜绝已知漏洞的回归。</p>
+</li>
+</ul>
+<p>此外，针对下游产品化流程中”代码本身的质量审查只是其中一个环节”的现状，Kitta 还覆盖了 PR 描述规范检查、描述与代码的一致性检查等流程类审查项，把审查范围从代码本身扩展到研发流程的完整上下文。</p>
+<p><strong>领域知识定制，让 AI 看得深</strong>：决定问题怎么判，依托多源头层次化知识库，做子领域拆分，沉淀典型缺陷模式，让 Agent 的判断贴合该领域专家的真实经验，而不是泛泛的”最佳实践”。在 ANCK，这轮定制落地为三件事：</p>
+<ul>
+<li><p><strong>内核领域数据工程</strong>——收集多来源的内核领域知识，经过数据筛选、数据合成、数据均衡等处理流水线，得到领域知识库和 Benchmark 数据；</p>
+</li>
+<li><p><strong>子系统专用知识库</strong>——内核不同子系统的评审关注点差异很大，按子系统组织专用知识库，让评审贴合各子领域的真实惯例；</p>
+</li>
+<li><p><strong>深度审查流程</strong>——引入”有罪推定—全栈调用链分析—自我辩论”的审查流程：先假设代码有问题，沿全栈调用链追语义，再自我辩论验证结论，加强对内核常见关键代码风险的识别深度。</p>
+</li>
+</ul>
+<p>为了让定制效果可衡量，Kitta 还构建了<strong>Benchmark 评估体系</strong>：基于三类来源收集数据——LKML（真实社区 Reviewer 的评审过程，问题分布均匀、真实性强）、sashiko benchmark（单 commit—单 issue 精确对应）、龙蜥 Gitee 社区数据；并引入 sashiko、review-prompts、qoder 等多个 SOTA 代码审查工作参与横向评估，用对比结果指导 Skills 进化。</p>
+<h4 id="3-3-第三步：在线离线协同迭代进化"><a href="#3-3-第三步：在线离线协同迭代进化" class="headerlink" title="3.3 第三步：在线离线协同迭代进化"></a>3.3 第三步：在线离线协同迭代进化</h4><p>领域知识是活的，Agent 也要持续进化。Kitta 采用在线离线协同的迭代机制：</p>
+<p><strong>离线侧，验证样本循环优化</strong>——用验证样本做隔离评测，根据结果反思进化，持续校准 Agent 的判断标准。</p>
+<p><strong>线上侧，线上观测持续校准</strong>——基于 Review 意见内容和研发的后续代码行为，开发了对各类意见有效性进行智能分析汇总的评估框架，结合 Review 采纳率持续监控、知识更新、迭代校准与阈值调整，让 Agent 在真实使用中越用越准。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-002.png" alt="image.png" loading="lazy"></p>
+<h3 id="Kitta-落地效果"><a href="#Kitta-落地效果" class="headerlink" title="Kitta 落地效果"></a>Kitta 落地效果</h3><h4 id="4-1-龙蜥社区内核仓库的实践"><a href="#4-1-龙蜥社区内核仓库的实践" class="headerlink" title="4.1 龙蜥社区内核仓库的实践"></a>4.1 龙蜥社区内核仓库的实践</h4><p>Kitta  已在龙蜥社区的真实研发流水线中持续落地运行，沿着一条完整的五阶段流水线对每一个内核 PR 进行审查。开发者提交 PR 或在评论中输入 <code>/check-code-review</code> 后，审查任务即被触发；整个流程先分类、再检查规范与依赖、最后落到代码质量，层层递进。</p>
+<p><strong>Stage 1. PR 分类。</strong> Kitta 首先判断这是纯自研补丁还是回合补丁：如果 Commit 中存在类似 <code>commit xxxx upstream</code> 的上游补丁声明，则归为回合补丁。分类决定后续检查范围——纯自研补丁不会执行补丁完整性检查和回合一致性检查，避免不必要的开销。</p>
+<p><strong>Stage 2. PR&#x2F;Commit Message 规范性检查。</strong> 基于龙蜥社区规范文档，对 PR 描述、Commit Title、Commit Message 等进行检查。这一步看起来”轻”，却能提前拦住大量因描述不清、标题不规范导致的维护成本。没有问题则不报告；有问题则给出 Message 规范建议，供开发者参考。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-003.png" alt="image.png" loading="lazy"></p>
+<p><strong>Stage 3. 补丁完整性检查。</strong> 针对回合补丁，Kitta 会智能追踪其上游依赖链，自动识别上游对应的 Fixes 补丁，按”检索上游 Fixes → 判断是否在 PR 中 → 判断是否在下游仓库已存在”的流程排查遗漏。检查结果分为三类：<code>无遗漏 Fixes</code> 表示无需补充；<code>已合入的 Fixes 补丁</code> 说明相关修复已存在于下游仓库；<code>遗漏的 Fixes 补丁</code> 则要求开发者补充，防止已知漏洞被重新引入下游。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-004.png" alt="image.png" loading="lazy"></p>
+<p><strong>Stage 4. 补丁回合一致性检查。</strong> 对于声明了上游来源的回合补丁，Kitta 会先获取上游原补丁，再从三个层次对比：基础对比看修改的文件和代码块是否一致；上下文对比看引用的符号、函数、变量定义是否一致、是否做了合理适配；语义对比则通过 LLM 判断上下游补丁是否实现了相同功能和语义。检查结果从 <code>consistent</code> 到 <code>text-inconsistent</code>、<code>semantic-inconsistent</code>、<code>inconsistent</code>分层输出，让开发者和 Maintainer 快速定位差异性质。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-005.png" alt="image.png" loading="lazy"></p>
+<p><strong>Stage 5. 代码质量审查。</strong> 最后落到代码本身，Kitta 将审查出的问题按严重程度分为 <code>Critical</code>、<code>Medium / Low</code>，Critical 问题通常会以内联评论定位到具体代码行，需要开发者处理或明确是否为误报；未发现风险则给出 <code>LGTM</code>。</p>
+<p><img src="/images/ai-agent-handbook/assets/imgs/chapter-25/image-006.png" alt="image.png" loading="lazy"></p>
+<p>Kitta 上线至今，核心运行数据如下：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>数值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>审查规模</td>
+<td>7 万+</td>
+</tr>
+<tr>
+<td>门禁准确率</td>
+<td>97%</td>
+</tr>
+<tr>
+<td>代码合入率</td>
+<td>62%</td>
+</tr>
+</tbody></table>
+<p>ANCK 的代码变更以回合补丁和自研补丁为主，既要保证与上游语义一致，又要适配下游产品化需求，审查深度和准确率要求都很高。基于线上评估框架对 Kitta 上线以来处理过的所有已合入 PR 进行回溯统计，两类核心场景都取得了可量化的效果：</p>
+<ul>
+<li><p><strong>回合补丁场景</strong>：一致性检查意见采纳率 70.4%、准确率 99.8%；</p>
+</li>
+<li><p><strong>自研 PR 场景</strong>：Code Review 意见采纳率 41.8%、准确率 73.6%；</p>
+</li>
+</ul>
+<p>Kitta 的介入让大量代码问题在进入人工审查之前就被识别，并给出可定位、可验证的修改建议。实践中，很多 PR 在 Kitta 给出意见后，开发者会直接依据建议补充依赖补丁或调整实现，大幅减少了 Maintainer 反复追问、来回确认的回合数。对社区 Maintainer 来说，这意味着他们可以把注意力从”逐行看变更”转移到”判断关键争议点”；对开发者来说，则意味着更快的反馈和更可预期的合入节奏。</p>
+<h4 id="4-2-Benchmark-评估体系：让定制效果可衡量"><a href="#4-2-Benchmark-评估体系：让定制效果可衡量" class="headerlink" title="4.2 Benchmark 评估体系：让定制效果可衡量"></a>4.2 Benchmark 评估体系：让定制效果可衡量</h4><p>为了让定制效果可衡量，Kitta 还构建了 Benchmark 评估体系：基于三类来源收集数据——LKML（真实社区 Reviewer 的评审过程，问题分布均匀、真实性强）、sashiko benchmark（单 commit—单 issue 精确对应）、龙蜥社区数据。其中：</p>
+<ul>
+<li><p>LKML 数据让 Kitta 能够对齐真实社区 Reviewer 的判断标准</p>
+</li>
+<li><p>sashiko benchmark 提供了严格的单 commit—单 issue 映射，让能力改进方向足够聚焦</p>
+</li>
+<li><p>龙蜥社区数据则把评估拉回到 Kitta 实际服务的仓库语境中</p>
+</li>
+</ul>
+<p>通过与 sashiko、review-prompts、qoder 等 SOTA 方案横向对比，Kitta 能够清楚看到自身在特定缺陷类型、特定子系统上的差距，并把这些差距转化为 Skill 迭代的优先级。后续该 Benchmark 系统还将支持接入其他 Skills&#x2F;Benchmark 进行评估，持续迭代优化能力。</p>
+<h4 id="4-3-跨领域通用实践"><a href="#4-3-跨领域通用实践" class="headerlink" title="4.3 跨领域通用实践"></a>4.3 跨领域通用实践</h4><p>Kitta 的能力并不局限于内核。通过把专家资产和审查流程抽象为可迁移的 Skill，Kitta 已经在操作系统内核、编译器、文件系统、网络系统、云原生平台、AI 计算框架六个领域完成验证。这些领域共同的特点是代码规模大、语义深、审查门槛高，传统通用 Review 工具往往难以给出有价值的结论。Kitta 在这些场景下的表现如下：</p>
+<table>
+<thead>
+<tr>
+<th>领域</th>
+<th>审查质量提升</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作系统内核</td>
+<td>20.4%</td>
+</tr>
+<tr>
+<td>编译器</td>
+<td>24.4%</td>
+</tr>
+<tr>
+<td>文件系统</td>
+<td>17.0%</td>
+</tr>
+<tr>
+<td>网络系统</td>
+<td>19.8%</td>
+</tr>
+<tr>
+<td>云原生平台</td>
+<td>31.6%</td>
+</tr>
+<tr>
+<td>AI 计算框架</td>
+<td>21.7%</td>
+</tr>
+</tbody></table>
+<p>跨领域的稳定提升说明 Kitta 的”领域定制”方法论具有通用性：无论是内核的锁语义、编译器的中间表示，还是云原生平台的配置约定，都可以通过沉淀专家资产、定制审查流程来构建专家级 Review 能力。这也为后续向 LLVM、CRIU、BaseOS 等更多基础软件项目扩展奠定了基础。</p>
+<h4 id="4-4-数据飞轮：数据向下沉淀，模型能力向上反哺"><a href="#4-4-数据飞轮：数据向下沉淀，模型能力向上反哺" class="headerlink" title="4.4 数据飞轮：数据向下沉淀，模型能力向上反哺"></a>4.4 数据飞轮：数据向下沉淀，模型能力向上反哺</h4><p>Kitta 在服务过程中还在持续沉淀数据，可以用于千问基座模型，形成”数据向下沉淀、能力向上反哺”的飞轮：</p>
+<table>
+<thead>
+<tr>
+<th>沉淀的数据</th>
+<th>反哺的能力</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>专家标注的 Benchmark 基准数据集</td>
+<td>漏洞发现能力——更深入的语义理解与潜在漏洞发现</td>
+</tr>
+<tr>
+<td>Agent 思维链轨迹跟踪数据</td>
+<td>指令跟随能力——更准确的工具调用与指令遵循</td>
+</tr>
+<tr>
+<td>用户偏好对齐数据</td>
+<td>用户对话能力——贴近用户需求的评审意见表达</td>
+</tr>
+<tr>
+<td>用户后续 Coding 动作</td>
+<td>代码生成能力——更好的跨语言 Coding 与 Debug 能力</td>
+</tr>
+</tbody></table>
+<p>评审过程中产生的专家标注、思维链轨迹、用户偏好与后续代码改动，既是改进 Review 服务本身的燃料，也在反哺基座模型更基础的能力。更重要的是，这些数据来自真实的社区运行，而不是人工构造的静态数据集，因此每一次迭代都在让 Kitta 更贴近实际研发场景。</p>
+<h3 id="实践总结：AI-Code-Review-的边界与共识"><a href="#实践总结：AI-Code-Review-的边界与共识" class="headerlink" title="实践总结：AI Code Review 的边界与共识"></a>实践总结：AI Code Review 的边界与共识</h3><p>经过落地实践后，我们发现要想最大化 AI Code Review 的效果，首先需要明确的是 AI 与人在协作中的信任边界。Kitta 遵循三条原则：</p>
+<p><strong>精准分级，克制打扰——严守门禁底线，释放建议空间。</strong> 对安全漏洞和破坏坚决拦截 CI 流程，这是底线；其余问题分级呈现、仅作提示，不过多占用开发者的注意力，平衡问题披露阈值。</p>
+<p><strong>行为作证，拒绝自嗨——用户可能沉默，但代码变更骗不了人。</strong> 不把开发者的默默无视当成认可，不看用户说什么，看”代码改了什么”：通过置信度熔断与追踪真实代码变更，基于客观变更驱动审查和模型迭代。</p>
+<p><strong>人类兜底，适时退场。</strong> AI 是探照灯，照亮风险、给出证据；Maintainer 是方向盘，最终决策权在人，是最后一道防线。</p>
+<p>最好的 AI 门禁，不是替代 Maintainer，而是让他们只把精力花在真正需要人类智慧的地方。</p>
+<hr>
+<p><em>本文档为技术能力介绍材料，文中数据来源于内部评测与生产环境统计。</em></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/24/agent-systems/ai-agent-handbook/ch25-PatchPilot-Agents%E8%AE%A9%E5%86%85%E6%A0%B8%E8%A1%A5%E4%B8%81%E4%BA%A4%E4%BB%98%E6%88%90%E4%B8%BA%E5%8F%AF%E7%BC%96%E6%8E%92%E5%8F%AF%E9%AA%8C%E8%AF%81%E7%9A%84%E5%B7%A5%E7%A8%8B%E9%97%AD%E7%8E%AF/">PatchPilot Agents：让内核补丁交付成为可编排、可验证的工程闭环</a></h3>
+        <p>上游补丁进入下游产品版本时，失败原因往往不是单一的 Git 冲突：同一函数可能已被重构，结构体字段或函数签名可能已演化…</p>
+        <a class="btn primary" href="/2026/09/24/agent-systems/ai-agent-handbook/ch25-PatchPilot-Agents%E8%AE%A9%E5%86%85%E6%A0%B8%E8%A1%A5%E4%B8%81%E4%BA%A4%E4%BB%98%E6%88%90%E4%B8%BA%E5%8F%AF%E7%BC%96%E6%8E%92%E5%8F%AF%E9%AA%8C%E8%AF%81%E7%9A%84%E5%B7%A5%E7%A8%8B%E9%97%AD%E7%8E%AF/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/24/agent-systems/ai-agent-handbook/ch25-ABACI%E5%86%85%E6%A0%B8%E8%A1%A5%E4%B8%81%E5%AE%9A%E5%90%91%E6%B5%8B%E8%AF%95%E4%B8%8E%E7%BC%BA%E9%99%B7%E6%A3%80%E6%B5%8B%E6%99%BA%E8%83%BD%E4%BD%93/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：ABACI 内核补丁定向测试与缺陷检测智能体</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 1 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#%E6%91%98%E8%A6%81" data-toc-target="摘要"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">摘要</span></a><a class="toc-level-3" href="#%E8%83%8C%E6%99%AF%E4%B8%8E%E7%8E%B0%E7%8A%B6" data-toc-target="背景与现状"><span class="toc-text">背景与现状</span></a><a class="toc-level-3" href="#AI-Code-Review-%E7%9A%84%E6%B7%B1%E5%B1%82%E6%8C%91%E6%88%98" data-toc-target="AI-Code-Review-的深层挑战"><span class="toc-text">AI Code Review 的深层挑战</span></a><a class="toc-level-3" href="#Kitta-Code-Review-Agent-%E6%8A%80%E6%9C%AF%E5%AE%9E%E8%B7%B5" data-toc-target="Kitta-Code-Review-Agent-技术实践"><span class="toc-text">Kitta Code Review Agent 技术实践</span></a><a class="toc-level-3" href="#Kitta-%E8%90%BD%E5%9C%B0%E6%95%88%E6%9E%9C" data-toc-target="Kitta-落地效果"><span class="toc-text">Kitta 落地效果</span></a><a class="toc-level-3" href="#%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93%EF%BC%9AAI-Code-Review-%E7%9A%84%E8%BE%B9%E7%95%8C%E4%B8%8E%E5%85%B1%E8%AF%86" data-toc-target="实践总结：AI-Code-Review-的边界与共识"><span class="toc-text">实践总结：AI Code Review 的边界与共识</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/ai-agent-handbook/" style="--rail: 69%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">35 / 51</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#%E6%91%98%E8%A6%81" data-toc-target="摘要" data-title="01 · 摘要" aria-label="摘要"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/ai-agent-handbook/ch25-Kitta领域专用Code-Review-Agent","title":"Kitta：领域专用 Code Review Agent","url":"/2026/09/24/agent-systems/ai-agent-handbook/ch25-Kitta%E9%A2%86%E5%9F%9F%E4%B8%93%E7%94%A8Code-Review-Agent/","path":"ai-agent-handbook","index":34,"total":51,"next":{"title":"PatchPilot Agents：让内核补丁交付成为可编排、可验证的工程闭环","url":"/2026/09/24/agent-systems/ai-agent-handbook/ch25-PatchPilot-Agents%E8%AE%A9%E5%86%85%E6%A0%B8%E8%A1%A5%E4%B8%81%E4%BA%A4%E4%BB%98%E6%88%90%E4%B8%BA%E5%8F%AF%E7%BC%96%E6%8E%92%E5%8F%AF%E9%AA%8C%E8%AF%81%E7%9A%84%E5%B7%A5%E7%A8%8B%E9%97%AD%E7%8E%AF/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>
