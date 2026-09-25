@@ -1,0 +1,505 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+<script>/* 首帧前写入 JS 标记与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto)$/.test(p.theme)?p.theme:'light';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 7 章 · Agent 的评估 · 配套实验 · 飞轮之道</title>
+<meta name="description" content="本章学习如何把“表现好不好”转成可解释的比较。先理解环境与评分，再定位失败，最后检查模型、记忆和系统成本的不同维度。">
+<meta name="author" content="李博杰">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/25/agent-systems/ai-agent-book/ch07-lab/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 7 章 · Agent 的评估 · 配套实验 · 飞轮之道">
+<meta property="og:description" content="本章学习如何把“表现好不好”转成可解释的比较。先理解环境与评分，再定位失败，最后检查模型、记忆和系统成本的不同维度。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/25/agent-systems/ai-agent-book/ch07-lab/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/ai-agent-book/">第二部分 如何提升 Agent 能力</a><a class="series-chip" href="/paths/ai-agent-book/" title="查看学习路径">第 17 / 25 篇</a>
+    </div>
+    <h1>第 7 章 · Agent 的评估 · 配套实验</h1>
+    <p class="article-deck">本章学习如何把“表现好不好”转成可解释的比较。先理解环境与评分，再定位失败，最后检查模型、记忆和系统成本的不同维度。</p>
+    <div class="article-meta">
+      <span>李博杰</span>
+      <span>8 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3-AI-Agent/">#深入理解 AI Agent</a><a class="article-meta__tag" href="/tags/%E9%85%8D%E5%A5%97%E5%AE%9E%E9%AA%8C/">#配套实验</a>
+    </div>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>本文收录自李博杰开源技术书《深入理解 AI Agent：设计原理与工程实践》（<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book">bojieli&#x2F;ai-agent-book</a>，Apache-2.0），正文与上游逐字一致，仅适配标题层级、站内链接、图片地址与 Pandoc 排版属性。<br>原文：<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/README.md">chapter7&#x2F;README.md</a> · 上游版本：<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/commit/73ffc0d73ad5fe210c73f3c7c3f6dc605554b0f3"><code>73ffc0d</code></a>（2026-09-22） · 作者：李博杰 · 系列目录：<a href="/paths/ai-agent-book/">深入理解 AI Agent学习路径</a></p>
+</blockquote>
+<p>本章学习如何把“表现好不好”转成可解释的比较。先理解环境与评分，再定位失败，最后检查模型、记忆和系统成本的不同维度。</p>
+<h2 id="第一次阅读的顺序"><a href="#第一次阅读的顺序" class="headerlink" title="第一次阅读的顺序"></a>第一次阅读的顺序</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/tau2-bench-eval/README.md">先读一条交互任务，区分回答质量与环境目标 </a>。</li>
+<li><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/android-world/failure-attribution/README.md">再用已有日志练习寻找最早失去依据的决策 </a>。</li>
+<li><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/agent-cost-analysis/README.md">最后把成功条件、调用成本与延迟放在一起分析 </a>。</li>
+</ol>
+<p>读懂一个完整例子后，再查阅下面的全部项目与配置。比较实验时，把输入、模型、运行条件和结果放在一起记录；遇到历史输出，先确认它对应的版本与任务范围。</p>
+<blockquote>
+<p>把表现变成可比较信号：评估环境、指标、统计显著性、评估驱动选型</p>
+</blockquote>
+<p>← <a href="/2026/09/25/agent-systems/ai-agent-book/00-overview/">返回主目录</a> · 📖 <a href="/2026/09/25/agent-systems/ai-agent-book/ch07-Agent%E7%9A%84%E8%AF%84%E4%BC%B0/">读本章正文</a></p>
+<p>逐实验的正文要求、直接证据与未完成边界见 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/EXPERIMENT_LEDGER.md">验收台账</a>。</p>
+<h2 id="如何阅读实验"><a href="#如何阅读实验" class="headerlink" title="如何阅读实验"></a>如何阅读实验</h2><p>正文伪代码先建立 reset → run → snapshot → verifier → record 的评估闭环；实验目录再展开统计与证据：</p>
+<ul>
+<li><strong>Starter</strong>：从 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/tau2-bench-eval">tau2-bench-eval</a> 跑一个固定任务，先看环境 reset、轨迹保存和结果 verifier；</li>
+<li><strong>Builder</strong>：阅读 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/user-memory-system-evaluation">user-memory-system-evaluation</a> 的 Rubric&#x2F;证据 schema，再看 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/elo-leaderboard">elo-leaderboard</a> 的配对统计；</li>
+<li><strong>Maintainer</strong>：检查 veto 规则、seed&#x2F;任务配对、bootstrap 或 McNemar 实现、manifest hash 和失败样本。</li>
+</ul>
+<p>首次可跳过 provider 适配器、图表和长期开跑脚本；先确认“过程违规”和“最终失败”是两类独立信号。</p>
+<h2 id="配套项目"><a href="#配套项目" class="headerlink" title="配套项目"></a>配套项目</h2><table>
+<thead>
+<tr>
+<th align="center">编号</th>
+<th>项目</th>
+<th align="center">类型</th>
+<th>一句话说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">7-1</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/tau2-bench-eval">tau2-bench-eval</a></td>
+<td align="center">✅</td>
+<td>已在固定上游提交上完成 5 个 telecom 双控任务：4&#x2F;5 通过；保存原始轨迹、成本、内容哈希及错选线路导致漏做流量加油的失败分析</td>
+</tr>
+<tr>
+<td align="center">7-1；7-2 的 τ²-bench 样本</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/sierra-research/tau2-bench"><code>sierra-research/tau2-bench</code></a> → <code>chapter7/tau2-bench</code></td>
+<td align="center"><code>8d005b0e5b9e4af0bc055886fa7f95fc86d1710e</code></td>
+<td>正文要求重点观察新增的双控 telecom 领域：<code>tau2 run --domain telecom --agent-llm &lt;model&gt; --user-llm &lt;model&gt; --num-trials 1 --num-tasks 5</code></td>
+</tr>
+<tr>
+<td align="center">7-1 原始 τ-bench 对照（仅溯源）</td>
+<td><a target="_blank" rel="noopener" href="https://arxiv.org/abs/2406.12045">论文</a> · <a target="_blank" rel="noopener" href="https://github.com/sierra-research/tau-bench/tree/59a200c6d575d595120f1cb70fea53cef0632f6b"><code>sierra-research/tau-bench</code></a>；<strong>不承诺本地 checkout</strong></td>
+<td align="center"><code>59a200c6d575d595120f1cb70fea53cef0632f6b</code></td>
+<td>该历史版本入口：<code>python run.py --agent-strategy tool-calling --env retail --model gpt-4o --model-provider openai --user-model gpt-4o --user-model-provider openai --user-strategy llm --max-concurrency 10</code></td>
+</tr>
+<tr>
+<td align="center">7-2</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/experiment-7-2-human-benchmark">experiment-7-2-human-benchmark</a></td>
+<td align="center">✅</td>
+<td>Codex 作为人工操作员，预注册并完成 GAIA、AndroidWorld、SWE-bench Verified、τ²-bench、Terminal-Bench、OSWorld-Verified 各简单&#x2F;中等&#x2F;困难一题，共 18&#x2F;18 个首轮正式结果：13 通过、5 失败；逐题保留任务、轨迹、官方评估及成败解释</td>
+</tr>
+<tr>
+<td align="center">7-2</td>
+<td><code>terminal-bench/</code></td>
+<td align="center">📖</td>
+<td>Terminal-Bench 外部任务与执行框架；7-2 的三档人工操作结果与失败分析已收录于上行案例集</td>
+</tr>
+<tr>
+<td align="center">7-2</td>
+<td><code>SWE-bench/</code></td>
+<td align="center">📖</td>
+<td>SWE-bench Verified 外部代码修复基准；7-2 的三档补丁轨迹与官方 harness 结果已收录于上行案例集</td>
+</tr>
+<tr>
+<td align="center">7-2</td>
+<td><code>GAIA/</code></td>
+<td align="center">📖</td>
+<td>GAIA 外部数据集；7-2 的 Level 1&#x2F;2&#x2F;3 作答、核验与舍入失败边界已收录于上行案例集</td>
+</tr>
+<tr>
+<td align="center">7-2</td>
+<td><code>OSWorld/</code></td>
+<td align="center">📖</td>
+<td>OSWorld-Verified 外部桌面环境；7-2 的三档 GUI 操作轨迹与官方结果已收录于上行案例集</td>
+</tr>
+<tr>
+<td align="center">7-2, 7-13</td>
+<td><code>android_world/</code></td>
+<td align="center">📖</td>
+<td>评估 Agent 在 Android 环境的应用导航、UI 交互与任务完成能力（外部基准仓库；7-2 的实际结果见上行）</td>
+</tr>
+<tr>
+<td align="center">7-2 GAIA</td>
+<td><a target="_blank" rel="noopener" href="https://huggingface.co/datasets/gaia-benchmark/GAIA"><code>gaia-benchmark/GAIA</code></a> → <code>chapter7/GAIA</code></td>
+<td align="center"><code>682dd723ee1e1697e00360edccf2366dc8418dd9</code></td>
+<td>从 <code>2023/validation/metadata.level1.parquet</code>、<code>metadata.level2.parquet</code>、<code>metadata.level3.parquet</code> 各选一题人工完成并核对答案</td>
+</tr>
+<tr>
+<td align="center">7-2 AndroidWorld</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/google-research/android_world"><code>google-research/android_world</code></a> → <code>chapter7/android_world</code></td>
+<td align="center"><code>0e95d641e244504c22087cc29b013f3b2428a261</code></td>
+<td><code>python minimal_task_runner.py --task=ContactsAddContact</code>（先按上游 README 配置 emulator）</td>
+</tr>
+<tr>
+<td align="center">7-2 SWE-Bench Verified</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/SWE-bench/SWE-bench"><code>SWE-bench/SWE-bench</code></a> → <code>chapter7/SWE-bench</code></td>
+<td align="center"><code>5cd4be9fb23971679cbbafe5a0ecade27cef99be</code></td>
+<td>安装后先用 <code>python -m swebench.harness.run_evaluation --predictions_path gold --max_workers 1 --instance_ids sympy__sympy-20590 --run_id validate-gold</code> 验证 harness，再人工处理选定 Verified issue</td>
+</tr>
+<tr>
+<td align="center">7-2 Terminal-Bench</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/laude-institute/terminal-bench"><code>laude-institute/terminal-bench</code></a> → <code>chapter7/terminal-bench</code></td>
+<td align="center"><code>8384a179b1b8688f6ea5233a4d9d51218df1ac96</code></td>
+<td>任务定义在 <code>tasks/</code>；若要核对 harness 参数，运行 <code>tb run --help</code></td>
+</tr>
+<tr>
+<td align="center">7-2 OSWorld-Verified</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/xlang-ai/OSWorld"><code>xlang-ai/OSWorld</code></a> → <code>chapter7/OSWorld</code></td>
+<td align="center"><code>8365edc975efd0477a0d62444a5beed562ab5a7b</code></td>
+<td><code>python quickstart.py --provider_name vmware --path_to_vm &quot;path/to/your/vm.vmx&quot;</code>；再从 Verified 任务中抽样人工完成</td>
+</tr>
+<tr>
+<td align="center">7-3</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter3/user-memory-evaluation">user-memory-evaluation</a></td>
+<td align="center">✅</td>
+<td>四档多维 Rubric 已在 60 用例 × 3 系统的 180&#x2F;180 条真实评判记录上完整执行</td>
+</tr>
+<tr>
+<td align="center">7-4</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/user-memory-system-evaluation">user-memory-system-evaluation</a></td>
+<td align="center">✅</td>
+<td>60 用例 × 3 系统共 180&#x2F;180 条真实轨迹，零错误且原生币种定价完整</td>
+</tr>
+<tr>
+<td align="center">7-5</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/tts-quality-eval">tts-quality-eval</a></td>
+<td align="center">✅</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/tts-quality-eval/validation/mistral_multimodal_20260730/manifest.json">真实验收</a>完成 OpenAI&#x2F;Fish 两 provider × 四类语料的 8&#x2F;8 双音频 Voxtral 四维评审；候选&#x2F;参考音频逐项哈希，早期 Gemini&#x2F;OpenRouter 失败证据仍保留</td>
+</tr>
+<tr>
+<td align="center">7-6</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/android-world/failure-attribution">android-world&#x2F;failure-attribution</a></td>
+<td align="center">✅</td>
+<td>对已保留的 T3A 日志做离线失败归因。全体统计（自原始日志重算）：53 个任务块，其中 1 块是基准自身 <code>initialize_task</code> 崩溃后跳过的，真正失败为 52 条；24&#x2F;52 是 Agent 自称完成后被验证器否掉；9 条目标必须依赖当前日期，其中仅 2 条拿到过它（且是顺带从表单默认值 <code>Sun, Oct 15</code> 读到的）；自述 “界面无变化” 一类观察出现 55 次、覆盖 18&#x2F;52 条轨迹。抽样标注 10 条，步号引用在构建时逐条核验：9 条静默失败、7 条首错发生在 assistant message，置信度 5 高 &#x2F; 4 中 &#x2F; 1 低。本次为<strong>第三轮</strong>：第二轮把 10 条中的 7 条首错步号前移，第三轮又订正了两项全体统计与一条记录的偏差描述，每处改动连同理由保留。另含 3 个轨迹前缀回归任务与 3 处对 <code>t3a_failed_analysis.md</code> 的更正</td>
+</tr>
+<tr>
+<td align="center">7-7</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/user-memory-policy-eval">user-memory-policy-eval</a></td>
+<td align="center">✅</td>
+<td>已用真实 <code>openai/gpt-5.6-sol</code> 经 OpenRouter 完成 11 个 trajectory-prefix bad case × JSON&#x2F;Markdown&#x2F;Python-like 三种表示，共 33&#x2F;33 个 API 单元、0 个 API 错误；三种表示均为 6&#x2F;11 通过，结果和哈希保存在 <code>results/policy_prefix_live.json</code> 与 <code>results/manifest.json</code></td>
+</tr>
+<tr>
+<td align="center">—</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/public-health-reporting-eval">public-health-reporting-eval</a></td>
+<td align="center">✅</td>
+<td>基于合成 DHIS2 风格汇总数据，客观评估公共卫生报告 Agent 的工具调用、计算准确性、证据引用与无依据声明</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>📖 表中带反引号的外部基准需自行克隆。<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/android-world"><code>android-world/</code></a>（连字符）是本仓库内的 <strong>T3A 评估分析笔记</strong>（见该目录 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/android-world/README.md">README</a>），与外部 <code>android_world/</code> 基准源码不是同一路径。</p>
+</blockquote>
+<span class="heading-alias" id="跨章-bad-case-回归协议" aria-hidden="true"></span><h2 id="跨章-Bad-Case-回归协议"><a href="#跨章-Bad-Case-回归协议" class="headerlink" title="跨章 Bad Case 回归协议"></a>跨章 Bad Case 回归协议</h2><p>正文新增的两类作用域&#x2F;保真度 Bad Case 评估不把训练代码重复复制到第七章：第七章负责记录首个错误、片段作用域、逐层字符串哈希和轨迹前缀回归；第八章的 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter8/curly-quote-sft"><code>curly-quote-sft</code></a> 与 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter8/exact-copy-sft"><code>exact-copy-sft</code></a> 复用这些标签生成训练数据，并在独立边界集和保留集上回归。前者按中文自然语言、英文原文、代码和 JSON 作用域评分，后者按 byte&#x2F;code-point&#x2F;token exactness 和真实工具参数匹配评分。</p>
+<span class="heading-alias" id="实验-7-1--7-2-外部复现锚点" aria-hidden="true"></span><h2 id="实验-7-1-7-2-外部复现锚点"><a href="#实验-7-1-7-2-外部复现锚点" class="headerlink" title="实验 7-1 &#x2F; 7-2 外部复现锚点"></a>实验 7-1 &#x2F; 7-2 外部复现锚点</h2><p>以下映射以<a href="/2026/09/25/agent-systems/ai-agent-book/ch07-Agent%E7%9A%84%E8%AF%84%E4%BC%B0/">正文</a>为准。SHA 来自对应 checkout 的 <code>origin</code> 与 <code>HEAD</code>。7-1 已保留五任务正式运行的<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/tau2-bench-eval/validation/runs/exp7-1-openrouter-gpt41mini-telecom-20260802-v1/manifest.json">验收证据</a>；7-2 的 18 个分级人工操作案例、正式结果与兼容边界见<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/experiment-7-2-human-benchmark/README.md">独立报告</a>。下表继续保留复现来源、路径和入口。</p>
+<table>
+<thead>
+<tr>
+<th align="center">实验</th>
+<th>上游与本地路径</th>
+<th>固定提交</th>
+<th>正文对应入口</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">7-8</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/elo-leaderboard">elo-leaderboard</a></td>
+<td>✅</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/elo-leaderboard/validation/runs/exp7-7-arena-20260731-v1/manifest.json">正式全量验收</a>处理 1,799,991 条公开 Arena 记录（1,670,250 条盲选票、129 个模型），在线 Elo 与 Bradley-Terry 排名 Spearman 0.787、Top-20 重合 12&#x2F;20；胜率矩阵、17 个月度快照、三张图与 D3 动画均由同一 manifest 哈希绑定并复核通过</td>
+</tr>
+<tr>
+<td align="center">7-9</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/model-action-threshold">model-action-threshold</a></td>
+<td>✅</td>
+<td>同一中性 Coding Harness 下完成 GPT-5.6-sol &#x2F; Claude Sonnet 5 × 三任务 × 三次重复的 18&#x2F;18 单元实测；<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/model-action-threshold/results/exp7-8-action-threshold-20260731-v1/manifest.json">manifest</a>零 API 错误并绑定完整轨迹与汇总哈希</td>
+</tr>
+<tr>
+<td align="center">7-10</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/agent-cost-analysis">agent-cost-analysis</a></td>
+<td>✅</td>
+<td>多轮 Agent 任务（客服退款）全链路成本拆解 + KV-cache 友好设计&#x2F;上下文压缩的 A&#x2F;B 节省量化</td>
+</tr>
+<tr>
+<td align="center">7-11</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/model-benchmark">model-benchmark</a></td>
+<td>🚧</td>
+<td>完整 8K&#x2F;32K&#x2F;128K × 512&#x2F;2048、限流爬坡、Agent 成本与 168 小时可用性 campaign 已实现；目前尚无验收证据，不能替代完整长期实验</td>
+</tr>
+<tr>
+<td align="center">7-12</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/user-memory-system-evaluation">user-memory-system-evaluation</a></td>
+<td>✅</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/user-memory-system-evaluation/results/full_7_11_60_case_matrix.json">全矩阵验收</a>完成 60 用例 × 24 单元（4 嵌入 × 3 reranker × 2 主模型）共 1,440&#x2F;1,440 条真实轨迹，零错误、零未定价用量，检索&#x2F;任务指标与交互分析完整；<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/user-memory-system-evaluation/validation/verify_full_matrix_20260731.py">独立验证器</a>复核通过（ALL CHECKS PASSED），后端替代方案如实记录于 <a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/user-memory-system-evaluation/results/full_matrix_backend_readiness_20260731.json">readiness 证据</a></td>
+</tr>
+<tr>
+<td align="center">7-13</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/android-world">android-world</a></td>
+<td>✅</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/android-world/validation/candidate_h5c_api33_local_qwen_20260804/evidence.json">完整候选实验证据</a>保留 116 任务 × 5 轮的 580&#x2F;580 条唯一 episode（包括评估失败），运行时错误为零：严格 T3A 成功 26 条（4.4828%），平均 evaluator reward 0.133621，由 77 条满分状态与 1 条 <code>0.5</code> 部分 reward 组成。实验在完成官方初始化且配齐 24&#x2F;24 应用的 Pixel 6&#x2F;API-33 上执行，本地 Qwen2.5-7B（revision <code>a09a35458c702b33eeacc393d103063234e8bc28</code>）通过 vLLM 0.19.0 运行于 RTX PRO 6000 Blackwell 96 GB。执行与证据已完成，但未批准部署；候选 Qwen 与配对源 Doubao 不同，因而不支持同模型提升或非劣性结论</td>
+</tr>
+<tr>
+<td align="center">7-14</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/openvla-robotwin2-eval">openvla-robotwin2-eval</a></td>
+<td>✅</td>
+<td><a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/blob/main/chapter7/openvla-robotwin2-eval/validation/runs/exp7-13-localgpu-20260803-v1/manifest.json">正式单卡运行</a>完成 chunk 1&#x2F;25 各 128 IID + 128 OOD episodes，严格门禁及 512 个 rollout hash 全通过；chunk 1 为 0&#x2F;256、chunk 25 为 26&#x2F;256，低绝对成功率作为真实结果保留</td>
+</tr>
+</tbody></table>
+<p>从仓库根目录取得同一版本：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git <span class="built_in">clone</span> https://github.com/sierra-research/tau2-bench.git chapter7/tau2-bench &amp;&amp; git -C chapter7/tau2-bench checkout --detach 8d005b0e5b9e4af0bc055886fa7f95fc86d1710e</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">git <span class="built_in">clone</span> https://huggingface.co/datasets/gaia-benchmark/GAIA chapter7/GAIA &amp;&amp; git -C chapter7/GAIA checkout --detach 682dd723ee1e1697e00360edccf2366dc8418dd9</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">git <span class="built_in">clone</span> https://github.com/google-research/android_world.git chapter7/android_world &amp;&amp; git -C chapter7/android_world checkout --detach 0e95d641e244504c22087cc29b013f3b2428a261</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">git <span class="built_in">clone</span> https://github.com/SWE-bench/SWE-bench.git chapter7/SWE-bench &amp;&amp; git -C chapter7/SWE-bench checkout --detach 5cd4be9fb23971679cbbafe5a0ecade27cef99be</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">git <span class="built_in">clone</span> https://github.com/laude-institute/terminal-bench.git chapter7/terminal-bench &amp;&amp; git -C chapter7/terminal-bench checkout --detach 8384a179b1b8688f6ea5233a4d9d51218df1ac96</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">git <span class="built_in">clone</span> https://github.com/xlang-ai/OSWorld.git chapter7/OSWorld &amp;&amp; git -C chapter7/OSWorld checkout --detach 8365edc975efd0477a0d62444a5beed562ab5a7b</span></span></code></pre></div></div></figure>
+
+<p>原始 τ-bench 行只用于复核 7-1 的历史设计差异，不在本仓库的 checkout 清单中。其当前 README 已明确警告：该仓库的 airline&#x2F;retail 任务版本过时，应使用后续的 <a target="_blank" rel="noopener" href="https://github.com/sierra-research/tau2-bench"><code>tau2-bench</code></a>（现已继续演进为 τ³-bench）获取修订任务与新领域。因此，不应把历史 τ-bench 的 retail 命令当成当前 τ²&#x2F;τ³-bench 的推荐运行入口。</p>
+<p>实验 7-2 是<strong>操作员亲自执行并记录轨迹</strong>，不是把六套 Agent harness 全跑一遍。本仓库的<a target="_blank" rel="noopener" href="https://github.com/bojieli/ai-agent-book/tree/main/chapter7/experiment-7-2-human-benchmark">已完成案例集</a>由 Codex 明确署名为人工操作员，并分别记录每个基准的简单、中等、困难任务 ID、环境版本、步骤、最终答案&#x2F;状态与标准验证结果；失败案例未在评估后修改或重跑。</p>
+<h2 id="项目类型说明"><a href="#项目类型说明" class="headerlink" title="项目类型说明"></a>项目类型说明</h2><table>
+<thead>
+<tr>
+<th align="center">图标</th>
+<th>类型</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">✅</td>
+<td><strong>可独立运行</strong></td>
+<td>本仓库自带完整代码，配置好 API Key 即可运行</td>
+</tr>
+<tr>
+<td align="center">📖</td>
+<td><strong>复现指南</strong></td>
+<td>依赖需自行 <code>git clone</code> 的<strong>外部仓库</strong>（训练框架、评测基准等）</td>
+</tr>
+<tr>
+<td align="center">🚧</td>
+<td><strong>进行中</strong></td>
+<td>已有实现，但实验范围或验收证据尚未满足正文全部要求</td>
+</tr>
+</tbody></table>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/25/agent-systems/ai-agent-book/ch08-%E6%A8%A1%E5%9E%8B%E5%90%8E%E8%AE%AD%E7%BB%83/">第 8 章 模型后训练</a></h3>
+        <p>预训练/SFT/RL 三阶段：何时选 SFT、何时选 RL，工具调用内化、样本效率</p>
+        <a class="btn primary" href="/2026/09/25/agent-systems/ai-agent-book/ch08-%E6%A8%A1%E5%9E%8B%E5%90%8E%E8%AE%AD%E7%BB%83/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/25/agent-systems/ai-agent-book/ch07-Agent%E7%9A%84%E8%AF%84%E4%BC%B0/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 7 章 Agent 的评估</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 6 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          
+          <a class="toc-level-2" href="#%E7%AC%AC%E4%B8%80%E6%AC%A1%E9%98%85%E8%AF%BB%E7%9A%84%E9%A1%BA%E5%BA%8F" data-toc-target="第一次阅读的顺序"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第一次阅读的顺序</span></a><a class="toc-level-2" href="#%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BB%E5%AE%9E%E9%AA%8C" data-toc-target="如何阅读实验"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">如何阅读实验</span></a><a class="toc-level-2" href="#%E9%85%8D%E5%A5%97%E9%A1%B9%E7%9B%AE" data-toc-target="配套项目"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">配套项目</span></a><a class="toc-level-2" href="#%E8%B7%A8%E7%AB%A0-Bad-Case-%E5%9B%9E%E5%BD%92%E5%8D%8F%E8%AE%AE" data-toc-target="跨章-Bad-Case-回归协议"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">跨章 Bad Case 回归协议</span></a><a class="toc-level-2" href="#%E5%AE%9E%E9%AA%8C-7-1-7-2-%E5%A4%96%E9%83%A8%E5%A4%8D%E7%8E%B0%E9%94%9A%E7%82%B9" data-toc-target="实验-7-1-7-2-外部复现锚点"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">实验 7-1 / 7-2 外部复现锚点</span></a><a class="toc-level-2" href="#%E9%A1%B9%E7%9B%AE%E7%B1%BB%E5%9E%8B%E8%AF%B4%E6%98%8E" data-toc-target="项目类型说明"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">项目类型说明</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/ai-agent-book/" style="--rail: 68%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">17 / 25</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E4%B8%80%E6%AC%A1%E9%98%85%E8%AF%BB%E7%9A%84%E9%A1%BA%E5%BA%8F" data-toc-target="第一次阅读的顺序" data-title="01 · 第一次阅读的顺序" aria-label="第一次阅读的顺序"></a><a class="toc-strip__dot" href="#%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BB%E5%AE%9E%E9%AA%8C" data-toc-target="如何阅读实验" data-title="02 · 如何阅读实验" aria-label="如何阅读实验"></a><a class="toc-strip__dot" href="#%E9%85%8D%E5%A5%97%E9%A1%B9%E7%9B%AE" data-toc-target="配套项目" data-title="03 · 配套项目" aria-label="配套项目"></a><a class="toc-strip__dot" href="#%E8%B7%A8%E7%AB%A0-Bad-Case-%E5%9B%9E%E5%BD%92%E5%8D%8F%E8%AE%AE" data-toc-target="跨章-Bad-Case-回归协议" data-title="04 · 跨章 Bad Case 回归协议" aria-label="跨章 Bad Case 回归协议"></a><a class="toc-strip__dot" href="#%E5%AE%9E%E9%AA%8C-7-1-7-2-%E5%A4%96%E9%83%A8%E5%A4%8D%E7%8E%B0%E9%94%9A%E7%82%B9" data-toc-target="实验-7-1-7-2-外部复现锚点" data-title="05 · 实验 7-1 / 7-2 外部复现锚点" aria-label="实验 7-1 / 7-2 外部复现锚点"></a><a class="toc-strip__dot" href="#%E9%A1%B9%E7%9B%AE%E7%B1%BB%E5%9E%8B%E8%AF%B4%E6%98%8E" data-toc-target="项目类型说明" data-title="06 · 项目类型说明" aria-label="项目类型说明"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="font-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>字号</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="font-sheet" role="dialog" aria-modal="true" aria-label="正文字号" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>正文字号</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+        <button type="button" data-scale="sm" aria-pressed="false">小</button>
+        <button type="button" data-scale="md" aria-pressed="true">默认</button>
+        <button type="button" data-scale="lg" aria-pressed="false">大</button>
+        <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+      </div>
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/ai-agent-book/ch07-lab","title":"第 7 章 · Agent 的评估 · 配套实验","url":"/2026/09/25/agent-systems/ai-agent-book/ch07-lab/","path":"ai-agent-book","index":16,"total":25,"next":{"title":"第 8 章 模型后训练","url":"/2026/09/25/agent-systems/ai-agent-book/ch08-%E6%A8%A1%E5%9E%8B%E5%90%8E%E8%AE%AD%E7%BB%83/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>
