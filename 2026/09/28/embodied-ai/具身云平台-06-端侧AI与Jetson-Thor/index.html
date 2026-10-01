@@ -1,0 +1,792 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 6 章 端侧 AI：Jetson Thor 时代的推理部署与资源纪律 · 飞轮之道</title>
+<meta name="description" content="VLA 与感知模型最终跑在机器人的主控上。本章讲清平台架构师必须掌握的端侧约束——算力分档、统一内存、推理引擎的“不可移植”、量化、实时隔离、热稳态——以及它们如何反过来决定云端 OTA 与模型工厂的设计。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-06-%E7%AB%AF%E4%BE%A7AI%E4%B8%8EJetson-Thor/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 6 章 端侧 AI：Jetson Thor 时代的推理部署与资源纪律 · 飞轮之道">
+<meta property="og:description" content="VLA 与感知模型最终跑在机器人的主控上。本章讲清平台架构师必须掌握的端侧约束——算力分档、统一内存、推理引擎的“不可移植”、量化、实时隔离、热稳态——以及它们如何反过来决定云端 OTA 与模型工厂的设计。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-06-%E7%AB%AF%E4%BE%A7AI%E4%B8%8EJetson-Thor/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">机器人与端侧</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 7 / 28 篇</a>
+    </div>
+    <h1>第 6 章 端侧 AI：Jetson Thor 时代的推理部署与资源纪律</h1>
+    <p class="article-deck">VLA 与感知模型最终跑在机器人的主控上。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>12 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E7%AB%AF%E4%BE%A7AI/">#端侧AI</a><a class="article-meta__tag" href="/tags/Jetson/">#Jetson</a><a class="article-meta__tag" href="/tags/%E6%8E%A8%E7%90%86%E9%83%A8%E7%BD%B2/">#推理部署</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>端侧优化确定性：看 P99、抖动、功耗、温度，不看 QPS。</li><li>统一内存一口锅：预算按总量算，备槽单列。</li><li>引擎矩阵：GPU 架构 × TensorRT 版本 × 精度。</li><li>模型制品五件套：权重/引擎、预处理契约、归一化统计量、模型卡、签名。</li><li>时延不等式：推理 P99 + 抖动 &lt; chunk 时长。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：VLA 与感知模型最终跑在机器人的主控上。本章讲清平台架构师必须掌握的端侧约束——算力分档、统一内存、推理引擎的“不可移植”、量化、实时隔离、热稳态——以及它们如何反过来决定云端 OTA 与模型工厂的设计。<br><strong>对应代码</strong>：p02（模型制品与双槽切换）、p01（端侧指标上云）｜<strong>建议学时</strong>：5 小时</p>
+</blockquote>
+<h2 id="6-1-认知反转：云端优化吞吐，端侧优化确定性"><a href="#6-1-认知反转：云端优化吞吐，端侧优化确定性" class="headerlink" title="6.1 认知反转：云端优化吞吐，端侧优化确定性"></a>6.1 认知反转：云端优化吞吐，端侧优化确定性</h2><h3 id="6-1-1-你的-AI-Infra-经验哪些成立"><a href="#6-1-1-你的-AI-Infra-经验哪些成立" class="headerlink" title="6.1.1 你的 AI Infra 经验哪些成立"></a>6.1.1 你的 AI Infra 经验哪些成立</h3><table>
+<thead>
+<tr>
+<th>云端经验</th>
+<th>端侧是否成立</th>
+<th>差异</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>量化降本</td>
+<td>✅ 更刚需</td>
+<td>目标从“省钱”变成“装得下、跑得稳”</td>
+</tr>
+<tr>
+<td>连续批处理</td>
+<td>❌ 基本失效</td>
+<td>端侧只有一个消费者，batch≈1</td>
+</tr>
+<tr>
+<td>KV Cache 复用</td>
+<td>⚠️ 部分成立</td>
+<td>同一任务内指令前缀可跨帧复用</td>
+</tr>
+<tr>
+<td>推理服务化</td>
+<td>⚠️ 变形</td>
+<td>端侧是进程内调用，不是 HTTP 服务</td>
+</tr>
+<tr>
+<td>显存规划</td>
+<td>⚠️ 重学</td>
+<td><strong>统一内存</strong>：CPU 与 GPU 共用一块内存</td>
+</tr>
+<tr>
+<td>性能指标</td>
+<td>❌ 反转</td>
+<td>看 P99 时延、抖动、功耗、温度，不看 QPS</td>
+</tr>
+</tbody></table>
+<p>一句话：<strong>端侧宁可留余量，也不要一次抖动</strong>。云端一次慢请求只是体验问题，机器人一次动作断流就是可见的卡顿，严重时是安全问题。</p>
+<h2 id="6-2-Thor-家族与选型"><a href="#6-2-Thor-家族与选型" class="headerlink" title="6.2 Thor 家族与选型"></a>6.2 Thor 家族与选型</h2><h3 id="6-2-1-2026-年的主控分档"><a href="#6-2-1-2026-年的主控分档" class="headerlink" title="6.2.1 2026 年的主控分档"></a>6.2.1 2026 年的主控分档</h3><table>
+<thead>
+<tr>
+<th>模块</th>
+<th>FP4 算力（稀疏）</th>
+<th>内存</th>
+<th>功耗</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>AGX Thor &#x2F; T5000</td>
+<td>2070 TFLOPS</td>
+<td>128GB</td>
+<td>40–130W</td>
+<td>人形、多相机、大 VLA + 大 VLM 同机</td>
+</tr>
+<tr>
+<td>T4000</td>
+<td>1200 TFLOPS</td>
+<td>64GB</td>
+<td>约 70W 级</td>
+<td>功耗与散热受限的人形&#x2F;复合机器人</td>
+</tr>
+<tr>
+<td>T3000 &#x2F; T2000</td>
+<td>更低</td>
+<td>更小</td>
+<td>更低</td>
+<td>2027Q1 供货，面向大众化机型</td>
+</tr>
+<tr>
+<td>AGX Orin（存量）</td>
+<td>上一代</td>
+<td>32&#x2F;64GB</td>
+<td>15–60W</td>
+<td>在役机队主力，长期并存</td>
+</tr>
+</tbody></table>
+<h3 id="6-2-2-选型四看"><a href="#6-2-2-选型四看" class="headerlink" title="6.2.2 选型四看"></a>6.2.2 选型四看</h3><ol>
+<li><strong>内存容量</strong>：模型 + 双槽切换 + 感知 + 系统 + 缓冲，最先见底的永远是内存；</li>
+<li><strong>内存带宽</strong>：大模型推理往往受带宽而非算力限制（Thor 约 273GB&#x2F;s 量级）；</li>
+<li><strong>功耗与散热</strong>：直接决定续航与是否会热降频；</li>
+<li><strong>软件栈</strong>：JetPack 版本、TensorRT 版本、是否支持目标精度（FP4&#x2F;FP8）。</li>
+</ol>
+<h3 id="6-2-3-峰值不是承诺"><a href="#6-2-3-峰值不是承诺" class="headerlink" title="6.2.3 峰值不是承诺"></a>6.2.3 峰值不是承诺</h3><p>厂商标称的 TFLOPS 是稀疏、最低精度、理想利用率下的峰值。真实模型的有效算力常常只有标称的一小部分，还要扣除数据搬运、预处理、热降频。<strong>唯一可信的数字来自你自己的机型、自己的模型、热稳态下的实测</strong>——和你在云上“只信自己压测”的纪律一样。</p>
+<h2 id="6-3-统一内存：最先见底的资源"><a href="#6-3-统一内存：最先见底的资源" class="headerlink" title="6.3 统一内存：最先见底的资源"></a>6.3 统一内存：最先见底的资源</h2><h3 id="6-3-1-一口锅的含义"><a href="#6-3-1-一口锅的含义" class="headerlink" title="6.3.1 一口锅的含义"></a>6.3.1 一口锅的含义</h3><p>Jetson 的 CPU 与 GPU 共享同一块物理内存。好处是省去主机与显存之间的拷贝；坏处是<strong>模型权重、图像缓冲、ROS 节点、日志缓存、操作系统全在一口锅里抢</strong>。一旦内存耗尽，Linux 的 OOM Killer 不知道“控制进程比日志进程重要”。</p>
+<h3 id="6-3-2-内存预算表（T5000-128GB-示例）"><a href="#6-3-2-内存预算表（T5000-128GB-示例）" class="headerlink" title="6.3.2 内存预算表（T5000 128GB 示例）"></a>6.3.2 内存预算表（T5000 128GB 示例）</h3><table>
+<thead>
+<tr>
+<th>项</th>
+<th>预算</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作系统 + JetPack</td>
+<td>4GB</td>
+<td></td>
+</tr>
+<tr>
+<td>ROS 2 栈与业务节点</td>
+<td>3GB</td>
+<td>含云桥、录制器</td>
+</tr>
+<tr>
+<td>感知模型（检测&#x2F;分割&#x2F;深度）</td>
+<td>6GB</td>
+<td>INT8&#x2F;FP8</td>
+</tr>
+<tr>
+<td>VLA 主槽</td>
+<td>16GB</td>
+<td>如 3B 级 VLA（GR00T N1.7 官方建议推理≥16GB 显存）</td>
+</tr>
+<tr>
+<td><strong>VLA 备槽（热切换期间）</strong></td>
+<td>16GB</td>
+<td>新旧模型同时驻留，双槽切换的隐性成本</td>
+</tr>
+<tr>
+<td>慢脑小模型（可选，本地 VLM&#x2F;LLM 兜底）</td>
+<td>20GB</td>
+<td>断网时的本地规划</td>
+</tr>
+<tr>
+<td>图像&#x2F;点云&#x2F;录制环形缓冲</td>
+<td>8GB</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>余量（防 OOM）</strong></td>
+<td>≥12GB</td>
+<td>约 10%</td>
+</tr>
+<tr>
+<td>合计</td>
+<td>≤128GB</td>
+<td></td>
+</tr>
+</tbody></table>
+<p><strong>“备槽”那一行</strong>是端侧选型最容易漏掉的：第 9 章的模型热切换要求新旧两份权重短暂同时驻留。T4000（64GB）上同样的配置就需要取舍——去掉本地慢脑或缩小 VLA。</p>
+<h2 id="6-4-推理运行时"><a href="#6-4-推理运行时" class="headerlink" title="6.4 推理运行时"></a>6.4 推理运行时</h2><h3 id="6-4-1-2026-年的端侧运行时"><a href="#6-4-1-2026-年的端侧运行时" class="headerlink" title="6.4.1 2026 年的端侧运行时"></a>6.4.1 2026 年的端侧运行时</h3><table>
+<thead>
+<tr>
+<th>运行时</th>
+<th>定位</th>
+<th>平台关注点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>TensorRT</td>
+<td>NVIDIA 官方推理引擎，端侧首选</td>
+<td>引擎按机型构建，见 6.5</td>
+</tr>
+<tr>
+<td>TensorRT-LLM &#x2F; TensorRT Edge-LLM</td>
+<td>面向 Transformer&#x2F;大模型；Edge-LLM 随 JetPack 7.1 提供</td>
+<td>VLA 骨干、端侧 VLM</td>
+</tr>
+<tr>
+<td>ONNX Runtime</td>
+<td>跨平台，带 TensorRT 执行提供者</td>
+<td>原型与跨硬件</td>
+</tr>
+<tr>
+<td>原生 PyTorch</td>
+<td>研发调试</td>
+<td>不建议直接上生产（时延与内存不可控）</td>
+</tr>
+<tr>
+<td>llama.cpp 类</td>
+<td>小模型、CPU 兜底</td>
+<td>语音、日志摘要等弹性负载</td>
+</tr>
+</tbody></table>
+<h3 id="6-4-2-进程内调用，而不是服务"><a href="#6-4-2-进程内调用，而不是服务" class="headerlink" title="6.4.2 进程内调用，而不是服务"></a>6.4.2 进程内调用，而不是服务</h3><p>云端习惯把模型包装成 HTTP 服务。端侧应当是<strong>进程内库调用</strong>：少一次序列化、少一跳网络、少一个故障点。只有在同一台机器上多个节点共享一个模型时，才考虑本地服务化，并且要评估它对时延抖动的影响。</p>
+<h2 id="6-5-部署链与“引擎不可移植”"><a href="#6-5-部署链与“引擎不可移植”" class="headerlink" title="6.5 部署链与“引擎不可移植”"></a>6.5 部署链与“引擎不可移植”</h2><h3 id="6-5-1-从训练产物到端侧引擎"><a href="#6-5-1-从训练产物到端侧引擎" class="headerlink" title="6.5.1 从训练产物到端侧引擎"></a>6.5.1 从训练产物到端侧引擎</h3><pre class="mermaid">flowchart LR
+  PT["PyTorch 权重&lt;br/&gt;（模型工厂产出）"] --&gt; ONNX["导出 ONNX&lt;br/&gt;固定输入契约"]
+  ONNX --&gt; BUILD["TensorRT 构建&lt;br/&gt;精度·校准·算子融合·内核调优"]
+  BUILD --&gt; ENG["引擎文件&lt;br/&gt;绑定 GPU 架构 × TRT 版本 × 精度"]
+  ENG --&gt; SIGN["签名 + 模型卡&lt;br/&gt;进入制品库"]
+  SIGN --&gt; OTA["OTA 分发到匹配机型"]</pre>
+
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 在目标机型（或同 GPU 架构 + 同 JetPack 的构建机）上构建引擎</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">trtexec --onnx=policy.onnx --saveEngine=policy_thor_jp71_fp8.engine \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">        --fp8 --memPoolSize=workspace:4096 --timingCacheFile=thor.cache</span></span></code></pre></div></div></figure>
+
+<h3 id="6-5-2-为什么引擎不能跨机型复制"><a href="#6-5-2-为什么引擎不能跨机型复制" class="headerlink" title="6.5.2 为什么引擎不能跨机型复制"></a>6.5.2 为什么引擎不能跨机型复制</h3><p>TensorRT 在构建时会针对具体 GPU 架构与软件版本选择最优内核，产物因此<strong>绑定“GPU 架构 × TensorRT 版本 × 精度”</strong>。Orin 上构建的引擎拿到 Thor 上通常无法加载，同型号跨 JetPack 大版本也不保证兼容。这一条直接决定了云端设计：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>做法</th>
+<th>优点</th>
+<th>代价</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A 端侧构建</td>
+<td>分发 ONNX，机器人首次加载时本地构建</td>
+<td>一份制品通吃</td>
+<td>构建耗时长、占资源、结果有差异</td>
+</tr>
+<tr>
+<td>B 按目标预构建</td>
+<td>CI 为每个（机型 × JetPack × 精度）构建引擎矩阵</td>
+<td>秒级加载、行为确定</td>
+<td>制品矩阵膨胀，需要版本治理</td>
+</tr>
+<tr>
+<td>C 混合</td>
+<td>主力机型预构建，长尾机型端侧构建兜底</td>
+<td>平衡</td>
+<td>两条路径都要维护</td>
+</tr>
+</tbody></table>
+<p><strong>推荐 B 为主、A 兜底</strong>。于是模型制品的兼容矩阵多了两维：GPU 架构与 JetPack 版本。这与你熟悉的“多车型 × 多域控 × 多固件版本”矩阵是同一种治理问题，第 9 章的 OTA 与 p02 工程都按此设计。</p>
+<h3 id="6-5-3-模型制品“五件套”"><a href="#6-5-3-模型制品“五件套”" class="headerlink" title="6.5.3 模型制品“五件套”"></a>6.5.3 模型制品“五件套”</h3><ol>
+<li>权重或引擎文件；2. <strong>预处理契约</strong>（分辨率、归一化、通道顺序）；3. <strong>动作归一化统计量</strong>（均值&#x2F;方差，决定反归一化是否正确）；4. 模型卡（观测&#x2F;动作&#x2F;频率契约、训练数据版本、评测结果、许可）；5. 签名与校验和。<strong>五件套缺一不入制品库</strong>——这条规则能挡住大部分“换了模型机器人乱动”的事故。</li>
+</ol>
+<h2 id="6-6-量化：端侧的默认项"><a href="#6-6-量化：端侧的默认项" class="headerlink" title="6.6 量化：端侧的默认项"></a>6.6 量化：端侧的默认项</h2><h3 id="6-6-1-实用顺序"><a href="#6-6-1-实用顺序" class="headerlink" title="6.6.1 实用顺序"></a>6.6.1 实用顺序</h3><p>FP16 跑通基线 → FP8&#x2F;INT8 达标就停 → 内存或时延仍不够再上 4 比特（Thor 的 Blackwell GPU 支持 FP4）→ 精度掉得太多才考虑量化感知训练。</p>
+<h3 id="6-6-2-动作模型的特殊性"><a href="#6-6-2-动作模型的特殊性" class="headerlink" title="6.6.2 动作模型的特殊性"></a>6.6.2 动作模型的特殊性</h3><p>分类模型有 softmax 的容错缓冲，而<strong>动作是连续量：量化误差会直接变成关节角误差</strong>。三条建议：骨干激进量化、<strong>动作头保守</strong>（保持 FP16）；量化后除了看成功率，还要看动作平滑度（加加速度统计）；用影子模式并跑“高精度版 vs 量化版”，以<strong>动作分歧分布</strong>作为门禁——这是最灵敏的退化检测器。</p>
+<h3 id="6-6-3-校准集是制品"><a href="#6-6-3-校准集是制品" class="headerlink" title="6.6.3 校准集是制品"></a>6.6.3 校准集是制品</h3><p>INT8&#x2F;FP8 校准需要代表性样本。<strong>校准集必须来自目标场景</strong>，必须版本化并进入数据血缘（第 12 章），场景变化（新站点、新光照）后要重新校准。</p>
+<h2 id="6-7-双频架构：让慢推理驱动快执行"><a href="#6-7-双频架构：让慢推理驱动快执行" class="headerlink" title="6.7 双频架构：让慢推理驱动快执行"></a>6.7 双频架构：让慢推理驱动快执行</h2><h3 id="6-7-1-动作分块"><a href="#6-7-1-动作分块" class="headerlink" title="6.7.1 动作分块"></a>6.7.1 动作分块</h3><p>VLA 一次推理输出未来 H 步动作（一个 chunk），执行器以高频逐步执行，下一次推理在 chunk 耗尽前完成。于是 5–10Hz 的推理可以驱动 50Hz 以上的执行。这与智驾“规划输出一段轨迹、控制器高频跟踪”完全同构。</p>
+<pre class="mermaid">sequenceDiagram
+  participant V as VLA 推理（约 5Hz）
+  participant B as 动作缓冲
+  participant X as 执行器（50Hz）
+  V-&gt;&gt;B: chunk N（10 步，覆盖 200ms）
+  loop 每 20ms
+    X-&gt;&gt;B: 取下一步动作
+  end
+  Note over V: 在 chunk N 耗尽前启动推理 N+1
+  V-&gt;&gt;B: chunk N+1（P99 必须明显小于 200ms）
+  Note over B: 缓冲水位是核心健康指标，见底即“卡一下”</pre>
+
+
+<h3 id="6-7-2-时延不等式"><a href="#6-7-2-时延不等式" class="headerlink" title="6.7.2 时延不等式"></a>6.7.2 时延不等式</h3><p><strong>推理时延 P99 + 抖动裕度 &lt; chunk 执行时长</strong>。例如 chunk&#x3D;10 步、执行 50Hz，chunk 时长 200ms，推理 P99 必须明显小于 200ms。不等式一旦被打破，动作缓冲见底，机器人就会“卡一下”。所以：</p>
+<ul>
+<li>端侧要把 <strong>chunk 缓冲水位</strong>作为核心健康指标上报；</li>
+<li>模型准入要用热稳态下的 P99 而不是冷机均值；</li>
+<li>任何可能拉高时延的变更（换模型、换精度、换 JetPack）都要重新验证这个不等式。</li>
+</ul>
+<h2 id="6-8-资源隔离：推理是客人，控制是主人"><a href="#6-8-资源隔离：推理是客人，控制是主人" class="headerlink" title="6.8 资源隔离：推理是客人，控制是主人"></a>6.8 资源隔离：推理是客人，控制是主人</h2><h3 id="6-8-1-隔离四板斧"><a href="#6-8-1-隔离四板斧" class="headerlink" title="6.8.1 隔离四板斧"></a>6.8.1 隔离四板斧</h3><table>
+<thead>
+<tr>
+<th>手段</th>
+<th>做法</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CPU 核隔离</td>
+<td>控制进程独占核（<code>isolcpus</code> &#x2F; cgroup cpuset）</td>
+<td>消除调度争抢</td>
+</tr>
+<tr>
+<td>实时优先级</td>
+<td>控制线程 <code>SCHED_FIFO</code> + <code>mlockall</code></td>
+<td>不被抢占、不被换页</td>
+</tr>
+<tr>
+<td>cgroup 限额</td>
+<td>推理、录制、OTA 进程限 CPU 份额与内存上限</td>
+<td>防单进程吃垮系统</td>
+</tr>
+<tr>
+<td>IO 限速</td>
+<td>录制与下载限带宽、低 IO 优先级</td>
+<td>防 IO 尖峰传导到控制</td>
+</tr>
+</tbody></table>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># /etc/systemd/system/ota-agent.service（节选）——平台进程永远是“后勤”</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="section">[Service]</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">ExecStart</span>=/opt/ecl/bin/ota-agent</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">CPUAffinity</span>=<span class="number">6</span> <span class="number">7</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">CPUWeight</span>=<span class="number">20</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">MemoryMax</span>=<span class="number">2</span>G</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">IOWeight</span>=<span class="number">10</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">Nice</span>=<span class="number">10</span></span></span></code></pre></div></div></figure>
+
+<h3 id="6-8-2-开机自检"><a href="#6-8-2-开机自检" class="headerlink" title="6.8.2 开机自检"></a>6.8.2 开机自检</h3><p>隔离配置会漂移（有人手动改过、镜像更新丢了参数）。在机器人启动的就绪阶段做自检：核隔离参数、关键进程优先级、<code>oom_score_adj</code>、cgroup 限额是否生效——<strong>任一不符就不进入可作业状态，并上报事件</strong>。生命周期节点（第 4 章）的 configure 阶段正是放这个检查的地方。</p>
+<h2 id="6-9-热与功耗"><a href="#6-9-热与功耗" class="headerlink" title="6.9 热与功耗"></a>6.9 热与功耗</h2><h3 id="6-9-1-热稳态压测"><a href="#6-9-1-热稳态压测" class="headerlink" title="6.9.1 热稳态压测"></a>6.9.1 热稳态压测</h3><p>实验室十分钟压测一切正常，现场连续作业两小时后 GPU 降频，推理 P99 越过时延不等式——这是端侧最常见也最隐蔽的问题。规则：<strong>所有端侧性能基线都在两小时热浸泡后测量</strong>，机型规格书记录热稳态数据，而不是峰值数据。</p>
+<h3 id="6-9-2-功耗档位是架构决策"><a href="#6-9-2-功耗档位是架构决策" class="headerlink" title="6.9.2 功耗档位是架构决策"></a>6.9.2 功耗档位是架构决策</h3><p><code>nvpmodel</code> 切换功耗模式，<code>jetson_clocks</code> 锁定频率。锁频消除调频引起的抖动，代价是功耗与发热恒高。<strong>功耗档位属于机型基线配置</strong>（走配置 OTA），换档等于换了一台机器，所有时延基线都要重测。</p>
+<h3 id="6-9-3-六个必须上云的端侧指标"><a href="#6-9-3-六个必须上云的端侧指标" class="headerlink" title="6.9.3 六个必须上云的端侧指标"></a>6.9.3 六个必须上云的端侧指标</h3><p>GPU 利用率、GPU 温度、<strong>降频比例</strong>、内存水位、功耗档位、推理时延 P99。采集方式是在端侧写一个指标节点解析 <code>tegrastats</code> 输出，并入遥测：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">import</span> re, subprocess</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">read_tegrastats_once</span>() -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;解析一行 tegrastats 输出（字段格式随 JetPack 版本略有差异，生产中需按版本适配）&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    line = subprocess.run([<span class="string">&quot;tegrastats&quot;</span>, <span class="string">&quot;--interval&quot;</span>, <span class="string">&quot;1000&quot;</span>, <span class="string">&quot;--count&quot;</span>, <span class="string">&quot;1&quot;</span>],   <span class="comment"># 部分版本无 --count，可读一行后终止</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">                          capture_output=<span class="literal">True</span>, text=<span class="literal">True</span>, timeout=<span class="number">5</span>).stdout</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    ram = re.search(<span class="string">r&quot;RAM (\d+)/(\d+)MB&quot;</span>, line)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    gpu = re.search(<span class="string">r&quot;GR3D_FREQ (\d+)%&quot;</span>, line)</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    temp = re.search(<span class="string">r&quot;(?:GPU|gpu)@([\d.]+)C&quot;</span>, line)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;mem_used_ratio&quot;</span>: <span class="built_in">int</span>(ram[<span class="number">1</span>]) / <span class="built_in">int</span>(ram[<span class="number">2</span>]) <span class="keyword">if</span> ram <span class="keyword">else</span> <span class="literal">None</span>,</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">            <span class="string">&quot;gpu_util&quot;</span>: <span class="built_in">int</span>(gpu[<span class="number">1</span>]) / <span class="number">100</span> <span class="keyword">if</span> gpu <span class="keyword">else</span> <span class="literal">None</span>,</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">            <span class="string">&quot;gpu_temp&quot;</span>: <span class="built_in">float</span>(temp[<span class="number">1</span>]) <span class="keyword">if</span> temp <span class="keyword">else</span> <span class="literal">None</span>&#125;</span></span></code></pre></div></div></figure>
+
+<p>p01 的遥测载荷已经预留了 <code>gpu_temp</code> 字段，扩展其余指标只需要在端侧聚合节点里加字段、在云端时序表里加列。</p>
+<h2 id="6-10-端侧模型运行时的六件事"><a href="#6-10-端侧模型运行时的六件事" class="headerlink" title="6.10 端侧模型运行时的六件事"></a>6.10 端侧模型运行时的六件事</h2><h3 id="6-10-1-清单"><a href="#6-10-1-清单" class="headerlink" title="6.10.1 清单"></a>6.10.1 清单</h3><ol>
+<li><strong>槽位管理</strong>：A&#x2F;B 双槽、原子切换、版本上报；</li>
+<li><strong>契约校验</strong>：加载时校验观测话题、图像尺寸、关节顺序、归一化统计量与本机 Device Profile 是否匹配，不匹配拒载；</li>
+<li><strong>观测同步缓冲</strong>：多路传感器按时间戳对齐，超阈丢帧并计数；</li>
+<li><strong>chunk 缓冲与水位</strong>：水位见底前触发推理，水位作为健康指标；</li>
+<li><strong>失效降级</strong>：推理超时或异常时立即降级（停住、收臂、交还传统控制栈）；</li>
+<li><strong>指标上报</strong>：时延 P50&#x2F;P99、水位、置信度分布、与影子模型的分歧计数。</li>
+</ol>
+<p>这份清单就是你给算法团队的<strong>“模型上机验收标准”</strong>，也是 p02 端侧 Agent 模拟的内容。</p>
+<h3 id="6-10-2-云端大脑与端侧小脑的协同"><a href="#6-10-2-云端大脑与端侧小脑的协同" class="headerlink" title="6.10.2 云端大脑与端侧小脑的协同"></a>6.10.2 云端大脑与端侧小脑的协同</h3><p>慢脑（任务理解、长程规划）可以调用云端具身推理模型——2026 年已有 Gemini Robotics ER 2 这类通过公开 API 提供的能力；中脑（VLA）在端侧运行。协同时的两条纪律：<strong>云端只返回“目标与子任务”，不返回动作</strong>；<strong>断网时端侧必须有本地兜底</strong>（本地小模型或预定义任务脚本），否则网络抖动就会让机器人停工。第 15 章的 Agent 平台会把这两条写进架构。</p>
+<h2 id="6-11-案例推演：新模型上线一小时后动作开始卡顿"><a href="#6-11-案例推演：新模型上线一小时后动作开始卡顿" class="headerlink" title="6.11 案例推演：新模型上线一小时后动作开始卡顿"></a>6.11 案例推演：新模型上线一小时后动作开始卡顿</h2><h3 id="6-11-1-现象"><a href="#6-11-1-现象" class="headerlink" title="6.11.1 现象"></a>6.11.1 现象</h3><p>某站点灰度第一环上线新版 VLA，前一个小时指标正常，之后人工介入率上升，现场反馈“机器人动作一顿一顿的”。</p>
+<h3 id="6-11-2-分析"><a href="#6-11-2-分析" class="headerlink" title="6.11.2 分析"></a>6.11.2 分析</h3><table>
+<thead>
+<tr>
+<th>假设</th>
+<th>证据</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>新模型推理更慢</td>
+<td>冷机压测 P99 180ms，chunk 时长 200ms，余量很小</td>
+<td>余量不足是前提</td>
+</tr>
+<tr>
+<td>热降频</td>
+<td>上线约 50 分钟后降频比例从 0 升到 30%，P99 升到 240ms</td>
+<td><strong>直接原因</strong></td>
+</tr>
+<tr>
+<td>内存压力</td>
+<td>切换后备槽未及时释放，内存水位 92%</td>
+<td>加剧抖动</td>
+</tr>
+</tbody></table>
+<h3 id="6-11-3-平台动作"><a href="#6-11-3-平台动作" class="headerlink" title="6.11.3 平台动作"></a>6.11.3 平台动作</h3><p>短期：自动回滚到旧模型（门禁指标“介入率”破线触发，见第 9 章）。中期：模型准入改为热稳态 P99；OTA Agent 在观察期结束后强制释放备槽。长期：机型规格书记录“热稳态下可承载的模型规模上限”，模型工厂在选择规模时以它为约束——<strong>用硬件规格反向约束模型选型</strong>，比事后优化便宜得多。</p>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车联网 &#x2F; AI Infra</th>
+<th>端侧 AI</th>
+<th>迁移方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>智驾域控（Orin&#x2F;Thor 同源）</td>
+<td>机器人主控</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>域控算力预算表</td>
+<td>统一内存预算表（含备槽）</td>
+<td>改造</td>
+</tr>
+<tr>
+<td>编译产物绑定芯片与 SDK</td>
+<td>TensorRT 引擎矩阵</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>域控热管理</td>
+<td>热稳态压测与降频监控</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>LLM 量化</td>
+<td>端侧量化（动作头保守）</td>
+<td>改造</td>
+</tr>
+<tr>
+<td>规划轨迹 + 控制跟踪</td>
+<td>动作分块 + 时延不等式</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>K8s requests&#x2F;limits</td>
+<td>cgroup 限额 + 核隔离</td>
+<td>改造：粒度更细</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>漏算备槽内存</strong>：热切换时 OOM，被杀的恰好是录制进程，事故现场数据全无。对策：预算表单列备槽，OOM 分数保护关键进程。</li>
+<li><strong>在开发机上构建引擎直接下发</strong>：换机型即加载失败。对策：CI 按（机型 × JetPack × 精度）构建矩阵，文件名与模型卡记录三元组，加载时校验。</li>
+<li><strong>冷机压测定标准</strong>：现场热稳态后时延越线。对策：一切基线在两小时热浸泡后测量。</li>
+<li><strong>动作头一起量化</strong>：机器人轻微抖动、减速器磨损加快。对策：混合精度，动作头保守，门禁加动作平滑度。</li>
+</ul>
+<h2 id="🛠️-动手练习"><a href="#🛠️-动手练习" class="headerlink" title="🛠️ 动手练习"></a>🛠️ 动手练习</h2><ol>
+<li>以 T4000（64GB）为目标机型，重做 6.3.2 的内存预算表，写出你会砍掉哪一项、为什么。</li>
+<li>为 6.5.2 的策略 B 设计引擎矩阵的命名规范与模型卡字段，并对照 p02 的制品清单（第 18 章）检查是否兼容。</li>
+<li>为 p01 的遥测载荷设计“六个端侧指标”的字段与上报频率，说明哪几个需要趋势告警而不是阈值告警。</li>
+</ol>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>端侧推理与云端推理的最大差异？（确定性 vs 吞吐、batch&#x3D;1、统一内存、热稳态）</li>
+<li>为什么 TensorRT 引擎不能跨机型分发？OTA 怎么设计？（内核调优绑定架构与版本 → 引擎矩阵）</li>
+<li>模型热切换对硬件有什么隐性要求？（双槽同时驻留的内存）</li>
+<li>如何判断一个 VLA 能不能在某机型上用？（热稳态 P99 + 抖动 &lt; chunk 时长）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>端侧优化确定性</strong>：看 P99、抖动、功耗、温度，不看 QPS。</li>
+<li><strong>统一内存一口锅</strong>：预算按总量算，备槽单列。</li>
+<li><strong>引擎矩阵</strong>：GPU 架构 × TensorRT 版本 × 精度。</li>
+<li><strong>模型制品五件套</strong>：权重&#x2F;引擎、预处理契约、归一化统计量、模型卡、签名。</li>
+<li><strong>时延不等式</strong>：推理 P99 + 抖动 &lt; chunk 时长。</li>
+<li><strong>推理是客人控制是主人</strong>：隔离四板斧 + 开机自检。</li>
+<li><strong>热稳态基线</strong>：两小时浸泡后的数字才算数。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-05-ROS2%E5%B7%A5%E7%A8%8B%E5%8C%96%E4%B8%8E%E7%AB%AF%E4%BA%91%E6%A1%A5%E6%8E%A5/">第 5 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-07-Robot-Cloud%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84/">第 7 章 Robot Cloud 参考架构</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-07-Robot-Cloud%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84/">第 7 章 Robot Cloud 参考架构：八个平面与车联网映射</a></h3>
+        <p>全书的架构总纲。给出一个可以直接拿去做架构评审的机器人云平台参考架构：量级假设、八个平面、三条读图纪律、与车联网平台的逐模块映射、云—边—端…</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-07-Robot-Cloud%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-05-ROS2%E5%B7%A5%E7%A8%8B%E5%8C%96%E4%B8%8E%E7%AB%AF%E4%BA%91%E6%A1%A5%E6%8E%A5/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 5 章 ROS 2 工程化与端云桥接</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 16 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#6-1-%E8%AE%A4%E7%9F%A5%E5%8F%8D%E8%BD%AC%EF%BC%9A%E4%BA%91%E7%AB%AF%E4%BC%98%E5%8C%96%E5%90%9E%E5%90%90%EF%BC%8C%E7%AB%AF%E4%BE%A7%E4%BC%98%E5%8C%96%E7%A1%AE%E5%AE%9A%E6%80%A7" data-toc-target="6-1-认知反转：云端优化吞吐，端侧优化确定性"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">6.1 认知反转：云端优化吞吐，端侧优化确定性</span></a><a class="toc-level-3" href="#6-1-1-%E4%BD%A0%E7%9A%84-AI-Infra-%E7%BB%8F%E9%AA%8C%E5%93%AA%E4%BA%9B%E6%88%90%E7%AB%8B" data-toc-target="6-1-1-你的-AI-Infra-经验哪些成立"><span class="toc-text">6.1.1 你的 AI Infra 经验哪些成立</span></a><a class="toc-level-2" href="#6-2-Thor-%E5%AE%B6%E6%97%8F%E4%B8%8E%E9%80%89%E5%9E%8B" data-toc-target="6-2-Thor-家族与选型"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">6.2 Thor 家族与选型</span></a><a class="toc-level-3" href="#6-2-1-2026-%E5%B9%B4%E7%9A%84%E4%B8%BB%E6%8E%A7%E5%88%86%E6%A1%A3" data-toc-target="6-2-1-2026-年的主控分档"><span class="toc-text">6.2.1 2026 年的主控分档</span></a><a class="toc-level-3" href="#6-2-2-%E9%80%89%E5%9E%8B%E5%9B%9B%E7%9C%8B" data-toc-target="6-2-2-选型四看"><span class="toc-text">6.2.2 选型四看</span></a><a class="toc-level-3" href="#6-2-3-%E5%B3%B0%E5%80%BC%E4%B8%8D%E6%98%AF%E6%89%BF%E8%AF%BA" data-toc-target="6-2-3-峰值不是承诺"><span class="toc-text">6.2.3 峰值不是承诺</span></a><a class="toc-level-2" href="#6-3-%E7%BB%9F%E4%B8%80%E5%86%85%E5%AD%98%EF%BC%9A%E6%9C%80%E5%85%88%E8%A7%81%E5%BA%95%E7%9A%84%E8%B5%84%E6%BA%90" data-toc-target="6-3-统一内存：最先见底的资源"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">6.3 统一内存：最先见底的资源</span></a><a class="toc-level-3" href="#6-3-1-%E4%B8%80%E5%8F%A3%E9%94%85%E7%9A%84%E5%90%AB%E4%B9%89" data-toc-target="6-3-1-一口锅的含义"><span class="toc-text">6.3.1 一口锅的含义</span></a><a class="toc-level-3" href="#6-3-2-%E5%86%85%E5%AD%98%E9%A2%84%E7%AE%97%E8%A1%A8%EF%BC%88T5000-128GB-%E7%A4%BA%E4%BE%8B%EF%BC%89" data-toc-target="6-3-2-内存预算表（T5000-128GB-示例）"><span class="toc-text">6.3.2 内存预算表（T5000 128GB 示例）</span></a><a class="toc-level-2" href="#6-4-%E6%8E%A8%E7%90%86%E8%BF%90%E8%A1%8C%E6%97%B6" data-toc-target="6-4-推理运行时"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">6.4 推理运行时</span></a><a class="toc-level-3" href="#6-4-1-2026-%E5%B9%B4%E7%9A%84%E7%AB%AF%E4%BE%A7%E8%BF%90%E8%A1%8C%E6%97%B6" data-toc-target="6-4-1-2026-年的端侧运行时"><span class="toc-text">6.4.1 2026 年的端侧运行时</span></a><a class="toc-level-3" href="#6-4-2-%E8%BF%9B%E7%A8%8B%E5%86%85%E8%B0%83%E7%94%A8%EF%BC%8C%E8%80%8C%E4%B8%8D%E6%98%AF%E6%9C%8D%E5%8A%A1" data-toc-target="6-4-2-进程内调用，而不是服务"><span class="toc-text">6.4.2 进程内调用，而不是服务</span></a><a class="toc-level-2" href="#6-5-%E9%83%A8%E7%BD%B2%E9%93%BE%E4%B8%8E%E2%80%9C%E5%BC%95%E6%93%8E%E4%B8%8D%E5%8F%AF%E7%A7%BB%E6%A4%8D%E2%80%9D" data-toc-target="6-5-部署链与“引擎不可移植”"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">6.5 部署链与“引擎不可移植”</span></a><a class="toc-level-3" href="#6-5-1-%E4%BB%8E%E8%AE%AD%E7%BB%83%E4%BA%A7%E7%89%A9%E5%88%B0%E7%AB%AF%E4%BE%A7%E5%BC%95%E6%93%8E" data-toc-target="6-5-1-从训练产物到端侧引擎"><span class="toc-text">6.5.1 从训练产物到端侧引擎</span></a><a class="toc-level-3" href="#6-5-2-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BC%95%E6%93%8E%E4%B8%8D%E8%83%BD%E8%B7%A8%E6%9C%BA%E5%9E%8B%E5%A4%8D%E5%88%B6" data-toc-target="6-5-2-为什么引擎不能跨机型复制"><span class="toc-text">6.5.2 为什么引擎不能跨机型复制</span></a><a class="toc-level-3" href="#6-5-3-%E6%A8%A1%E5%9E%8B%E5%88%B6%E5%93%81%E2%80%9C%E4%BA%94%E4%BB%B6%E5%A5%97%E2%80%9D" data-toc-target="6-5-3-模型制品“五件套”"><span class="toc-text">6.5.3 模型制品“五件套”</span></a><a class="toc-level-2" href="#6-6-%E9%87%8F%E5%8C%96%EF%BC%9A%E7%AB%AF%E4%BE%A7%E7%9A%84%E9%BB%98%E8%AE%A4%E9%A1%B9" data-toc-target="6-6-量化：端侧的默认项"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">6.6 量化：端侧的默认项</span></a><a class="toc-level-3" href="#6-6-1-%E5%AE%9E%E7%94%A8%E9%A1%BA%E5%BA%8F" data-toc-target="6-6-1-实用顺序"><span class="toc-text">6.6.1 实用顺序</span></a><a class="toc-level-3" href="#6-6-2-%E5%8A%A8%E4%BD%9C%E6%A8%A1%E5%9E%8B%E7%9A%84%E7%89%B9%E6%AE%8A%E6%80%A7" data-toc-target="6-6-2-动作模型的特殊性"><span class="toc-text">6.6.2 动作模型的特殊性</span></a><a class="toc-level-3" href="#6-6-3-%E6%A0%A1%E5%87%86%E9%9B%86%E6%98%AF%E5%88%B6%E5%93%81" data-toc-target="6-6-3-校准集是制品"><span class="toc-text">6.6.3 校准集是制品</span></a><a class="toc-level-2" href="#6-7-%E5%8F%8C%E9%A2%91%E6%9E%B6%E6%9E%84%EF%BC%9A%E8%AE%A9%E6%85%A2%E6%8E%A8%E7%90%86%E9%A9%B1%E5%8A%A8%E5%BF%AB%E6%89%A7%E8%A1%8C" data-toc-target="6-7-双频架构：让慢推理驱动快执行"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">6.7 双频架构：让慢推理驱动快执行</span></a><a class="toc-level-3" href="#6-7-1-%E5%8A%A8%E4%BD%9C%E5%88%86%E5%9D%97" data-toc-target="6-7-1-动作分块"><span class="toc-text">6.7.1 动作分块</span></a><a class="toc-level-3" href="#6-7-2-%E6%97%B6%E5%BB%B6%E4%B8%8D%E7%AD%89%E5%BC%8F" data-toc-target="6-7-2-时延不等式"><span class="toc-text">6.7.2 时延不等式</span></a><a class="toc-level-2" href="#6-8-%E8%B5%84%E6%BA%90%E9%9A%94%E7%A6%BB%EF%BC%9A%E6%8E%A8%E7%90%86%E6%98%AF%E5%AE%A2%E4%BA%BA%EF%BC%8C%E6%8E%A7%E5%88%B6%E6%98%AF%E4%B8%BB%E4%BA%BA" data-toc-target="6-8-资源隔离：推理是客人，控制是主人"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">6.8 资源隔离：推理是客人，控制是主人</span></a><a class="toc-level-3" href="#6-8-1-%E9%9A%94%E7%A6%BB%E5%9B%9B%E6%9D%BF%E6%96%A7" data-toc-target="6-8-1-隔离四板斧"><span class="toc-text">6.8.1 隔离四板斧</span></a><a class="toc-level-3" href="#6-8-2-%E5%BC%80%E6%9C%BA%E8%87%AA%E6%A3%80" data-toc-target="6-8-2-开机自检"><span class="toc-text">6.8.2 开机自检</span></a><a class="toc-level-2" href="#6-9-%E7%83%AD%E4%B8%8E%E5%8A%9F%E8%80%97" data-toc-target="6-9-热与功耗"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">6.9 热与功耗</span></a><a class="toc-level-3" href="#6-9-1-%E7%83%AD%E7%A8%B3%E6%80%81%E5%8E%8B%E6%B5%8B" data-toc-target="6-9-1-热稳态压测"><span class="toc-text">6.9.1 热稳态压测</span></a><a class="toc-level-3" href="#6-9-2-%E5%8A%9F%E8%80%97%E6%A1%A3%E4%BD%8D%E6%98%AF%E6%9E%B6%E6%9E%84%E5%86%B3%E7%AD%96" data-toc-target="6-9-2-功耗档位是架构决策"><span class="toc-text">6.9.2 功耗档位是架构决策</span></a><a class="toc-level-3" href="#6-9-3-%E5%85%AD%E4%B8%AA%E5%BF%85%E9%A1%BB%E4%B8%8A%E4%BA%91%E7%9A%84%E7%AB%AF%E4%BE%A7%E6%8C%87%E6%A0%87" data-toc-target="6-9-3-六个必须上云的端侧指标"><span class="toc-text">6.9.3 六个必须上云的端侧指标</span></a><a class="toc-level-2" href="#6-10-%E7%AB%AF%E4%BE%A7%E6%A8%A1%E5%9E%8B%E8%BF%90%E8%A1%8C%E6%97%B6%E7%9A%84%E5%85%AD%E4%BB%B6%E4%BA%8B" data-toc-target="6-10-端侧模型运行时的六件事"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">6.10 端侧模型运行时的六件事</span></a><a class="toc-level-3" href="#6-10-1-%E6%B8%85%E5%8D%95" data-toc-target="6-10-1-清单"><span class="toc-text">6.10.1 清单</span></a><a class="toc-level-3" href="#6-10-2-%E4%BA%91%E7%AB%AF%E5%A4%A7%E8%84%91%E4%B8%8E%E7%AB%AF%E4%BE%A7%E5%B0%8F%E8%84%91%E7%9A%84%E5%8D%8F%E5%90%8C" data-toc-target="6-10-2-云端大脑与端侧小脑的协同"><span class="toc-text">6.10.2 云端大脑与端侧小脑的协同</span></a><a class="toc-level-2" href="#6-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E6%96%B0%E6%A8%A1%E5%9E%8B%E4%B8%8A%E7%BA%BF%E4%B8%80%E5%B0%8F%E6%97%B6%E5%90%8E%E5%8A%A8%E4%BD%9C%E5%BC%80%E5%A7%8B%E5%8D%A1%E9%A1%BF" data-toc-target="6-11-案例推演：新模型上线一小时后动作开始卡顿"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">6.11 案例推演：新模型上线一小时后动作开始卡顿</span></a><a class="toc-level-3" href="#6-11-1-%E7%8E%B0%E8%B1%A1" data-toc-target="6-11-1-现象"><span class="toc-text">6.11.1 现象</span></a><a class="toc-level-3" href="#6-11-2-%E5%88%86%E6%9E%90" data-toc-target="6-11-2-分析"><span class="toc-text">6.11.2 分析</span></a><a class="toc-level-3" href="#6-11-3-%E5%B9%B3%E5%8F%B0%E5%8A%A8%E4%BD%9C" data-toc-target="6-11-3-平台动作"><span class="toc-text">6.11.3 平台动作</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">🛠️ 动手练习</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 25%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">7 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#6-1-%E8%AE%A4%E7%9F%A5%E5%8F%8D%E8%BD%AC%EF%BC%9A%E4%BA%91%E7%AB%AF%E4%BC%98%E5%8C%96%E5%90%9E%E5%90%90%EF%BC%8C%E7%AB%AF%E4%BE%A7%E4%BC%98%E5%8C%96%E7%A1%AE%E5%AE%9A%E6%80%A7" data-toc-target="6-1-认知反转：云端优化吞吐，端侧优化确定性" data-title="01 · 6.1 认知反转：云端优化吞吐，端侧优化确定性" aria-label="6.1 认知反转：云端优化吞吐，端侧优化确定性"></a><a class="toc-strip__dot" href="#6-2-Thor-%E5%AE%B6%E6%97%8F%E4%B8%8E%E9%80%89%E5%9E%8B" data-toc-target="6-2-Thor-家族与选型" data-title="02 · 6.2 Thor 家族与选型" aria-label="6.2 Thor 家族与选型"></a><a class="toc-strip__dot" href="#6-3-%E7%BB%9F%E4%B8%80%E5%86%85%E5%AD%98%EF%BC%9A%E6%9C%80%E5%85%88%E8%A7%81%E5%BA%95%E7%9A%84%E8%B5%84%E6%BA%90" data-toc-target="6-3-统一内存：最先见底的资源" data-title="03 · 6.3 统一内存：最先见底的资源" aria-label="6.3 统一内存：最先见底的资源"></a><a class="toc-strip__dot" href="#6-4-%E6%8E%A8%E7%90%86%E8%BF%90%E8%A1%8C%E6%97%B6" data-toc-target="6-4-推理运行时" data-title="04 · 6.4 推理运行时" aria-label="6.4 推理运行时"></a><a class="toc-strip__dot" href="#6-5-%E9%83%A8%E7%BD%B2%E9%93%BE%E4%B8%8E%E2%80%9C%E5%BC%95%E6%93%8E%E4%B8%8D%E5%8F%AF%E7%A7%BB%E6%A4%8D%E2%80%9D" data-toc-target="6-5-部署链与“引擎不可移植”" data-title="05 · 6.5 部署链与“引擎不可移植”" aria-label="6.5 部署链与“引擎不可移植”"></a><a class="toc-strip__dot" href="#6-6-%E9%87%8F%E5%8C%96%EF%BC%9A%E7%AB%AF%E4%BE%A7%E7%9A%84%E9%BB%98%E8%AE%A4%E9%A1%B9" data-toc-target="6-6-量化：端侧的默认项" data-title="06 · 6.6 量化：端侧的默认项" aria-label="6.6 量化：端侧的默认项"></a><a class="toc-strip__dot" href="#6-7-%E5%8F%8C%E9%A2%91%E6%9E%B6%E6%9E%84%EF%BC%9A%E8%AE%A9%E6%85%A2%E6%8E%A8%E7%90%86%E9%A9%B1%E5%8A%A8%E5%BF%AB%E6%89%A7%E8%A1%8C" data-toc-target="6-7-双频架构：让慢推理驱动快执行" data-title="07 · 6.7 双频架构：让慢推理驱动快执行" aria-label="6.7 双频架构：让慢推理驱动快执行"></a><a class="toc-strip__dot" href="#6-8-%E8%B5%84%E6%BA%90%E9%9A%94%E7%A6%BB%EF%BC%9A%E6%8E%A8%E7%90%86%E6%98%AF%E5%AE%A2%E4%BA%BA%EF%BC%8C%E6%8E%A7%E5%88%B6%E6%98%AF%E4%B8%BB%E4%BA%BA" data-toc-target="6-8-资源隔离：推理是客人，控制是主人" data-title="08 · 6.8 资源隔离：推理是客人，控制是主人" aria-label="6.8 资源隔离：推理是客人，控制是主人"></a><a class="toc-strip__dot" href="#6-9-%E7%83%AD%E4%B8%8E%E5%8A%9F%E8%80%97" data-toc-target="6-9-热与功耗" data-title="09 · 6.9 热与功耗" aria-label="6.9 热与功耗"></a><a class="toc-strip__dot" href="#6-10-%E7%AB%AF%E4%BE%A7%E6%A8%A1%E5%9E%8B%E8%BF%90%E8%A1%8C%E6%97%B6%E7%9A%84%E5%85%AD%E4%BB%B6%E4%BA%8B" data-toc-target="6-10-端侧模型运行时的六件事" data-title="10 · 6.10 端侧模型运行时的六件事" aria-label="6.10 端侧模型运行时的六件事"></a><a class="toc-strip__dot" href="#6-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E6%96%B0%E6%A8%A1%E5%9E%8B%E4%B8%8A%E7%BA%BF%E4%B8%80%E5%B0%8F%E6%97%B6%E5%90%8E%E5%8A%A8%E4%BD%9C%E5%BC%80%E5%A7%8B%E5%8D%A1%E9%A1%BF" data-toc-target="6-11-案例推演：新模型上线一小时后动作开始卡顿" data-title="11 · 6.11 案例推演：新模型上线一小时后动作开始卡顿" aria-label="6.11 案例推演：新模型上线一小时后动作开始卡顿"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="12 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="13 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习" data-title="14 · 🛠️ 动手练习" aria-label="🛠️ 动手练习"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="15 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="16 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-06-端侧AI与Jetson-Thor","title":"第 6 章 端侧 AI：Jetson Thor 时代的推理部署与资源纪律","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-06-%E7%AB%AF%E4%BE%A7AI%E4%B8%8EJetson-Thor/","path":"embodied-cloud-book","index":6,"total":28,"next":{"title":"第 7 章 Robot Cloud 参考架构：八个平面与车联网映射","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-07-Robot-Cloud%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

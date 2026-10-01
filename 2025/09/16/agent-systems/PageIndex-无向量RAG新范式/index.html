@@ -1,0 +1,901 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>PageIndex：无向量、推理驱动的长文档检索 · 飞轮之道</title>
+<meta name="description" content="从向量 RAG 在财报、法规等长文档上的失败模式出发，按 PageIndex 仓库源码拆解树索引生成与推理式树搜索，给出可运行用法、成本与延迟权衡、与向量 RAG 和 GraphRAG 的对比及 MCP 接入方式。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/09/16/agent-systems/PageIndex-%E6%97%A0%E5%90%91%E9%87%8FRAG%E6%96%B0%E8%8C%83%E5%BC%8F/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="PageIndex：无向量、推理驱动的长文档检索 · 飞轮之道">
+<meta property="og:description" content="从向量 RAG 在财报、法规等长文档上的失败模式出发，按 PageIndex 仓库源码拆解树索引生成与推理式树搜索，给出可运行用法、成本与延迟权衡、与向量 RAG 和 GraphRAG 的对比及 MCP 接入方式。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/09/16/agent-systems/PageIndex-%E6%97%A0%E5%90%91%E9%87%8FRAG%E6%96%B0%E8%8C%83%E5%BC%8F/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/langgraph-agent-engineering/">生态与选型</a><a class="series-chip" href="/paths/langgraph-agent-engineering/" title="查看学习路径">第 16 / 17 篇</a>
+    </div>
+    <h1>PageIndex：无向量、推理驱动的长文档检索</h1>
+    <p class="article-deck">从向量 RAG 在财报、法规等长文档上的失败模式出发，按 PageIndex 仓库源码拆解树索引生成与推理式树搜索…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>16 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/MCP/">#MCP</a><a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/RAG/">#RAG</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>PageIndex 用 LLM 为文档生成带页码的目录树，检索时让 LLM 读树选节点，再按页码取原文；不需要向量库，也不切块。</li><li>它把成本从查询端的向量计算挪到了 LLM：建树时整本文档至少过一遍模型，每次查询要把整棵树放进上下文。</li><li>适合结构清晰、单篇很长、问题需要跨章节推理的专业文档；不适合海量短文档、高并发低延迟和无文字层的扫描件。</li><li>2025-09 的开源仓库只负责建树，检索逻辑需要自己写或使用云端 API；MCP 服务以云端能力为基础。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="向量-RAG-在长篇专业文档上的失败模式"><a href="#向量-RAG-在长篇专业文档上的失败模式" class="headerlink" title="向量 RAG 在长篇专业文档上的失败模式"></a>向量 RAG 在长篇专业文档上的失败模式</h2><p>向量 RAG 的默认流程是“固定长度切块 → 向量化 → 取 top-k 相似块”。在客服 FAQ、短文章上它足够好用，但放到几百页的年报、监管文件、技术手册上，会稳定地出现下面几类问题：</p>
+<table>
+<thead>
+<tr>
+<th>失败模式</th>
+<th>典型表现</th>
+<th>根因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>相似不等于相关</td>
+<td>问“研发投入同比变化”，召回的是风险因素里一段措辞相近的描述，而不是财务报表附注</td>
+<td>向量只衡量语义距离，不理解“哪一节才是口径正确的出处”</td>
+</tr>
+<tr>
+<td>切块割裂上下文</td>
+<td>表头和数据行分在两个块；条款的例外情形在下一个块</td>
+<td>块边界由长度决定，不由文档结构决定</td>
+</tr>
+<tr>
+<td>文内引用断链</td>
+<td>“详见附注 12”“参见 1.2 节”无法顺着找过去</td>
+<td>引用语句与目标内容在语义上并不相似</td>
+</tr>
+<tr>
+<td>结构性问题答不了</td>
+<td>“第三章列了哪些风险”“这份文件分几部分”</td>
+<td>答案在目录结构里，不在任何单个块里</td>
+</tr>
+<tr>
+<td>同模板文档互相干扰</td>
+<td>多个年度的年报格式一致，召回混入其他年份</td>
+<td>向量几乎相同，只能靠元数据区分</td>
+</tr>
+<tr>
+<td>检索过程不可解释</td>
+<td>只能看到一串相似度分数</td>
+<td>没有“为什么选这里”的推理记录</td>
+</tr>
+</tbody></table>
+<p>这些问题的共性是：专业文档的<strong>结构本身就是检索线索</strong>，而切块 + 向量把结构丢掉了。人类专家读年报的方式是先看目录、定位章节、读完再判断是否需要翻到附注，PageIndex 就是把这个过程交给 LLM。</p>
+<h2 id="PageIndex-是什么"><a href="#PageIndex-是什么" class="headerlink" title="PageIndex 是什么"></a>PageIndex 是什么</h2><p>PageIndex 由 Vectify AI 开源，GitHub 仓库 VectifyAI&#x2F;PageIndex 创建于 2025-04-01，MIT 许可；PyPI 上的 <code>pageindex</code> 包更早（0.1.0 发布于 2025-03-12），它是云端 API 的 Python SDK，写作时最新为 0.1.8（2025-08-26）。README 把它概括为两步：</p>
+<ol>
+<li>为文档生成一棵“目录式”的树状索引；</li>
+<li>用 LLM 在树上做推理式搜索，找到相关节点。</li>
+</ol>
+<p>仓库 README 引用了其金融文档问答系统 Mafin 2.5 在 FinanceBench 上 98.7% 准确率的结果。这是厂商基于自有系统公布的数字，系统还包含 PageIndex 之外的组件，应理解为方向性证据，而不是开源仓库可直接复现的指标。</p>
+<p>以下原理部分依据仓库 2025-09-03 的代码（提交 <code>42382bd</code>）整理。</p>
+<h2 id="原理一：树索引怎么生成"><a href="#原理一：树索引怎么生成" class="headerlink" title="原理一：树索引怎么生成"></a>原理一：树索引怎么生成</h2><h3 id="生成流程"><a href="#生成流程" class="headerlink" title="生成流程"></a>生成流程</h3><pre class="mermaid">flowchart TD
+    A[PDF 逐页抽取文本&lt;br/&gt;PyPDF2，按页计 token] --&gt; B&#123;前 20 页逐页判断&lt;br/&gt;是否为目录页&#125;
+    B --&gt;|有目录且带页码| C1[解析目录&lt;br/&gt;计算印刷页码与物理页码偏移]
+    B --&gt;|有目录无页码| C2[按目录标题在正文中定位页码]
+    B --&gt;|无目录| C3[正文按 2 万 token 分组&lt;br/&gt;由 LLM 逐组生成目录]
+    C1 --&gt; V[校验：每个标题是否&lt;br/&gt;出现在声称的页上]
+    C2 --&gt; V
+    C3 --&gt; V
+    V --&gt;|准确率 100%| T[组装树]
+    V --&gt;|高于 60%| F[修正错误条目&lt;br/&gt;最多 3 轮] --&gt; T
+    V --&gt;|不高于 60%| D[降级到下一种模式&lt;br/&gt;无目录模式也失败则报错]
+    D --&gt; C2
+    D --&gt; C3
+    T --&gt; L[页数超过 10 且 token 达到 2 万的节点&lt;br/&gt;递归细分为子节点]
+    L --&gt; S[写入 node_id、节点摘要&lt;br/&gt;可选文档描述]</pre>
+
+
+<p>几个关键点：</p>
+<ul>
+<li><strong>三种模式逐级降级</strong>。优先利用文档自带的目录；目录不可靠时退化为“按标题找页”；再不行就让 LLM 通读全文自己编目录。每一级都要通过“标题是否真的出现在那一页”的校验，校验本身也是 LLM 调用。</li>
+<li><strong>大节点递归细分</strong>。一个章节页数超过 <code>max_page_num_each_node</code>（默认 10）且 token 数达到 <code>max_token_num_each_node</code>（默认 20000）时，对这一段再跑一遍无目录模式，生成子节点。</li>
+<li><strong>节点摘要用全文生成</strong>。开启摘要时，每个节点的完整正文都会送给 LLM 生成一段描述，所有节点并发执行。</li>
+</ul>
+<h3 id="输出结构"><a href="#输出结构" class="headerlink" title="输出结构"></a>输出结构</h3><p>PDF 生成的节点形如：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;title&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Financial Stability&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;node_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0006&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;start_index&quot;</span><span class="punctuation">:</span> <span class="number">21</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;end_index&quot;</span><span class="punctuation">:</span> <span class="number">22</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;summary&quot;</span><span class="punctuation">:</span> <span class="string">&quot;…&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">&quot;nodes&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><code>start_index</code>、<code>end_index</code> 是从 1 开始、闭区间的<strong>物理页码</strong>（不是印刷页码）。一个章节可能从页面中部开始，所以相邻节点常共享边界页，例如仓库示例中上一节结束于第 22 页，下一节也从第 22 页开始。</p>
+<p>Markdown 文件走另一条路径：按 <code>#</code> 的层级直接建树，节点带 <code>line_num</code> 而不是页码。关闭摘要时整个过程不调用 LLM，下面是用一份自拟的运维手册在本地实测的输出（节选）：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;title&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1.2 升级失败处理&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;node_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0003&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;text&quot;</span><span class="punctuation">:</span> <span class="string">&quot;### 1.2 升级失败处理\n先核对基线版本，再检查补丁签名与哈希；连续失败三次回滚到备用分区。&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;line_num&quot;</span><span class="punctuation">:</span> <span class="number">8</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<h3 id="树有多大"><a href="#树有多大" class="headerlink" title="树有多大"></a>树有多大</h3><p>树需要整体放进 LLM 上下文，所以体积直接决定每次查询的成本。用 tiktoken（gpt-4o 对应的 o200k_base 编码）统计仓库 <code>tests/results</code> 里的四个示例：</p>
+<table>
+<thead>
+<tr>
+<th>示例文档</th>
+<th>页数</th>
+<th>节点数</th>
+<th>最大深度</th>
+<th>含摘要</th>
+<th>树的 token 数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>美联储 2023 年报</td>
+<td>222</td>
+<td>76</td>
+<td>3</td>
+<td>否</td>
+<td>约 2.7K</td>
+</tr>
+<tr>
+<td>PRML 教材</td>
+<td>758</td>
+<td>286</td>
+<td>3</td>
+<td>否</td>
+<td>约 9.1K</td>
+</tr>
+<tr>
+<td>某公司季度财报（q1-fy25-earnings）</td>
+<td>22</td>
+<td>41</td>
+<td>3</td>
+<td>是</td>
+<td>约 9.9K</td>
+</tr>
+<tr>
+<td>监管解释性文件（Regulation Best Interest）</td>
+<td>28</td>
+<td>9</td>
+<td>2</td>
+<td>是</td>
+<td>约 2.2K</td>
+</tr>
+</tbody></table>
+<p>结论很直接：<strong>摘要是树体积的主要来源</strong>。一份 22 页、带摘要的财报，树的体积和 758 页、不带摘要的教材相当。摘要能显著提升 LLM 选节点的准确度，但要按文档规模权衡是否开启，或者只给上层节点加摘要。</p>
+<h2 id="原理二：推理式树搜索"><a href="#原理二：推理式树搜索" class="headerlink" title="原理二：推理式树搜索"></a>原理二：推理式树搜索</h2><p>开源仓库只负责建树，检索要自己实现。官方 tree-search 教程给出的基本做法是一次 LLM 调用：把问题和去掉正文的树交给模型，要求返回 JSON 格式的推理过程和节点 ID 列表，然后按 ID 取回节点正文，再生成答案。教程也说明，其云端检索 API 使用的是“LLM 树搜索 + 基于价值函数的蒙特卡洛树搜索（MCTS）”的组合，细节当时尚未公开。</p>
+<p>这种方式带来两个向量检索没有的能力：</p>
+<ul>
+<li><strong>检索过程可读</strong>。模型返回的 <code>thinking</code> 说明了为什么选这些节点，出错时能直接看出是理解错了问题还是目录本身有问题。</li>
+<li><strong>专家知识直接写进提示词</strong>。教程的例子是“问题涉及 EBITDA 调整时，优先看 10-K 的 Item 7 与 Item 8 附注”。在向量 RAG 里做同样的事，往往要微调 embedding 模型或额外加重排规则。</li>
+</ul>
+<p>多文档场景下，PageIndex 当时默认只在单文档内检索。官方 doc-search 教程给出三种先选文档、再做树搜索的策略：按元数据筛选、按语义检索文档、按文档描述让 LLM 选择（适合文档数量少的情况）。</p>
+<h2 id="优缺点与成本、延迟权衡"><a href="#优缺点与成本、延迟权衡" class="headerlink" title="优缺点与成本、延迟权衡"></a>优缺点与成本、延迟权衡</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>PageIndex 的表现</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>检索准确性</td>
+<td>结构清晰的长文档上明显占优</td>
+<td>取回的是完整章节，不存在切块割裂</td>
+</tr>
+<tr>
+<td>可解释性</td>
+<td>强</td>
+<td>有推理文字和页码范围，便于审计</td>
+</tr>
+<tr>
+<td>建索引成本</td>
+<td>高</td>
+<td>前 20 页逐页调用 LLM 判断是否为目录页；无目录模式下全文按 2 万 token 分组逐组送入 LLM；每个目录条目的页码校验各一次调用；摘要又把各节点全文送一遍。粗略看，整本文档至少要过 1～2 遍模型</td>
+</tr>
+<tr>
+<td>查询延迟</td>
+<td>秒级</td>
+<td>每次查询至少一次读整棵树的 LLM 调用，再加答案生成；向量检索是毫秒级</td>
+</tr>
+<tr>
+<td>查询成本</td>
+<td>与树的大小成正比</td>
+<td>上表中 2K～10K token 的树，每次查询都要付这部分输入</td>
+</tr>
+<tr>
+<td>更新代价</td>
+<td>以文档为单位重建</td>
+<td>改了一页也要重新建树；对“一次写入、反复查询”的归档文档影响不大</td>
+</tr>
+<tr>
+<td>扩展性</td>
+<td>单文档内优秀，跨大量文档需要外层先选文档</td>
+<td>不能像向量库一样直接在百万块上检索</td>
+</tr>
+<tr>
+<td>基础设施</td>
+<td>不需要向量库</td>
+<td>树就是一个 JSON 文件，存对象存储或数据库即可</td>
+</tr>
+</tbody></table>
+<p>适合 PageIndex 的成本结构是：文档数量有限、单篇很长、查询频率不高但对准确性要求高。典型如投研、审计、合规审查、法律尽调，一次答错的代价远高于一次多花几秒和几分钱。</p>
+<h2 id="真实用法（2025-09-版本）"><a href="#真实用法（2025-09-版本）" class="headerlink" title="真实用法（2025-09 版本）"></a>真实用法（2025-09 版本）</h2><p>原稿里的 <code>chat_completions</code> 调用、<code>pageindex.mcp</code> 模块和“某投行合规覆盖率从 60% 到 95%”一类案例数据都无法在当时的代码与文档中找到依据，这里全部删去，只保留能对上源码的用法。</p>
+<h3 id="开源仓库：本地建树"><a href="#开源仓库：本地建树" class="headerlink" title="开源仓库：本地建树"></a>开源仓库：本地建树</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git <span class="built_in">clone</span> https://github.com/VectifyAI/PageIndex.git</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">cd</span> PageIndex</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">pip3 install --upgrade -r requirements.txt   <span class="comment"># openai、pymupdf、PyPDF2、tiktoken 等，均锁定版本</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">echo</span> <span class="string">&quot;CHATGPT_API_KEY=<span class="variable">$&#123;OPENAI_API_KEY&#125;</span>&quot;</span> &gt; .<span class="built_in">env</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">python3 run_pageindex.py --pdf_path ./docs/annual_report.pdf</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># 结果写入 ./results/annual_report_structure.json</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">python3 run_pageindex.py --md_path ./docs/manual.md --if-add-node-summary no</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="comment"># Markdown 按 # 层级建树；关闭摘要时不调用 LLM</span></span></span></code></pre></div></div></figure>
+
+<p><code>run_pageindex.py</code> 的参数及默认值（以代码中的 argparse 为准）：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>默认值</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--model</code></td>
+<td><code>gpt-4o-2024-11-20</code></td>
+<td>建树与摘要使用的模型</td>
+</tr>
+<tr>
+<td><code>--toc-check-pages</code></td>
+<td>20</td>
+<td>在前多少页里找目录</td>
+</tr>
+<tr>
+<td><code>--max-pages-per-node</code></td>
+<td>10</td>
+<td>节点超过该页数（且 token 超限）时细分</td>
+</tr>
+<tr>
+<td><code>--max-tokens-per-node</code></td>
+<td>20000</td>
+<td>节点 token 上限</td>
+</tr>
+<tr>
+<td><code>--if-add-node-id</code></td>
+<td>yes</td>
+<td>写入 node_id</td>
+</tr>
+<tr>
+<td><code>--if-add-node-summary</code></td>
+<td>yes</td>
+<td>为节点生成摘要</td>
+</tr>
+<tr>
+<td><code>--if-add-doc-description</code></td>
+<td>no</td>
+<td>生成整份文档的描述（README 写的默认值是 yes，与代码不一致）</td>
+</tr>
+<tr>
+<td><code>--if-add-node-text</code></td>
+<td>no</td>
+<td>在节点中保留正文</td>
+</tr>
+</tbody></table>
+<p>这一版本代码的边界条件，都能在源码中找到对应位置：</p>
+<ul>
+<li><strong>只读文字层</strong>。PDF 文本由 PyPDF2 的 <code>extract_text()</code> 提取，扫描件没有文字层时，建出来的树没有意义。仓库 README 也说明它面向“简单 PDF”，复杂版面建议先用其云端 OCR 转成 Markdown。</li>
+<li><strong>绑定 OpenAI 模型名</strong>。LLM 调用写死了 OpenAI 客户端（可通过 <code>OPENAI_BASE_URL</code> 指向兼容服务），但 token 计数用 <code>tiktoken.encoding_for_model(model)</code>。实测 <code>qwen-plus</code>、<code>deepseek-chat</code> 这类名称会抛 <code>KeyError</code>，文档没有目录、走到按页计数的分支时就会失败。</li>
+<li><strong>失败不抛异常</strong>。LLM 调用重试 10 次仍失败时返回字符串 <code>&quot;Error&quot;</code>，节点摘要可能就是这五个字母；三种模式全部校验失败时才抛 <code>Exception(&#39;Processing failed&#39;)</code>。</li>
+<li><strong>包名冲突</strong>。仓库里的 <code>pageindex/</code> 目录与 PyPI 上的 SDK 同名。在仓库根目录运行 SDK 代码，<code>from pageindex import PageIndexClient</code> 导入的是本地目录（实测直接报缺少 tiktoken），两者要放在不同工程或虚拟环境里。</li>
+</ul>
+<h3 id="检索：自己实现树搜索"><a href="#检索：自己实现树搜索" class="headerlink" title="检索：自己实现树搜索"></a>检索：自己实现树搜索</h3><p>下面的实现参照官方 tree-search 教程与 cookbook 的提示词结构，补上了三个生产中必须处理的问题：只把目录和摘要交给模型、过滤模型编造的节点 ID、限制单次取回的页数。</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="77"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 依赖：openai==1.101.0 pymupdf==1.26.4（与 PageIndex 仓库 requirements.txt 一致）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> json</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">from</span> collections.abc <span class="keyword">import</span> <span class="type">Callable</span>, Iterator</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">import</span> pymupdf</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">SEARCH_PROMPT = <span class="string">&quot;&quot;&quot;你会拿到一个问题和一份文档的树状目录（每个节点含 node_id、标题、页码范围，可能含摘要）。</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="string">找出所有可能包含答案的节点。优先选择最具体的子节点，不要选覆盖整本文档的根节点。</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="string">问题：&#123;query&#125;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="string">文档树：</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="string">&#123;tree&#125;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="string">只输出 JSON：&#123;&#123;&quot;thinking&quot;: &quot;&lt;为什么选这些节点&gt;&quot;, &quot;node_list&quot;: [&quot;0003&quot;, &quot;0007&quot;]&#125;&#125;&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">iter_nodes</span>(<span class="params">nodes: <span class="built_in">list</span>[<span class="built_in">dict</span>]</span>) -&gt; Iterator[<span class="built_in">dict</span>]:</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="keyword">for</span> node <span class="keyword">in</span> nodes:</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">        <span class="keyword">yield</span> node</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        <span class="keyword">yield</span> <span class="keyword">from</span> iter_nodes(node.get(<span class="string">&quot;nodes&quot;</span>, []))</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">strip_fields</span>(<span class="params">nodes: <span class="built_in">list</span>[<span class="built_in">dict</span>], fields=(<span class="params"><span class="string">&quot;text&quot;</span>,</span>)</span>) -&gt; <span class="built_in">list</span>[<span class="built_in">dict</span>]:</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;检索时只给模型看目录与摘要，正文按需再取。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">    <span class="keyword">return</span> [</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        &#123;**&#123;k: v <span class="keyword">for</span> k, v <span class="keyword">in</span> n.items() <span class="keyword">if</span> k <span class="keyword">not</span> <span class="keyword">in</span> fields <span class="keyword">and</span> k != <span class="string">&quot;nodes&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">         **(&#123;<span class="string">&quot;nodes&quot;</span>: strip_fields(n[<span class="string">&quot;nodes&quot;</span>], fields)&#125; <span class="keyword">if</span> n.get(<span class="string">&quot;nodes&quot;</span>) <span class="keyword">else</span> &#123;&#125;)&#125;</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">        <span class="keyword">for</span> n <span class="keyword">in</span> nodes</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">    ]</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">openai_llm</span>(<span class="params">model: <span class="built_in">str</span> = <span class="string">&quot;gpt-4.1&quot;</span></span>) -&gt; <span class="type">Callable</span>[[<span class="built_in">str</span>], <span class="built_in">str</span>]:</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    client = OpenAI()  <span class="comment"># 读取环境变量 OPENAI_API_KEY</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    <span class="keyword">def</span> <span class="title function_">call</span>(<span class="params">prompt: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">        resp = client.chat.completions.create(</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">            model=model,</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">            temperature=<span class="number">0</span>,</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">            response_format=&#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;json_object&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">            messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: prompt&#125;],</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">        )</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">        <span class="keyword">return</span> resp.choices[<span class="number">0</span>].message.content</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">    <span class="keyword">return</span> call</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">tree_search</span>(<span class="params">query: <span class="built_in">str</span>, structure: <span class="built_in">list</span>[<span class="built_in">dict</span>], llm: <span class="type">Callable</span>[[<span class="built_in">str</span>], <span class="built_in">str</span>]</span>) -&gt; <span class="built_in">tuple</span>[<span class="built_in">str</span>, <span class="built_in">list</span>[<span class="built_in">dict</span>]]:</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">    tree = json.dumps(strip_fields(structure), ensure_ascii=<span class="literal">False</span>)</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">    result = json.loads(llm(SEARCH_PROMPT.<span class="built_in">format</span>(query=query, tree=tree)))</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">    by_id = &#123;n[<span class="string">&quot;node_id&quot;</span>]: n <span class="keyword">for</span> n <span class="keyword">in</span> iter_nodes(structure)&#125;</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">    <span class="comment"># 模型可能编造不存在的 node_id，必须按真实映射过滤</span></span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">    hits = [by_id[i] <span class="keyword">for</span> i <span class="keyword">in</span> result.get(<span class="string">&quot;node_list&quot;</span>, []) <span class="keyword">if</span> i <span class="keyword">in</span> by_id]</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">    <span class="keyword">return</span> result.get(<span class="string">&quot;thinking&quot;</span>, <span class="string">&quot;&quot;</span>), hits</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">node_content</span>(<span class="params">node: <span class="built_in">dict</span>, pdf_path: <span class="built_in">str</span> | <span class="literal">None</span> = <span class="literal">None</span>, max_pages: <span class="built_in">int</span> = <span class="number">20</span></span>) -&gt; <span class="built_in">str</span>:</span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">    <span class="keyword">if</span> <span class="string">&quot;text&quot;</span> <span class="keyword">in</span> node:  <span class="comment"># Markdown 树，或生成时开启了 --if-add-node-text</span></span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">        <span class="keyword">return</span> node[<span class="string">&quot;text&quot;</span>]</span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">    start, end = node[<span class="string">&quot;start_index&quot;</span>], node[<span class="string">&quot;end_index&quot;</span>]  <span class="comment"># 1 起始、闭区间的物理页码</span></span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">    <span class="keyword">if</span> end - start + <span class="number">1</span> &gt; max_pages:</span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">        <span class="keyword">raise</span> ValueError(<span class="string">f&quot;节点 <span class="subst">&#123;node[<span class="string">&#x27;node_id&#x27;</span>]&#125;</span> 跨 <span class="subst">&#123;end - start + <span class="number">1</span>&#125;</span> 页，应下钻到子节点再取正文&quot;</span>)</span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">    <span class="keyword">with</span> pymupdf.<span class="built_in">open</span>(pdf_path) <span class="keyword">as</span> doc:</span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">        <span class="keyword">return</span> <span class="string">&quot;\n&quot;</span>.join(doc[i - <span class="number">1</span>].get_text() <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(start, end + <span class="number">1</span>))</span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">audit_tree</span>(<span class="params">result: <span class="built_in">dict</span>, total_pages: <span class="built_in">int</span></span>) -&gt; <span class="built_in">list</span>[<span class="built_in">str</span>]:</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;建树后自检：本地版本的 LLM 调用重试 10 次仍失败时会返回字符串 &quot;Error&quot;，不会抛异常。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">    problems = []</span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">    <span class="keyword">for</span> n <span class="keyword">in</span> iter_nodes(result[<span class="string">&quot;structure&quot;</span>]):</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">        <span class="keyword">if</span> n.get(<span class="string">&quot;summary&quot;</span>) == <span class="string">&quot;Error&quot;</span>:</span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">            problems.append(<span class="string">f&quot;<span class="subst">&#123;n[<span class="string">&#x27;node_id&#x27;</span>]&#125;</span> 摘要生成失败&quot;</span>)</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">        start, end = n.get(<span class="string">&quot;start_index&quot;</span>), n.get(<span class="string">&quot;end_index&quot;</span>)</span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">        <span class="keyword">if</span> start <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">or</span> end <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">or</span> start &gt; end <span class="keyword">or</span> end &gt; total_pages:</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">            problems.append(<span class="string">f&quot;<span class="subst">&#123;n.get(<span class="string">&#x27;node_id&#x27;</span>)&#125;</span> 页码异常：<span class="subst">&#123;start&#125;</span>-<span class="subst">&#123;end&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">    <span class="keyword">return</span> problems</span></span></code></pre></div></div></figure>
+
+<p>用法：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">import</span> json</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">result = json.load(<span class="built_in">open</span>(<span class="string">&quot;results/annual_report_structure.json&quot;</span>))</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">print</span>(audit_tree(result, total_pages=<span class="number">222</span>))  <span class="comment"># 空列表才进入检索</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">thinking, hits = tree_search(<span class="string">&quot;2023 年研发投入同比变化是多少？&quot;</span>, result[<span class="string">&quot;structure&quot;</span>], openai_llm())</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">context = <span class="string">&quot;\n\n&quot;</span>.join(node_content(n, <span class="string">&quot;docs/annual_report.pdf&quot;</span>) <span class="keyword">for</span> n <span class="keyword">in</span> hits)</span></span></code></pre></div></div></figure>
+
+<p>离线验证时用固定返回的假模型替代 <code>openai_llm()</code>：对 Markdown 树返回 <code>[&quot;0006&quot;, &quot;0003&quot;, &quot;9999&quot;]</code>，编造的 <code>9999</code> 被过滤；发给模型的树中不含 <code>text</code> 字段；对跨 30 页的根节点取正文会触发页数保护；用仓库的年报示例树跑 <code>audit_tree</code> 结果为空，人为把一个摘要改成 <code>&quot;Error&quot;</code>、一个 <code>end_index</code> 改成 999 后都能报出来。</p>
+<p>单次树搜索的主要失败方式是模型选了过大的父节点。上面用页数上限直接拒绝，更完整的做法是两段式：先只给模型看前两层，选中章节后再展开该章节的子树做第二次选择，树越大收益越明显。</p>
+<h3 id="云端-API：pageindex-SDK-0-1-8"><a href="#云端-API：pageindex-SDK-0-1-8" class="headerlink" title="云端 API：pageindex SDK 0.1.8"></a>云端 API：pageindex SDK 0.1.8</h3><p>云端服务在建树之外还提供 OCR 和托管检索。SDK 是一个很薄的 HTTP 客户端，全部方法如下：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="18"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 依赖：pageindex==0.1.8（云端 API 的 Python SDK，与仓库里的本地建树代码不是同一套）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> os</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> time</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">from</span> pageindex <span class="keyword">import</span> PageIndexClient</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">client = PageIndexClient(api_key=os.environ[<span class="string">&quot;PAGEINDEX_API_KEY&quot;</span>])</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">doc_id = client.submit_document(<span class="string">&quot;./annual_report.pdf&quot;</span>)[<span class="string">&quot;doc_id&quot;</span>]  <span class="comment"># 上传后云端同时做 OCR 与建树</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">while</span> <span class="keyword">not</span> client.is_retrieval_ready(doc_id):</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    time.sleep(<span class="number">10</span>)</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">tree = client.get_tree(doc_id, node_summary=<span class="literal">True</span>)[<span class="string">&quot;result&quot;</span>]  <span class="comment"># 可交给上文的 tree_search 自行检索</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">page_md = client.get_ocr(doc_id, <span class="built_in">format</span>=<span class="string">&quot;page&quot;</span>)  <span class="comment"># 逐页 OCR 结果；format=&quot;node&quot; 按节点返回</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="comment"># 或直接使用云端检索：提交后得到 retrieval_id，再用 get_retrieval 查询状态与结果</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">retrieval_id = client.submit_query(doc_id, <span class="string">&quot;2023 年研发投入同比变化是多少？&quot;</span>, thinking=<span class="literal">True</span>)[<span class="string">&quot;retrieval_id&quot;</span>]</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="built_in">print</span>(client.get_retrieval(retrieval_id))</span></span></code></pre></div></div></figure>
+
+<p>用替换 <code>requests</code> 的方式核对了调用序列：<code>POST /doc/</code> → 轮询 <code>GET /doc/{id}/?type=tree</code> → <code>GET …?type=tree&amp;summary=True</code> → <code>GET …?type=ocr&amp;format=page</code> → <code>POST /retrieval/</code> → <code>GET /retrieval/{id}/</code>。另有 <code>delete_document(doc_id)</code>。注意文档会上传到第三方云端，涉密或受监管数据要先确认合规。</p>
+<h2 id="与向量-RAG、GraphRAG-的对比"><a href="#与向量-RAG、GraphRAG-的对比" class="headerlink" title="与向量 RAG、GraphRAG 的对比"></a>与向量 RAG、GraphRAG 的对比</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>向量 RAG</th>
+<th>GraphRAG（微软，2024）</th>
+<th>PageIndex</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>索引单元</td>
+<td>固定长度的块</td>
+<td>实体、关系、社区摘要</td>
+<td>文档自身的章节树</td>
+</tr>
+<tr>
+<td>建索引成本</td>
+<td>低（只算 embedding）</td>
+<td>很高（LLM 抽取实体关系并逐层生成社区摘要）</td>
+<td>高（LLM 识别目录、校验、生成摘要）</td>
+</tr>
+<tr>
+<td>查询延迟</td>
+<td>毫秒级检索 + 一次生成</td>
+<td>本地搜索较快，全局搜索需汇总大量社区摘要</td>
+<td>秒级，至少两次 LLM 调用</td>
+</tr>
+<tr>
+<td>检索依据</td>
+<td>语义相似度</td>
+<td>实体关联与社区归纳</td>
+<td>LLM 对目录结构的推理</td>
+</tr>
+<tr>
+<td>擅长的问题</td>
+<td>事实型、措辞接近的问题</td>
+<td>跨大量文档的全局性、主题性问题</td>
+<td>单篇长文档内需要定位与跨章节推理的问题</td>
+</tr>
+<tr>
+<td>规模</td>
+<td>百万级块</td>
+<td>语料级，但成本随语料线性上升</td>
+<td>单文档内最佳，多文档要先选文档</td>
+</tr>
+<tr>
+<td>可解释性</td>
+<td>弱（分数）</td>
+<td>中（可追溯实体与社区）</td>
+<td>强（推理文字 + 页码）</td>
+</tr>
+<tr>
+<td>对文档结构的依赖</td>
+<td>无</td>
+<td>低</td>
+<td>高，没有清晰层级时优势消失</td>
+</tr>
+<tr>
+<td>基础设施</td>
+<td>向量库</td>
+<td>图存储或 Parquet 文件 + 向量库</td>
+<td>一个 JSON 文件</td>
+</tr>
+</tbody></table>
+<p>三者并不互斥。常见组合是：向量或元数据检索先从文档库里选出候选文档，PageIndex 在单篇文档内做精确定位；GraphRAG 用在“整个语料说了什么”这类全局问题上。</p>
+<h2 id="适用场景判断清单"><a href="#适用场景判断清单" class="headerlink" title="适用场景判断清单"></a>适用场景判断清单</h2><p>优先考虑 PageIndex：</p>
+<ul>
+<li><input disabled="" type="checkbox"> 单篇文档在几十页以上，并且有清晰的章节层级（年报、招股书、法规、标准、教材、设备手册）。</li>
+<li><input disabled="" type="checkbox"> 问题需要“先找到哪一节，再读完整一节”，或者涉及附注、附录的交叉引用。</li>
+<li><input disabled="" type="checkbox"> 答案需要附带页码出处，便于人工复核或审计。</li>
+<li><input disabled="" type="checkbox"> 查询量不大（人工分析场景），可以接受秒级延迟和每次几千到一万 token 的额外输入。</li>
+<li><input disabled="" type="checkbox"> 文档是“一次写入、反复查询”的归档材料，重建频率低。</li>
+</ul>
+<p>不适合或需要搭配其他方案：</p>
+<ul>
+<li><input disabled="" type="checkbox"> 海量短文档（工单、聊天记录、商品描述）：没有可利用的结构，向量或全文检索更合适。</li>
+<li><input disabled="" type="checkbox"> 高并发在线问答，要求百毫秒级响应。</li>
+<li><input disabled="" type="checkbox"> 扫描件且不能使用云端 OCR：先解决文字层，否则树建不起来。</li>
+<li><input disabled="" type="checkbox"> 文档频繁局部修改，需要分钟级同步。</li>
+<li><input disabled="" type="checkbox"> 问题是跨整个语料的归纳（“今年所有合同的共性风险”）：用 GraphRAG 或先做结构化抽取。</li>
+</ul>
+<h2 id="与-Agent-结合：MCP"><a href="#与-Agent-结合：MCP" class="headerlink" title="与 Agent 结合：MCP"></a>与 Agent 结合：MCP</h2><p>2025-08-25 创建的 VectifyAI&#x2F;pageindex-mcp 把云端能力封装成 MCP server，2025-09-15 发布的 1.3.0 加入了 OAuth 2.1 认证。两种接入方式：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;mcpServers&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;pageindex-local&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;npx&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;-y&quot;</span><span class="punctuation">,</span> <span class="string">&quot;pageindex-mcp&quot;</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">&quot;pageindex-remote&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;http&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="attr">&quot;url&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://mcp.pageindex.ai/mcp&quot;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>实际使用时二选一。本地方式需要 Node.js 18 以上，首次运行会打开浏览器完成 OAuth 授权，支持上传本机 PDF；远程方式由 MCP 客户端处理 OAuth，只能通过 URL 提交 PDF。不支持 HTTP 传输的客户端可以用 <code>mcp-remote</code> 桥接。Claude Desktop 还可以直接安装它发布的 <code>.dxt</code> 扩展。</p>
+<p>暴露给 Agent 的工具：</p>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>作用</th>
+<th>关键参数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>process_document</code></td>
+<td>上传本地 PDF 或提交 URL，执行 OCR 与建树</td>
+<td><code>url</code>（本地路径或 URL）</td>
+</tr>
+<tr>
+<td><code>recent_documents</code></td>
+<td>最近处理的文档及状态</td>
+<td><code>limit</code></td>
+</tr>
+<tr>
+<td><code>get_document</code></td>
+<td>单个文档信息与状态</td>
+<td><code>doc_id</code></td>
+</tr>
+<tr>
+<td><code>get_document_structure</code></td>
+<td>读取树结构，可控制深度</td>
+<td><code>doc_id</code>、<code>max_depth</code>（1–10）</td>
+</tr>
+<tr>
+<td><code>get_page_content</code></td>
+<td>读取指定页内容</td>
+<td><code>doc_id</code>、<code>pages</code>（如 <code>&quot;5&quot;</code>、<code>&quot;3-7&quot;</code>、<code>&quot;1,5,10&quot;</code>）</td>
+</tr>
+<tr>
+<td><code>remove_document</code></td>
+<td>永久删除文档及相关数据</td>
+<td><code>doc_ids</code></td>
+</tr>
+</tbody></table>
+<p>这组工具的设计本身就体现了“推理式检索”：没有 <code>search(query, top_k)</code>，Agent 需要先用 <code>get_document_structure</code> 看目录，自己判断要读哪几页，再用 <code>get_page_content</code> 取原文，读完不够再回到目录。接入时有两点建议：</p>
+<ul>
+<li><strong>先浅后深</strong>。<code>max_depth</code> 从 2 开始，定位到章节后再加深，避免一次把整棵树塞进上下文。</li>
+<li><strong>收紧危险工具</strong>。<code>remove_document</code> 是不可恢复的删除，在 Agent 的工具白名单里默认去掉，或者要求人工确认。</li>
+</ul>
+<p>不想把文档交给云端时，可以把上文的 <code>tree_search</code> 和 <code>node_content</code> 包装成自己 Agent 框架里的两个工具（读目录、按页取文），本地建树 + 本地检索，行为与 MCP 版本一致。</p>
+<h2 id="2026-09-补记：SDK-双模式与后续变化"><a href="#2026-09-补记：SDK-双模式与后续变化" class="headerlink" title="2026-09 补记：SDK 双模式与后续变化"></a>2026-09 补记：SDK 双模式与后续变化</h2><p>以下按 2026-09-28 的 PyPI 与 GitHub 信息核对。</p>
+<ul>
+<li><strong>SDK 支持 local mode</strong>。<code>pageindex</code> 在 2026-08-13 的 0.2.10.dev1 首次加入本地模式，正式版 0.2.10 发布于 2026-08-19。<code>PageIndexClient(api_key=...)</code> 走云端；不传 <code>api_key</code> 时进入本地模式，用开源流水线和你自己的模型密钥建索引，数据默认存放在 <code>./.pageindex</code>；也可以用 <code>PageIndexCloudClient</code>、<code>PageIndexLocalClient</code> 显式固定模式。本地模式的模型调用改为经由 LiteLLM 路由，token 计数也改用 <code>litellm.token_counter</code>，上文“本地代码绑定 OpenAI 模型名”的问题在 SDK 本地模式下不再存在；本地模式只支持 PDF，建索引是同步的。</li>
+<li><strong>检索 API 标注弃用</strong>。0.2.10 中 <code>submit_query</code>、<code>get_retrieval</code> 注明为仅云端可用，且云端已将其标记为弃用，推荐改用 <code>chat_completions</code>。上文 0.1.8 的云端检索写法仍可作为理解接口的参考，新项目应按新接口实现。</li>
+<li><strong>Agent 集成内置化</strong>。0.2.10 提供 <code>as_openai_tools</code>、<code>as_anthropic_tools</code>、<code>as_claude_mcp</code> 等方法，以及 OpenAI Agents SDK、Anthropic SDK、Claude Agent SDK 的集成模块，不必再手写工具包装。</li>
+<li><strong>规模与热度</strong>。README 新增了面向海量文档的 “PageIndex File System” 介绍和对话平台入口；仓库在 2026-09-28 约有 3.6 万 star，SDK 最新版本为同日发布的 0.2.20。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/02/04/agent-systems/%E4%B8%AA%E4%BA%BAAI%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AE%89%E5%85%A8%E8%BE%B9%E7%95%8C/">OpenClaw（原 Clawdbot）爆红之后：个人 AI 基础设施的安全边界</a></h3>
+        <p>从 OpenClaw 的信任模型和 CVE-2026-25253 攻击链出发，梳理本地执行型个人 Agent 的五类风险…</p>
+        <a class="btn primary" href="/2026/02/04/agent-systems/%E4%B8%AA%E4%BA%BAAI%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AE%89%E5%85%A8%E8%BE%B9%E7%95%8C/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/02/10/agent-systems/LlamaIndex%E6%B7%B1%E5%BA%A6%E8%B0%83%E7%A0%94%E4%B8%8E%E5%AE%9E%E8%B7%B5/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：LlamaIndex 2026：从 RAG 框架到文档 Agent 平台</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%90%91%E9%87%8F-RAG-%E5%9C%A8%E9%95%BF%E7%AF%87%E4%B8%93%E4%B8%9A%E6%96%87%E6%A1%A3%E4%B8%8A%E7%9A%84%E5%A4%B1%E8%B4%A5%E6%A8%A1%E5%BC%8F" data-toc-target="向量-RAG-在长篇专业文档上的失败模式"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">向量 RAG 在长篇专业文档上的失败模式</span></a><a class="toc-level-2" href="#PageIndex-%E6%98%AF%E4%BB%80%E4%B9%88" data-toc-target="PageIndex-是什么"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">PageIndex 是什么</span></a><a class="toc-level-2" href="#%E5%8E%9F%E7%90%86%E4%B8%80%EF%BC%9A%E6%A0%91%E7%B4%A2%E5%BC%95%E6%80%8E%E4%B9%88%E7%94%9F%E6%88%90" data-toc-target="原理一：树索引怎么生成"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">原理一：树索引怎么生成</span></a><a class="toc-level-3" href="#%E7%94%9F%E6%88%90%E6%B5%81%E7%A8%8B" data-toc-target="生成流程"><span class="toc-text">生成流程</span></a><a class="toc-level-3" href="#%E8%BE%93%E5%87%BA%E7%BB%93%E6%9E%84" data-toc-target="输出结构"><span class="toc-text">输出结构</span></a><a class="toc-level-3" href="#%E6%A0%91%E6%9C%89%E5%A4%9A%E5%A4%A7" data-toc-target="树有多大"><span class="toc-text">树有多大</span></a><a class="toc-level-2" href="#%E5%8E%9F%E7%90%86%E4%BA%8C%EF%BC%9A%E6%8E%A8%E7%90%86%E5%BC%8F%E6%A0%91%E6%90%9C%E7%B4%A2" data-toc-target="原理二：推理式树搜索"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">原理二：推理式树搜索</span></a><a class="toc-level-2" href="#%E4%BC%98%E7%BC%BA%E7%82%B9%E4%B8%8E%E6%88%90%E6%9C%AC%E3%80%81%E5%BB%B6%E8%BF%9F%E6%9D%83%E8%A1%A1" data-toc-target="优缺点与成本、延迟权衡"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">优缺点与成本、延迟权衡</span></a><a class="toc-level-2" href="#%E7%9C%9F%E5%AE%9E%E7%94%A8%E6%B3%95%EF%BC%882025-09-%E7%89%88%E6%9C%AC%EF%BC%89" data-toc-target="真实用法（2025-09-版本）"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">真实用法（2025-09 版本）</span></a><a class="toc-level-3" href="#%E5%BC%80%E6%BA%90%E4%BB%93%E5%BA%93%EF%BC%9A%E6%9C%AC%E5%9C%B0%E5%BB%BA%E6%A0%91" data-toc-target="开源仓库：本地建树"><span class="toc-text">开源仓库：本地建树</span></a><a class="toc-level-3" href="#%E6%A3%80%E7%B4%A2%EF%BC%9A%E8%87%AA%E5%B7%B1%E5%AE%9E%E7%8E%B0%E6%A0%91%E6%90%9C%E7%B4%A2" data-toc-target="检索：自己实现树搜索"><span class="toc-text">检索：自己实现树搜索</span></a><a class="toc-level-3" href="#%E4%BA%91%E7%AB%AF-API%EF%BC%9Apageindex-SDK-0-1-8" data-toc-target="云端-API：pageindex-SDK-0-1-8"><span class="toc-text">云端 API：pageindex SDK 0.1.8</span></a><a class="toc-level-2" href="#%E4%B8%8E%E5%90%91%E9%87%8F-RAG%E3%80%81GraphRAG-%E7%9A%84%E5%AF%B9%E6%AF%94" data-toc-target="与向量-RAG、GraphRAG-的对比"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">与向量 RAG、GraphRAG 的对比</span></a><a class="toc-level-2" href="#%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF%E5%88%A4%E6%96%AD%E6%B8%85%E5%8D%95" data-toc-target="适用场景判断清单"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">适用场景判断清单</span></a><a class="toc-level-2" href="#%E4%B8%8E-Agent-%E7%BB%93%E5%90%88%EF%BC%9AMCP" data-toc-target="与-Agent-结合：MCP"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">与 Agent 结合：MCP</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ASDK-%E5%8F%8C%E6%A8%A1%E5%BC%8F%E4%B8%8E%E5%90%8E%E7%BB%AD%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：SDK-双模式与后续变化"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">2026-09 补记：SDK 双模式与后续变化</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/langgraph-agent-engineering/" style="--rail: 94%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">16 / 17</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%90%91%E9%87%8F-RAG-%E5%9C%A8%E9%95%BF%E7%AF%87%E4%B8%93%E4%B8%9A%E6%96%87%E6%A1%A3%E4%B8%8A%E7%9A%84%E5%A4%B1%E8%B4%A5%E6%A8%A1%E5%BC%8F" data-toc-target="向量-RAG-在长篇专业文档上的失败模式" data-title="01 · 向量 RAG 在长篇专业文档上的失败模式" aria-label="向量 RAG 在长篇专业文档上的失败模式"></a><a class="toc-strip__dot" href="#PageIndex-%E6%98%AF%E4%BB%80%E4%B9%88" data-toc-target="PageIndex-是什么" data-title="02 · PageIndex 是什么" aria-label="PageIndex 是什么"></a><a class="toc-strip__dot" href="#%E5%8E%9F%E7%90%86%E4%B8%80%EF%BC%9A%E6%A0%91%E7%B4%A2%E5%BC%95%E6%80%8E%E4%B9%88%E7%94%9F%E6%88%90" data-toc-target="原理一：树索引怎么生成" data-title="03 · 原理一：树索引怎么生成" aria-label="原理一：树索引怎么生成"></a><a class="toc-strip__dot" href="#%E5%8E%9F%E7%90%86%E4%BA%8C%EF%BC%9A%E6%8E%A8%E7%90%86%E5%BC%8F%E6%A0%91%E6%90%9C%E7%B4%A2" data-toc-target="原理二：推理式树搜索" data-title="04 · 原理二：推理式树搜索" aria-label="原理二：推理式树搜索"></a><a class="toc-strip__dot" href="#%E4%BC%98%E7%BC%BA%E7%82%B9%E4%B8%8E%E6%88%90%E6%9C%AC%E3%80%81%E5%BB%B6%E8%BF%9F%E6%9D%83%E8%A1%A1" data-toc-target="优缺点与成本、延迟权衡" data-title="05 · 优缺点与成本、延迟权衡" aria-label="优缺点与成本、延迟权衡"></a><a class="toc-strip__dot" href="#%E7%9C%9F%E5%AE%9E%E7%94%A8%E6%B3%95%EF%BC%882025-09-%E7%89%88%E6%9C%AC%EF%BC%89" data-toc-target="真实用法（2025-09-版本）" data-title="06 · 真实用法（2025-09 版本）" aria-label="真实用法（2025-09 版本）"></a><a class="toc-strip__dot" href="#%E4%B8%8E%E5%90%91%E9%87%8F-RAG%E3%80%81GraphRAG-%E7%9A%84%E5%AF%B9%E6%AF%94" data-toc-target="与向量-RAG、GraphRAG-的对比" data-title="07 · 与向量 RAG、GraphRAG 的对比" aria-label="与向量 RAG、GraphRAG 的对比"></a><a class="toc-strip__dot" href="#%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF%E5%88%A4%E6%96%AD%E6%B8%85%E5%8D%95" data-toc-target="适用场景判断清单" data-title="08 · 适用场景判断清单" aria-label="适用场景判断清单"></a><a class="toc-strip__dot" href="#%E4%B8%8E-Agent-%E7%BB%93%E5%90%88%EF%BC%9AMCP" data-toc-target="与-Agent-结合：MCP" data-title="09 · 与 Agent 结合：MCP" aria-label="与 Agent 结合：MCP"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ASDK-%E5%8F%8C%E6%A8%A1%E5%BC%8F%E4%B8%8E%E5%90%8E%E7%BB%AD%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：SDK-双模式与后续变化" data-title="10 · 2026-09 补记：SDK 双模式与后续变化" aria-label="2026-09 补记：SDK 双模式与后续变化"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/PageIndex-无向量RAG新范式","title":"PageIndex：无向量、推理驱动的长文档检索","url":"/2025/09/16/agent-systems/PageIndex-%E6%97%A0%E5%90%91%E9%87%8FRAG%E6%96%B0%E8%8C%83%E5%BC%8F/","path":"langgraph-agent-engineering","index":15,"total":17,"next":{"title":"OpenClaw（原 Clawdbot）爆红之后：个人 AI 基础设施的安全边界","url":"/2026/02/04/agent-systems/%E4%B8%AA%E4%BA%BAAI%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AE%89%E5%85%A8%E8%BE%B9%E7%95%8C/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

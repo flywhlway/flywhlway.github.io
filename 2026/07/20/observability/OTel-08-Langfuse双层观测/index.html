@@ -1,0 +1,759 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Langfuse 双层观测融合 · 飞轮之道</title>
+<meta name="description" content="一次埋点、双端消费：Collector 扇出到 Tempo 与 Langfuse，Langfuse 管道补上过滤与脱敏，Baggage 改为白名单，并给出采样一致性设计与两层数据的对账方法。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/07/20/observability/OTel-08-Langfuse%E5%8F%8C%E5%B1%82%E8%A7%82%E6%B5%8B/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Langfuse 双层观测融合 · 飞轮之道">
+<meta property="og:description" content="一次埋点、双端消费：Collector 扇出到 Tempo 与 Langfuse，Langfuse 管道补上过滤与脱敏，Baggage 改为白名单，并给出采样一致性设计与两层数据的对账方法。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/07/20/observability/OTel-08-Langfuse%E5%8F%8C%E5%B1%82%E8%A7%82%E6%B5%8B/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">实验评估</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 9 / 12 篇</a>
+    </div>
+    <h1>Langfuse 双层观测融合</h1>
+    <p class="article-deck">一次埋点、双端消费：Collector 扇出到 Tempo 与 Langfuse，Langfuse 管道补上过滤与脱敏，Baggage 改为白名单…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>15 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a><a class="article-meta__tag" href="/tags/Langfuse/">#Langfuse</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>发往 Langfuse 的管道必须单独过滤和脱敏，Tempo 管道则去掉消息正文，内容只保留一份。</li><li>BaggageSpanProcessor 放行全部键，等于允许外部请求往 Langfuse 写任意属性；只放行 session.id、user.id。</li><li>采样只裁决一次：尾采样放在扇出之前，两个后端才能看到同一批 Trace。</li><li>同一次模型调用可能在 Langfuse 里出现两到三个 generation，对账前先去重。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>目标：<strong>一次埋点，双端消费</strong>。同一份 Trace 同时进入 Tempo（系统层：延迟、错误、依赖、SLO）与 Langfuse（AI 业务层：Prompt、会话、成本、评测），两层通过 trace_id 与会话属性互相印证。除了管道搭建，本篇重点讲三块容易被忽略的内容：Langfuse 管道的脱敏、Baggage 的白名单、两层数据的采样一致性与对账。</p>
+</blockquote>
+<h2 id="1-分工模型"><a href="#1-分工模型" class="headerlink" title="1. 分工模型"></a>1. 分工模型</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>LGTM（系统层）</th>
+<th>Langfuse（AI 业务层）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>核心问题</td>
+<td>慢在哪、错在哪、依赖谁</td>
+<td>答得好不好、贵不贵、哪个 Prompt 版本更好</td>
+</tr>
+<tr>
+<td>数据粒度</td>
+<td>全服务 Span（HTTP、DB、MQ、LLM）</td>
+<td>AI 语义 Span（Agent、节点、工具、模型调用）</td>
+</tr>
+<tr>
+<td>特色能力</td>
+<td>服务拓扑、TraceQL、日志与指标联动、告警</td>
+<td>会话回放、成本核算、Prompt 管理、评测与标注、数据集回归</td>
+</tr>
+<tr>
+<td>使用者</td>
+<td>SRE &#x2F; 平台工程</td>
+<td>AI 工程师 &#x2F; 产品 &#x2F; 算法</td>
+</tr>
+</tbody></table>
+<p>反模式：用 Langfuse 看微服务拓扑，或用 Grafana 做 Prompt 评测。每层做擅长的事，两层之间只靠 trace_id 和会话 ID 关联。</p>
+<h2 id="2-双层架构的取舍"><a href="#2-双层架构的取舍" class="headerlink" title="2. 双层架构的取舍"></a>2. 双层架构的取舍</h2><table>
+<thead>
+<tr>
+<th>方案</th>
+<th>密钥位置</th>
+<th>过滤与脱敏</th>
+<th>采样一致性</th>
+<th>故障影响</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A. Collector 扇出</td>
+<td>只在 Collector</td>
+<td>集中在 Langfuse 管道</td>
+<td>可在扇出前统一裁决</td>
+<td>Langfuse 不可用只影响其管道（见 4.4）</td>
+<td><strong>推荐</strong></td>
+</tr>
+<tr>
+<td>B. 应用内双 Exporter</td>
+<td>散落在每个服务</td>
+<td>每个服务各写一套</td>
+<td>各服务自行保证</td>
+<td>应用进程直接受 Langfuse 延迟影响</td>
+<td>不推荐</td>
+</tr>
+<tr>
+<td>C. 应用改用 Langfuse SDK</td>
+<td>散落在每个服务</td>
+<td>SDK 的掩码回调</td>
+<td>与 OTel 采样分离</td>
+<td>同 B</td>
+<td>与厂商绑定，本系列不采用</td>
+</tr>
+<tr>
+<td>D. 只保留一层</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>失去另一层能力</td>
+</tr>
+</tbody></table>
+<p>A 的额外收益是「内容只存一份」：消息正文只进 Langfuse（经过脱敏），Tempo 管道把正文属性删掉。Trace 后端的访问面通常比 Langfuse 宽得多，正文不该出现在那里。</p>
+<h2 id="3-Langfuse-作为-OTLP-后端的约束"><a href="#3-Langfuse-作为-OTLP-后端的约束" class="headerlink" title="3. Langfuse 作为 OTLP 后端的约束"></a>3. Langfuse 作为 OTLP 后端的约束</h2><ul>
+<li><strong>端点</strong>：<code>{LANGFUSE_HOST}/api/public/otel</code>，Trace 专用路径 <code>/api/public/otel/v1/traces</code>；自托管需 ≥ v3.22.0。</li>
+<li><strong>协议</strong>：只支持 OTLP&#x2F;HTTP（protobuf 与 JSON），不支持 gRPC；只消费 Trace，Collector 里不要把 metrics &#x2F; logs 管道指向它。支持 gzip 压缩。</li>
+<li><strong>认证</strong>：Basic Auth，<code>base64(pk-lf-...:sk-lf-...)</code>。</li>
+<li><strong>实时性请求头</strong>：官方文档（2026-07）说明，Langfuse Cloud 的 Fast Preview（v4 数据模型）需要额外带 <code>x-langfuse-ingestion-version: 4</code> 才能实时可见；本系列自托管的是 v3（文档 04 锁定 <code>LANGFUSE_VERSION=3</code>），不需要这个头。</li>
+<li><strong>trace_id</strong>：Langfuse 直接使用 OTel 的 trace_id，两边可以用同一个 ID 互查。</li>
+<li><strong>观测类型判定</strong>：带 <code>gen_ai.operation.name=chat</code>、<code>openinference.span.kind=LLM</code> 的 Span 会被识别为 generation；没有明确标注时，只要带 <code>gen_ai.request.model</code>、<code>llm.model_name</code> 或裸的 <code>model</code> 属性，也会按 generation 处理。这条兜底规则是后面「重复计费」问题的根源。</li>
+<li><strong>会话与用户</strong>：<code>session.id</code>（或 <code>gen_ai.conversation.id</code>、<code>langfuse.session.id</code>）映射为会话，<code>user.id</code> 映射为用户，<code>deployment.environment.name</code> 映射为环境。</li>
+<li><strong>Trace 根</strong>：没有父 Span 的那个 Span 决定 Trace 的名称与输入输出。根被过滤掉时，Langfuse 只建一个空壳 Trace，靠其他 Span 上的 <code>session.id</code>、<code>user.id</code>、<code>langfuse.trace.name</code> 等 Trace 级属性补全归属。</li>
+</ul>
+<p>端口规划与文档 03、04 保持一致：</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>宿主机访问</th>
+<th>容器网络内访问</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Grafana</td>
+<td><code>http://localhost:3000</code></td>
+<td><code>grafana:3000</code></td>
+</tr>
+<tr>
+<td>Langfuse Web</td>
+<td><code>http://localhost:3001</code></td>
+<td><code>langfuse-web:3000</code></td>
+</tr>
+<tr>
+<td>Collector OTLP</td>
+<td><code>localhost:4317</code>（gRPC）&#x2F; <code>4318</code>（HTTP）</td>
+<td><code>otel-collector:4317</code> &#x2F; <code>4318</code></td>
+</tr>
+<tr>
+<td>Tempo</td>
+<td><code>http://localhost:3200</code></td>
+<td><code>tempo:3200</code></td>
+</tr>
+<tr>
+<td>Prometheus</td>
+<td><code>http://localhost:9090</code></td>
+<td><code>prometheus:9090</code></td>
+</tr>
+</tbody></table>
+<p>Langfuse 在容器内监听 3000，映射到宿主机 3001，避开 Grafana。Collector 在容器网络里访问 <code>langfuse-web:3000</code>，宿主机上的脚本和浏览器访问 <code>localhost:3001</code>，两个端口都对，别混用。</p>
+<h2 id="4-推荐管道：Collector-扇出-过滤-脱敏"><a href="#4-推荐管道：Collector-扇出-过滤-脱敏" class="headerlink" title="4. 推荐管道：Collector 扇出 + 过滤 + 脱敏"></a>4. 推荐管道：Collector 扇出 + 过滤 + 脱敏</h2><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">App(OTLP) ─► Collector ─► [memory_limiter, tail_sampling] ─► forward/sampled ─┬─► [删正文] ─► Tempo</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">                                                                              └─► [范围过滤, 脱敏] ─► Langfuse</span></span></code></pre></div></div></figure>
+
+<h3 id="4-1-配置"><a href="#4-1-配置" class="headerlink" title="4.1 配置"></a>4.1 配置</h3><p>在文档 04 的 <code>otel-collector/config.yaml</code> 上改造 traces 部分（替换原有的 traces 管道，其余信号不动）：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="81"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">extensions:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">basicauth/langfuse:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">client_auth:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">username:</span> <span class="string">$&#123;env:LANGFUSE_PUBLIC_KEY&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">password:</span> <span class="string">$&#123;env:LANGFUSE_SECRET_KEY&#125;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">connectors:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">forward/sampled:</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">processors:</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="attr">tail_sampling:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="attr">decision_wait:</span> <span class="string">30s</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">policies:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">keep-genai</span>              <span class="comment"># 含 AI 语义 Span 的 Trace 全部保留</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">ottl_condition</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        <span class="attr">ottl_condition:</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">          <span class="attr">error_mode:</span> <span class="string">ignore</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">          <span class="attr">span:</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">            <span class="bullet">-</span> <span class="string">span.attributes[&quot;gen_ai.operation.name&quot;]</span> <span class="type">!=</span> <span class="string">nil</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">keep-errors</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">status_code</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        <span class="attr">status_code:</span> &#123; <span class="attr">status_codes:</span> [<span class="string">ERROR</span>] &#125;</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">sample-rest</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">probabilistic</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        <span class="attr">probabilistic:</span> &#123; <span class="attr">sampling_percentage:</span> <span class="number">10</span> &#125;</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">  <span class="attr">transform/strip-content:</span>            <span class="comment"># Tempo 管道：正文不进系统层</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    <span class="attr">error_mode:</span> <span class="string">ignore</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    <span class="attr">trace_statements:</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">delete_key(span.attributes,</span> <span class="string">&quot;gen_ai.input.messages&quot;</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">delete_key(span.attributes,</span> <span class="string">&quot;gen_ai.output.messages&quot;</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">delete_key(span.attributes,</span> <span class="string">&quot;input.value&quot;</span><span class="string">)</span>        <span class="comment"># OpenInference 未隐藏输入输出时的正文</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">delete_key(span.attributes,</span> <span class="string">&quot;output.value&quot;</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">  <span class="attr">filter/langfuse-scope:</span>              <span class="comment"># Langfuse 管道：只留 AI 语义 Span，并对模型调用去重</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">    <span class="attr">error_mode:</span> <span class="string">ignore</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    <span class="attr">trace_conditions:</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">span.attributes[&quot;gen_ai.operation.name&quot;]</span> <span class="string">==</span> <span class="string">nil</span> <span class="string">and</span> <span class="string">span.attributes[&quot;openinference.span.kind&quot;]</span> <span class="string">==</span> <span class="string">nil</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">span.attributes[&quot;openinference.span.kind&quot;]</span> <span class="string">==</span> <span class="string">&quot;LLM&quot;</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">  <span class="attr">transform/langfuse-redact:</span>          <span class="comment"># Langfuse 管道：正文规范化 + 脱敏 + Trace 命名</span></span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">    <span class="attr">error_mode:</span> <span class="string">ignore</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">    <span class="attr">trace_statements:</span></span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">      <span class="comment"># openai-v2 写入的是 ASCII 转义的 JSON，先解析再序列化成 UTF-8，正则边界才可靠</span></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">set(span.attributes[&quot;gen_ai.input.messages&quot;],</span> <span class="string">String(ParseJSON(span.attributes[&quot;gen_ai.input.messages&quot;])))</span> <span class="string">where</span> <span class="string">span.attributes[&quot;gen_ai.input.messages&quot;]</span> <span class="type">!=</span> <span class="string">nil</span></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">set(span.attributes[&quot;gen_ai.output.messages&quot;],</span> <span class="string">String(ParseJSON(span.attributes[&quot;gen_ai.output.messages&quot;])))</span> <span class="string">where</span> <span class="string">span.attributes[&quot;gen_ai.output.messages&quot;]</span> <span class="type">!=</span> <span class="string">nil</span></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">replace_all_patterns(span.attributes,</span> <span class="string">&quot;value&quot;</span><span class="string">,</span> <span class="string">&quot;\\b[1-9][0-9]&#123;5&#125;(19|20)[0-9]&#123;2&#125;(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])[0-9]&#123;3&#125;[0-9Xx]\\b&quot;</span><span class="string">,</span> <span class="string">&quot;[ID]&quot;</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">replace_all_patterns(span.attributes,</span> <span class="string">&quot;value&quot;</span><span class="string">,</span> <span class="string">&quot;\\b[A-HJ-NPR-Z0-9]&#123;17&#125;\\b&quot;</span><span class="string">,</span> <span class="string">&quot;[VIN]&quot;</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">replace_all_patterns(span.attributes,</span> <span class="string">&quot;value&quot;</span><span class="string">,</span> <span class="string">&quot;\\b1[3-9][0-9]&#123;9&#125;\\b&quot;</span><span class="string">,</span> <span class="string">&quot;[PHONE]&quot;</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">set(span.attributes[&quot;langfuse.trace.name&quot;],</span> <span class="string">span.name)</span> <span class="string">where</span> <span class="string">span.attributes[&quot;gen_ai.operation.name&quot;]</span> <span class="string">==</span> <span class="string">&quot;invoke_agent&quot;</span></span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx"><span class="attr">exporters:</span></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">  <span class="attr">otlphttp/langfuse:</span></span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">    <span class="attr">endpoint:</span> <span class="string">http://langfuse-web:3000/api/public/otel</span>   <span class="comment"># 容器网络内地址</span></span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">    <span class="attr">auth:</span></span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">      <span class="attr">authenticator:</span> <span class="string">basicauth/langfuse</span></span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">    <span class="attr">compression:</span> <span class="string">gzip</span></span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">    <span class="attr">retry_on_failure:</span></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">      <span class="attr">initial_interval:</span> <span class="string">5s</span></span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">      <span class="attr">max_interval:</span> <span class="string">30s</span></span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">      <span class="attr">max_elapsed_time:</span> <span class="string">300s</span></span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">    <span class="attr">sending_queue:</span></span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">      <span class="attr">queue_size:</span> <span class="number">5000</span></span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx"><span class="attr">service:</span></span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">  <span class="attr">extensions:</span> [<span class="string">health_check</span>, <span class="string">basicauth/langfuse</span>]</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">  <span class="attr">pipelines:</span></span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">    <span class="attr">traces/in:</span></span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">      <span class="attr">receivers:</span> [<span class="string">otlp</span>]</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">      <span class="attr">processors:</span> [<span class="string">memory_limiter</span>, <span class="string">tail_sampling</span>]</span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">      <span class="attr">exporters:</span> [<span class="string">forward/sampled</span>]</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">    <span class="attr">traces/tempo:</span></span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">      <span class="attr">receivers:</span> [<span class="string">forward/sampled</span>]</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">      <span class="attr">processors:</span> [<span class="string">transform/strip-content</span>, <span class="string">batch</span>]</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">      <span class="attr">exporters:</span> [<span class="string">otlp/tempo</span>]</span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">    <span class="attr">traces/langfuse:</span></span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">      <span class="attr">receivers:</span> [<span class="string">forward/sampled</span>]</span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">      <span class="attr">processors:</span> [<span class="string">filter/langfuse-scope</span>, <span class="string">transform/langfuse-redact</span>, <span class="string">batch</span>]</span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">      <span class="attr">exporters:</span> [<span class="string">otlphttp/langfuse</span>]</span></span></code></pre></div></div></figure>
+
+<p>密钥放在 Collector 的 <code>.env</code> 里，由 compose 注入，不写进配置文件，也不进版本库：</p>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">LANGFUSE_PUBLIC_KEY=pk-lf_ChangeMe_public</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">LANGFUSE_SECRET_KEY=sk-lf_ChangeMe_secret</span></span></code></pre></div></div></figure>
+
+<h3 id="4-2-过滤规则为什么这样写"><a href="#4-2-过滤规则为什么这样写" class="headerlink" title="4.2 过滤规则为什么这样写"></a>4.2 过滤规则为什么这样写</h3><p><code>filter/langfuse-scope</code> 的两条条件满足任意一条即丢弃：</p>
+<ol>
+<li><strong>没有 AI 语义的 Span 不进 Langfuse</strong>：HTTP、数据库、ASGI 内部 Span 在 Langfuse 里只是噪声。按属性判断而不是按 Span 名单判断，新增 Agent 不用改配置。Higress 网关 Span 没有 <code>gen_ai.operation.name</code>，也在这一步被挡住，避免它的 <code>model</code> 属性触发兜底规则变成第三个 generation。</li>
+<li><strong>同一次模型调用只保留一层</strong>：文档 05 的埋点组合里，一次调用会同时产生 OpenInference 的 <code>ChatOpenAI</code>（LLM）和 openai-v2 的 <code>chat deepseek-chat</code>，两个都会被 Langfuse 识别为 generation，token 和成本翻倍。这里保留 openai-v2 这一层，因为它遵循 GenAI 约定，并且是文档 05 生产配置里唯一携带正文的来源。</li>
+</ol>
+<p>第 2 条的前提是<strong>所有模型调用都经过 OpenAI SDK</strong>。如果某个 LangChain 组件用了别的 Provider SDK（openai-v2 覆盖不到），它只有 OpenInference 这一层，按这条规则会被整条丢掉；这时改为保留 OpenInference 层、丢弃 openai-v2 层。</p>
+<h3 id="4-3-脱敏规则的边界"><a href="#4-3-脱敏规则的边界" class="headerlink" title="4.3 脱敏规则的边界"></a>4.3 脱敏规则的边界</h3><ul>
+<li><strong>先规范化，再匹配。</strong> openai-v2 写入 <code>gen_ai.input.messages</code> 时用的是 ASCII 转义的 JSON，「我手机13812345678」在属性里是 <code>\u6211\u624b\u673a13812345678</code>：号码前一个字符是转义序列末尾的 <code>a</code>，属于单词字符，<code>\b</code> 边界不成立，手机号原样漏过。把一句带手机号的中文问题送进 openai-v2 就能复现。去掉 <code>\b</code> 也不行：VIN 规则会从转义序列中间开始匹配，把 <code>\u53f7</code> 切坏成非法 JSON，Langfuse 就解析不了整条消息。<code>ParseJSON</code> 加 <code>String</code> 把两个消息属性重新序列化成 UTF-8 文本之后，<code>\b</code> 在中文与数字之间成立，三条规则都能精确命中，20 位的订单号也不会被误伤。</li>
+<li><strong>规则顺序</strong>：身份证号（18 位）先于 VIN（17 位）、VIN 先于手机号（11 位），长规则先吃掉整段，短规则不会在长号码内部误中。</li>
+<li><strong>作用范围</strong>：<code>replace_all_patterns(span.attributes, &quot;value&quot;, ...)</code> 作用于所有字符串属性值，覆盖 OpenInference 的 <code>input.value</code> 等位置，不用逐个列键名。OpenInference 写入的 JSON 本身不转义中文，不需要规范化。</li>
+<li><strong>失败时的行为</strong>：<code>error_mode: ignore</code> 下，解析失败（例如属性被截断成非法 JSON）只跳过该条语句，后面的正则照常执行，但只能在转义文本上匹配，可能漏。所以文档 05 建议不要靠 <code>OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT</code> 截断正文。</li>
+<li><strong>定位</strong>：正则是兜底而不是第一道防线，业务标识在应用侧就应该用 <code>pseudonymize()</code> 哈希（文档 05）。规则变更要带样本回归：把脱敏后的真实会话整理成样本集，覆盖转义与非转义两种写法，每次改规则跑一遍对比。</li>
+<li>Tempo 管道删除的是正文属性；如果系统层也需要保留正文用于排障，同样要挂这组处理器，不能只保护 Langfuse 一侧。</li>
+</ul>
+<h3 id="4-4-两条管道的故障隔离"><a href="#4-4-两条管道的故障隔离" class="headerlink" title="4.4 两条管道的故障隔离"></a>4.4 两条管道的故障隔离</h3><p>扇出之后，每条管道有自己的 <code>batch</code> 处理器和发送队列。<code>batch</code> 与 <code>tail_sampling</code> 都是先接收、后异步下发，下游导出失败不会回传给客户端 SDK，所以 Langfuse 宕机既不会拖慢应用，也不会影响 Tempo 管道。代价是 Langfuse 这一侧会<strong>丢数据</strong>：发送队列在重试期间持续积压，满了之后新数据被丢弃，只留下日志和计数。因此要做三件事：</p>
+<ul>
+<li><code>sending_queue</code> 按「Langfuse 最长维护窗口 × 峰值 Span 速率」估算容量，不要沿用默认值；</li>
+<li>监控 Collector 自身指标里 <code>exporter=&quot;otlphttp/langfuse&quot;</code> 的发送失败与入队失败计数（指标名与告警规则见文档 10），入队失败一出现就说明队列已满；</li>
+<li>生产上给 Langfuse exporter 挂持久化队列（<code>file_storage</code>），Collector 重启也不丢积压（见文档 10）。</li>
+</ul>
+<h3 id="4-5-备选：应用直连（仅本地调试）"><a href="#4-5-备选：应用直连（仅本地调试）" class="headerlink" title="4.5 备选：应用直连（仅本地调试）"></a>4.5 备选：应用直连（仅本地调试）</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">AUTH=$(<span class="built_in">printf</span> <span class="string">&#x27;%s&#x27;</span> <span class="string">&quot;pk-lf_ChangeMe_public:sk-lf_ChangeMe_secret&quot;</span> | <span class="built_in">base64</span> | <span class="built_in">tr</span> -d <span class="string">&#x27;\n&#x27;</span>)</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">export</span> OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<span class="string">&quot;http://localhost:3001/api/public/otel/v1/traces&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">export</span> OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">export</span> OTEL_EXPORTER_OTLP_TRACES_HEADERS=<span class="string">&quot;Authorization=Basic <span class="variable">$&#123;AUTH&#125;</span>&quot;</span></span></span></code></pre></div></div></figure>
+
+<p><code>tr -d &#39;\n&#39;</code> 不能省：GNU coreutils 的 <code>base64</code> 默认每 76 个字符换行，Langfuse 的公私钥拼接后编码超过这个长度，换行符混进请求头会直接鉴权失败。直连没有过滤和脱敏，只用于快速验证。</p>
+<h2 id="5-会话与用户维度：Baggage-白名单"><a href="#5-会话与用户维度：Baggage-白名单" class="headerlink" title="5. 会话与用户维度：Baggage 白名单"></a>5. 会话与用户维度：Baggage 白名单</h2><p><code>user.id</code>、<code>session.id</code> 只打在根 Span 上，Langfuse 里按会话筛选时会漏掉子 Span。做法是在入口把它们写入 OTel Baggage，再用 <code>BaggageSpanProcessor</code> 复制到该上下文内的每个 Span。很多示例直接用 <code>ALLOW_ALL_BAGGAGE_KEYS</code>，这是一个安全缺口：</p>
+<ul>
+<li><code>baggage</code> 是普通请求头，任何能访问入口的客户端都能构造；</li>
+<li>放行全部键，意味着外部请求可以往每个 Span 写任意属性，包括 <code>langfuse.trace.name</code>、<code>langfuse.trace.tags</code>、<code>langfuse.observation.prompt.name</code> 这类 Langfuse 的控制属性，直接篡改 Trace 命名、标签和 Prompt 关联，也可以塞入超长值撑大存储；</li>
+<li>伪造的 <code>user.id</code> 会让成本和评测数据归到别人名下。</li>
+</ul>
+<p>改为白名单，并且只在网关鉴权之后写入：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># telemetry.py：setup_telemetry() 中，添加导出处理器之前</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">from</span> opentelemetry.processor.baggage <span class="keyword">import</span> BaggageSpanProcessor</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">BAGGAGE_TO_SPAN = &#123;<span class="string">&quot;session.id&quot;</span>, <span class="string">&quot;user.id&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">tp.add_span_processor(BaggageSpanProcessor(<span class="keyword">lambda</span> key: key <span class="keyword">in</span> BAGGAGE_TO_SPAN))</span></span></code></pre></div></div></figure>
+
+<p>依赖为 <code>opentelemetry-processor-baggage==0.64b0</code>（与文档 05 的埋点包同批次）。实测：入站 <code>baggage: session.id=s-1,user.id=u-9,langfuse.trace.tags=...,is_admin=true</code>，Span 上只会出现前两个键。</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 请求入口：网关已完成鉴权，这里只接收网关写入的值，不接受客户端自带的</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">from</span> opentelemetry <span class="keyword">import</span> baggage, context</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">bind_session</span>(<span class="params">user_hash: <span class="built_in">str</span>, session_id: <span class="built_in">str</span></span>):</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    ctx = baggage.set_baggage(<span class="string">&quot;user.id&quot;</span>, user_hash)            <span class="comment"># 哈希值，不放明文账号</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    ctx = baggage.set_baggage(<span class="string">&quot;session.id&quot;</span>, session_id, context=ctx)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="keyword">return</span> context.attach(ctx)                                  <span class="comment"># 请求结束时 context.detach(token)</span></span></span></code></pre></div></div></figure>
+
+<p>白名单只解决「哪些键能变成属性」，解决不了「值是不是伪造的」。完整链路要三处配合：</p>
+<ol>
+<li><strong>边缘剥离</strong>：公网入口在请求进入网关之前删除外部 <code>baggage</code> 头（文档 06 第 5 节解释了为什么不能在 GlobalFilter 里删）。</li>
+<li><strong>网关写入</strong>：鉴权之后由网关写入 <code>user.id</code>（哈希）与 <code>session.id</code>。</li>
+<li><strong>消费白名单</strong>：Python 侧按上面的方式只复制白名单键。</li>
+</ol>
+<p>还有一个容易忽略的出站问题：W3C Baggage 传播器会把 baggage 随<strong>所有</strong>出站 HTTP 请求发出，包括发往外部模型服务商的请求。这是 <code>user.id</code> 只放哈希的另一个原因；更彻底的做法是在出口网关（Higress）上删除发往外部的 <code>baggage</code> 请求头。</p>
+<p>Java 网关侧的写法随路线不同：路线 A（Agent）默认透传全部 baggage，路线 B（Micrometer）只透传 <code>management.tracing.baggage.remote-fields</code> 里声明的键（文档 06 §4.2）。</p>
+<h2 id="6-采样一致性"><a href="#6-采样一致性" class="headerlink" title="6. 采样一致性"></a>6. 采样一致性</h2><p>两层数据能对上的前提，是它们看到的是同一批 Trace。常见的不一致来源与对策：</p>
+<table>
+<thead>
+<tr>
+<th>不一致来源</th>
+<th>表现</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>两条管道各自做概率采样</td>
+<td>Langfuse 有的 Trace 在 Tempo 查不到，反之亦然</td>
+<td>尾采样放在扇出之前，只裁决一次（4.1 的 <code>forward</code> 连接器结构）</td>
+</tr>
+<tr>
+<td>网关按 0.1 头部采样</td>
+<td>两边都只有 10% 的 AI 会话，成本显著偏低</td>
+<td>Micrometer 路线显式设 <code>management.tracing.sampling.probability: 1.0</code>（文档 06）</td>
+</tr>
+<tr>
+<td>尾采样丢了部分 AI Trace</td>
+<td>Langfuse 会话缺轮次</td>
+<td><code>keep-genai</code> 策略保证含 AI 语义的 Trace 全量保留</td>
+</tr>
+<tr>
+<td>长工作流超过 <code>decision_wait</code></td>
+<td>同一会话被切成多段、部分段被丢</td>
+<td>文档 07 的做法：按 <code>temporalWorkflowID</code> 串联，保留规则覆盖这类 Span</td>
+</tr>
+<tr>
+<td>多副本 Collector 各自尾采样</td>
+<td>同一 Trace 的 Span 落在不同副本，决策不一致</td>
+<td>前面加一层按 trace_id 路由的负载均衡导出器，保证同一 Trace 进同一副本（文档 10）</td>
+</tr>
+</tbody></table>
+<p>要不要对 AI Trace 采样，是一个取舍：AI 会话的量通常比基础设施流量小几个数量级，但单条价值高（评测、回归、成本核算都依赖完整数据），所以本系列对 AI Trace 全量保留，只对其余流量按 10% 概率采样。确实需要对 AI Trace 采样时，两层的成本数字都要按采样率还原，而且以 Prometheus 指标为准，因为指标在 SDK 侧产生，不受 Trace 采样影响。</p>
+<h2 id="7-对账方法"><a href="#7-对账方法" class="headerlink" title="7. 对账方法"></a>7. 对账方法</h2><p>对账回答的是「两层数据有没有丢、有没有重」。以一个整点小时为窗口，比较三个数：模型调用次数、输入 token、输出 token。</p>
+<h3 id="7-1-指标侧（Prometheus，不受采样影响）"><a href="#7-1-指标侧（Prometheus，不受采样影响）" class="headerlink" title="7.1 指标侧（Prometheus，不受采样影响）"></a>7.1 指标侧（Prometheus，不受采样影响）</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 调用次数，按模型</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">sum by (gen_ai_request_model) (increase(gen_ai_client_operation_duration_seconds_count&#123;gen_ai_operation_name=&quot;chat&quot;&#125;[1h]))</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"># token，按模型与类型</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">sum by (gen_ai_request_model, gen_ai_token_type) (increase(gen_ai_client_token_usage_sum[1h]))</span></span></code></pre></div></div></figure>
+
+<p>在 Prometheus 的查询 API 上把评估时间设为窗口结束时刻（<code>time=2026-07-20T11:00:00Z</code>）。指标名的由来见文档 09 §6。</p>
+<h3 id="7-2-Langfuse-侧（Metrics-API）"><a href="#7-2-Langfuse-侧（Metrics-API）" class="headerlink" title="7.2 Langfuse 侧（Metrics API）"></a>7.2 Langfuse 侧（Metrics API）</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Q=<span class="string">&#x27;&#123;&quot;view&quot;:&quot;observations&quot;,</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="string">    &quot;dimensions&quot;:[&#123;&quot;field&quot;:&quot;providedModelName&quot;&#125;],</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="string">    &quot;metrics&quot;:[&#123;&quot;measure&quot;:&quot;count&quot;,&quot;aggregation&quot;:&quot;count&quot;&#125;,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="string">               &#123;&quot;measure&quot;:&quot;inputTokens&quot;,&quot;aggregation&quot;:&quot;sum&quot;&#125;,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="string">               &#123;&quot;measure&quot;:&quot;outputTokens&quot;,&quot;aggregation&quot;:&quot;sum&quot;&#125;],</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="string">    &quot;filters&quot;:[&#123;&quot;column&quot;:&quot;type&quot;,&quot;operator&quot;:&quot;=&quot;,&quot;value&quot;:&quot;GENERATION&quot;,&quot;type&quot;:&quot;string&quot;&#125;],</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="string">    &quot;fromTimestamp&quot;:&quot;2026-07-20T10:00:00Z&quot;,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="string">    &quot;toTimestamp&quot;:&quot;2026-07-20T11:00:00Z&quot;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">curl -s -G -u <span class="string">&quot;<span class="variable">$&#123;LANGFUSE_PUBLIC_KEY&#125;</span>:<span class="variable">$&#123;LANGFUSE_SECRET_KEY&#125;</span>&quot;</span> \</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  --data-urlencode <span class="string">&quot;query=<span class="variable">$&#123;Q&#125;</span>&quot;</span> \</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  http://localhost:3001/api/public/metrics | jq .</span></span></code></pre></div></div></figure>
+
+<h3 id="7-3-Tempo-侧（结构抽查）"><a href="#7-3-Tempo-侧（结构抽查）" class="headerlink" title="7.3 Tempo 侧（结构抽查）"></a>7.3 Tempo 侧（结构抽查）</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123; span.gen_ai.operation.name = &quot;chat&quot; &#125; | count() &gt; 1</span></span></code></pre></div></div></figure>
+
+<p>这条 TraceQL 找出一个 Trace 内有多次模型调用的会话，随机挑几条，在 Langfuse 里用同一个 trace_id 打开，逐个核对 generation 数量是否与 Tempo 中的 <code>chat</code> Span 数一致。</p>
+<h3 id="7-4-偏差解读"><a href="#7-4-偏差解读" class="headerlink" title="7.4 偏差解读"></a>7.4 偏差解读</h3><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>最可能的原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Langfuse token ≈ 指标的 2 倍</td>
+<td>两层 LLM Span 都进了 Langfuse，<code>filter/langfuse-scope</code> 第 2 条没生效</td>
+</tr>
+<tr>
+<td>Langfuse token ≈ 指标的 3 倍</td>
+<td>网关 Span 也进了 Langfuse（带 <code>model</code> 属性被识别为 generation）</td>
+</tr>
+<tr>
+<td>Langfuse 明显偏少且比例稳定</td>
+<td>头部或尾部采样把 AI Trace 丢了一部分（见第 6 节）</td>
+</tr>
+<tr>
+<td>Langfuse 偏少且集中在最近十几分钟</td>
+<td>摄取尚未完成，等待后重查</td>
+</tr>
+<tr>
+<td>调用次数对得上，token 对不上</td>
+<td>流式调用未开 <code>stream_options={&quot;include_usage&quot;: True}</code>，两侧都缺 usage；或模型名不一致导致分组错位</td>
+</tr>
+<tr>
+<td>调用次数与 token 都对得上，成本为 0</td>
+<td>Langfuse 的模型价目表里没有该模型，在项目设置中新增模型定义（匹配规则 + 单价）</td>
+</tr>
+</tbody></table>
+<p>经验阈值：窗口对齐后，调用次数应完全一致，token 偏差在 2% 以内（来源是 <code>increase()</code> 的外推误差）。超过阈值就按上表定位，不要调阈值。</p>
+<h2 id="8-Langfuse-侧的增值动作"><a href="#8-Langfuse-侧的增值动作" class="headerlink" title="8. Langfuse 侧的增值动作"></a>8. Langfuse 侧的增值动作</h2><ol>
+<li><strong>Sessions 视图</strong>：按 <code>session.id</code> 回放多轮诊断会话，检查上下文携带是否正确；</li>
+<li><strong>成本核算</strong>：确认 <code>deepseek-chat</code> 的价目表（输入&#x2F;输出单价）生效，按用户、会话、模型聚合；</li>
+<li><strong>评测（LLM-as-Judge）</strong>：配置 Judge 模型对回答打分（准确性、幻觉），分数挂到对应 Trace；</li>
+<li><strong>Prompt 管理</strong>：Prompt 版本化后，在 LLM Span 上写 <code>langfuse.observation.prompt.name</code> &#x2F; <code>langfuse.observation.prompt.version</code>，就能 A&#x2F;B 对比不同版本的成本与评分；</li>
+<li><strong>数据集回归</strong>：把线上问题 Trace 加入 Dataset，作为发布前回归集。</li>
+</ol>
+<h2 id="9-验收清单"><a href="#9-验收清单" class="headerlink" title="9. 验收清单"></a>9. 验收清单</h2><ul>
+<li><input disabled="" type="checkbox"> 同一次请求在 Tempo 与 Langfuse 均可见，trace_id 一致；</li>
+<li><input disabled="" type="checkbox"> Tempo 中的 Span 不含 <code>gen_ai.input.messages</code>、<code>gen_ai.output.messages</code>、<code>input.value</code>、<code>output.value</code>；</li>
+<li><input disabled="" type="checkbox"> Langfuse 中构造的手机号、身份证号、VIN 样本均显示为掩码；</li>
+<li><input disabled="" type="checkbox"> 入站携带 <code>langfuse.trace.tags</code> 等非白名单 baggage 时，Span 上不出现这些键；</li>
+<li><input disabled="" type="checkbox"> 一次模型调用在 Langfuse 中只对应一个 generation；</li>
+<li><input disabled="" type="checkbox"> 7.1 与 7.2 的调用次数一致，token 偏差 &lt; 2%；</li>
+<li><input disabled="" type="checkbox"> Collector 中 <code>otlphttp/langfuse</code> 的发送失败、入队失败计数为 0。</li>
+</ul>
+<h2 id="2026-09-补记：Langfuse-v4-与-OTLP-实时写入"><a href="#2026-09-补记：Langfuse-v4-与-OTLP-实时写入" class="headerlink" title="2026-09 补记：Langfuse v4 与 OTLP 实时写入"></a>2026-09 补记：Langfuse v4 与 OTLP 实时写入</h2><p>Langfuse 自托管 v4.0.0 于 2026-07-29 发布。文档 04 锁定的 <code>LANGFUSE_VERSION=3</code> 不受影响，升级到 v4 之后有一处与本篇管道直接相关：v4 的 OTLP 直写如果不带 <code>x-langfuse-ingestion-version: 4</code> 请求头，数据最长可能延迟 15 分钟才可见（官方兼容性说明）。两种处理方式任选其一：在 <code>otlphttp/langfuse</code> 的 <code>headers</code> 里加上该头；或者在自托管实例上设置 <code>LANGFUSE_MIGRATION_V4_NATIVE_OTEL_BEHAVIOUR=direct</code>，让所有 OTLP 写入都走实时路径。升级后第 7 节对账表里「集中在最近十几分钟」的偏差应当消失，如果仍然存在，优先检查这一项。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/07/22/observability/OTel-09-%E7%AB%AF%E5%88%B0%E7%AB%AFDemo/">端到端 Demo：一次 Agent 会话的全链路观测</a></h3>
+        <p>把 05–08 篇串成一次可复现的演练：一次诊断会话在 Tempo 与 Langfuse 中各长什么样，日志、指标与 Trace 如何互跳…</p>
+        <a class="btn primary" href="/2026/07/22/observability/OTel-09-%E7%AB%AF%E5%88%B0%E7%AB%AFDemo/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/06/16/observability/Langfuse%E4%BB%8E%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E8%B7%B5/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Langfuse 从入门到实践</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#1-%E5%88%86%E5%B7%A5%E6%A8%A1%E5%9E%8B" data-toc-target="1-分工模型"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">1. 分工模型</span></a><a class="toc-level-2" href="#2-%E5%8F%8C%E5%B1%82%E6%9E%B6%E6%9E%84%E7%9A%84%E5%8F%96%E8%88%8D" data-toc-target="2-双层架构的取舍"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">2. 双层架构的取舍</span></a><a class="toc-level-2" href="#3-Langfuse-%E4%BD%9C%E4%B8%BA-OTLP-%E5%90%8E%E7%AB%AF%E7%9A%84%E7%BA%A6%E6%9D%9F" data-toc-target="3-Langfuse-作为-OTLP-后端的约束"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">3. Langfuse 作为 OTLP 后端的约束</span></a><a class="toc-level-2" href="#4-%E6%8E%A8%E8%8D%90%E7%AE%A1%E9%81%93%EF%BC%9ACollector-%E6%89%87%E5%87%BA-%E8%BF%87%E6%BB%A4-%E8%84%B1%E6%95%8F" data-toc-target="4-推荐管道：Collector-扇出-过滤-脱敏"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">4. 推荐管道：Collector 扇出 + 过滤 + 脱敏</span></a><a class="toc-level-3" href="#4-1-%E9%85%8D%E7%BD%AE" data-toc-target="4-1-配置"><span class="toc-text">4.1 配置</span></a><a class="toc-level-3" href="#4-2-%E8%BF%87%E6%BB%A4%E8%A7%84%E5%88%99%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E5%86%99" data-toc-target="4-2-过滤规则为什么这样写"><span class="toc-text">4.2 过滤规则为什么这样写</span></a><a class="toc-level-3" href="#4-3-%E8%84%B1%E6%95%8F%E8%A7%84%E5%88%99%E7%9A%84%E8%BE%B9%E7%95%8C" data-toc-target="4-3-脱敏规则的边界"><span class="toc-text">4.3 脱敏规则的边界</span></a><a class="toc-level-3" href="#4-4-%E4%B8%A4%E6%9D%A1%E7%AE%A1%E9%81%93%E7%9A%84%E6%95%85%E9%9A%9C%E9%9A%94%E7%A6%BB" data-toc-target="4-4-两条管道的故障隔离"><span class="toc-text">4.4 两条管道的故障隔离</span></a><a class="toc-level-3" href="#4-5-%E5%A4%87%E9%80%89%EF%BC%9A%E5%BA%94%E7%94%A8%E7%9B%B4%E8%BF%9E%EF%BC%88%E4%BB%85%E6%9C%AC%E5%9C%B0%E8%B0%83%E8%AF%95%EF%BC%89" data-toc-target="4-5-备选：应用直连（仅本地调试）"><span class="toc-text">4.5 备选：应用直连（仅本地调试）</span></a><a class="toc-level-2" href="#5-%E4%BC%9A%E8%AF%9D%E4%B8%8E%E7%94%A8%E6%88%B7%E7%BB%B4%E5%BA%A6%EF%BC%9ABaggage-%E7%99%BD%E5%90%8D%E5%8D%95" data-toc-target="5-会话与用户维度：Baggage-白名单"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">5. 会话与用户维度：Baggage 白名单</span></a><a class="toc-level-2" href="#6-%E9%87%87%E6%A0%B7%E4%B8%80%E8%87%B4%E6%80%A7" data-toc-target="6-采样一致性"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">6. 采样一致性</span></a><a class="toc-level-2" href="#7-%E5%AF%B9%E8%B4%A6%E6%96%B9%E6%B3%95" data-toc-target="7-对账方法"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">7. 对账方法</span></a><a class="toc-level-3" href="#7-1-%E6%8C%87%E6%A0%87%E4%BE%A7%EF%BC%88Prometheus%EF%BC%8C%E4%B8%8D%E5%8F%97%E9%87%87%E6%A0%B7%E5%BD%B1%E5%93%8D%EF%BC%89" data-toc-target="7-1-指标侧（Prometheus，不受采样影响）"><span class="toc-text">7.1 指标侧（Prometheus，不受采样影响）</span></a><a class="toc-level-3" href="#7-2-Langfuse-%E4%BE%A7%EF%BC%88Metrics-API%EF%BC%89" data-toc-target="7-2-Langfuse-侧（Metrics-API）"><span class="toc-text">7.2 Langfuse 侧（Metrics API）</span></a><a class="toc-level-3" href="#7-3-Tempo-%E4%BE%A7%EF%BC%88%E7%BB%93%E6%9E%84%E6%8A%BD%E6%9F%A5%EF%BC%89" data-toc-target="7-3-Tempo-侧（结构抽查）"><span class="toc-text">7.3 Tempo 侧（结构抽查）</span></a><a class="toc-level-3" href="#7-4-%E5%81%8F%E5%B7%AE%E8%A7%A3%E8%AF%BB" data-toc-target="7-4-偏差解读"><span class="toc-text">7.4 偏差解读</span></a><a class="toc-level-2" href="#8-Langfuse-%E4%BE%A7%E7%9A%84%E5%A2%9E%E5%80%BC%E5%8A%A8%E4%BD%9C" data-toc-target="8-Langfuse-侧的增值动作"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">8. Langfuse 侧的增值动作</span></a><a class="toc-level-2" href="#9-%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="9-验收清单"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">9. 验收清单</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ALangfuse-v4-%E4%B8%8E-OTLP-%E5%AE%9E%E6%97%B6%E5%86%99%E5%85%A5" data-toc-target="2026-09-补记：Langfuse-v4-与-OTLP-实时写入"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">2026-09 补记：Langfuse v4 与 OTLP 实时写入</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 75%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">9 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#1-%E5%88%86%E5%B7%A5%E6%A8%A1%E5%9E%8B" data-toc-target="1-分工模型" data-title="01 · 1. 分工模型" aria-label="1. 分工模型"></a><a class="toc-strip__dot" href="#2-%E5%8F%8C%E5%B1%82%E6%9E%B6%E6%9E%84%E7%9A%84%E5%8F%96%E8%88%8D" data-toc-target="2-双层架构的取舍" data-title="02 · 2. 双层架构的取舍" aria-label="2. 双层架构的取舍"></a><a class="toc-strip__dot" href="#3-Langfuse-%E4%BD%9C%E4%B8%BA-OTLP-%E5%90%8E%E7%AB%AF%E7%9A%84%E7%BA%A6%E6%9D%9F" data-toc-target="3-Langfuse-作为-OTLP-后端的约束" data-title="03 · 3. Langfuse 作为 OTLP 后端的约束" aria-label="3. Langfuse 作为 OTLP 后端的约束"></a><a class="toc-strip__dot" href="#4-%E6%8E%A8%E8%8D%90%E7%AE%A1%E9%81%93%EF%BC%9ACollector-%E6%89%87%E5%87%BA-%E8%BF%87%E6%BB%A4-%E8%84%B1%E6%95%8F" data-toc-target="4-推荐管道：Collector-扇出-过滤-脱敏" data-title="04 · 4. 推荐管道：Collector 扇出 + 过滤 + 脱敏" aria-label="4. 推荐管道：Collector 扇出 + 过滤 + 脱敏"></a><a class="toc-strip__dot" href="#5-%E4%BC%9A%E8%AF%9D%E4%B8%8E%E7%94%A8%E6%88%B7%E7%BB%B4%E5%BA%A6%EF%BC%9ABaggage-%E7%99%BD%E5%90%8D%E5%8D%95" data-toc-target="5-会话与用户维度：Baggage-白名单" data-title="05 · 5. 会话与用户维度：Baggage 白名单" aria-label="5. 会话与用户维度：Baggage 白名单"></a><a class="toc-strip__dot" href="#6-%E9%87%87%E6%A0%B7%E4%B8%80%E8%87%B4%E6%80%A7" data-toc-target="6-采样一致性" data-title="06 · 6. 采样一致性" aria-label="6. 采样一致性"></a><a class="toc-strip__dot" href="#7-%E5%AF%B9%E8%B4%A6%E6%96%B9%E6%B3%95" data-toc-target="7-对账方法" data-title="07 · 7. 对账方法" aria-label="7. 对账方法"></a><a class="toc-strip__dot" href="#8-Langfuse-%E4%BE%A7%E7%9A%84%E5%A2%9E%E5%80%BC%E5%8A%A8%E4%BD%9C" data-toc-target="8-Langfuse-侧的增值动作" data-title="08 · 8. Langfuse 侧的增值动作" aria-label="8. Langfuse 侧的增值动作"></a><a class="toc-strip__dot" href="#9-%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="9-验收清单" data-title="09 · 9. 验收清单" aria-label="9. 验收清单"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ALangfuse-v4-%E4%B8%8E-OTLP-%E5%AE%9E%E6%97%B6%E5%86%99%E5%85%A5" data-toc-target="2026-09-补记：Langfuse-v4-与-OTLP-实时写入" data-title="10 · 2026-09 补记：Langfuse v4 与 OTLP 实时写入" aria-label="2026-09 补记：Langfuse v4 与 OTLP 实时写入"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-08-Langfuse双层观测","title":"Langfuse 双层观测融合","url":"/2026/07/20/observability/OTel-08-Langfuse%E5%8F%8C%E5%B1%82%E8%A7%82%E6%B5%8B/","path":"agent-observability","index":8,"total":12,"next":{"title":"端到端 Demo：一次 Agent 会话的全链路观测","url":"/2026/07/22/observability/OTel-09-%E7%AB%AF%E5%88%B0%E7%AB%AFDemo/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

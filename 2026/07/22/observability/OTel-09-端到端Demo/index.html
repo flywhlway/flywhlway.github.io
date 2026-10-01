@@ -1,0 +1,969 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>端到端 Demo：一次 Agent 会话的全链路观测 · 飞轮之道</title>
+<meta name="description" content="把 05–08 篇串成一次可复现的演练：一次诊断会话在 Tempo 与 Langfuse 中各长什么样，日志、指标与 Trace 如何互跳，成本与时延大盘的 PromQL，以及断链时的排查顺序。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/07/22/observability/OTel-09-%E7%AB%AF%E5%88%B0%E7%AB%AFDemo/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="端到端 Demo：一次 Agent 会话的全链路观测 · 飞轮之道">
+<meta property="og:description" content="把 05–08 篇串成一次可复现的演练：一次诊断会话在 Tempo 与 Langfuse 中各长什么样，日志、指标与 Trace 如何互跳，成本与时延大盘的 PromQL，以及断链时的排查顺序。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/07/22/observability/OTel-09-%E7%AB%AF%E5%88%B0%E7%AB%AFDemo/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">实验评估</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 10 / 12 篇</a>
+    </div>
+    <h1>端到端 Demo：一次 Agent 会话的全链路观测</h1>
+    <p class="article-deck">把 05–08 篇串成一次可复现的演练：一次诊断会话在 Tempo 与 Langfuse 中各长什么样，日志、指标与 Trace 如何互跳，成本与时延大盘的 PromQL…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>21 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/LangGraph/">#LangGraph</a><a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>同一个 trace_id 贯穿网关、Agent 节点、工具、mem0 与模型调用，Tempo 看全貌，Langfuse 只看 AI 语义那一部分。</li><li>指标名经过 Prometheus 的 OTLP 转换：单位变后缀、点变下划线、花括号单位被丢弃，写 PromQL 前先查实际名称。</li><li>首 Token 时延要用自带桶边界的直方图，成本以应用侧计数器为准、PromQL 折算做交叉校验。</li><li>排查断链先看 trace_id 是否一致，再看父子关系，最后看采样标志，顺序不能乱。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>前八篇分别解决了埋点、传输、部署与双层消费，本篇把它们串成一次完整演练：用户经网关发起一次故障码诊断，Agent 查记忆、调模型、调工具、再调模型、最后异步写记忆。目标是回答文档 01 提出的第一个问题——<strong>一次用户会话完整经过了哪些服务、Agent 节点和工具</strong>——并在 Grafana 与 Langfuse 两端对照同一个 trace_id。文中的 Span 树与属性取自实际运行结果（模型端点换成了本地的 OpenAI 兼容桩服务，结构与真实调用一致）。</p>
+</blockquote>
+<h2 id="1-演练拓扑"><a href="#1-演练拓扑" class="headerlink" title="1. 演练拓扑"></a>1. 演练拓扑</h2><pre class="mermaid">flowchart LR
+  FE["前端 / curl"] --&gt;|traceparent| GW["scg-gateway&lt;br/&gt;Java Agent"]
+  GW --&gt;|traceparent| AG["diag-agent&lt;br/&gt;FastAPI + LangGraph"]
+  AG --&gt; LLM["DeepSeek&lt;br/&gt;OpenAI 兼容端点"]
+  AG --&gt; TOOL["lookup_dtc&lt;br/&gt;进程内工具"]
+  AG --&gt; MEM["mem0&lt;br/&gt;本地 Qdrant + Ollama 嵌入"]
+  GW -. OTLP .-&gt; COL["OTel Collector"]
+  AG -. OTLP .-&gt; COL
+  COL --&gt; TEMPO["Tempo"] &amp; PROM["Prometheus"] &amp; LOKI["Loki"]
+  COL --&gt; LF["Langfuse"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th><code>service.name</code></th>
+<th>端口</th>
+<th>埋点方式</th>
+<th>出处</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>网关</td>
+<td><code>scg-gateway</code></td>
+<td>8080</td>
+<td>OTel Java Agent（路线 A）</td>
+<td>文档 06</td>
+</tr>
+<tr>
+<td>Agent 服务</td>
+<td><code>diag-agent</code></td>
+<td>8000</td>
+<td><code>telemetry.py</code> + FastAPI&#x2F;LangGraph&#x2F;openai-v2 埋点</td>
+<td>文档 05</td>
+</tr>
+<tr>
+<td>模型</td>
+<td>外部</td>
+<td>—</td>
+<td>由 openai-v2 在客户端侧记录</td>
+<td>文档 05</td>
+</tr>
+<tr>
+<td>记忆</td>
+<td>进程内</td>
+<td>Ollama 11434</td>
+<td>手动工具 Span + httpx 埋点</td>
+<td>文档 05</td>
+</tr>
+<tr>
+<td>观测底座</td>
+<td>—</td>
+<td>3000 &#x2F; 3001 &#x2F; 3200 &#x2F; 9090 &#x2F; 4317</td>
+<td>Collector 扇出到 LGTM 与 Langfuse</td>
+<td>文档 04、08</td>
+</tr>
+</tbody></table>
+<p>前端在本演练里就是 <code>curl</code>。如果浏览器页面也要加入同一条 Trace，需要在前端引入 OTel 的 Web SDK 生成 <code>traceparent</code>，同时网关的 CORS 配置要允许 <code>traceparent</code>、<code>tracestate</code> 请求头，否则预检请求会把它们拦掉。</p>
+<h2 id="2-准备"><a href="#2-准备" class="headerlink" title="2. 准备"></a>2. 准备</h2><h3 id="2-1-观测底座"><a href="#2-1-观测底座" class="headerlink" title="2.1 观测底座"></a>2.1 观测底座</h3><p>在文档 04 的 Compose 上完成三处调整：</p>
+<ol>
+<li>Collector 的 traces 部分换成文档 08 §4.1 的扇出管道（尾采样 → 删正文进 Tempo &#x2F; 过滤脱敏进 Langfuse）。</li>
+<li>Prometheus 启动参数追加 <code>--enable-feature=exemplar-storage</code>，否则指标上的 exemplar 会被丢弃，第 5 节「从指标跳到 Trace」无从谈起。</li>
+<li>如需在 PromQL 里按环境过滤，在 <code>prometheus.yml</code> 顶层追加：</li>
+</ol>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">otlp:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">promote_resource_attributes:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="bullet">-</span> <span class="string">deployment.environment.name</span></span></span></code></pre></div></div></figure>
+
+<p>Prometheus 的 OTLP 接收端默认只把 <code>service.namespace</code> + <code>service.name</code> 拼成 <code>job</code> 标签（本演练为 <code>agent-platform/diag-agent</code>）、把 <code>service.instance.id</code> 映射为 <code>instance</code>，其余 Resource 属性只进 <code>target_info</code>，不会出现在每条序列上。</p>
+<h3 id="2-2-Agent-服务"><a href="#2-2-Agent-服务" class="headerlink" title="2.2 Agent 服务"></a>2.2 Agent 服务</h3><p>依赖在文档 05 第 1 节的基础上追加两个包：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">uv add <span class="string">&quot;opentelemetry-processor-baggage==0.64b0&quot;</span> ollama</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">ollama pull nomic-embed-text      <span class="comment"># mem0 的嵌入模型，768 维</span></span></span></code></pre></div></div></figure>
+
+<p><code>telemetry.py</code> 直接复用文档 05 §2 的版本，再按文档 08 第 5 节加上 Baggage 白名单处理器。<code>.env</code>：</p>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental,http</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_only</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">OTEL_METRIC_EXPORT_INTERVAL=15000</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">OPENINFERENCE_HIDE_INPUTS=false          # 演练保留，便于对照；预发与生产按文档 05 §10 设为 true</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">SERVICE_NAMESPACE=agent-platform</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">DEPLOY_ENV=poc</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">ID_HASH_KEY=hash_ChangeMe_key</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">DEEPSEEK_API_KEY=sk_ChangeMe_deepseek</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">PRICE_INPUT_CNY_PER_MTOK=0               # 按 DeepSeek 官网价目表填写</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">PRICE_OUTPUT_CNY_PER_MTOK=0</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">MEM0_TELEMETRY=False</span></span></code></pre></div></div></figure>
+
+
+<h3 id="2-3-网关"><a href="#2-3-网关" class="headerlink" title="2.3 网关"></a>2.3 网关</h3><p>网关按文档 06 路线 A 启动 Java Agent，路由写法按 Gateway 4.3 起的新前缀（5.0 已移除旧的 <code>spring.cloud.gateway.routes</code>）：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">spring:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">application:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">name:</span> <span class="string">scg-gateway</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">cloud:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">gateway:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="attr">server:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="attr">webflux:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">          <span class="attr">routes:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">diag-agent</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">              <span class="attr">uri:</span> <span class="string">http://localhost:8000</span>     <span class="comment"># 接入 Nacos 时改为 lb://diag-agent</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">              <span class="attr">predicates:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">                <span class="bullet">-</span> <span class="string">Path=/api/**</span></span></span></code></pre></div></div></figure>
+
+<h2 id="3-Agent-代码"><a href="#3-Agent-代码" class="headerlink" title="3. Agent 代码"></a>3. Agent 代码</h2><p><code>app.py</code> 共 170 余行，所有埋点能力都来自 <code>telemetry.py</code>，业务代码里只出现三类观测相关的写法：根 Span、工具 Span、<code>in_node_span()</code>。自定义指标与私有属性使用 <code>com.example.</code> 前缀（约定见文档 05），以你的组织域名替换 <code>com.example</code>。</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="177"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:3"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># app.py：诊断 Agent Demo（FastAPI + LangGraph + mem0），埋点全部来自 telemetry.py</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">from</span> telemetry <span class="keyword">import</span> setup_telemetry, shutdown_telemetry</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">setup_telemetry(<span class="string">&quot;diag-agent&quot;</span>)  <span class="comment"># 必须先于创建模型客户端与编译图</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="keyword">import</span> asyncio</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">import</span> logging</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="keyword">import</span> os</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">import</span> time</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">from</span> contextlib <span class="keyword">import</span> asynccontextmanager</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="keyword">from</span> typing <span class="keyword">import</span> Annotated, TypedDict</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="keyword">from</span> langchain_core.messages <span class="keyword">import</span> AnyMessage, HumanMessage, SystemMessage</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="keyword">from</span> langchain_core.tools <span class="keyword">import</span> tool</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="keyword">from</span> langchain_openai <span class="keyword">import</span> ChatOpenAI</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="keyword">from</span> langgraph.graph <span class="keyword">import</span> START, StateGraph</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="keyword">from</span> langgraph.graph.message <span class="keyword">import</span> add_messages</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="keyword">from</span> langgraph.prebuilt <span class="keyword">import</span> ToolNode, tools_condition</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="keyword">from</span> mem0 <span class="keyword">import</span> AsyncMemory</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="keyword">from</span> opentelemetry <span class="keyword">import</span> baggage, context, metrics, trace</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="keyword">from</span> opentelemetry.context <span class="keyword">import</span> Context</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="keyword">from</span> opentelemetry.instrumentation.fastapi <span class="keyword">import</span> FastAPIInstrumentor</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="keyword">from</span> opentelemetry.semconv._incubating.metrics.gen_ai_metrics <span class="keyword">import</span> (</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    GEN_AI_CLIENT_OPERATION_TIME_TO_FIRST_CHUNK,</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">)</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"><span class="keyword">from</span> pydantic <span class="keyword">import</span> BaseModel</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx"><span class="keyword">from</span> telemetry <span class="keyword">import</span> in_node_span, pseudonymize</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">log = logging.getLogger(<span class="string">&quot;diag&quot;</span>)</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">tracer = trace.get_tracer(<span class="string">&quot;com.example.diag-agent&quot;</span>)</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">meter = metrics.get_meter(<span class="string">&quot;com.example.diag-agent&quot;</span>)</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">MODEL = <span class="string">&quot;deepseek-chat&quot;</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">PRICE_IN = <span class="built_in">float</span>(os.getenv(<span class="string">&quot;PRICE_INPUT_CNY_PER_MTOK&quot;</span>, <span class="string">&quot;0&quot;</span>))    <span class="comment"># 元 / 百万 token，按官网价目表填写</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">PRICE_OUT = <span class="built_in">float</span>(os.getenv(<span class="string">&quot;PRICE_OUTPUT_CNY_PER_MTOK&quot;</span>, <span class="string">&quot;0&quot;</span>))</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">diag_counter = meter.create_counter(<span class="string">&quot;com.example.diagnose.requests&quot;</span>, unit=<span class="string">&quot;&#123;request&#125;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">token_cost = meter.create_counter(<span class="string">&quot;com.example.token.cost&quot;</span>, unit=<span class="string">&quot;&#123;CNY&#125;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">ttfc_hist = meter.create_histogram(</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">    GEN_AI_CLIENT_OPERATION_TIME_TO_FIRST_CHUNK, unit=<span class="string">&quot;s&quot;</span>,</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">    explicit_bucket_boundaries_advisory=[<span class="number">0.05</span>, <span class="number">0.1</span>, <span class="number">0.2</span>, <span class="number">0.4</span>, <span class="number">0.8</span>, <span class="number">1.6</span>, <span class="number">3.2</span>, <span class="number">6.4</span>, <span class="number">12.8</span>, <span class="number">25.6</span>],</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">)</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">MEM0_CONFIG = &#123;</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">    <span class="string">&quot;llm&quot;</span>: &#123;<span class="string">&quot;provider&quot;</span>: <span class="string">&quot;deepseek&quot;</span>, <span class="string">&quot;config&quot;</span>: &#123;</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">        <span class="string">&quot;model&quot;</span>: MODEL, <span class="string">&quot;api_key&quot;</span>: os.environ[<span class="string">&quot;DEEPSEEK_API_KEY&quot;</span>],</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">        <span class="string">&quot;deepseek_base_url&quot;</span>: os.getenv(<span class="string">&quot;DEEPSEEK_BASE_URL&quot;</span>, <span class="string">&quot;https://api.deepseek.com&quot;</span>)&#125;&#125;,</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">    <span class="string">&quot;embedder&quot;</span>: &#123;<span class="string">&quot;provider&quot;</span>: <span class="string">&quot;ollama&quot;</span>, <span class="string">&quot;config&quot;</span>: &#123;</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">        <span class="string">&quot;model&quot;</span>: <span class="string">&quot;nomic-embed-text&quot;</span>, <span class="string">&quot;embedding_dims&quot;</span>: <span class="number">768</span>,</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">        <span class="string">&quot;ollama_base_url&quot;</span>: os.getenv(<span class="string">&quot;OLLAMA_BASE_URL&quot;</span>, <span class="string">&quot;http://localhost:11434&quot;</span>)&#125;&#125;,</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">    <span class="string">&quot;vector_store&quot;</span>: &#123;<span class="string">&quot;provider&quot;</span>: <span class="string">&quot;qdrant&quot;</span>, <span class="string">&quot;config&quot;</span>: &#123;</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">        <span class="string">&quot;collection_name&quot;</span>: <span class="string">&quot;diag_memories&quot;</span>, <span class="string">&quot;embedding_model_dims&quot;</span>: <span class="number">768</span>,</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">        <span class="string">&quot;path&quot;</span>: os.getenv(<span class="string">&quot;QDRANT_PATH&quot;</span>, <span class="string">&quot;./.qdrant&quot;</span>)&#125;&#125;,</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">memory = AsyncMemory.from_config(MEM0_CONFIG)</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">DTC_TABLE = &#123;<span class="string">&quot;P0301&quot;</span>: <span class="string">&quot;第 1 缸检测到失火&quot;</span>, <span class="string">&quot;P0420&quot;</span>: <span class="string">&quot;三元催化器效率低于阈值&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx"><span class="meta">@tool</span></span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">lookup_dtc</span>(<span class="params">code: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;查询 OBD-II 故障码的标准含义。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">    <span class="keyword">return</span> DTC_TABLE.get(code.upper(), <span class="string">&quot;未收录的故障码&quot;</span>)</span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">llm = ChatOpenAI(</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">    model=MODEL,</span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">    api_key=os.environ[<span class="string">&quot;DEEPSEEK_API_KEY&quot;</span>],</span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">    base_url=os.getenv(<span class="string">&quot;DEEPSEEK_BASE_URL&quot;</span>, <span class="string">&quot;https://api.deepseek.com&quot;</span>),</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">    temperature=<span class="number">0.2</span>,</span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">    stream_usage=<span class="literal">True</span>,          <span class="comment"># 流式调用也返回 usage，否则 token 指标为空</span></span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">).bind_tools([lookup_dtc])</span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">DiagState</span>(<span class="title class_ inherited__">TypedDict</span>):</span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">    messages: Annotated[<span class="built_in">list</span>[AnyMessage], add_messages]</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">    user_id: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">recall_node</span>(<span class="params">state: DiagState</span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx">    question = state[<span class="string">&quot;messages&quot;</span>][-<span class="number">1</span>].content</span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">    <span class="keyword">with</span> in_node_span(), tracer.start_as_current_span(</span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">        <span class="string">&quot;execute_tool mem0_search&quot;</span>,</span></span>
+<span class="cb-line" data-ln="86"><span class="cb-tx">        attributes=&#123;<span class="string">&quot;gen_ai.operation.name&quot;</span>: <span class="string">&quot;execute_tool&quot;</span>, <span class="string">&quot;gen_ai.tool.name&quot;</span>: <span class="string">&quot;mem0_search&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="87"><span class="cb-tx">    ) <span class="keyword">as</span> span:</span></span>
+<span class="cb-line" data-ln="88"><span class="cb-tx">        result = <span class="keyword">await</span> memory.search(question, filters=&#123;<span class="string">&quot;user_id&quot;</span>: state[<span class="string">&quot;user_id&quot;</span>]&#125;, top_k=<span class="number">5</span>)</span></span>
+<span class="cb-line" data-ln="89"><span class="cb-tx">        hits = result.get(<span class="string">&quot;results&quot;</span>, [])</span></span>
+<span class="cb-line" data-ln="90"><span class="cb-tx">        span.set_attribute(<span class="string">&quot;com.example.memory.hits&quot;</span>, <span class="built_in">len</span>(hits))</span></span>
+<span class="cb-line" data-ln="91"><span class="cb-tx">    notes = <span class="string">&quot;\n&quot;</span>.join(h[<span class="string">&quot;memory&quot;</span>] <span class="keyword">for</span> h <span class="keyword">in</span> hits) <span class="keyword">or</span> <span class="string">&quot;无&quot;</span></span></span>
+<span class="cb-line" data-ln="92"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;messages&quot;</span>: [SystemMessage(<span class="string">f&quot;你是车辆诊断助手。该用户的历史信息：<span class="subst">&#123;notes&#125;</span>&quot;</span>)]&#125;</span></span>
+<span class="cb-line" data-ln="93"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="94"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="95"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">agent_node</span>(<span class="params">state: DiagState</span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="96"><span class="cb-tx">    started, full = time.monotonic(), <span class="literal">None</span></span></span>
+<span class="cb-line" data-ln="97"><span class="cb-tx">    <span class="keyword">with</span> in_node_span():</span></span>
+<span class="cb-line" data-ln="98"><span class="cb-tx">        <span class="keyword">async</span> <span class="keyword">for</span> chunk <span class="keyword">in</span> llm.astream(state[<span class="string">&quot;messages&quot;</span>]):</span></span>
+<span class="cb-line" data-ln="99"><span class="cb-tx">            <span class="keyword">if</span> full <span class="keyword">is</span> <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="100"><span class="cb-tx">                ttfc_hist.record(time.monotonic() - started,</span></span>
+<span class="cb-line" data-ln="101"><span class="cb-tx">                                 &#123;<span class="string">&quot;gen_ai.operation.name&quot;</span>: <span class="string">&quot;chat&quot;</span>, <span class="string">&quot;gen_ai.request.model&quot;</span>: MODEL&#125;)</span></span>
+<span class="cb-line" data-ln="102"><span class="cb-tx">            full = chunk <span class="keyword">if</span> full <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">else</span> full + chunk</span></span>
+<span class="cb-line" data-ln="103"><span class="cb-tx">    usage = full.usage_metadata <span class="keyword">or</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="104"><span class="cb-tx">    cost = (usage.get(<span class="string">&quot;input_tokens&quot;</span>, <span class="number">0</span>) * PRICE_IN + usage.get(<span class="string">&quot;output_tokens&quot;</span>, <span class="number">0</span>) * PRICE_OUT) / <span class="number">1e6</span></span></span>
+<span class="cb-line" data-ln="105"><span class="cb-tx">    token_cost.add(cost, &#123;<span class="string">&quot;gen_ai.request.model&quot;</span>: MODEL&#125;)</span></span>
+<span class="cb-line" data-ln="106"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;messages&quot;</span>: [full]&#125;</span></span>
+<span class="cb-line" data-ln="107"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="108"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="109"><span class="cb-tx">builder = StateGraph(DiagState)</span></span>
+<span class="cb-line" data-ln="110"><span class="cb-tx">builder.add_node(<span class="string">&quot;recall&quot;</span>, recall_node)</span></span>
+<span class="cb-line" data-ln="111"><span class="cb-tx">builder.add_node(<span class="string">&quot;agent&quot;</span>, agent_node)</span></span>
+<span class="cb-line" data-ln="112"><span class="cb-tx">builder.add_node(<span class="string">&quot;tools&quot;</span>, ToolNode([lookup_dtc]))</span></span>
+<span class="cb-line" data-ln="113"><span class="cb-tx">builder.add_edge(START, <span class="string">&quot;recall&quot;</span>)</span></span>
+<span class="cb-line" data-ln="114"><span class="cb-tx">builder.add_edge(<span class="string">&quot;recall&quot;</span>, <span class="string">&quot;agent&quot;</span>)</span></span>
+<span class="cb-line" data-ln="115"><span class="cb-tx">builder.add_conditional_edges(<span class="string">&quot;agent&quot;</span>, tools_condition)</span></span>
+<span class="cb-line" data-ln="116"><span class="cb-tx">builder.add_edge(<span class="string">&quot;tools&quot;</span>, <span class="string">&quot;agent&quot;</span>)</span></span>
+<span class="cb-line" data-ln="117"><span class="cb-tx">graph = builder.<span class="built_in">compile</span>()</span></span>
+<span class="cb-line" data-ln="118"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="119"><span class="cb-tx">_background: <span class="built_in">set</span>[asyncio.Task] = <span class="built_in">set</span>()</span></span>
+<span class="cb-line" data-ln="120"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="121"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="122"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">remember</span>(<span class="params">user_id: <span class="built_in">str</span>, session_id: <span class="built_in">str</span>, question: <span class="built_in">str</span>, answer: <span class="built_in">str</span>,</span></span></span>
+<span class="cb-line" data-ln="123"><span class="cb-tx"><span class="params">                   origin: trace.SpanContext</span>) -&gt; <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="124"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;写记忆放到响应之后：新开一条 Trace，用 Link 指回触发它的会话。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="125"><span class="cb-tx">    <span class="keyword">with</span> tracer.start_as_current_span(</span></span>
+<span class="cb-line" data-ln="126"><span class="cb-tx">        <span class="string">&quot;execute_tool mem0_add&quot;</span>,</span></span>
+<span class="cb-line" data-ln="127"><span class="cb-tx">        context=Context(),</span></span>
+<span class="cb-line" data-ln="128"><span class="cb-tx">        links=[trace.Link(origin)],</span></span>
+<span class="cb-line" data-ln="129"><span class="cb-tx">        attributes=&#123;<span class="string">&quot;gen_ai.operation.name&quot;</span>: <span class="string">&quot;execute_tool&quot;</span>, <span class="string">&quot;gen_ai.tool.name&quot;</span>: <span class="string">&quot;mem0_add&quot;</span>,</span></span>
+<span class="cb-line" data-ln="130"><span class="cb-tx">                    <span class="string">&quot;session.id&quot;</span>: session_id, <span class="string">&quot;user.id&quot;</span>: pseudonymize(user_id)&#125;,</span></span>
+<span class="cb-line" data-ln="131"><span class="cb-tx">    ):</span></span>
+<span class="cb-line" data-ln="132"><span class="cb-tx">        <span class="keyword">await</span> memory.add([&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: question&#125;,</span></span>
+<span class="cb-line" data-ln="133"><span class="cb-tx">                          &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;assistant&quot;</span>, <span class="string">&quot;content&quot;</span>: answer&#125;], user_id=user_id)</span></span>
+<span class="cb-line" data-ln="134"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="135"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="136"><span class="cb-tx"><span class="meta">@asynccontextmanager</span></span></span>
+<span class="cb-line" data-ln="137"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">lifespan</span>(<span class="params">app: FastAPI</span>):</span></span>
+<span class="cb-line" data-ln="138"><span class="cb-tx">    <span class="keyword">yield</span></span></span>
+<span class="cb-line" data-ln="139"><span class="cb-tx">    <span class="keyword">await</span> asyncio.gather(*_background, return_exceptions=<span class="literal">True</span>)</span></span>
+<span class="cb-line" data-ln="140"><span class="cb-tx">    shutdown_telemetry()</span></span>
+<span class="cb-line" data-ln="141"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="142"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="143"><span class="cb-tx">app = FastAPI(title=<span class="string">&quot;diag-agent&quot;</span>, lifespan=lifespan)</span></span>
+<span class="cb-line" data-ln="144"><span class="cb-tx">FastAPIInstrumentor.instrument_app(app, excluded_urls=<span class="string">&quot;/healthz&quot;</span>, exclude_spans=[<span class="string">&quot;receive&quot;</span>, <span class="string">&quot;send&quot;</span>])</span></span>
+<span class="cb-line" data-ln="145"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="146"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="147"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">DiagnoseRequest</span>(<span class="title class_ inherited__">BaseModel</span>):</span></span>
+<span class="cb-line" data-ln="148"><span class="cb-tx">    session_id: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="149"><span class="cb-tx">    user_id: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="150"><span class="cb-tx">    question: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="151"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="152"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="153"><span class="cb-tx"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/api/diagnose&quot;</span></span>)</span></span></span>
+<span class="cb-line" data-ln="154"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">diagnose</span>(<span class="params">req: DiagnoseRequest</span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="155"><span class="cb-tx">    ctx = baggage.set_baggage(<span class="string">&quot;session.id&quot;</span>, req.session_id)</span></span>
+<span class="cb-line" data-ln="156"><span class="cb-tx">    ctx = baggage.set_baggage(<span class="string">&quot;user.id&quot;</span>, pseudonymize(req.user_id), context=ctx)</span></span>
+<span class="cb-line" data-ln="157"><span class="cb-tx">    token = context.attach(ctx)</span></span>
+<span class="cb-line" data-ln="158"><span class="cb-tx">    <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="159"><span class="cb-tx">        <span class="keyword">with</span> tracer.start_as_current_span(</span></span>
+<span class="cb-line" data-ln="160"><span class="cb-tx">            <span class="string">&quot;invoke_agent vehicle-diag-agent&quot;</span>,</span></span>
+<span class="cb-line" data-ln="161"><span class="cb-tx">            attributes=&#123;<span class="string">&quot;gen_ai.operation.name&quot;</span>: <span class="string">&quot;invoke_agent&quot;</span>,</span></span>
+<span class="cb-line" data-ln="162"><span class="cb-tx">                        <span class="string">&quot;gen_ai.agent.name&quot;</span>: <span class="string">&quot;vehicle-diag-agent&quot;</span>,</span></span>
+<span class="cb-line" data-ln="163"><span class="cb-tx">                        <span class="string">&quot;gen_ai.conversation.id&quot;</span>: req.session_id&#125;,</span></span>
+<span class="cb-line" data-ln="164"><span class="cb-tx">        ) <span class="keyword">as</span> span:</span></span>
+<span class="cb-line" data-ln="165"><span class="cb-tx">            result = <span class="keyword">await</span> graph.ainvoke(&#123;<span class="string">&quot;messages&quot;</span>: [HumanMessage(req.question)],</span></span>
+<span class="cb-line" data-ln="166"><span class="cb-tx">                                          <span class="string">&quot;user_id&quot;</span>: req.user_id&#125;)</span></span>
+<span class="cb-line" data-ln="167"><span class="cb-tx">            answer = result[<span class="string">&quot;messages&quot;</span>][-<span class="number">1</span>].content</span></span>
+<span class="cb-line" data-ln="168"><span class="cb-tx">            diag_counter.add(<span class="number">1</span>, &#123;<span class="string">&quot;com.example.triage.channel&quot;</span>: <span class="string">&quot;online&quot;</span>&#125;)</span></span>
+<span class="cb-line" data-ln="169"><span class="cb-tx">            log.info(<span class="string">&quot;诊断完成 session=%s&quot;</span>, req.session_id)</span></span>
+<span class="cb-line" data-ln="170"><span class="cb-tx">            origin = span.get_span_context()</span></span>
+<span class="cb-line" data-ln="171"><span class="cb-tx">    <span class="keyword">finally</span>:</span></span>
+<span class="cb-line" data-ln="172"><span class="cb-tx">        context.detach(token)</span></span>
+<span class="cb-line" data-ln="173"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="174"><span class="cb-tx">    task = asyncio.create_task(remember(req.user_id, req.session_id, req.question, answer, origin))</span></span>
+<span class="cb-line" data-ln="175"><span class="cb-tx">    _background.add(task)</span></span>
+<span class="cb-line" data-ln="176"><span class="cb-tx">    task.add_done_callback(_background.discard)</span></span>
+<span class="cb-line" data-ln="177"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;answer&quot;</span>: answer, <span class="string">&quot;trace_id&quot;</span>: <span class="built_in">format</span>(origin.trace_id, <span class="string">&quot;032x&quot;</span>)&#125;</span></span></code></pre></div></div></figure>
+
+<p>与前几篇的对应关系：</p>
+<ul>
+<li><strong>会话标识走 Baggage</strong>：入口把 <code>session.id</code> 与哈希后的 <code>user.id</code> 写入 Baggage，白名单处理器把它们复制到之后创建的每个 Span（文档 08 第 5 节）。演练里由 Agent 服务自己写入；生产上这一步在网关鉴权之后完成，Agent 只接收。</li>
+<li><strong>节点内的 Span 挂回节点</strong>：<code>recall_node</code> 与 <code>agent_node</code> 都包了 <code>in_node_span()</code>，否则 <code>mem0_search</code> 与 <code>chat</code> Span 会挂到 <code>invoke_agent</code> 下，节点 Span 变成空壳（文档 05 §5）。</li>
+<li><strong>流式调用的两个细节</strong>：<code>stream_usage=True</code> 让 DeepSeek 在最后一个分片返回 usage，openai-v2 才能记下 token；首分片时延用自带桶边界的直方图记录（文档 05 §8）。</li>
+<li><strong>写记忆不阻塞响应</strong>：<code>remember</code> 在响应之后执行，用空的 <code>Context()</code> 新开 Trace，再用 Span Link 指回原会话。它复制不到入口的 Baggage，所以 <code>session.id</code>、<code>user.id</code> 显式写成属性，Langfuse 才能把它归到同一个会话。</li>
+<li><strong>响应里带回 trace_id</strong>：用户反馈问题时附上这个 ID，运维可以直接在 Tempo 和 Langfuse 里打开这次会话。</li>
+</ul>
+<h2 id="4-一次会话在-Tempo-里的样子"><a href="#4-一次会话在-Tempo-里的样子" class="headerlink" title="4. 一次会话在 Tempo 里的样子"></a>4. 一次会话在 Tempo 里的样子</h2><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s -X POST http://localhost:8080/api/diagnose \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;session_id&quot;:&quot;s-demo-001&quot;,&quot;user_id&quot;:&quot;u-1001&quot;,&quot;question&quot;:&quot;P0301 故障码是什么意思？&quot;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># &#123;&quot;answer&quot;:&quot;P0301 表示第 1 缸检测到失火。&quot;,&quot;trace_id&quot;:&quot;9aea70b6b2709fbe7498a35170939410&quot;&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>在 Grafana → Explore → Tempo 中粘贴 trace_id，Span 树如下（网关两层来自文档 06 的 Agent 埋点，其余为实测结构）：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="20"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">scg-gateway  POST /api/diagnose                    SERVER</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">└─ scg-gateway  POST                               CLIENT   spring-cloud-gateway.route.id=diag-agent</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">   └─ diag-agent  POST /api/diagnose               SERVER   http.route=/api/diagnose</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      └─ invoke_agent vehicle-diag-agent           INTERNAL gen_ai.operation.name=invoke_agent</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">         └─ LangGraph                              INTERNAL openinference.span.kind=CHAIN</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">            ├─ recall                              CHAIN</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">            │  └─ execute_tool mem0_search         INTERNAL gen_ai.tool.name=mem0_search, com.example.memory.hits=0</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">            │     └─ POST                          CLIENT   url.full=http://localhost:11434/api/embed</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">            ├─ agent                               AGENT    （第一轮：模型决定调工具）</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">            │  ├─ ChatOpenAI                       LLM      llm.token_count.prompt / completion</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">            │  ├─ chat deepseek-chat               CLIENT   gen_ai.usage.input_tokens / output_tokens</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">            │  │  └─ POST                          CLIENT   url.full=https://api.deepseek.com/chat/completions</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">            │  └─ tools_condition                  CHAIN</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">            ├─ tools                               CHAIN</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">            │  └─ lookup_dtc                       TOOL</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">            └─ agent                               AGENT    （第二轮：模型给出答案）</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">               ├─ ChatOpenAI                       LLM</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">               ├─ chat deepseek-chat               CLIENT</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">               │  └─ POST                          CLIENT</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">               └─ tools_condition                  CHAIN</span></span></code></pre></div></div></figure>
+
+<p>另有一条独立的 Trace：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">execute_tool mem0_add                              INTERNAL session.id=s-demo-001，Link → 9aea70b6…</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├─ POST                                            CLIENT   url.full=http://localhost:11434/api/embed</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">└─ chat deepseek-chat                              CLIENT   mem0 的记忆抽取调用</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">   └─ POST                                         CLIENT</span></span></code></pre></div></div></figure>
+
+<p>读这棵树的几个要点：</p>
+<ul>
+<li><strong>哪一层回答哪个问题</strong>：<code>scg-gateway</code> 两层看网关耗时与路由；<code>invoke_agent</code> 的时长是用户感知的 Agent 总耗时；<code>agent</code> &#x2F; <code>tools</code> 节点的重复次数就是 Agent 循环次数；<code>chat</code> 与其下的 <code>POST</code> 时长之差是 SDK 内部开销，正常应在毫秒级。</li>
+<li><strong>同一次模型调用的两层</strong>：<code>ChatOpenAI</code>（OpenInference）与 <code>chat deepseek-chat</code>（openai-v2）并列在节点下，时长几乎相同。Tempo 里保留两层没有问题，发往 Langfuse 时由文档 08 的过滤规则去掉前者。</li>
+<li><strong>所有 Span 都带 <code>session.id</code> 与 <code>user.id</code></strong>：这是 Baggage 处理器的效果，也是按会话检索的基础。实测时在请求里伪造 <code>baggage: langfuse.trace.tags=forged,is_admin=true</code>，这两个键没有出现在任何 Span 上。</li>
+<li><strong>Tempo 管道里没有正文</strong>：<code>gen_ai.input.messages</code> 等属性已被 Collector 删除，只在 Langfuse 一侧保留脱敏后的版本。</li>
+</ul>
+<p>常用 TraceQL：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 某个会话的全部 Trace（含异步写记忆那条）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">&#123; span.session.id = &quot;s-demo-001&quot; &#125;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"># 一次会话里调了三次以上模型：Agent 循环异常的信号</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">&#123; span.gen_ai.operation.name = &quot;chat&quot; &#125; | count() &gt; 3</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"># 模型调用失败且发生在 Agent 内部</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">&#123; span.gen_ai.operation.name = &quot;invoke_agent&quot; &#125; &gt;&gt; &#123; span.gen_ai.operation.name = &quot;chat&quot; &amp;&amp; status = error &#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"># 慢工具</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">&#123; span.gen_ai.operation.name = &quot;execute_tool&quot; &amp;&amp; duration &gt; 1s &#125;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"># 查看每次模型调用的 token</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">&#123; span.gen_ai.operation.name = &quot;chat&quot; &#125; | select(span.gen_ai.usage.input_tokens, span.gen_ai.usage.output_tokens)</span></span></code></pre></div></div></figure>
+
+<h2 id="5-同一会话在-Langfuse-里的样子"><a href="#5-同一会话在-Langfuse-里的样子" class="headerlink" title="5. 同一会话在 Langfuse 里的样子"></a>5. 同一会话在 Langfuse 里的样子</h2><p>打开 <code>http://localhost:3001</code>，在 Traces 列表按 trace_id 或会话 <code>s-demo-001</code> 查找。经过文档 08 的过滤后，Langfuse 收到的是这样一棵树（括号内为 Langfuse 的观测类型）：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Trace: invoke_agent vehicle-diag-agent        session=s-demo-001  user=&lt;哈希值&gt;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">└─ invoke_agent vehicle-diag-agent            (AGENT)</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">   └─ LangGraph                               (CHAIN)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      ├─ recall                               (CHAIN)</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      │  └─ execute_tool mem0_search          (TOOL)</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      ├─ agent                                (AGENT)</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      │  ├─ chat deepseek-chat                (GENERATION)  输入 120 / 输出 40 token</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      │  └─ tools_condition                   (CHAIN)</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      ├─ tools                                (CHAIN)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      │  └─ lookup_dtc                        (TOOL)</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      └─ agent                                (AGENT)</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">         ├─ chat deepseek-chat                (GENERATION)  输入 120 / 输出 180 token</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">         └─ tools_condition                   (CHAIN)</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">Trace: execute_tool mem0_add                  session=s-demo-001</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">└─ execute_tool mem0_add                      (TOOL)</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">   └─ chat deepseek-chat                      (GENERATION)  记忆抽取</span></span></code></pre></div></div></figure>
+
+<p>和 Tempo 对照，少了三类 Span：网关与 HTTP 的 SERVER&#x2F;CLIENT Span（没有 AI 语义）、<code>ChatOpenAI</code>（与 <code>chat</code> 重复）、嵌入与模型调用下的 <code>POST</code>。Trace 名称来自 Collector 写入的 <code>langfuse.trace.name</code>：原本的根是网关 Span，被过滤之后如果没有这个属性，Langfuse 里只会是一个没有名字的空壳 Trace。</p>
+<p>在 Sessions 视图里，<code>s-demo-001</code> 下有两条 Trace：主会话与写记忆。后者的成本（记忆抽取那次模型调用）会计入同一会话，这正是把 <code>session.id</code> 显式写到后台 Span 上的原因。打开 <code>chat deepseek-chat</code> 的输入，能看到脱敏后的消息正文；如果用户问题里带手机号，这里显示的是 <code>[PHONE]</code>。</p>
+<h2 id="6-PromQL：成本与时延大盘"><a href="#6-PromQL：成本与时延大盘" class="headerlink" title="6. PromQL：成本与时延大盘"></a>6. PromQL：成本与时延大盘</h2><h3 id="6-1-指标名从哪来"><a href="#6-1-指标名从哪来" class="headerlink" title="6.1 指标名从哪来"></a>6.1 指标名从哪来</h3><p>Collector 把 OTLP 指标写入 Prometheus 的 OTLP 接收端，默认转换策略会改名：点换成下划线；有单位的加单位后缀（<code>s</code> → <code>_seconds</code>）；花括号里的注解单位（<code>{token}</code>、<code>{CNY}</code>）被丢弃；计数器加 <code>_total</code>；直方图拆成 <code>_bucket</code> &#x2F; <code>_sum</code> &#x2F; <code>_count</code>。本演练涉及的指标：</p>
+<table>
+<thead>
+<tr>
+<th>OTel 指标</th>
+<th>类型与单位</th>
+<th>Prometheus 中的名称</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gen_ai.client.token.usage</code></td>
+<td>直方图，<code>{token}</code></td>
+<td><code>gen_ai_client_token_usage_bucket</code> &#x2F; <code>_sum</code> &#x2F; <code>_count</code></td>
+</tr>
+<tr>
+<td><code>gen_ai.client.operation.duration</code></td>
+<td>直方图，<code>s</code></td>
+<td><code>gen_ai_client_operation_duration_seconds_*</code></td>
+</tr>
+<tr>
+<td><code>gen_ai.client.operation.time_to_first_chunk</code></td>
+<td>直方图，<code>s</code></td>
+<td><code>gen_ai_client_operation_time_to_first_chunk_seconds_*</code></td>
+</tr>
+<tr>
+<td><code>com.example.token.cost</code></td>
+<td>计数器，<code>{CNY}</code></td>
+<td><code>com_example_token_cost_total</code></td>
+</tr>
+<tr>
+<td><code>com.example.diagnose.requests</code></td>
+<td>计数器，<code>{request}</code></td>
+<td><code>com_example_diagnose_requests_total</code></td>
+</tr>
+<tr>
+<td><code>http.server.request.duration</code></td>
+<td>直方图，<code>s</code></td>
+<td><code>http_server_request_duration_seconds_*</code></td>
+</tr>
+<tr>
+<td>Tempo 从 Span 派生</td>
+<td>计数器 &#x2F; 直方图</td>
+<td><code>traces_spanmetrics_calls_total</code>、<code>traces_spanmetrics_latency_bucket</code></td>
+</tr>
+</tbody></table>
+<p>属性同样换成下划线：<code>gen_ai_request_model</code>、<code>gen_ai_token_type</code>、<code>server_address</code>、<code>error_type</code>。拿不准时先列出实际名称再写查询：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s http://localhost:9090/api/v1/label/__name__/values | jq -r <span class="string">&#x27;.data[]&#x27;</span> | grep -E <span class="string">&#x27;^(gen_ai|com_example)_&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p>以下查询中 <code>J</code> 代表 <code>job=&quot;agent-platform/diag-agent&quot;</code>，贴进 Grafana 时展开即可。</p>
+<h3 id="6-2-Token-用量"><a href="#6-2-Token-用量" class="headerlink" title="6.2 Token 用量"></a>6.2 Token 用量</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 每分钟 token 速率，按模型与方向</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">sum by (gen_ai_request_model, gen_ai_token_type) (</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  rate(gen_ai_client_token_usage_sum&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[5m])</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">) * 60</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"># 所选时间范围内的 token 总量</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">sum by (gen_ai_request_model, gen_ai_token_type) (</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  increase(gen_ai_client_token_usage_sum&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[$__range])</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"># 平均每次诊断消耗的 token（含记忆抽取）</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">sum(increase(gen_ai_client_token_usage_sum&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[1h]))</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">/</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">sum(increase(com_example_diagnose_requests_total&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[1h]))</span></span></code></pre></div></div></figure>
+
+<p>最后一个比值是最值得挂告警的业务指标：它突然翻倍，通常意味着 Agent 循环次数失控或记忆检索带回了过多上下文，比单看总量更早暴露问题。</p>
+<h3 id="6-3-成本"><a href="#6-3-成本" class="headerlink" title="6.3 成本"></a>6.3 成本</h3><p>两种口径并存，互相校验：</p>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 口径 A：应用侧按价目表折算后累加（多模型、分档价格都在代码里处理）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">sum by (gen_ai_request_model) (increase(com_example_token_cost_total&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[$__range]))</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"># 口径 B：用 token 用量乘单价，单价放在 Grafana 的常量变量 price_in / price_out（元 / 百万 token）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">sum(increase(gen_ai_client_token_usage_sum&#123;job=&quot;agent-platform/diag-agent&quot;, gen_ai_token_type=&quot;input&quot;&#125;[$__range])) / 1e6 * $price_in</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">+</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">sum(increase(gen_ai_client_token_usage_sum&#123;job=&quot;agent-platform/diag-agent&quot;, gen_ai_token_type=&quot;output&quot;&#125;[$__range])) / 1e6 * $price_out</span></span></code></pre></div></div></figure>
+
+<p>两个口径的差异来源只有两个：价目表不一致，或者有模型调用没经过 <code>agent_node</code>（本演练中 mem0 的记忆抽取就是这种情况，它只出现在口径 B 里）。差异稳定且能解释，大盘就可信；差异突变，先查是否新增了绕过成本计数的调用路径。</p>
+<p>Java 侧经 Spring AI 调模型的服务，token 指标是 Micrometer 计数器 <code>gen_ai_client_token_usage_total</code>（带 <code>gen_ai_token_type=&quot;total&quot;</code> 这一额外取值，见文档 06 第 8 节），与 Python 侧的直方图不同名。用 recording rule 归一到同一个序列名：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># prometheus/rules/genai.yml，并在 prometheus.yml 的 rule_files 中引用</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">groups:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">genai-unify</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">interval:</span> <span class="string">30s</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">rules:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">record:</span> <span class="string">genai:token_usage:rate5m</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum</span> <span class="string">by</span> <span class="string">(job,</span> <span class="string">gen_ai_request_model,</span> <span class="string">gen_ai_token_type)</span> <span class="string">(rate(gen_ai_client_token_usage_sum[5m]))</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">source:</span> <span class="string">otel_histogram</span> &#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">record:</span> <span class="string">genai:token_usage:rate5m</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum</span> <span class="string">by</span> <span class="string">(job,</span> <span class="string">gen_ai_request_model,</span> <span class="string">gen_ai_token_type)</span> <span class="string">(rate(gen_ai_client_token_usage_total&#123;gen_ai_token_type!=&quot;total&quot;&#125;[5m]))</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">source:</span> <span class="string">micrometer_counter</span> &#125;</span></span></code></pre></div></div></figure>
+
+<p>两条规则写入同一个名字，用静态标签 <code>source</code> 区分来源（同名同标签的规则会被 promtool 判为重复），大盘统一查询 <code>sum by (gen_ai_request_model, gen_ai_token_type) (genai:token_usage:rate5m)</code>。</p>
+<h3 id="6-4-首-Token-时延与调用时延"><a href="#6-4-首-Token-时延与调用时延" class="headerlink" title="6.4 首 Token 时延与调用时延"></a>6.4 首 Token 时延与调用时延</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 首分片时延 P95（流式调用），按模型</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">histogram_quantile(0.95, sum by (le, gen_ai_request_model) (</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  rate(gen_ai_client_operation_time_to_first_chunk_seconds_bucket&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[5m])</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">))</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"># 单次模型调用时延 P95</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">histogram_quantile(0.95, sum by (le, gen_ai_request_model) (</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  rate(gen_ai_client_operation_duration_seconds_bucket&#123;job=&quot;agent-platform/diag-agent&quot;, gen_ai_operation_name=&quot;chat&quot;&#125;[5m])</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">))</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"># 用户感知的端到端时延 P95（HTTP 层）</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">histogram_quantile(0.95, sum by (le) (</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  rate(http_server_request_duration_seconds_bucket&#123;job=&quot;agent-platform/diag-agent&quot;, http_route=&quot;/api/diagnose&quot;&#125;[5m])</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">))</span></span></code></pre></div></div></figure>
+
+<p>同一面板里叠加这三条线，能直接看出时间花在哪：端到端明显高于单次调用，说明循环次数多或记忆检索慢；首分片时延高而总时延正常，多半是模型侧排队。网关视角的平均首 Token 时延见文档 07 §1.2，两者之差是网关到应用这一段的开销。</p>
+<h3 id="6-5-错误率"><a href="#6-5-错误率" class="headerlink" title="6.5 错误率"></a>6.5 错误率</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 模型调用错误率（openai-v2 在失败时给指标带上 error_type）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">sum(rate(gen_ai_client_operation_duration_seconds_count&#123;job=&quot;agent-platform/diag-agent&quot;, error_type!=&quot;&quot;&#125;[5m]))</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">/</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">sum(rate(gen_ai_client_operation_duration_seconds_count&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[5m]))</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"># Agent 级错误率（Tempo metrics-generator 从 Span 派生）</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;, status_code=&quot;STATUS_CODE_ERROR&quot;&#125;[5m]))</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">/</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;&#125;[5m]))</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"># HTTP 5xx 比例</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">sum(rate(http_server_request_duration_seconds_count&#123;job=&quot;agent-platform/diag-agent&quot;, http_response_status_code=~&quot;5..&quot;&#125;[5m]))</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">/</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">sum(rate(http_server_request_duration_seconds_count&#123;job=&quot;agent-platform/diag-agent&quot;&#125;[5m]))</span></span></code></pre></div></div></figure>
+
+<p>三个错误率看的是不同层：模型调用失败不一定导致 Agent 失败（有重试或降级），Agent 失败也不一定是 5xx（可能返回了兜底答案）。只看 HTTP 5xx 会漏掉「答非所问但状态码 200」的情况，这部分要靠 Langfuse 的评测分数兜住。</p>
+<p><code>traces_spanmetrics_*</code> 来自 Tempo，只统计到达 Tempo 的 Span。文档 08 的尾采样对含 AI 语义的 Trace 全量保留，所以 Agent 级错误率不受采样影响；如果改动了采样策略，这条查询要按采样率重新解读。</p>
+<h3 id="6-6-从指标跳到-Trace"><a href="#6-6-从指标跳到-Trace" class="headerlink" title="6.6 从指标跳到 Trace"></a>6.6 从指标跳到 Trace</h3><p>openai-v2 记录两个直方图时处在 <code>chat</code> Span 的上下文中，Python SDK 默认的 exemplar 过滤器（<code>trace_based</code>）会把当时的 trace_id 附在数据点上，实测每个数据点都带有对应会话的 trace_id。Prometheus 开启 <code>exemplar-storage</code> 之后，在 Grafana 的时序面板打开 Exemplars 开关，图上会出现可点击的点，直接跳到文档 04 配置的 Tempo 数据源。排查「P95 为什么突然升高」时，这是从指标到具体会话最短的路径。</p>
+<h2 id="7-日志与-Trace-互跳"><a href="#7-日志与-Trace-互跳" class="headerlink" title="7. 日志与 Trace 互跳"></a>7. 日志与 Trace 互跳</h2><p><code>app.py</code> 在会话结束时打了一条日志。OTLP 日志记录自带 <code>trace_id</code> 与 <code>span_id</code> 字段，Loki 把它们存为结构化元数据：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 按内容查</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">&#123;service_name=&quot;diag-agent&quot;&#125; |= &quot;诊断完成&quot;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"># 按 trace_id 精确查某次会话的全部日志</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">&#123;service_name=&quot;diag-agent&quot;&#125; | trace_id=&quot;9aea70b6b2709fbe7498a35170939410&quot;</span></span></code></pre></div></div></figure>
+
+<ul>
+<li><strong>Loki → Tempo</strong>：展开日志行，文档 04 配置的 <code>derivedFields</code> 会把 <code>trace_id</code> 渲染成链接；</li>
+<li><strong>Tempo → Loki</strong>：Span 详情里的 Logs for this span，按 trace_id 与时间窗过滤；</li>
+<li><strong>网关日志</strong>：Java Agent 发出的日志同样带 <code>trace_id</code>，同一个查询把 <code>service_name</code> 换成 <code>scg-gateway</code> 即可，两个服务的日志用同一个 trace_id 对齐。</li>
+</ul>
+<p>一个小清理：<code>LoggingInstrumentor</code> 为了在控制台格式里显示 trace_id，会往每条日志记录上加 <code>otelTraceID</code>、<code>otelSpanID</code>、<code>otelTraceSampled</code>、<code>otelServiceName</code> 四个属性，它们随 OTLP 进入 Loki，与原生的 <code>trace_id</code> 字段重复。可以在 Collector 的 logs 管道里删掉：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">processors:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">transform/drop-log-dup:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">error_mode:</span> <span class="string">ignore</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">log_statements:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">delete_matching_keys(log.attributes,</span> <span class="string">&quot;^otel(TraceID|SpanID|TraceSampled|ServiceName)$&quot;</span><span class="string">)</span></span></span></code></pre></div></div></figure>
+
+<h2 id="8-断链排查"><a href="#8-断链排查" class="headerlink" title="8. 断链排查"></a>8. 断链排查</h2><p>排查顺序固定为三步：<strong>trace_id 是否一致 → 父子关系是否正确 → 采样标志是否为 1</strong>。前一步不成立，后面的现象都是它的衍生。</p>
+<table>
+<thead>
+<tr>
+<th>症状</th>
+<th>定位方法</th>
+<th>常见原因与处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>网关与 Agent 各有一条 Trace</td>
+<td>按文档 06 §6.1 用固定 <code>traceparent</code> 发请求，看 Agent 收到的请求头</td>
+<td>中间有代理没透传头；GlobalFilter 重建了请求头</td>
+</tr>
+<tr>
+<td>Agent 的 Trace 缺网关部分</td>
+<td>网关 Span 在 Tempo 中是否存在</td>
+<td>Java Agent 端点指到了 4317 而协议是 http&#x2F;protobuf（文档 06 §3.1）</td>
+</tr>
+<tr>
+<td>节点 Span 下面是空的，<code>chat</code> 挂在 <code>invoke_agent</code> 下</td>
+<td>看 <code>chat</code> 的父 Span 名称</td>
+<td>节点函数里漏了 <code>in_node_span()</code></td>
+</tr>
+<tr>
+<td>某些 <code>chat</code> 或 <code>POST</code> 成了单独的 Trace</td>
+<td>TraceQL 查 <code>{ span.gen_ai.operation.name = &quot;chat&quot; }</code>，看是否有根 Span 就是 <code>chat</code> 的 Trace</td>
+<td>调用发生在线程池里：业务代码的 <code>run_in_executor</code>，或 mem0 同步版 <code>Memory</code> 做实体加权检索时用的线程池；启用 <code>ThreadingInstrumentor</code>（文档 05 §6.2）</td>
+</tr>
+<tr>
+<td><code>invoke_agent</code> 只有几毫秒</td>
+<td>对比 HTTP Span 时长</td>
+<td>流式接口把根 Span 包在了 <code>return StreamingResponse(...)</code> 外面（文档 05 §6.3）</td>
+</tr>
+<tr>
+<td><code>chat</code> Span 没有 token</td>
+<td>看 <code>gen_ai.usage.*</code> 是否缺失</td>
+<td>流式调用没开 <code>stream_usage=True</code></td>
+</tr>
+<tr>
+<td>Tempo 有、Langfuse 没有</td>
+<td>Collector 自身指标里 <code>otlphttp/langfuse</code> 的发送失败计数；Collector 日志中的 401</td>
+<td>密钥错误或 Base64 带了换行（文档 08 §4.5）；摄取延迟</td>
+</tr>
+<tr>
+<td>Langfuse 里 Trace 没名字、不在会话下</td>
+<td>看 <code>invoke_agent</code> 上是否有 <code>langfuse.trace.name</code>、<code>session.id</code></td>
+<td>Collector 的 <code>transform/langfuse-redact</code> 没挂到 Langfuse 管道；Baggage 白名单漏了键</td>
+</tr>
+<tr>
+<td>写记忆那条 Trace 不在会话里</td>
+<td>看 <code>mem0_add</code> 上的 <code>session.id</code></td>
+<td>后台任务新开 Trace 时没显式写会话属性</td>
+</tr>
+<tr>
+<td>日志里 trace_id 全是 0</td>
+<td>看日志打印位置</td>
+<td>日志发生在任何 Span 之外（启动、后台线程）；或 Handler 被重复挂载（文档 05 §2）</td>
+</tr>
+<tr>
+<td>有指标没有 exemplar</td>
+<td>看 Prometheus 启动参数</td>
+<td>缺 <code>--enable-feature=exemplar-storage</code></td>
+</tr>
+<tr>
+<td>PromQL 查不到数据</td>
+<td>6.1 的名称列表</td>
+<td>单位后缀、<code>_total</code> 或 <code>job</code> 标签写错</td>
+</tr>
+</tbody></table>
+<h2 id="9-演练验收"><a href="#9-演练验收" class="headerlink" title="9. 演练验收"></a>9. 演练验收</h2><ul>
+<li><input disabled="" type="checkbox"> 一次请求的 trace_id 在 Tempo 与 Langfuse 中都能打开，且网关、Agent、节点、工具、模型调用在 Tempo 中结构完整；</li>
+<li><input disabled="" type="checkbox"> Langfuse 中该会话包含主会话与写记忆两条 Trace，每次模型调用只对应一个 generation；</li>
+<li><input disabled="" type="checkbox"> Tempo 中没有消息正文，Langfuse 中的手机号显示为 <code>[PHONE]</code>；</li>
+<li><input disabled="" type="checkbox"> 6.2–6.5 的查询都有数据，6.3 两个成本口径的差异可以解释；</li>
+<li><input disabled="" type="checkbox"> 从 Loki 日志、Prometheus exemplar 都能跳到这次会话的 Trace。</li>
+</ul>
+<h2 id="2026-09-补记：按原文依赖重建环境会失败"><a href="#2026-09-补记：按原文依赖重建环境会失败" class="headerlink" title="2026-09 补记：按原文依赖重建环境会失败"></a>2026-09 补记：按原文依赖重建环境会失败</h2><p>2026-09-24 之后按第 2.2 节新建环境，会拉到与 openai-v2 2.4b0 不兼容的 <code>opentelemetry-util-genai</code> 1.2b0，<code>setup_telemetry()</code> 在导入 openai-v2 埋点时直接报错，整个演练起不来（原因与复现见文档 05 的补记）。在依赖里加一条 <code>&quot;opentelemetry-util-genai&lt;1.2&quot;</code> 即可恢复，演练中的 Span 树、属性与指标名不受影响。另外，openai Python SDK 3.x 会让 <code>chat</code> Span 与两个 GenAI 指标缺少 <code>server.address</code>，文档 05 第 1 节 <code>&quot;openai&gt;=2,&lt;3&quot;</code> 的约束需要保留。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/07/24/observability/OTel-10-%E7%94%9F%E4%BA%A7%E5%B7%A5%E7%A8%8B%E5%8C%96/">可观测性生产工程化演进</a></h3>
+        <p>POC 的目标是看得见，生产的目标是扛得住、管得住、算得清：按拓扑高可用、数据治理、安全合规、SLO 告警、规范治理五个维度给出演进路线…</p>
+        <a class="btn primary" href="/2026/07/24/observability/OTel-10-%E7%94%9F%E4%BA%A7%E5%B7%A5%E7%A8%8B%E5%8C%96/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/07/20/observability/OTel-08-Langfuse%E5%8F%8C%E5%B1%82%E8%A7%82%E6%B5%8B/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Langfuse 双层观测融合</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#1-%E6%BC%94%E7%BB%83%E6%8B%93%E6%89%91" data-toc-target="1-演练拓扑"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">1. 演练拓扑</span></a><a class="toc-level-2" href="#2-%E5%87%86%E5%A4%87" data-toc-target="2-准备"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">2. 准备</span></a><a class="toc-level-3" href="#2-1-%E8%A7%82%E6%B5%8B%E5%BA%95%E5%BA%A7" data-toc-target="2-1-观测底座"><span class="toc-text">2.1 观测底座</span></a><a class="toc-level-3" href="#2-2-Agent-%E6%9C%8D%E5%8A%A1" data-toc-target="2-2-Agent-服务"><span class="toc-text">2.2 Agent 服务</span></a><a class="toc-level-3" href="#2-3-%E7%BD%91%E5%85%B3" data-toc-target="2-3-网关"><span class="toc-text">2.3 网关</span></a><a class="toc-level-2" href="#3-Agent-%E4%BB%A3%E7%A0%81" data-toc-target="3-Agent-代码"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">3. Agent 代码</span></a><a class="toc-level-2" href="#4-%E4%B8%80%E6%AC%A1%E4%BC%9A%E8%AF%9D%E5%9C%A8-Tempo-%E9%87%8C%E7%9A%84%E6%A0%B7%E5%AD%90" data-toc-target="4-一次会话在-Tempo-里的样子"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">4. 一次会话在 Tempo 里的样子</span></a><a class="toc-level-2" href="#5-%E5%90%8C%E4%B8%80%E4%BC%9A%E8%AF%9D%E5%9C%A8-Langfuse-%E9%87%8C%E7%9A%84%E6%A0%B7%E5%AD%90" data-toc-target="5-同一会话在-Langfuse-里的样子"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">5. 同一会话在 Langfuse 里的样子</span></a><a class="toc-level-2" href="#6-PromQL%EF%BC%9A%E6%88%90%E6%9C%AC%E4%B8%8E%E6%97%B6%E5%BB%B6%E5%A4%A7%E7%9B%98" data-toc-target="6-PromQL：成本与时延大盘"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">6. PromQL：成本与时延大盘</span></a><a class="toc-level-3" href="#6-1-%E6%8C%87%E6%A0%87%E5%90%8D%E4%BB%8E%E5%93%AA%E6%9D%A5" data-toc-target="6-1-指标名从哪来"><span class="toc-text">6.1 指标名从哪来</span></a><a class="toc-level-3" href="#6-2-Token-%E7%94%A8%E9%87%8F" data-toc-target="6-2-Token-用量"><span class="toc-text">6.2 Token 用量</span></a><a class="toc-level-3" href="#6-3-%E6%88%90%E6%9C%AC" data-toc-target="6-3-成本"><span class="toc-text">6.3 成本</span></a><a class="toc-level-3" href="#6-4-%E9%A6%96-Token-%E6%97%B6%E5%BB%B6%E4%B8%8E%E8%B0%83%E7%94%A8%E6%97%B6%E5%BB%B6" data-toc-target="6-4-首-Token-时延与调用时延"><span class="toc-text">6.4 首 Token 时延与调用时延</span></a><a class="toc-level-3" href="#6-5-%E9%94%99%E8%AF%AF%E7%8E%87" data-toc-target="6-5-错误率"><span class="toc-text">6.5 错误率</span></a><a class="toc-level-3" href="#6-6-%E4%BB%8E%E6%8C%87%E6%A0%87%E8%B7%B3%E5%88%B0-Trace" data-toc-target="6-6-从指标跳到-Trace"><span class="toc-text">6.6 从指标跳到 Trace</span></a><a class="toc-level-2" href="#7-%E6%97%A5%E5%BF%97%E4%B8%8E-Trace-%E4%BA%92%E8%B7%B3" data-toc-target="7-日志与-Trace-互跳"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">7. 日志与 Trace 互跳</span></a><a class="toc-level-2" href="#8-%E6%96%AD%E9%93%BE%E6%8E%92%E6%9F%A5" data-toc-target="8-断链排查"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">8. 断链排查</span></a><a class="toc-level-2" href="#9-%E6%BC%94%E7%BB%83%E9%AA%8C%E6%94%B6" data-toc-target="9-演练验收"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">9. 演练验收</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E6%8C%89%E5%8E%9F%E6%96%87%E4%BE%9D%E8%B5%96%E9%87%8D%E5%BB%BA%E7%8E%AF%E5%A2%83%E4%BC%9A%E5%A4%B1%E8%B4%A5" data-toc-target="2026-09-补记：按原文依赖重建环境会失败"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">2026-09 补记：按原文依赖重建环境会失败</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 83%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">10 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#1-%E6%BC%94%E7%BB%83%E6%8B%93%E6%89%91" data-toc-target="1-演练拓扑" data-title="01 · 1. 演练拓扑" aria-label="1. 演练拓扑"></a><a class="toc-strip__dot" href="#2-%E5%87%86%E5%A4%87" data-toc-target="2-准备" data-title="02 · 2. 准备" aria-label="2. 准备"></a><a class="toc-strip__dot" href="#3-Agent-%E4%BB%A3%E7%A0%81" data-toc-target="3-Agent-代码" data-title="03 · 3. Agent 代码" aria-label="3. Agent 代码"></a><a class="toc-strip__dot" href="#4-%E4%B8%80%E6%AC%A1%E4%BC%9A%E8%AF%9D%E5%9C%A8-Tempo-%E9%87%8C%E7%9A%84%E6%A0%B7%E5%AD%90" data-toc-target="4-一次会话在-Tempo-里的样子" data-title="04 · 4. 一次会话在 Tempo 里的样子" aria-label="4. 一次会话在 Tempo 里的样子"></a><a class="toc-strip__dot" href="#5-%E5%90%8C%E4%B8%80%E4%BC%9A%E8%AF%9D%E5%9C%A8-Langfuse-%E9%87%8C%E7%9A%84%E6%A0%B7%E5%AD%90" data-toc-target="5-同一会话在-Langfuse-里的样子" data-title="05 · 5. 同一会话在 Langfuse 里的样子" aria-label="5. 同一会话在 Langfuse 里的样子"></a><a class="toc-strip__dot" href="#6-PromQL%EF%BC%9A%E6%88%90%E6%9C%AC%E4%B8%8E%E6%97%B6%E5%BB%B6%E5%A4%A7%E7%9B%98" data-toc-target="6-PromQL：成本与时延大盘" data-title="06 · 6. PromQL：成本与时延大盘" aria-label="6. PromQL：成本与时延大盘"></a><a class="toc-strip__dot" href="#7-%E6%97%A5%E5%BF%97%E4%B8%8E-Trace-%E4%BA%92%E8%B7%B3" data-toc-target="7-日志与-Trace-互跳" data-title="07 · 7. 日志与 Trace 互跳" aria-label="7. 日志与 Trace 互跳"></a><a class="toc-strip__dot" href="#8-%E6%96%AD%E9%93%BE%E6%8E%92%E6%9F%A5" data-toc-target="8-断链排查" data-title="08 · 8. 断链排查" aria-label="8. 断链排查"></a><a class="toc-strip__dot" href="#9-%E6%BC%94%E7%BB%83%E9%AA%8C%E6%94%B6" data-toc-target="9-演练验收" data-title="09 · 9. 演练验收" aria-label="9. 演练验收"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E6%8C%89%E5%8E%9F%E6%96%87%E4%BE%9D%E8%B5%96%E9%87%8D%E5%BB%BA%E7%8E%AF%E5%A2%83%E4%BC%9A%E5%A4%B1%E8%B4%A5" data-toc-target="2026-09-补记：按原文依赖重建环境会失败" data-title="10 · 2026-09 补记：按原文依赖重建环境会失败" aria-label="2026-09 补记：按原文依赖重建环境会失败"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-09-端到端Demo","title":"端到端 Demo：一次 Agent 会话的全链路观测","url":"/2026/07/22/observability/OTel-09-%E7%AB%AF%E5%88%B0%E7%AB%AFDemo/","path":"agent-observability","index":9,"total":12,"next":{"title":"可观测性生产工程化演进","url":"/2026/07/24/observability/OTel-10-%E7%94%9F%E4%BA%A7%E5%B7%A5%E7%A8%8B%E5%8C%96/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

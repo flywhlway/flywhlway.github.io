@@ -1,0 +1,662 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 11 章 遥测、可观测与远程诊断：把车联网智能诊断搬到机器人上 · 飞轮之道</title>
+<meta name="description" content="机器人规模化运营的第二道门槛是“出了问题能不能远程定位”。本章讲可观测在机器人场景的三个变化（端上为主、三键贯穿、指标换成作业质量），然后把车联网智能诊断的方法迁移成机器人远程诊断：故障图谱、证据采集、假设排序、诊断工作流与人审。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-11-%E9%81%A5%E6%B5%8B%E5%8F%AF%E8%A7%82%E6%B5%8B%E4%B8%8E%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 11 章 遥测、可观测与远程诊断：把车联网智能诊断搬到机器人上 · 飞轮之道">
+<meta property="og:description" content="机器人规模化运营的第二道门槛是“出了问题能不能远程定位”。本章讲可观测在机器人场景的三个变化（端上为主、三键贯穿、指标换成作业质量），然后把车联网智能诊断的方法迁移成机器人远程诊断：故障图谱、证据采集、假设排序、诊断工作流与人审。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-11-%E9%81%A5%E6%B5%8B%E5%8F%AF%E8%A7%82%E6%B5%8B%E4%B8%8E%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD/">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Suitable_Technologies_Beam_telepresence_robot.jpg/1280px-Suitable_Technologies_Beam_telepresence_robot.jpg">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">平台架构</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 12 / 28 篇</a>
+    </div>
+    <h1>第 11 章 遥测、可观测与远程诊断：把车联网智能诊断搬到机器人上</h1>
+    <p class="article-deck">机器人规模化运营的第二道门槛是“出了问题能不能远程定位”。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>9 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/%E6%9C%BA%E5%99%A8%E4%BA%BA%E4%BA%91%E5%B9%B3%E5%8F%B0/">#机器人云平台</a><a class="article-meta__tag" href="/tags/%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD/">#远程诊断</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>端上为主云端为索引：证据留在端上，云端知道在哪。</li><li>三键贯穿：robotid、taskid、traceid 由框架保证。</li><li>四层指标：作业质量、任务服务、端侧健康、平台健康。</li><li>诊断原语：把排障剧本变成可调用的只读命令。</li><li>故障图谱：症状、故障、检查、处置、案例。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：机器人规模化运营的第二道门槛是“出了问题能不能远程定位”。本章讲可观测在机器人场景的三个变化（端上为主、三键贯穿、指标换成作业质量），然后把车联网智能诊断的方法迁移成机器人远程诊断：故障图谱、证据采集、假设排序、诊断工作流与人审。<br><strong>对应代码</strong>：<code>p05-remote-diagnosis</code>（故障图谱、证据、假设排序、工作流、报告与证据包）、p01（遥测与事件）｜<strong>建议学时</strong>：5 小时</p>
+</blockquote>
+<h2 id="11-1-机器人可观测的三个变化"><a href="#11-1-机器人可观测的三个变化" class="headerlink" title="11.1 机器人可观测的三个变化"></a>11.1 机器人可观测的三个变化</h2><h3 id="11-1-1-变化一：证据在端上"><a href="#11-1-1-变化一：证据在端上" class="headerlink" title="11.1.1 变化一：证据在端上"></a>11.1.1 变化一：证据在端上</h3><p>云服务的日志、指标、Trace 都在机房里；机器人的大部分证据（高频传感器、节点日志、bag 片段、内核日志）<strong>产生在端上、大多也留在端上</strong>。上行带宽只够传摘要。因此可观测的设计原则是：<strong>端上为主、云端为索引</strong>——云端知道“证据在哪台机器人的哪个时间窗”，需要时再按需召回。</p>
+<h3 id="11-1-2-变化二：三键贯穿"><a href="#11-1-2-变化二：三键贯穿" class="headerlink" title="11.1.2 变化二：三键贯穿"></a>11.1.2 变化二：三键贯穿</h3><p>车联网用 VIN、指令 ID、trace_id 串起一次远控；机器人用 <strong>robot_id &#x2F; task_id &#x2F; trace_id</strong> 串起一次任务：任务下发时生成 trace_id，随 ECL v1 的 task&#x2F;cmd 载荷下发，端侧所有与该任务相关的日志、事件、片段都带上它。三键必须由框架保证（日志库、云桥、任务执行器自动注入），而不是靠开发者自觉。</p>
+<h3 id="11-1-3-变化三：顶层指标是作业质量"><a href="#11-1-3-变化三：顶层指标是作业质量" class="headerlink" title="11.1.3 变化三：顶层指标是作业质量"></a>11.1.3 变化三：顶层指标是作业质量</h3><p>云服务的黄金指标是时延、流量、错误、饱和度。机器人最顶层的指标是<strong>物理世界的作业结果</strong>：任务成功率、无人工闭单率、急停次数。中间层才是熟悉的时延与错误，底层是端侧资源。</p>
+<h2 id="11-2-遥测管道"><a href="#11-2-遥测管道" class="headerlink" title="11.2 遥测管道"></a>11.2 遥测管道</h2><h3 id="11-2-1-管道与衍生流"><a href="#11-2-1-管道与衍生流" class="headerlink" title="11.2.1 管道与衍生流"></a>11.2.1 管道与衍生流</h3><pre class="mermaid">flowchart LR
+  MQ["MQTT 集群"] --&gt; K["Kafka&lt;br/&gt;按 robot_id 分区"]
+  K --&gt; F1["Flink：健康分（窗口聚合）"]
+  K --&gt; F2["Flink：告警规则（阈值+趋势）"]
+  K --&gt; F3["Flink：门禁聚合（OTA 实验组/对照组）"]
+  K --&gt; CH["ClickHouse：时序明细"]
+  F1 --&gt; TW["孪生档案"]
+  F2 --&gt; AL["告警中心"]
+  F3 --&gt; GATE["灰度引擎"]</pre>
+
+
+<p>遥测管道本身几乎可以原样复用车联网的建设经验。新增的是三条<strong>衍生流</strong>：健康分（供调度与排批）、告警（供值班与诊断）、门禁聚合（供第 9 章的灰度引擎）。</p>
+<h3 id="11-2-2-分层存储"><a href="#11-2-2-分层存储" class="headerlink" title="11.2.2 分层存储"></a>11.2.2 分层存储</h3><p>原始遥测明细保留数天到数周（排障用），分钟级聚合保留数月（趋势与容量），事件长期保留（审计与训练数据索引）。和车联网一样，<strong>按查询模式而不是按数据来源决定存储</strong>。</p>
+<h2 id="11-3-云—边—端-Trace"><a href="#11-3-云—边—端-Trace" class="headerlink" title="11.3 云—边—端 Trace"></a>11.3 云—边—端 Trace</h2><h3 id="11-3-1-一次任务一条-Trace"><a href="#11-3-1-一次任务一条-Trace" class="headerlink" title="11.3.1 一次任务一条 Trace"></a>11.3.1 一次任务一条 Trace</h3><pre class="mermaid">---
+title: "一次任务一条 Trace：trace_id 随任务载荷穿越云、边、端"
+---
+sequenceDiagram
+  participant B as 业务系统
+  participant F as Fleet 调度&lt;br/&gt;(云)
+  participant W as 任务工作流&lt;br/&gt;(Temporal)
+  participant BR as 云桥&lt;br/&gt;(端)
+  participant EX as 任务执行器&lt;br/&gt;(端)
+  B-&gt;&gt;F: 订单（traceparent 生成）
+  F-&gt;&gt;W: 启动工作流（span: dispatch）
+  W-&gt;&gt;BR: task/cmd &#123;task_id, trace_id&#125;
+  Note right of BR: 端侧 span 带时间戳&lt;br/&gt;本地缓存，异步批量上报
+  BR-&gt;&gt;EX: send_goal（span: execute）
+  EX--&gt;&gt;BR: feedback / result
+  BR-&gt;&gt;W: task/event（span: report）
+  W-&gt;&gt;B: 回写（span: close）
+  Note over F,EX: 云端按 trace_id 拼装完整链路：&lt;br/&gt;派单排队 · 网络 · 端侧准入 · 执行各阶段 · 回写</pre>
+
+
+<h3 id="11-3-2-端侧-span-的现实约束"><a href="#11-3-2-端侧-span-的现实约束" class="headerlink" title="11.3.2 端侧 span 的现实约束"></a>11.3.2 端侧 span 的现实约束</h3><p>端侧不能像微服务那样实时导出 span：带宽有限、可能断网。做法是<strong>本地缓冲 + 批量异步上报 + 断网补传</strong>，云端按 trace_id 拼装；端侧时钟偏移要作为属性一起上报，拼装时校正。这与你在车联网“车端埋点批量回传”的做法相同。</p>
+<h2 id="11-4-机器人黄金指标与-SLO"><a href="#11-4-机器人黄金指标与-SLO" class="headerlink" title="11.4 机器人黄金指标与 SLO"></a>11.4 机器人黄金指标与 SLO</h2><h3 id="11-4-1-四层指标"><a href="#11-4-1-四层指标" class="headerlink" title="11.4.1 四层指标"></a>11.4.1 四层指标</h3><table>
+<thead>
+<tr>
+<th>层</th>
+<th>指标</th>
+<th>SLO 示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>作业质量</td>
+<td>任务成功率、无人工闭单率、急停次数、单任务耗时</td>
+<td>无人工闭单率 ≥ 95%；非人为急停每千小时 ≤ 1</td>
+</tr>
+<tr>
+<td>任务服务</td>
+<td>派单成功率、任务端到端时延、租约回收率</td>
+<td>派单成功率 ≥ 99.5%</td>
+</tr>
+<tr>
+<td>端侧健康</td>
+<td>推理 P99、chunk 水位、降频比例、关节温度、电量</td>
+<td>推理 P99 &lt; chunk 时长的 70%</td>
+</tr>
+<tr>
+<td>平台健康</td>
+<td>接入成功率、消息端到端时延、OTA 成功率、回传积压</td>
+<td>遥测端到端时延 P99 &lt; 3s</td>
+</tr>
+</tbody></table>
+<h3 id="11-4-2-SLO-的用途"><a href="#11-4-2-SLO-的用途" class="headerlink" title="11.4.2 SLO 的用途"></a>11.4.2 SLO 的用途</h3><p>SLO 不只用于告警：<strong>作业质量层的 SLO 就是 OTA 门禁的依据</strong>（第 9 章），端侧健康层的 SLO 就是模型准入的依据（第 6 章），平台健康层的 SLO 就是容量规划的依据。一套指标，三处复用。</p>
+<h2 id="11-5-日志：端上为主，三通道召回"><a href="#11-5-日志：端上为主，三通道召回" class="headerlink" title="11.5 日志：端上为主，三通道召回"></a>11.5 日志：端上为主，三通道召回</h2><h3 id="11-5-1-三个召回通道"><a href="#11-5-1-三个召回通道" class="headerlink" title="11.5.1 三个召回通道"></a>11.5.1 三个召回通道</h3><table>
+<thead>
+<tr>
+<th>通道</th>
+<th>触发</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>事件随行</td>
+<td>故障或安全事件发生时</td>
+<td>事件前后 N 秒的关键日志摘要，随事件上行</td>
+</tr>
+<tr>
+<td>按需拉取</td>
+<td>诊断会话中工程师发起</td>
+<td>指定节点、时间窗的日志文件，经网关文件通道上传</td>
+</tr>
+<tr>
+<td>定期归档</td>
+<td>夜间充电窗口</td>
+<td>压缩后的日志包，进入冷存储</td>
+</tr>
+</tbody></table>
+<h3 id="11-5-2-端侧日志治理"><a href="#11-5-2-端侧日志治理" class="headerlink" title="11.5.2 端侧日志治理"></a>11.5.2 端侧日志治理</h3><p>结构化日志（JSON）、三键字段、按节点分文件、按大小与时间滚动、磁盘水位保护（第 3 章：eMMC&#x2F;SSD 寿命与写满风险）。<strong>日志把磁盘写满导致机器人停机</strong>，是端侧最低级也最常见的事故之一。</p>
+<h2 id="11-6-三级大盘"><a href="#11-6-三级大盘" class="headerlink" title="11.6 三级大盘"></a>11.6 三级大盘</h2><h3 id="11-6-1-机队、站点、单机"><a href="#11-6-1-机队、站点、单机" class="headerlink" title="11.6.1 机队、站点、单机"></a>11.6.1 机队、站点、单机</h3><ul>
+<li><strong>机队级</strong>（管理层）：在线率、无人工闭单率、急停趋势、OTA 进度、回传积压；</li>
+<li><strong>站点级</strong>（站点运营）：本站点机器人状态分布、在途任务、排队与资源锁、告警认领情况；</li>
+<li><strong>单机级</strong>（工程师）：孪生档案首屏——实时遥测、近期事件、软件版本、标定时间、健康分构成、最近任务与 Trace。</li>
+</ul>
+<p><strong>单机级大盘就是诊断会话的首屏</strong>：工程师打开一台机器人时，第一眼应该看到“它现在怎样、最近发生了什么、和同型号机器人相比哪里不同”。</p>
+<h2 id="11-7-告警治理"><a href="#11-7-告警治理" class="headerlink" title="11.7 告警治理"></a>11.7 告警治理</h2><h3 id="11-7-1-四条规则"><a href="#11-7-1-四条规则" class="headerlink" title="11.7.1 四条规则"></a>11.7.1 四条规则</h3><ol>
+<li><strong>每条告警必须有消费方</strong>：没有认领人的告警就是噪声；</li>
+<li><strong>分级</strong>：P0（安全、停线）电话，P1（作业受影响）即时消息，P2（趋势）工单；</li>
+<li><strong>抑制与聚合</strong>：同一站点网络故障导致 50 台机器人离线，只发一条站点级告警；</li>
+<li><strong>趋势告警</strong>：关节温度、电池内阻、定位质量这类<strong>渐进退化</strong>，用趋势（斜率、同比）而不是阈值告警——等到阈值触发时往往已经停机。</li>
+</ol>
+<h2 id="11-8-远程诊断会话"><a href="#11-8-远程诊断会话" class="headerlink" title="11.8 远程诊断会话"></a>11.8 远程诊断会话</h2><h3 id="11-8-1-会话里能做什么"><a href="#11-8-1-会话里能做什么" class="headerlink" title="11.8.1 会话里能做什么"></a>11.8.1 会话里能做什么</h3><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>风险</th>
+<th>管控</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>查看孪生、遥测、事件</td>
+<td>低</td>
+<td>默认开放给值班角色</td>
+</tr>
+<tr>
+<td>只读诊断命令（节点列表、QoS 摘要、参数读取）</td>
+<td>低</td>
+<td>白名单命令，结果回传</td>
+</tr>
+<tr>
+<td>拉取日志、bag 片段</td>
+<td>中（数据合规）</td>
+<td>审批 + 脱敏 + 审计</td>
+</tr>
+<tr>
+<td>实时可视化（Foxglove Bridge 等）</td>
+<td>中</td>
+<td>限时、限人、会话结束自动关闭</td>
+</tr>
+<tr>
+<td>改参数、重启节点、重新标定</td>
+<td>高</td>
+<td>作为任务下发，走人审门（第 15 章）</td>
+</tr>
+</tbody></table>
+<h3 id="11-8-2-只读诊断命令即“远程诊断原语”"><a href="#11-8-2-只读诊断命令即“远程诊断原语”" class="headerlink" title="11.8.2 只读诊断命令即“远程诊断原语”"></a>11.8.2 只读诊断命令即“远程诊断原语”</h3><p>第 4 章 4.11 的排障命令，就是远程诊断的原语：云端向云桥发送白名单内的只读诊断请求，云桥在端侧执行并把结构化结果回传。<strong>把工程师的排障剧本变成可调用的诊断原语</strong>，是后续让 Agent 参与诊断的前提。</p>
+<h2 id="11-9-车联网智能诊断迁移：故障图谱驱动的智能诊断"><a href="#11-9-车联网智能诊断迁移：故障图谱驱动的智能诊断" class="headerlink" title="11.9 车联网智能诊断迁移：故障图谱驱动的智能诊断"></a>11.9 车联网智能诊断迁移：故障图谱驱动的智能诊断</h2><h3 id="11-9-1-故障图谱的结构"><a href="#11-9-1-故障图谱的结构" class="headerlink" title="11.9.1 故障图谱的结构"></a>11.9.1 故障图谱的结构</h3><pre class="mermaid">flowchart LR
+  SYM["症状&lt;br/&gt;可由证据特征判定&lt;br/&gt;例：关节温度 P95 &gt; 80℃"] --&gt;|指向| F["故障&lt;br/&gt;先验概率 · 严重度"]
+  F --&gt;|需要确认| CHK["检查&lt;br/&gt;只读诊断原语"]
+  F --&gt;|处置| ACT["处置动作&lt;br/&gt;风险等级 · 是否需人审"]
+  F --&gt;|关联| CASE["历史案例&lt;br/&gt;工单 · 片段 · 复盘"]</pre>
+
+
+<p>与车联网的 DTC + 故障树相比，机器人的故障图谱有两个特点：<strong>症状来自多源证据的特征</strong>（遥测统计、事件计数、日志模式），而不是单一故障码；<strong>大量故障是环境与配置问题</strong>（Wi-Fi 漫游、反光地面、地图过期、QoS 不匹配、时钟偏移），而不只是零部件损坏。</p>
+<h3 id="11-9-2-p05-中的一个故障节点"><a href="#11-9-2-p05-中的一个故障节点" class="headerlink" title="11.9.2 p05 中的一个故障节点"></a>11.9.2 p05 中的一个故障节点</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># p05 diagnose/kg.py（节选）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">&#123;<span class="string">&quot;id&quot;</span>: <span class="string">&quot;F-LOC-WIFI&quot;</span>, <span class="string">&quot;name&quot;</span>: <span class="string">&quot;Wi-Fi 漫游导致定位与连接抖动&quot;</span>, <span class="string">&quot;severity&quot;</span>: <span class="string">&quot;P1&quot;</span>, <span class="string">&quot;prior&quot;</span>: <span class="number">0.08</span>,</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"> <span class="string">&quot;symptoms&quot;</span>: [</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    &#123;<span class="string">&quot;feature&quot;</span>: <span class="string">&quot;reconnect_count&quot;</span>, <span class="string">&quot;op&quot;</span>: <span class="string">&quot;&gt;=&quot;</span>, <span class="string">&quot;value&quot;</span>: <span class="number">5</span>, <span class="string">&quot;weight&quot;</span>: <span class="number">2.0</span>&#125;,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    &#123;<span class="string">&quot;feature&quot;</span>: <span class="string">&quot;localization_lost_count&quot;</span>, <span class="string">&quot;op&quot;</span>: <span class="string">&quot;&gt;=&quot;</span>, <span class="string">&quot;value&quot;</span>: <span class="number">2</span>, <span class="string">&quot;weight&quot;</span>: <span class="number">1.5</span>&#125;,</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    &#123;<span class="string">&quot;feature&quot;</span>: <span class="string">&quot;wifi_rssi_min&quot;</span>, <span class="string">&quot;op&quot;</span>: <span class="string">&quot;&lt;&quot;</span>, <span class="string">&quot;value&quot;</span>: -<span class="number">75</span>, <span class="string">&quot;weight&quot;</span>: <span class="number">1.5</span>&#125;],</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"> <span class="string">&quot;checks&quot;</span>: [<span class="string">&quot;net.roam_log&quot;</span>, <span class="string">&quot;loc.quality_timeline&quot;</span>],</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"> <span class="string">&quot;actions&quot;</span>: [&#123;<span class="string">&quot;id&quot;</span>: <span class="string">&quot;A-KEEPALIVE&quot;</span>, <span class="string">&quot;desc&quot;</span>: <span class="string">&quot;放宽 keepalive 并开启漫游宽限&quot;</span>, <span class="string">&quot;risk&quot;</span>: <span class="string">&quot;low&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">             &#123;<span class="string">&quot;id&quot;</span>: <span class="string">&quot;A-AP-TUNE&quot;</span>, <span class="string">&quot;desc&quot;</span>: <span class="string">&quot;联系 IT 调整 AP 漫游阈值&quot;</span>, <span class="string">&quot;risk&quot;</span>: <span class="string">&quot;low&quot;</span>&#125;]&#125;</span></span></code></pre></div></div></figure>
+
+<h3 id="11-9-3-假设排序"><a href="#11-9-3-假设排序" class="headerlink" title="11.9.3 假设排序"></a>11.9.3 假设排序</h3><p>对每个故障计算“对数几率得分”：先验的对数几率 + 命中症状的权重之和 − 关键症状缺失的惩罚，再归一化成排序。<strong>每个假设都附带“哪些证据支持、哪些证据缺失”的解释</strong>——诊断结果必须可解释、可复核，这是运维场景与问答场景的根本区别。可选的 LLM 只负责把结构化结果写成可读的报告，不参与打分；离线环境用模板生成。</p>
+<h2 id="11-10-诊断工作流"><a href="#11-10-诊断工作流" class="headerlink" title="11.10 诊断工作流"></a>11.10 诊断工作流</h2><h3 id="11-10-1-流程"><a href="#11-10-1-流程" class="headerlink" title="11.10.1 流程"></a>11.10.1 流程</h3><pre class="mermaid">---
+title: "智能诊断工作流（p05 的最小实现，生产用 Temporal）"
+---
+flowchart TD
+  S(["开始"]) --&gt; A["告警或工单触发（robot_id, 时间窗, trace_id）"]
+  A --&gt; B["采集证据（遥测统计·事件·日志模式）&lt;br/&gt;失败自动重试"]
+  B --&gt; C["故障图谱打分 → 假设排序 + 解释"]
+  C --&gt; D["执行只读检查（诊断原语）&lt;br/&gt;补充证据后重新排序"]
+  D --&gt; Q&#123;"最高假设置信度足够&lt;br/&gt;且处置为低风险?"&#125;
+  Q --&gt;|"是"| E["自动处置（作为任务下发，带审计）"]
+  Q --&gt;|"否"| F["人审门：工程师确认假设与处置"]
+  E --&gt; G["生成诊断报告 + 证据包（可复现）"]
+  F --&gt; G
+  G --&gt; H["结果反馈：命中率统计 → 调整先验与权重"]
+  H --&gt; Z(["结束"])</pre>
+
+
+<h3 id="11-10-2-三个工程要点"><a href="#11-10-2-三个工程要点" class="headerlink" title="11.10.2 三个工程要点"></a>11.10.2 三个工程要点</h3><ol>
+<li><strong>活动可重试、可恢复</strong>：证据采集依赖端侧在线，失败要重试；工作流中断后从断点恢复（p05 用状态文件模拟 Temporal 的持久化执行）；</li>
+<li><strong>高风险处置必须人审</strong>：重启、重新标定、改安全参数一律经人审门，且作为任务下发（第 7 章纪律三）；</li>
+<li><strong>闭环学习</strong>：每次诊断的最终结论（工程师确认的根因）回写图谱，更新先验与权重——<strong>诊断系统越用越准</strong>，这正是智能诊断平台的核心价值。</li>
+</ol>
+<h2 id="11-11-取证包"><a href="#11-11-取证包" class="headerlink" title="11.11 取证包"></a>11.11 取证包</h2><h3 id="11-11-1-内容"><a href="#11-11-1-内容" class="headerlink" title="11.11.1 内容"></a>11.11.1 内容</h3><p>事故或高价值故障发生时，自动打包：时间窗内的遥测与事件、相关日志、bag 片段索引、软件与模型版本、标定版本、孪生快照、Trace、诊断结论。取证包带清单与摘要，<strong>可以在另一台机器上复现分析</strong>。它同时服务三类用户：运维（定位）、算法（数据）、合规（审计）。</p>
+<h2 id="11-12-案例推演：夜班定位丢失频发"><a href="#11-12-案例推演：夜班定位丢失频发" class="headerlink" title="11.12 案例推演：夜班定位丢失频发"></a>11.12 案例推演：夜班定位丢失频发</h2><h3 id="11-12-1-现象"><a href="#11-12-1-现象" class="headerlink" title="11.12.1 现象"></a>11.12.1 现象</h3><p>某仓库最近一周夜班“定位丢失”事件是白班的五倍，集中在 C 区通道。</p>
+<h3 id="11-12-2-诊断过程"><a href="#11-12-2-诊断过程" class="headerlink" title="11.12.2 诊断过程"></a>11.12.2 诊断过程</h3><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>证据</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>证据采集</td>
+<td>定位丢失事件集中在 22:00 以后；同时段重连次数上升；Wi-Fi 信号最低值变差</td>
+<td>候选：Wi-Fi 漫游（F-LOC-WIFI）、地面反光、地图过期</td>
+</tr>
+<tr>
+<td>只读检查</td>
+<td>漫游日志显示 C 区新增了一台 AP 且夜间功率策略不同；定位质量时间线与漫游时刻吻合</td>
+<td>Wi-Fi 假设置信度上升</td>
+</tr>
+<tr>
+<td>排除</td>
+<td>同时段白班也有反光地面但无异常；地图版本近期未变</td>
+<td>排除反光与地图</td>
+</tr>
+<tr>
+<td>人审</td>
+<td>工程师确认根因</td>
+<td>处置：放宽 keepalive + 漫游宽限；联系 IT 调整 AP 策略</td>
+</tr>
+</tbody></table>
+<h3 id="11-12-3-平台收获"><a href="#11-12-3-平台收获" class="headerlink" title="11.12.3 平台收获"></a>11.12.3 平台收获</h3><p>把这次案例写回图谱（Wi-Fi 类故障在该站点的先验上调），把“C 区夜间”加入数据回传的触发条件（为定位模块积累数据）——一次诊断同时改进了<strong>运维知识</strong>与<strong>训练数据</strong>，这就是诊断系统与数据飞轮的交汇点。</p>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车联网</th>
+<th>机器人可观测与诊断</th>
+<th>迁移方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>VIN&#x2F;指令&#x2F;trace 三键</td>
+<td>robot_id&#x2F;task_id&#x2F;trace_id</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>车端埋点批量回传</td>
+<td>端侧 span 缓冲拼装</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>车队 SLO</td>
+<td>四层指标（顶层换作业质量）</td>
+<td>改造</td>
+</tr>
+<tr>
+<td>车端日志拉取</td>
+<td>三通道召回</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>DTC + 故障树</td>
+<td>多源证据特征 + 故障图谱</td>
+<td>改造</td>
+</tr>
+<tr>
+<td>车联网智能诊断</td>
+<td>诊断工作流 + 人审 + 闭环学习</td>
+<td>直用</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>把端上日志全量上云</strong>：带宽与存储成本失控，关键时刻反而找不到。对策：端上为主、事件随行、按需拉取。</li>
+<li><strong>阈值告警覆盖渐进退化</strong>：关节温度缓慢上升，等到阈值触发已经停机。对策：趋势告警。</li>
+<li><strong>诊断结果不可解释</strong>：给出“最可能原因”却说不清依据，工程师不信任。对策：每个假设附支持与缺失证据。</li>
+<li><strong>诊断系统不闭环</strong>：图谱永远停留在初始版本。对策：工程师确认的根因回写先验与权重。</li>
+</ul>
+<h2 id="🛠️-动手练习"><a href="#🛠️-动手练习" class="headerlink" title="🛠️ 动手练习"></a>🛠️ 动手练习</h2><ol>
+<li>运行 p05 的三个诊断剧本（第 21 章），对照报告中的“支持证据&#x2F;缺失证据”理解打分逻辑。</li>
+<li>为你熟悉的一类机器人故障（例如电池、相机）在 p05 的图谱格式中新增一个故障节点，并补测试样例。</li>
+<li>为 p01 的遥测定义四层指标中的五个 SLO，并说明每个 SLO 会被哪个平面复用。</li>
+</ol>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>机器人可观测与云服务可观测最大的不同？（端上为主、三键贯穿、顶层指标是作业质量）</li>
+<li>如何设计一次任务的端到端 Trace？（trace_id 随任务载荷、端侧缓冲批量上报、云端拼装、时钟偏移校正）</li>
+<li>如何把车联网智能诊断迁移到机器人？（多源证据特征 + 故障图谱 + 可解释排序 + 人审 + 闭环学习）</li>
+<li>远程诊断会话如何管控风险？（按能力分级：只读开放、数据拉取审批、变更类作为任务走人审）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>端上为主云端为索引</strong>：证据留在端上，云端知道在哪。</li>
+<li><strong>三键贯穿</strong>：robot_id、task_id、trace_id 由框架保证。</li>
+<li><strong>四层指标</strong>：作业质量、任务服务、端侧健康、平台健康。</li>
+<li><strong>诊断原语</strong>：把排障剧本变成可调用的只读命令。</li>
+<li><strong>故障图谱</strong>：症状、故障、检查、处置、案例。</li>
+<li><strong>可解释排序</strong>：每个假设附支持与缺失证据。</li>
+<li><strong>诊断闭环</strong>：确认的根因回写先验与权重。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-10-Fleet%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6%E4%B8%8E%E4%BA%92%E6%93%8D%E4%BD%9C/">第 10 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-12-%E6%95%B0%E6%8D%AE%E9%97%AD%E7%8E%AF%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/">第 12 章 数据闭环与数据引擎</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-12-%E6%95%B0%E6%8D%AE%E9%97%AD%E7%8E%AF%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/">第 12 章 数据闭环：机器人数据引擎</a></h3>
+        <p>2026 年具身智能的第一瓶颈是数据，而数据生产线恰恰是平台工程师的主场。</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-12-%E6%95%B0%E6%8D%AE%E9%97%AD%E7%8E%AF%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-10-Fleet%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6%E4%B8%8E%E4%BA%92%E6%93%8D%E4%BD%9C/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 10 章 Fleet 任务、调度与互操作</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 17 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#11-1-%E6%9C%BA%E5%99%A8%E4%BA%BA%E5%8F%AF%E8%A7%82%E6%B5%8B%E7%9A%84%E4%B8%89%E4%B8%AA%E5%8F%98%E5%8C%96" data-toc-target="11-1-机器人可观测的三个变化"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">11.1 机器人可观测的三个变化</span></a><a class="toc-level-3" href="#11-1-1-%E5%8F%98%E5%8C%96%E4%B8%80%EF%BC%9A%E8%AF%81%E6%8D%AE%E5%9C%A8%E7%AB%AF%E4%B8%8A" data-toc-target="11-1-1-变化一：证据在端上"><span class="toc-text">11.1.1 变化一：证据在端上</span></a><a class="toc-level-3" href="#11-1-2-%E5%8F%98%E5%8C%96%E4%BA%8C%EF%BC%9A%E4%B8%89%E9%94%AE%E8%B4%AF%E7%A9%BF" data-toc-target="11-1-2-变化二：三键贯穿"><span class="toc-text">11.1.2 变化二：三键贯穿</span></a><a class="toc-level-3" href="#11-1-3-%E5%8F%98%E5%8C%96%E4%B8%89%EF%BC%9A%E9%A1%B6%E5%B1%82%E6%8C%87%E6%A0%87%E6%98%AF%E4%BD%9C%E4%B8%9A%E8%B4%A8%E9%87%8F" data-toc-target="11-1-3-变化三：顶层指标是作业质量"><span class="toc-text">11.1.3 变化三：顶层指标是作业质量</span></a><a class="toc-level-2" href="#11-2-%E9%81%A5%E6%B5%8B%E7%AE%A1%E9%81%93" data-toc-target="11-2-遥测管道"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">11.2 遥测管道</span></a><a class="toc-level-3" href="#11-2-1-%E7%AE%A1%E9%81%93%E4%B8%8E%E8%A1%8D%E7%94%9F%E6%B5%81" data-toc-target="11-2-1-管道与衍生流"><span class="toc-text">11.2.1 管道与衍生流</span></a><a class="toc-level-3" href="#11-2-2-%E5%88%86%E5%B1%82%E5%AD%98%E5%82%A8" data-toc-target="11-2-2-分层存储"><span class="toc-text">11.2.2 分层存储</span></a><a class="toc-level-2" href="#11-3-%E4%BA%91%E2%80%94%E8%BE%B9%E2%80%94%E7%AB%AF-Trace" data-toc-target="11-3-云—边—端-Trace"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">11.3 云—边—端 Trace</span></a><a class="toc-level-3" href="#11-3-1-%E4%B8%80%E6%AC%A1%E4%BB%BB%E5%8A%A1%E4%B8%80%E6%9D%A1-Trace" data-toc-target="11-3-1-一次任务一条-Trace"><span class="toc-text">11.3.1 一次任务一条 Trace</span></a><a class="toc-level-3" href="#11-3-2-%E7%AB%AF%E4%BE%A7-span-%E7%9A%84%E7%8E%B0%E5%AE%9E%E7%BA%A6%E6%9D%9F" data-toc-target="11-3-2-端侧-span-的现实约束"><span class="toc-text">11.3.2 端侧 span 的现实约束</span></a><a class="toc-level-2" href="#11-4-%E6%9C%BA%E5%99%A8%E4%BA%BA%E9%BB%84%E9%87%91%E6%8C%87%E6%A0%87%E4%B8%8E-SLO" data-toc-target="11-4-机器人黄金指标与-SLO"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">11.4 机器人黄金指标与 SLO</span></a><a class="toc-level-3" href="#11-4-1-%E5%9B%9B%E5%B1%82%E6%8C%87%E6%A0%87" data-toc-target="11-4-1-四层指标"><span class="toc-text">11.4.1 四层指标</span></a><a class="toc-level-3" href="#11-4-2-SLO-%E7%9A%84%E7%94%A8%E9%80%94" data-toc-target="11-4-2-SLO-的用途"><span class="toc-text">11.4.2 SLO 的用途</span></a><a class="toc-level-2" href="#11-5-%E6%97%A5%E5%BF%97%EF%BC%9A%E7%AB%AF%E4%B8%8A%E4%B8%BA%E4%B8%BB%EF%BC%8C%E4%B8%89%E9%80%9A%E9%81%93%E5%8F%AC%E5%9B%9E" data-toc-target="11-5-日志：端上为主，三通道召回"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">11.5 日志：端上为主，三通道召回</span></a><a class="toc-level-3" href="#11-5-1-%E4%B8%89%E4%B8%AA%E5%8F%AC%E5%9B%9E%E9%80%9A%E9%81%93" data-toc-target="11-5-1-三个召回通道"><span class="toc-text">11.5.1 三个召回通道</span></a><a class="toc-level-3" href="#11-5-2-%E7%AB%AF%E4%BE%A7%E6%97%A5%E5%BF%97%E6%B2%BB%E7%90%86" data-toc-target="11-5-2-端侧日志治理"><span class="toc-text">11.5.2 端侧日志治理</span></a><a class="toc-level-2" href="#11-6-%E4%B8%89%E7%BA%A7%E5%A4%A7%E7%9B%98" data-toc-target="11-6-三级大盘"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">11.6 三级大盘</span></a><a class="toc-level-3" href="#11-6-1-%E6%9C%BA%E9%98%9F%E3%80%81%E7%AB%99%E7%82%B9%E3%80%81%E5%8D%95%E6%9C%BA" data-toc-target="11-6-1-机队、站点、单机"><span class="toc-text">11.6.1 机队、站点、单机</span></a><a class="toc-level-2" href="#11-7-%E5%91%8A%E8%AD%A6%E6%B2%BB%E7%90%86" data-toc-target="11-7-告警治理"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">11.7 告警治理</span></a><a class="toc-level-3" href="#11-7-1-%E5%9B%9B%E6%9D%A1%E8%A7%84%E5%88%99" data-toc-target="11-7-1-四条规则"><span class="toc-text">11.7.1 四条规则</span></a><a class="toc-level-2" href="#11-8-%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD%E4%BC%9A%E8%AF%9D" data-toc-target="11-8-远程诊断会话"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">11.8 远程诊断会话</span></a><a class="toc-level-3" href="#11-8-1-%E4%BC%9A%E8%AF%9D%E9%87%8C%E8%83%BD%E5%81%9A%E4%BB%80%E4%B9%88" data-toc-target="11-8-1-会话里能做什么"><span class="toc-text">11.8.1 会话里能做什么</span></a><a class="toc-level-3" href="#11-8-2-%E5%8F%AA%E8%AF%BB%E8%AF%8A%E6%96%AD%E5%91%BD%E4%BB%A4%E5%8D%B3%E2%80%9C%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD%E5%8E%9F%E8%AF%AD%E2%80%9D" data-toc-target="11-8-2-只读诊断命令即“远程诊断原语”"><span class="toc-text">11.8.2 只读诊断命令即“远程诊断原语”</span></a><a class="toc-level-2" href="#11-9-%E8%BD%A6%E8%81%94%E7%BD%91%E6%99%BA%E8%83%BD%E8%AF%8A%E6%96%AD%E8%BF%81%E7%A7%BB%EF%BC%9A%E6%95%85%E9%9A%9C%E5%9B%BE%E8%B0%B1%E9%A9%B1%E5%8A%A8%E7%9A%84%E6%99%BA%E8%83%BD%E8%AF%8A%E6%96%AD" data-toc-target="11-9-车联网智能诊断迁移：故障图谱驱动的智能诊断"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">11.9 车联网智能诊断迁移：故障图谱驱动的智能诊断</span></a><a class="toc-level-3" href="#11-9-1-%E6%95%85%E9%9A%9C%E5%9B%BE%E8%B0%B1%E7%9A%84%E7%BB%93%E6%9E%84" data-toc-target="11-9-1-故障图谱的结构"><span class="toc-text">11.9.1 故障图谱的结构</span></a><a class="toc-level-3" href="#11-9-2-p05-%E4%B8%AD%E7%9A%84%E4%B8%80%E4%B8%AA%E6%95%85%E9%9A%9C%E8%8A%82%E7%82%B9" data-toc-target="11-9-2-p05-中的一个故障节点"><span class="toc-text">11.9.2 p05 中的一个故障节点</span></a><a class="toc-level-3" href="#11-9-3-%E5%81%87%E8%AE%BE%E6%8E%92%E5%BA%8F" data-toc-target="11-9-3-假设排序"><span class="toc-text">11.9.3 假设排序</span></a><a class="toc-level-2" href="#11-10-%E8%AF%8A%E6%96%AD%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="11-10-诊断工作流"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">11.10 诊断工作流</span></a><a class="toc-level-3" href="#11-10-1-%E6%B5%81%E7%A8%8B" data-toc-target="11-10-1-流程"><span class="toc-text">11.10.1 流程</span></a><a class="toc-level-3" href="#11-10-2-%E4%B8%89%E4%B8%AA%E5%B7%A5%E7%A8%8B%E8%A6%81%E7%82%B9" data-toc-target="11-10-2-三个工程要点"><span class="toc-text">11.10.2 三个工程要点</span></a><a class="toc-level-2" href="#11-11-%E5%8F%96%E8%AF%81%E5%8C%85" data-toc-target="11-11-取证包"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">11.11 取证包</span></a><a class="toc-level-3" href="#11-11-1-%E5%86%85%E5%AE%B9" data-toc-target="11-11-1-内容"><span class="toc-text">11.11.1 内容</span></a><a class="toc-level-2" href="#11-12-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E5%A4%9C%E7%8F%AD%E5%AE%9A%E4%BD%8D%E4%B8%A2%E5%A4%B1%E9%A2%91%E5%8F%91" data-toc-target="11-12-案例推演：夜班定位丢失频发"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">11.12 案例推演：夜班定位丢失频发</span></a><a class="toc-level-3" href="#11-12-1-%E7%8E%B0%E8%B1%A1" data-toc-target="11-12-1-现象"><span class="toc-text">11.12.1 现象</span></a><a class="toc-level-3" href="#11-12-2-%E8%AF%8A%E6%96%AD%E8%BF%87%E7%A8%8B" data-toc-target="11-12-2-诊断过程"><span class="toc-text">11.12.2 诊断过程</span></a><a class="toc-level-3" href="#11-12-3-%E5%B9%B3%E5%8F%B0%E6%94%B6%E8%8E%B7" data-toc-target="11-12-3-平台收获"><span class="toc-text">11.12.3 平台收获</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">🛠️ 动手练习</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">17</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 43%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">12 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#11-1-%E6%9C%BA%E5%99%A8%E4%BA%BA%E5%8F%AF%E8%A7%82%E6%B5%8B%E7%9A%84%E4%B8%89%E4%B8%AA%E5%8F%98%E5%8C%96" data-toc-target="11-1-机器人可观测的三个变化" data-title="01 · 11.1 机器人可观测的三个变化" aria-label="11.1 机器人可观测的三个变化"></a><a class="toc-strip__dot" href="#11-2-%E9%81%A5%E6%B5%8B%E7%AE%A1%E9%81%93" data-toc-target="11-2-遥测管道" data-title="02 · 11.2 遥测管道" aria-label="11.2 遥测管道"></a><a class="toc-strip__dot" href="#11-3-%E4%BA%91%E2%80%94%E8%BE%B9%E2%80%94%E7%AB%AF-Trace" data-toc-target="11-3-云—边—端-Trace" data-title="03 · 11.3 云—边—端 Trace" aria-label="11.3 云—边—端 Trace"></a><a class="toc-strip__dot" href="#11-4-%E6%9C%BA%E5%99%A8%E4%BA%BA%E9%BB%84%E9%87%91%E6%8C%87%E6%A0%87%E4%B8%8E-SLO" data-toc-target="11-4-机器人黄金指标与-SLO" data-title="04 · 11.4 机器人黄金指标与 SLO" aria-label="11.4 机器人黄金指标与 SLO"></a><a class="toc-strip__dot" href="#11-5-%E6%97%A5%E5%BF%97%EF%BC%9A%E7%AB%AF%E4%B8%8A%E4%B8%BA%E4%B8%BB%EF%BC%8C%E4%B8%89%E9%80%9A%E9%81%93%E5%8F%AC%E5%9B%9E" data-toc-target="11-5-日志：端上为主，三通道召回" data-title="05 · 11.5 日志：端上为主，三通道召回" aria-label="11.5 日志：端上为主，三通道召回"></a><a class="toc-strip__dot" href="#11-6-%E4%B8%89%E7%BA%A7%E5%A4%A7%E7%9B%98" data-toc-target="11-6-三级大盘" data-title="06 · 11.6 三级大盘" aria-label="11.6 三级大盘"></a><a class="toc-strip__dot" href="#11-7-%E5%91%8A%E8%AD%A6%E6%B2%BB%E7%90%86" data-toc-target="11-7-告警治理" data-title="07 · 11.7 告警治理" aria-label="11.7 告警治理"></a><a class="toc-strip__dot" href="#11-8-%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD%E4%BC%9A%E8%AF%9D" data-toc-target="11-8-远程诊断会话" data-title="08 · 11.8 远程诊断会话" aria-label="11.8 远程诊断会话"></a><a class="toc-strip__dot" href="#11-9-%E8%BD%A6%E8%81%94%E7%BD%91%E6%99%BA%E8%83%BD%E8%AF%8A%E6%96%AD%E8%BF%81%E7%A7%BB%EF%BC%9A%E6%95%85%E9%9A%9C%E5%9B%BE%E8%B0%B1%E9%A9%B1%E5%8A%A8%E7%9A%84%E6%99%BA%E8%83%BD%E8%AF%8A%E6%96%AD" data-toc-target="11-9-车联网智能诊断迁移：故障图谱驱动的智能诊断" data-title="09 · 11.9 车联网智能诊断迁移：故障图谱驱动的智能诊断" aria-label="11.9 车联网智能诊断迁移：故障图谱驱动的智能诊断"></a><a class="toc-strip__dot" href="#11-10-%E8%AF%8A%E6%96%AD%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="11-10-诊断工作流" data-title="10 · 11.10 诊断工作流" aria-label="11.10 诊断工作流"></a><a class="toc-strip__dot" href="#11-11-%E5%8F%96%E8%AF%81%E5%8C%85" data-toc-target="11-11-取证包" data-title="11 · 11.11 取证包" aria-label="11.11 取证包"></a><a class="toc-strip__dot" href="#11-12-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E5%A4%9C%E7%8F%AD%E5%AE%9A%E4%BD%8D%E4%B8%A2%E5%A4%B1%E9%A2%91%E5%8F%91" data-toc-target="11-12-案例推演：夜班定位丢失频发" data-title="12 · 11.12 案例推演：夜班定位丢失频发" aria-label="11.12 案例推演：夜班定位丢失频发"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="13 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="14 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习" data-title="15 · 🛠️ 动手练习" aria-label="🛠️ 动手练习"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="16 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="17 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-11-遥测可观测与远程诊断","title":"第 11 章 遥测、可观测与远程诊断：把车联网智能诊断搬到机器人上","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-11-%E9%81%A5%E6%B5%8B%E5%8F%AF%E8%A7%82%E6%B5%8B%E4%B8%8E%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD/","path":"embodied-cloud-book","index":11,"total":28,"next":{"title":"第 12 章 数据闭环：机器人数据引擎","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-12-%E6%95%B0%E6%8D%AE%E9%97%AD%E7%8E%AF%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BC%95%E6%93%8E/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

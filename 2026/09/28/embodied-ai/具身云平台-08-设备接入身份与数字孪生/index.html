@@ -1,0 +1,796 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 8 章 设备接入、身份与数字孪生 · 飞轮之道</title>
+<meta name="description" content="设备面与接入面是平台的地基。本章给出机器人身份体系、注册激活、接入层 ACL、ECL v1 端云协议规范、三信号在线判定、影子与数字孪生、生命周期与配置基线——每一项都附 p01 中的实现位置。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-08-%E8%AE%BE%E5%A4%87%E6%8E%A5%E5%85%A5%E8%BA%AB%E4%BB%BD%E4%B8%8E%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 8 章 设备接入、身份与数字孪生 · 飞轮之道">
+<meta property="og:description" content="设备面与接入面是平台的地基。本章给出机器人身份体系、注册激活、接入层 ACL、ECL v1 端云协议规范、三信号在线判定、影子与数字孪生、生命周期与配置基线——每一项都附 p01 中的实现位置。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-08-%E8%AE%BE%E5%A4%87%E6%8E%A5%E5%85%A5%E8%BA%AB%E4%BB%BD%E4%B8%8E%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518314916381-77a37c2a49ae?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">平台架构</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 9 / 28 篇</a>
+    </div>
+    <h1>第 8 章 设备接入、身份与数字孪生</h1>
+    <p class="article-deck">平台代码面向 Profile 编程，而不是面向某个机型：OTA 的兼容检查读 compute，Agent 的技能目录读 skills（第 15 章）…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/MQTT/">#MQTT</a><a class="article-meta__tag" href="/tags/%E8%AE%BE%E5%A4%87%E6%8E%A5%E5%85%A5/">#设备接入</a><a class="article-meta__tag" href="/tags/%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F/">#数字孪生</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Device Profile 编程：平台面向能力描述而不是面向机型。</li><li>信任锚在产线：没有产线证书永远进不了平台。</li><li>只碰自己的子树：主题 ACL 模板化。</li><li>三信号在线判定：连接 + 遥测新鲜度 + 机内活性。</li><li>影子三要义：单向写、delta 幂等、收敛超时告警。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：设备面与接入面是平台的地基。本章给出机器人身份体系、注册激活、接入层 ACL、<strong>ECL v1 端云协议规范</strong>、三信号在线判定、影子与数字孪生、生命周期与配置基线——每一项都附 p01 中的实现位置。<br><strong>对应代码</strong>：<code>p01-robofleet-core</code>（service.py、protocol.py、sim_robot.py）｜<strong>建议学时</strong>：5 小时</p>
+</blockquote>
+<h2 id="8-1-设备模型"><a href="#8-1-设备模型" class="headerlink" title="8.1 设备模型"></a>8.1 设备模型</h2><h3 id="8-1-1-四个标识"><a href="#8-1-1-四个标识" class="headerlink" title="8.1.1 四个标识"></a>8.1.1 四个标识</h3><table>
+<thead>
+<tr>
+<th>概念</th>
+<th>定义</th>
+<th>车联网对应</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Robot ID</td>
+<td>平台唯一逻辑身份：证书 CN、主题树根、数据分区键、日志字段</td>
+<td>VIN</td>
+</tr>
+<tr>
+<td>SN &#x2F; 部件序列号</td>
+<td>本体序列号 + 关键部件（关节模组、主控、电池、相机）序列号</td>
+<td>车辆 SN、零部件追溯</td>
+</tr>
+<tr>
+<td>机型 &#x2F; 硬件版本</td>
+<td>决定兼容矩阵的型号标识</td>
+<td>车型、配置字</td>
+</tr>
+<tr>
+<td>Device Profile</td>
+<td>该机型的能力描述：话题、任务、传感器、资源规格</td>
+<td>车型信号矩阵</td>
+</tr>
+</tbody></table>
+<h3 id="8-1-2-Device-Profile-示例"><a href="#8-1-2-Device-Profile-示例" class="headerlink" title="8.1.2 Device Profile 示例"></a>8.1.2 Device Profile 示例</h3><figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;model&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hum-w2&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;hw_rev&quot;</span><span class="punctuation">:</span> <span class="string">&quot;B&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;compute&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;module&quot;</span><span class="punctuation">:</span> <span class="string">&quot;thor-t5000&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;memory_gb&quot;</span><span class="punctuation">:</span> <span class="number">128</span><span class="punctuation">,</span> <span class="attr">&quot;gpu_arch&quot;</span><span class="punctuation">:</span> <span class="string">&quot;thor&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;jetpack&quot;</span><span class="punctuation">:</span> <span class="string">&quot;7.1&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;sensors&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;head_rgbd&quot;</span><span class="punctuation">,</span> <span class="string">&quot;wrist_cam_l&quot;</span><span class="punctuation">,</span> <span class="string">&quot;wrist_cam_r&quot;</span><span class="punctuation">,</span> <span class="string">&quot;lidar_3d&quot;</span><span class="punctuation">,</span> <span class="string">&quot;imu&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;skills&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;move_to&quot;</span><span class="punctuation">,</span> <span class="string">&quot;pick_place&quot;</span><span class="punctuation">,</span> <span class="string">&quot;patrol&quot;</span><span class="punctuation">,</span> <span class="string">&quot;charge&quot;</span><span class="punctuation">,</span> <span class="string">&quot;calibrate&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">&quot;action_space&quot;</span><span class="punctuation">:</span> <span class="string">&quot;ee_delta_7d&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">&quot;max_speed_mps&quot;</span><span class="punctuation">:</span> <span class="number">1.2</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">&quot;safety&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;estop&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hardware&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;collab_zone_speed_mps&quot;</span><span class="punctuation">:</span> <span class="number">0.25</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>平台代码面向 Profile 编程，而不是面向某个机型</strong>：OTA 的兼容检查读 <code>compute</code>，Agent 的技能目录读 <code>skills</code>（第 15 章），调度的约束读 <code>max_speed_mps</code> 与 <code>safety</code>。新机型接入时只需新增一份 Profile。</p>
+<h2 id="8-2-身份体系"><a href="#8-2-身份体系" class="headerlink" title="8.2 身份体系"></a>8.2 身份体系</h2><h3 id="8-2-1-两级-CA-与产线出生证书"><a href="#8-2-1-两级-CA-与产线出生证书" class="headerlink" title="8.2.1 两级 CA 与产线出生证书"></a>8.2.1 两级 CA 与产线出生证书</h3><p>信任结构：<strong>离线根 CA → 按产品线的中间 CA → 设备证书</strong>（CN &#x3D; Robot ID）。设备证书在产线安全工位签发，私钥生成并保存在安全芯片或 TPM 中、永不导出（第 16 章）。<strong>没有产线证书的设备永远进不了平台</strong>——信任锚定在制造环节，与 TBox 产线灌装证书完全同构。</p>
+<h3 id="8-2-2-一根多用途"><a href="#8-2-2-一根多用途" class="headerlink" title="8.2.2 一根多用途"></a>8.2.2 一根多用途</h3><p>同一个 PKI 为不同用途签发证书：设备证书（连接云端 MQTT）、节点证书（机内 DDS 安全，第 16 章）、边缘服务证书（站点集群）。证书周期分层：根 CA 长期离线；中间 CA 可按产品线吊销止损；设备证书一年级自动轮换；接入令牌小时级。</p>
+<h3 id="8-2-3-教学实现与生产实现"><a href="#8-2-3-教学实现与生产实现" class="headerlink" title="8.2.3 教学实现与生产实现"></a>8.2.3 教学实现与生产实现</h3><p>p01 为了能在一台笔记本上跑通，用“注册时生成一次性密钥、平台只存哈希、激活时比对”的方式模拟身份：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># p01 service.py（节选）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">register_robot</span>(<span class="params">self, rid, model=<span class="string">&quot;generic&quot;</span>, site=<span class="string">&quot;default&quot;</span></span>) -&gt; <span class="built_in">str</span>:</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    secret = secrets.token_urlsafe(<span class="number">18</span>)                 <span class="comment"># 一次性返回，平台只存哈希</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="variable language_">self</span>.store.<span class="built_in">exec</span>(<span class="string">&quot;INSERT INTO robots VALUES(?,?,?,?,?,?,NULL)&quot;</span>,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">                    (rid, model, site, _h(secret), <span class="string">&quot;registered&quot;</span>, <span class="variable language_">self</span>.clock.now()))</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="keyword">return</span> secret</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">activate</span>(<span class="params">self, rid, secret</span>) -&gt; <span class="built_in">bool</span>:</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    row = <span class="variable language_">self</span>.store.one(<span class="string">&quot;SELECT secret_hash, lifecycle FROM robots WHERE rid=?&quot;</span>, (rid,))</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> row <span class="keyword">or</span> <span class="keyword">not</span> secrets.compare_digest(row[<span class="string">&quot;secret_hash&quot;</span>], _h(secret)):  <span class="comment"># 常量时间比较</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        <span class="keyword">return</span> <span class="literal">False</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    ...</span></span></code></pre></div></div></figure>
+
+<p>生产实现把“共享密钥”换成“产线证书 + mTLS 握手 + 证书链校验 + 吊销检查”，其余流程不变。</p>
+<h2 id="8-3-注册与激活"><a href="#8-3-注册与激活" class="headerlink" title="8.3 注册与激活"></a>8.3 注册与激活</h2><h3 id="8-3-1-首次开机时序"><a href="#8-3-1-首次开机时序" class="headerlink" title="8.3.1 首次开机时序"></a>8.3.1 首次开机时序</h3><pre class="mermaid">---
+title: "机器人首次开机：身份校验 → 激活 → 建立会话"
+---
+sequenceDiagram
+  participant R as 机器人&lt;br/&gt;(云桥/OTA Agent)
+  participant G as 接入网关&lt;br/&gt;(mTLS)
+  participant I as 身份服务
+  participant D as 设备服务&lt;br/&gt;(注册/生命周期)
+  participant S as 影子服务
+  participant C as 配置中心
+  R-&gt;&gt;G: TLS 握手（产线设备证书）
+  G-&gt;&gt;I: 证书链校验 + 吊销检查
+  I--&gt;&gt;G: 身份有效（Robot ID）
+  R-&gt;&gt;D: 激活请求（SN、部件序列号、固件版本）
+  D-&gt;&gt;D: 主数据核对（防串号/防克隆）
+  D-&gt;&gt;S: 创建影子（初始 reported）
+  D-&gt;&gt;C: 绑定机型基线 + 站点覆盖
+  D--&gt;&gt;R: 激活成功 + 接入凭据 + 主题前缀
+  R-&gt;&gt;G: 建立 MQTT 长连接（设置遗嘱）
+  R-&gt;&gt;S: 首次全量 reported</pre>
+
+
+<h3 id="8-3-2-两个硬门禁"><a href="#8-3-2-两个硬门禁" class="headerlink" title="8.3.2 两个硬门禁"></a>8.3.2 两个硬门禁</h3><ol>
+<li><strong>激活即绑定配置基线</strong>：激活时必须落到唯一的“机型基线 + 站点覆盖”，杜绝没有配置归属的“裸设备”；</li>
+<li><strong>防克隆</strong>：激活请求携带部件序列号指纹，与主数据核对；同一 Robot ID 在两个地点同时激活要告警。</li>
+</ol>
+<h2 id="8-4-接入层"><a href="#8-4-接入层" class="headerlink" title="8.4 接入层"></a>8.4 接入层</h2><h3 id="8-4-1-主题-ACL：每台机器人只能碰自己的子树"><a href="#8-4-1-主题-ACL：每台机器人只能碰自己的子树" class="headerlink" title="8.4.1 主题 ACL：每台机器人只能碰自己的子树"></a>8.4.1 主题 ACL：每台机器人只能碰自己的子树</h3><p>以 EMQX 为例，ACL 的思路是“用户名 &#x3D; Robot ID，只允许读写 <code>ecl/v1/${username}/#</code>”：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 规则示意（EMQX 授权规则）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">&#123;allow, &#123;username, &quot;$&#123;username&#125;&quot;&#125;, publish,   [&quot;ecl/v1/$&#123;username&#125;/telemetry&quot;, &quot;ecl/v1/$&#123;username&#125;/event&quot;,</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                                                &quot;ecl/v1/$&#123;username&#125;/status&quot;, &quot;ecl/v1/$&#123;username&#125;/shadow/reported&quot;,</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">                                                &quot;ecl/v1/$&#123;username&#125;/task/event&quot;]&#125;.</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">&#123;allow, &#123;username, &quot;$&#123;username&#125;&quot;&#125;, subscribe, [&quot;ecl/v1/$&#123;username&#125;/shadow/delta&quot;, &quot;ecl/v1/$&#123;username&#125;/task/cmd&quot;]&#125;.</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">&#123;deny, all&#125;.</span></span></code></pre></div></div></figure>
+
+<p><strong>上行只能发上行主题、下行只能订下行主题、只能碰自己的子树</strong>——一台机器人被攻破，也无法冒充其他机器人或偷听别人的任务。p01 在应用层再做一次校验：未激活设备的上行消息全部丢弃并计数（<code>rejected_uplink_msgs</code>，作为安全审计指标）。</p>
+<h3 id="8-4-2-会话与连接治理"><a href="#8-4-2-会话与连接治理" class="headerlink" title="8.4.2 会话与连接治理"></a>8.4.2 会话与连接治理</h3><table>
+<thead>
+<tr>
+<th>问题</th>
+<th>做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>弱网断续</td>
+<td>持久会话 + QoS 1 + 端侧分级离线缓存（第 5 章）</td>
+</tr>
+<tr>
+<td>重连风暴</td>
+<td>端侧指数退避 + 随机抖动；服务端连接速率限制</td>
+</tr>
+<tr>
+<td>ClientID 冲突</td>
+<td>ClientID &#x3D; Robot ID；重复连接踢旧并告警（可能是克隆）</td>
+</tr>
+<tr>
+<td>大文件</td>
+<td>永不走 MQTT，走网关文件通道</td>
+</tr>
+</tbody></table>
+<h2 id="8-5-ECL-v1-端云协议规范"><a href="#8-5-ECL-v1-端云协议规范" class="headerlink" title="8.5 ECL v1 端云协议规范"></a>8.5 ECL v1 端云协议规范</h2><h3 id="8-5-1-主题树"><a href="#8-5-1-主题树" class="headerlink" title="8.5.1 主题树"></a>8.5.1 主题树</h3><table>
+<thead>
+<tr>
+<th>主题</th>
+<th>方向</th>
+<th>QoS</th>
+<th>保留</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ecl/v1/{rid}/telemetry</code></td>
+<td>↑</td>
+<td>0&#x2F;1</td>
+<td>否</td>
+<td>聚合状态，1–5Hz</td>
+</tr>
+<tr>
+<td><code>ecl/v1/{rid}/event</code></td>
+<td>↑</td>
+<td>1</td>
+<td>否</td>
+<td>故障、安全、业务事件</td>
+</tr>
+<tr>
+<td><code>ecl/v1/{rid}/status</code></td>
+<td>↑</td>
+<td>1</td>
+<td><strong>是</strong></td>
+<td>上线&#x2F;下线；遗嘱消息发这里</td>
+</tr>
+<tr>
+<td><code>ecl/v1/{rid}/shadow/reported</code></td>
+<td>↑</td>
+<td>1</td>
+<td>否</td>
+<td>实际状态 + 机内活性</td>
+</tr>
+<tr>
+<td><code>ecl/v1/{rid}/shadow/delta</code></td>
+<td>↓</td>
+<td>1</td>
+<td>否</td>
+<td>期望与实际的差集</td>
+</tr>
+<tr>
+<td><code>ecl/v1/{rid}/task/cmd</code></td>
+<td>↓</td>
+<td>1</td>
+<td>否</td>
+<td>任务下发（带租约与 trace_id）</td>
+</tr>
+<tr>
+<td><code>ecl/v1/{rid}/task/event</code></td>
+<td>↑</td>
+<td>1</td>
+<td>否</td>
+<td>任务状态事件（兼作续租）</td>
+</tr>
+</tbody></table>
+<h3 id="8-5-2-载荷示例"><a href="#8-5-2-载荷示例" class="headerlink" title="8.5.2 载荷示例"></a>8.5.2 载荷示例</h3><figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">// telemetry</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="punctuation">&#123;</span><span class="attr">&quot;rid&quot;</span><span class="punctuation">:</span> <span class="string">&quot;amr-001&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;ts&quot;</span><span class="punctuation">:</span> <span class="number">1780000123.4</span><span class="punctuation">,</span> <span class="attr">&quot;seq&quot;</span><span class="punctuation">:</span> <span class="number">812</span><span class="punctuation">,</span> <span class="attr">&quot;pose&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;x&quot;</span><span class="punctuation">:</span> <span class="number">3.2</span><span class="punctuation">,</span> <span class="attr">&quot;y&quot;</span><span class="punctuation">:</span> <span class="number">1.1</span><span class="punctuation">,</span> <span class="attr">&quot;theta&quot;</span><span class="punctuation">:</span> <span class="number">0.52</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"> <span class="attr">&quot;battery&quot;</span><span class="punctuation">:</span> <span class="number">0.83</span><span class="punctuation">,</span> <span class="attr">&quot;cpu&quot;</span><span class="punctuation">:</span> <span class="number">0.41</span><span class="punctuation">,</span> <span class="attr">&quot;gpu_temp&quot;</span><span class="punctuation">:</span> <span class="number">58.2</span><span class="punctuation">,</span> <span class="attr">&quot;joint_temp_max&quot;</span><span class="punctuation">:</span> <span class="number">55.7</span><span class="punctuation">,</span> <span class="attr">&quot;error_code&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"> <span class="attr">&quot;mode&quot;</span><span class="punctuation">:</span> <span class="string">&quot;auto&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;task_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;9f1c2a7b33d0&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;model_ver&quot;</span><span class="punctuation">:</span> <span class="string">&quot;vla-2.3&quot;</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment">// task/cmd</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="punctuation">&#123;</span><span class="attr">&quot;task_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;9f1c2a7b33d0&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;patrol&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;params&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;route&quot;</span><span class="punctuation">:</span> <span class="string">&quot;A区&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span> <span class="attr">&quot;lease_s&quot;</span><span class="punctuation">:</span> <span class="number">30</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"> <span class="attr">&quot;trace_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;4b9e0c6a1f2d4e7a8c3b5d6e7f8a9b0c&quot;</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="comment">// task/event</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="punctuation">&#123;</span><span class="attr">&quot;task_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;9f1c2a7b33d0&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;state&quot;</span><span class="punctuation">:</span> <span class="string">&quot;RUNNING&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;stage&quot;</span><span class="punctuation">:</span> <span class="string">&quot;inspect&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;progress&quot;</span><span class="punctuation">:</span> <span class="number">0.5</span><span class="punctuation">,</span> <span class="attr">&quot;detail&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;ts&quot;</span><span class="punctuation">:</span> <span class="number">1780000130.1</span><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<h3 id="8-5-3-协议演进规则"><a href="#8-5-3-协议演进规则" class="headerlink" title="8.5.3 协议演进规则"></a>8.5.3 协议演进规则</h3><ol>
+<li><strong>只增不改</strong>：新增字段向后兼容，接收方忽略未知字段；</li>
+<li><strong>破坏性变更升版本</strong>：<code>ecl/v2/...</code> 与 v1 并行一段时间；</li>
+<li><strong>契约测试守门</strong>：p06 的契约测试逐项比对端云常量（任务类型、阶段、可写字段、主题格式），协议漂移在 CI 就被拦下。</li>
+</ol>
+<h2 id="8-6-三信号在线判定"><a href="#8-6-三信号在线判定" class="headerlink" title="8.6 三信号在线判定"></a>8.6 三信号在线判定</h2><h3 id="8-6-1-为什么一个信号不够"><a href="#8-6-1-为什么一个信号不够" class="headerlink" title="8.6.1 为什么一个信号不够"></a>8.6.1 为什么一个信号不够</h3><table>
+<thead>
+<tr>
+<th>信号</th>
+<th>能发现</th>
+<th>发现不了</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MQTT 连接 + 遗嘱</td>
+<td>断电、断网、进程崩溃</td>
+<td>进程活着但业务线程卡死</td>
+</tr>
+<tr>
+<td>遥测新鲜度</td>
+<td>业务停止上报</td>
+<td>上报正常但机内关键节点已死</td>
+</tr>
+<tr>
+<td>机内活性（DDS Liveliness 汇总）</td>
+<td>关键节点失活</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<h3 id="8-6-2-判定规则"><a href="#8-6-2-判定规则" class="headerlink" title="8.6.2 判定规则"></a>8.6.2 判定规则</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># p01 service.py —— 在线判定（节选）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">online_state</span>(<span class="params">self, rid: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    conn = <span class="variable language_">self</span>.store.one(<span class="string">&quot;SELECT connected FROM conn WHERE rid=?&quot;</span>, (rid,))</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> conn <span class="keyword">or</span> <span class="keyword">not</span> conn[<span class="string">&quot;connected&quot;</span>]:</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="keyword">return</span> <span class="string">&quot;OFFLINE&quot;</span>                                   <span class="comment"># 连接断了（含遗嘱）</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    latest = <span class="variable language_">self</span>.store.one(<span class="string">&quot;SELECT ts FROM telemetry_latest WHERE rid=?&quot;</span>, (rid,))</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> latest <span class="keyword">or</span> <span class="variable language_">self</span>.clock.now() - latest[<span class="string">&quot;ts&quot;</span>] &gt; <span class="variable language_">self</span>.stale_s:</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        <span class="keyword">return</span> <span class="string">&quot;ZOMBIE&quot;</span>                                    <span class="comment"># 连着但遥测停了：假死</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    sh = <span class="variable language_">self</span>.store.one(<span class="string">&quot;SELECT liveliness_ok FROM shadow WHERE rid=?&quot;</span>, (rid,))</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="keyword">if</span> sh <span class="keyword">and</span> <span class="keyword">not</span> sh[<span class="string">&quot;liveliness_ok&quot;</span>]:</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        <span class="keyword">return</span> <span class="string">&quot;DEGRADED&quot;</span>                                  <span class="comment"># 机内关键节点失活</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="keyword">return</span> <span class="string">&quot;ONLINE&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>新鲜度用<strong>云端接收时刻</strong>判断，不信任设备时钟（设备时钟可能漂移）。第 5 章的漫游案例还要求加“短暂离线宽限”，避免 Wi-Fi 切换引起状态抖动。</p>
+<h3 id="8-6-3-状态的业务含义"><a href="#8-6-3-状态的业务含义" class="headerlink" title="8.6.3 状态的业务含义"></a>8.6.3 状态的业务含义</h3><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>调度</th>
+<th>告警</th>
+<th>OTA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ONLINE</td>
+<td>可派单</td>
+<td>—</td>
+<td>可纳入批次</td>
+</tr>
+<tr>
+<td>DEGRADED</td>
+<td>不派新单</td>
+<td>站点值班</td>
+<td>暂停</td>
+</tr>
+<tr>
+<td>ZOMBIE</td>
+<td>不派单，回收在途任务</td>
+<td>站点值班（高优）</td>
+<td>暂停</td>
+</tr>
+<tr>
+<td>OFFLINE</td>
+<td>不派单</td>
+<td>超过阈值才告警</td>
+<td>排除</td>
+</tr>
+</tbody></table>
+<h2 id="8-7-影子：期望态驱动"><a href="#8-7-影子：期望态驱动" class="headerlink" title="8.7 影子：期望态驱动"></a>8.7 影子：期望态驱动</h2><h3 id="8-7-1-三条要义"><a href="#8-7-1-三条要义" class="headerlink" title="8.7.1 三条要义"></a>8.7.1 三条要义</h3><ol>
+<li><strong>单向写权限</strong>：平台只写 desired，设备只写 reported，两边不会“打架”；</li>
+<li><strong>delta 驱动</strong>：只下发差集；设备重连后再下发一次差集即可自动补齐，天然幂等；</li>
+<li><strong>收敛超时告警</strong>：desired 与 reported 长时间不一致，说明端侧拒绝或失败——这是配置漂移的实时探测器。</li>
+</ol>
+<h3 id="8-7-2-实现要点"><a href="#8-7-2-实现要点" class="headerlink" title="8.7.2 实现要点"></a>8.7.2 实现要点</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># p01 service.py —— 修改期望态并下发差集（节选）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">patch_desired</span>(<span class="params">self, rid: <span class="built_in">str</span>, patch: <span class="built_in">dict</span></span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    sh = <span class="variable language_">self</span>.get_shadow(rid)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    desired = &#123;**sh[<span class="string">&quot;desired&quot;</span>], **patch&#125;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    ver = sh[<span class="string">&quot;desired_ver&quot;</span>] + <span class="number">1</span>                          <span class="comment"># 版本号单调递增，便于排查“谁改的”</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="variable language_">self</span>.store.<span class="built_in">exec</span>(<span class="string">&quot;UPDATE shadow SET desired=?, desired_ver=? WHERE rid=?&quot;</span>, (json.dumps(desired), ver, rid))</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    sh = <span class="variable language_">self</span>.get_shadow(rid)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="variable language_">self</span>.bus.publish(topic(rid, <span class="string">&quot;shadow/delta&quot;</span>), &#123;<span class="string">&quot;ver&quot;</span>: ver, <span class="string">&quot;delta&quot;</span>: sh[<span class="string">&quot;delta&quot;</span>]&#125;)</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="keyword">return</span> <span class="variable language_">self</span>.get_shadow(rid)</span></span></code></pre></div></div></figure>
+
+<p>端侧只接受白名单字段（<code>report_hz</code>、<code>speed_limit</code>、<code>model_ver</code>、<code>mode</code>），并在参数校验回调里做范围检查（第 4 章）。p01 的测试覆盖了“白名单拦截未知键 → 影子保持未收敛”的路径。</p>
+<h3 id="8-7-3-端到端链路"><a href="#8-7-3-端到端链路" class="headerlink" title="8.7.3 端到端链路"></a>8.7.3 端到端链路</h3><pre class="mermaid">sequenceDiagram
+  participant Ops as 运营/上层服务
+  participant Sh as 影子服务
+  participant Br as 云桥（端侧）
+  participant Node as 目标节点参数
+  Ops-&gt;&gt;Sh: PATCH desired &#123;report_hz: 2&#125;
+  Sh-&gt;&gt;Br: shadow/delta &#123;ver:5, delta:&#123;report_hz:2&#125;&#125;
+  Br-&gt;&gt;Node: set_parameters（校验回调）
+  Node--&gt;&gt;Br: successful
+  Br-&gt;&gt;Sh: shadow/reported &#123;report_hz: 2&#125;
+  Sh--&gt;&gt;Ops: converged = true</pre>
+
+
+<h2 id="8-8-数字孪生三层"><a href="#8-8-数字孪生三层" class="headerlink" title="8.8 数字孪生三层"></a>8.8 数字孪生三层</h2><h3 id="8-8-1-影子、档案、仿真孪生"><a href="#8-8-1-影子、档案、仿真孪生" class="headerlink" title="8.8.1 影子、档案、仿真孪生"></a>8.8.1 影子、档案、仿真孪生</h3><table>
+<thead>
+<tr>
+<th>层</th>
+<th>内容</th>
+<th>价值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L1 影子</td>
+<td>desired &#x2F; reported &#x2F; delta</td>
+<td>运行态真相源</td>
+</tr>
+<tr>
+<td>L2 全息档案</td>
+<td>影子 + Profile + 部件与标定 + 软件版本 + 历史遥测与事件 + 健康分</td>
+<td>运维、诊断、灰度与调度的数据服务</td>
+</tr>
+<tr>
+<td>L3 仿真孪生</td>
+<td>结构（URDF）与站点场景进入仿真器</td>
+<td>推演、预演、培训（第 14 章）</td>
+</tr>
+</tbody></table>
+<p>建设顺序严格 L1 → L2 → L3，绝大多数运营价值在前两层。</p>
+<h3 id="8-8-2-孪生的-API-比-UI-重要"><a href="#8-8-2-孪生的-API-比-UI-重要" class="headerlink" title="8.8.2 孪生的 API 比 UI 重要"></a>8.8.2 孪生的 API 比 UI 重要</h3><p>孪生不是大屏，而是其他平面的数据服务：OTA 读它筛选合格设备，灰度引擎读健康分排批次，调度读电量与位置分配任务，诊断读它作为会话首屏。<strong>唯一写入路径（影子服务），多路只读投影</strong>——防止各团队旁路直写设备状态。</p>
+<h3 id="8-8-3-健康分"><a href="#8-8-3-健康分" class="headerlink" title="8.8.3 健康分"></a>8.8.3 健康分</h3><p>健康分把多维指标压缩成一个可排序的数：关节温度与跟随误差、电池健康、近 7 天故障次数、人工介入率、标定新鲜度。它的用途是<strong>排序</strong>而不是诊断：OTA 先升健康分高的设备，调度优先派给健康分高的设备。健康分模型本身要版本化，能对同一段历史数据重算，保证批次决策可审计。</p>
+<h2 id="8-9-生命周期"><a href="#8-9-生命周期" class="headerlink" title="8.9 生命周期"></a>8.9 生命周期</h2><h3 id="8-9-1-状态机与平台动作"><a href="#8-9-1-状态机与平台动作" class="headerlink" title="8.9.1 状态机与平台动作"></a>8.9.1 状态机与平台动作</h3><pre class="mermaid">stateDiagram-v2
+  [*] --&gt; 已生产: 产线签发证书
+  已生产 --&gt; 已注册: 录入主数据
+  已注册 --&gt; 在营: 首次激活 + 绑定基线
+  在营 --&gt; 维护中: 故障/保养/召回
+  维护中 --&gt; 在营: 修复验证通过
+  在营 --&gt; 退役: 到期/报废
+  退役 --&gt; [*]: 吊销证书 + 数据归档</pre>
+
+
+<p>每个迁移都挂平台动作：进入“维护中”自动暂停该机的 OTA 批次与派单（p01 中 <code>set_lifecycle</code> 后派单会被拒绝）；进入“退役”触发证书吊销、影子冻结、数据归档。<strong>状态机就是运营流程的代码化</strong>。</p>
+<h2 id="8-10-配置基线"><a href="#8-10-配置基线" class="headerlink" title="8.10 配置基线"></a>8.10 配置基线</h2><h3 id="8-10-1-三层配置"><a href="#8-10-1-三层配置" class="headerlink" title="8.10.1 三层配置"></a>8.10.1 三层配置</h3><p>机型基线（随机型发布）→ 站点覆盖（只写差异）→ 单机例外（审批制，数量要监控）。配置下发走影子期望态或配置 OTA；端侧落点是 ROS 2 参数（第 4 章）。<strong>单机例外越多，机队越难运维</strong>——把“单机例外数量”做成治理指标。</p>
+<h2 id="8-11-案例推演：假死机器人被派了活"><a href="#8-11-案例推演：假死机器人被派了活" class="headerlink" title="8.11 案例推演：假死机器人被派了活"></a>8.11 案例推演：假死机器人被派了活</h2><h3 id="8-11-1-现象"><a href="#8-11-1-现象" class="headerlink" title="8.11.1 现象"></a>8.11.1 现象</h3><p>调度系统把一个紧急搬运任务派给了一台“在线”的机器人，十分钟后任务仍无进展，产线等料停线。</p>
+<h3 id="8-11-2-根因"><a href="#8-11-2-根因" class="headerlink" title="8.11.2 根因"></a>8.11.2 根因</h3><p>该机器人的任务执行节点因单线程执行器里的同步等待而死锁（第 4 章），云桥进程仍然活着、MQTT 连接正常——只看连接的在线判定认为它“在线”。遥测也在上报，因为遥测由另一个节点负责；但机内活性（执行器节点的 Liveliness）早已丢失。</p>
+<h3 id="8-11-3-平台动作"><a href="#8-11-3-平台动作" class="headerlink" title="8.11.3 平台动作"></a>8.11.3 平台动作</h3><ol>
+<li>在线判定升级为三信号，执行器节点纳入活性汇总，机器人被判为 DEGRADED，不再派单；</li>
+<li>任务租约（第 10 章）保证即使判定漏网，任务也会在租约到期后被回收改派；</li>
+<li>端侧修复死锁，并把“回调中禁止同步等待”写入代码规范与静态检查。</li>
+</ol>
+<p>三道防线（判定、租约、端侧纪律）任何一道单独都不够。</p>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车联网</th>
+<th>机器人</th>
+<th>迁移方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>VIN &#x2F; 车型信号矩阵</td>
+<td>Robot ID &#x2F; Device Profile</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>TBox 产线证书</td>
+<td>产线出生证书（安全芯片）</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>车辆主题 ACL</td>
+<td>每机只碰自己子树</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>车辆在线判定</td>
+<td>三信号在线判定</td>
+<td>改造：加机内活性</td>
+</tr>
+<tr>
+<td>车辆影子</td>
+<td>设备影子 + 可写白名单</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>车辆健康度</td>
+<td>健康分（关节、电池、介入率）</td>
+<td>改造</td>
+</tr>
+<tr>
+<td>车辆全生命周期</td>
+<td>机器人生命周期状态机</td>
+<td>直用</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>Robot ID 与证书脱钩</strong>：用自增 ID 当业务主键，证书 CN 另一套编号，审计时无法关联。对策：Robot ID 一处签发、处处引用。</li>
+<li><strong>ACL 放行通配</strong>：为了省事允许设备订阅 <code>ecl/v1/+/task/cmd</code>，一台被攻破即可偷听全机队任务。对策：模板化 ACL，只允许自己的子树。</li>
+<li><strong>影子无白名单</strong>：云端误下发一个未知字段，端侧照单全收。对策：端云双侧白名单 + 参数校验回调。</li>
+<li><strong>只看连接判在线</strong>：假死设备被派活（8.11）。对策：三信号 + 租约。</li>
+</ul>
+<h2 id="🛠️-动手练习"><a href="#🛠️-动手练习" class="headerlink" title="🛠️ 动手练习"></a>🛠️ 动手练习</h2><ol>
+<li>运行 <code>python -m robofleet.demo</code>，对照输出解释第④幕“ZOMBIE + 任务回收”是哪两段代码共同作用的结果。</li>
+<li>在 p01 的在线判定里实现“短暂离线宽限”：OFFLINE 在 5 秒内恢复不产生离线事件，并补一个测试。</li>
+<li>为你的目标机型写一份 Device Profile，并说明 OTA、调度、Agent 分别会读取哪些字段。</li>
+</ol>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>设计万台机器人的身份体系。（两级 CA、产线锚定、CN&#x3D;Robot ID、轮换吊销、一根多用途）</li>
+<li>在线状态为什么不能只看 MQTT 连接？（假死；三信号；云端接收时刻判新鲜度）</li>
+<li>影子的三条要义是什么？（单向写、delta 幂等、收敛超时告警）</li>
+<li>协议如何演进而不破坏存量设备？（只增不改、升版本并行、契约测试）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>Device Profile 编程</strong>：平台面向能力描述而不是面向机型。</li>
+<li><strong>信任锚在产线</strong>：没有产线证书永远进不了平台。</li>
+<li><strong>只碰自己的子树</strong>：主题 ACL 模板化。</li>
+<li><strong>三信号在线判定</strong>：连接 + 遥测新鲜度 + 机内活性。</li>
+<li><strong>影子三要义</strong>：单向写、delta 幂等、收敛超时告警。</li>
+<li><strong>孪生 API 大于 UI</strong>：唯一写入路径，多路只读投影。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-07-Robot-Cloud%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84/">第 7 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-09-OTA2.0%E5%9B%9B%E8%BD%BD%E8%8D%B7%E5%8F%91%E5%B8%83/">第 9 章 OTA 2.0</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-09-OTA2.0%E5%9B%9B%E8%BD%BD%E8%8D%B7%E5%8F%91%E5%B8%83/">第 9 章 OTA 2.0：固件、模型、配置、技能四载荷发布</a></h3>
+        <p>OTA 是车联网架构师迁移价值最高、也最容易“照搬出事故”的平面。</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-09-OTA2.0%E5%9B%9B%E8%BD%BD%E8%8D%B7%E5%8F%91%E5%B8%83/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-07-Robot-Cloud%E5%8F%82%E8%80%83%E6%9E%B6%E6%9E%84/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 7 章 Robot Cloud 参考架构：八个平面与车联网映射</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 16 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#8-1-%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B" data-toc-target="8-1-设备模型"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">8.1 设备模型</span></a><a class="toc-level-3" href="#8-1-1-%E5%9B%9B%E4%B8%AA%E6%A0%87%E8%AF%86" data-toc-target="8-1-1-四个标识"><span class="toc-text">8.1.1 四个标识</span></a><a class="toc-level-3" href="#8-1-2-Device-Profile-%E7%A4%BA%E4%BE%8B" data-toc-target="8-1-2-Device-Profile-示例"><span class="toc-text">8.1.2 Device Profile 示例</span></a><a class="toc-level-2" href="#8-2-%E8%BA%AB%E4%BB%BD%E4%BD%93%E7%B3%BB" data-toc-target="8-2-身份体系"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">8.2 身份体系</span></a><a class="toc-level-3" href="#8-2-1-%E4%B8%A4%E7%BA%A7-CA-%E4%B8%8E%E4%BA%A7%E7%BA%BF%E5%87%BA%E7%94%9F%E8%AF%81%E4%B9%A6" data-toc-target="8-2-1-两级-CA-与产线出生证书"><span class="toc-text">8.2.1 两级 CA 与产线出生证书</span></a><a class="toc-level-3" href="#8-2-2-%E4%B8%80%E6%A0%B9%E5%A4%9A%E7%94%A8%E9%80%94" data-toc-target="8-2-2-一根多用途"><span class="toc-text">8.2.2 一根多用途</span></a><a class="toc-level-3" href="#8-2-3-%E6%95%99%E5%AD%A6%E5%AE%9E%E7%8E%B0%E4%B8%8E%E7%94%9F%E4%BA%A7%E5%AE%9E%E7%8E%B0" data-toc-target="8-2-3-教学实现与生产实现"><span class="toc-text">8.2.3 教学实现与生产实现</span></a><a class="toc-level-2" href="#8-3-%E6%B3%A8%E5%86%8C%E4%B8%8E%E6%BF%80%E6%B4%BB" data-toc-target="8-3-注册与激活"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">8.3 注册与激活</span></a><a class="toc-level-3" href="#8-3-1-%E9%A6%96%E6%AC%A1%E5%BC%80%E6%9C%BA%E6%97%B6%E5%BA%8F" data-toc-target="8-3-1-首次开机时序"><span class="toc-text">8.3.1 首次开机时序</span></a><a class="toc-level-3" href="#8-3-2-%E4%B8%A4%E4%B8%AA%E7%A1%AC%E9%97%A8%E7%A6%81" data-toc-target="8-3-2-两个硬门禁"><span class="toc-text">8.3.2 两个硬门禁</span></a><a class="toc-level-2" href="#8-4-%E6%8E%A5%E5%85%A5%E5%B1%82" data-toc-target="8-4-接入层"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">8.4 接入层</span></a><a class="toc-level-3" href="#8-4-1-%E4%B8%BB%E9%A2%98-ACL%EF%BC%9A%E6%AF%8F%E5%8F%B0%E6%9C%BA%E5%99%A8%E4%BA%BA%E5%8F%AA%E8%83%BD%E7%A2%B0%E8%87%AA%E5%B7%B1%E7%9A%84%E5%AD%90%E6%A0%91" data-toc-target="8-4-1-主题-ACL：每台机器人只能碰自己的子树"><span class="toc-text">8.4.1 主题 ACL：每台机器人只能碰自己的子树</span></a><a class="toc-level-3" href="#8-4-2-%E4%BC%9A%E8%AF%9D%E4%B8%8E%E8%BF%9E%E6%8E%A5%E6%B2%BB%E7%90%86" data-toc-target="8-4-2-会话与连接治理"><span class="toc-text">8.4.2 会话与连接治理</span></a><a class="toc-level-2" href="#8-5-ECL-v1-%E7%AB%AF%E4%BA%91%E5%8D%8F%E8%AE%AE%E8%A7%84%E8%8C%83" data-toc-target="8-5-ECL-v1-端云协议规范"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">8.5 ECL v1 端云协议规范</span></a><a class="toc-level-3" href="#8-5-1-%E4%B8%BB%E9%A2%98%E6%A0%91" data-toc-target="8-5-1-主题树"><span class="toc-text">8.5.1 主题树</span></a><a class="toc-level-3" href="#8-5-2-%E8%BD%BD%E8%8D%B7%E7%A4%BA%E4%BE%8B" data-toc-target="8-5-2-载荷示例"><span class="toc-text">8.5.2 载荷示例</span></a><a class="toc-level-3" href="#8-5-3-%E5%8D%8F%E8%AE%AE%E6%BC%94%E8%BF%9B%E8%A7%84%E5%88%99" data-toc-target="8-5-3-协议演进规则"><span class="toc-text">8.5.3 协议演进规则</span></a><a class="toc-level-2" href="#8-6-%E4%B8%89%E4%BF%A1%E5%8F%B7%E5%9C%A8%E7%BA%BF%E5%88%A4%E5%AE%9A" data-toc-target="8-6-三信号在线判定"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">8.6 三信号在线判定</span></a><a class="toc-level-3" href="#8-6-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%80%E4%B8%AA%E4%BF%A1%E5%8F%B7%E4%B8%8D%E5%A4%9F" data-toc-target="8-6-1-为什么一个信号不够"><span class="toc-text">8.6.1 为什么一个信号不够</span></a><a class="toc-level-3" href="#8-6-2-%E5%88%A4%E5%AE%9A%E8%A7%84%E5%88%99" data-toc-target="8-6-2-判定规则"><span class="toc-text">8.6.2 判定规则</span></a><a class="toc-level-3" href="#8-6-3-%E7%8A%B6%E6%80%81%E7%9A%84%E4%B8%9A%E5%8A%A1%E5%90%AB%E4%B9%89" data-toc-target="8-6-3-状态的业务含义"><span class="toc-text">8.6.3 状态的业务含义</span></a><a class="toc-level-2" href="#8-7-%E5%BD%B1%E5%AD%90%EF%BC%9A%E6%9C%9F%E6%9C%9B%E6%80%81%E9%A9%B1%E5%8A%A8" data-toc-target="8-7-影子：期望态驱动"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">8.7 影子：期望态驱动</span></a><a class="toc-level-3" href="#8-7-1-%E4%B8%89%E6%9D%A1%E8%A6%81%E4%B9%89" data-toc-target="8-7-1-三条要义"><span class="toc-text">8.7.1 三条要义</span></a><a class="toc-level-3" href="#8-7-2-%E5%AE%9E%E7%8E%B0%E8%A6%81%E7%82%B9" data-toc-target="8-7-2-实现要点"><span class="toc-text">8.7.2 实现要点</span></a><a class="toc-level-3" href="#8-7-3-%E7%AB%AF%E5%88%B0%E7%AB%AF%E9%93%BE%E8%B7%AF" data-toc-target="8-7-3-端到端链路"><span class="toc-text">8.7.3 端到端链路</span></a><a class="toc-level-2" href="#8-8-%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E4%B8%89%E5%B1%82" data-toc-target="8-8-数字孪生三层"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">8.8 数字孪生三层</span></a><a class="toc-level-3" href="#8-8-1-%E5%BD%B1%E5%AD%90%E3%80%81%E6%A1%A3%E6%A1%88%E3%80%81%E4%BB%BF%E7%9C%9F%E5%AD%AA%E7%94%9F" data-toc-target="8-8-1-影子、档案、仿真孪生"><span class="toc-text">8.8.1 影子、档案、仿真孪生</span></a><a class="toc-level-3" href="#8-8-2-%E5%AD%AA%E7%94%9F%E7%9A%84-API-%E6%AF%94-UI-%E9%87%8D%E8%A6%81" data-toc-target="8-8-2-孪生的-API-比-UI-重要"><span class="toc-text">8.8.2 孪生的 API 比 UI 重要</span></a><a class="toc-level-3" href="#8-8-3-%E5%81%A5%E5%BA%B7%E5%88%86" data-toc-target="8-8-3-健康分"><span class="toc-text">8.8.3 健康分</span></a><a class="toc-level-2" href="#8-9-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F" data-toc-target="8-9-生命周期"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">8.9 生命周期</span></a><a class="toc-level-3" href="#8-9-1-%E7%8A%B6%E6%80%81%E6%9C%BA%E4%B8%8E%E5%B9%B3%E5%8F%B0%E5%8A%A8%E4%BD%9C" data-toc-target="8-9-1-状态机与平台动作"><span class="toc-text">8.9.1 状态机与平台动作</span></a><a class="toc-level-2" href="#8-10-%E9%85%8D%E7%BD%AE%E5%9F%BA%E7%BA%BF" data-toc-target="8-10-配置基线"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">8.10 配置基线</span></a><a class="toc-level-3" href="#8-10-1-%E4%B8%89%E5%B1%82%E9%85%8D%E7%BD%AE" data-toc-target="8-10-1-三层配置"><span class="toc-text">8.10.1 三层配置</span></a><a class="toc-level-2" href="#8-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E5%81%87%E6%AD%BB%E6%9C%BA%E5%99%A8%E4%BA%BA%E8%A2%AB%E6%B4%BE%E4%BA%86%E6%B4%BB" data-toc-target="8-11-案例推演：假死机器人被派了活"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">8.11 案例推演：假死机器人被派了活</span></a><a class="toc-level-3" href="#8-11-1-%E7%8E%B0%E8%B1%A1" data-toc-target="8-11-1-现象"><span class="toc-text">8.11.1 现象</span></a><a class="toc-level-3" href="#8-11-2-%E6%A0%B9%E5%9B%A0" data-toc-target="8-11-2-根因"><span class="toc-text">8.11.2 根因</span></a><a class="toc-level-3" href="#8-11-3-%E5%B9%B3%E5%8F%B0%E5%8A%A8%E4%BD%9C" data-toc-target="8-11-3-平台动作"><span class="toc-text">8.11.3 平台动作</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">🛠️ 动手练习</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 32%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">9 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#8-1-%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B" data-toc-target="8-1-设备模型" data-title="01 · 8.1 设备模型" aria-label="8.1 设备模型"></a><a class="toc-strip__dot" href="#8-2-%E8%BA%AB%E4%BB%BD%E4%BD%93%E7%B3%BB" data-toc-target="8-2-身份体系" data-title="02 · 8.2 身份体系" aria-label="8.2 身份体系"></a><a class="toc-strip__dot" href="#8-3-%E6%B3%A8%E5%86%8C%E4%B8%8E%E6%BF%80%E6%B4%BB" data-toc-target="8-3-注册与激活" data-title="03 · 8.3 注册与激活" aria-label="8.3 注册与激活"></a><a class="toc-strip__dot" href="#8-4-%E6%8E%A5%E5%85%A5%E5%B1%82" data-toc-target="8-4-接入层" data-title="04 · 8.4 接入层" aria-label="8.4 接入层"></a><a class="toc-strip__dot" href="#8-5-ECL-v1-%E7%AB%AF%E4%BA%91%E5%8D%8F%E8%AE%AE%E8%A7%84%E8%8C%83" data-toc-target="8-5-ECL-v1-端云协议规范" data-title="05 · 8.5 ECL v1 端云协议规范" aria-label="8.5 ECL v1 端云协议规范"></a><a class="toc-strip__dot" href="#8-6-%E4%B8%89%E4%BF%A1%E5%8F%B7%E5%9C%A8%E7%BA%BF%E5%88%A4%E5%AE%9A" data-toc-target="8-6-三信号在线判定" data-title="06 · 8.6 三信号在线判定" aria-label="8.6 三信号在线判定"></a><a class="toc-strip__dot" href="#8-7-%E5%BD%B1%E5%AD%90%EF%BC%9A%E6%9C%9F%E6%9C%9B%E6%80%81%E9%A9%B1%E5%8A%A8" data-toc-target="8-7-影子：期望态驱动" data-title="07 · 8.7 影子：期望态驱动" aria-label="8.7 影子：期望态驱动"></a><a class="toc-strip__dot" href="#8-8-%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E4%B8%89%E5%B1%82" data-toc-target="8-8-数字孪生三层" data-title="08 · 8.8 数字孪生三层" aria-label="8.8 数字孪生三层"></a><a class="toc-strip__dot" href="#8-9-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F" data-toc-target="8-9-生命周期" data-title="09 · 8.9 生命周期" aria-label="8.9 生命周期"></a><a class="toc-strip__dot" href="#8-10-%E9%85%8D%E7%BD%AE%E5%9F%BA%E7%BA%BF" data-toc-target="8-10-配置基线" data-title="10 · 8.10 配置基线" aria-label="8.10 配置基线"></a><a class="toc-strip__dot" href="#8-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E5%81%87%E6%AD%BB%E6%9C%BA%E5%99%A8%E4%BA%BA%E8%A2%AB%E6%B4%BE%E4%BA%86%E6%B4%BB" data-toc-target="8-11-案例推演：假死机器人被派了活" data-title="11 · 8.11 案例推演：假死机器人被派了活" aria-label="8.11 案例推演：假死机器人被派了活"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="12 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="13 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习" data-title="14 · 🛠️ 动手练习" aria-label="🛠️ 动手练习"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="15 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="16 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-08-设备接入身份与数字孪生","title":"第 8 章 设备接入、身份与数字孪生","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-08-%E8%AE%BE%E5%A4%87%E6%8E%A5%E5%85%A5%E8%BA%AB%E4%BB%BD%E4%B8%8E%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F/","path":"embodied-cloud-book","index":8,"total":28,"next":{"title":"第 9 章 OTA 2.0：固件、模型、配置、技能四载荷发布","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-09-OTA2.0%E5%9B%9B%E8%BD%BD%E8%8D%B7%E5%8F%91%E5%B8%83/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

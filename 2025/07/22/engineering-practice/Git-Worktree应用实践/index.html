@@ -1,0 +1,879 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Git Worktree 实践：从 Hotfix 并行到「一个 Agent 一个工作树」 · 飞轮之道</title>
+<meta name="description" content="git worktree 让一个仓库同时检出多个分支：讲清共享对象库与独立 HEAD/索引的原理，实测全部子命令的行为与报错，再给出 Hotfix、PR Review、多版本对比和多 Agent 并行的目录约定、端口隔离与回收脚本。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/07/22/engineering-practice/Git-Worktree%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Git Worktree 实践：从 Hotfix 并行到「一个 Agent 一个工作树」 · 飞轮之道">
+<meta property="og:description" content="git worktree 让一个仓库同时检出多个分支：讲清共享对象库与独立 HEAD/索引的原理，实测全部子命令的行为与报错，再给出 Hotfix、PR Review、多版本对比和多 Agent 并行的目录约定、端口隔离与回收脚本。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/07/22/engineering-practice/Git-Worktree%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / <a href="/paths/ai-coding-toolchain/">通用方法</a><a class="series-chip" href="/paths/ai-coding-toolchain/" title="查看学习路径">第 4 / 7 篇</a>
+    </div>
+    <h1>Git Worktree 实践：从 Hotfix 并行到「一个 Agent 一个工作树」</h1>
+    <p class="article-deck">git worktree 让一个仓库同时检出多个分支：讲清共享对象库与独立 HEAD/索引的原理，实测全部子命令的行为与报错…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>16 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/AI-%E7%BC%96%E7%A8%8B/">#AI 编程</a><a class="article-meta__tag" href="/tags/Git/">#Git</a><a class="article-meta__tag" href="/tags/Worktree/">#Worktree</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>worktree 共享对象库和分支引用，只把 HEAD、索引和工作目录分开；比再 clone 一份省空间，比 stash 切换少打断。</li><li>同一分支同一时刻只能被一个 worktree 检出；remove 会拒绝有改动的目录，但会静默删掉被忽略的 .env 和本地数据。</li><li>多 Agent 并行的关键不在 Git，而在依赖、端口、数据库这些 Git 管不到的资源：给每个 worktree 分配独立端口和 Compose 项目名。</li><li>用 lock 标记正在工作的 worktree，用「已合入基线 + 无改动 + 未加锁」三个条件做批量回收。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="问题：切分支的代价"><a href="#问题：切分支的代价" class="headerlink" title="问题：切分支的代价"></a>问题：切分支的代价</h2><p>一个仓库默认只有一个工作目录。手上的功能改了二十个文件、调试断点还开着，线上来了个紧急修复，常规做法是 <code>git stash</code> → 切到 main → 修 → 切回来 → <code>git stash pop</code>。这个过程有三处损耗：未提交的改动要搬家；IDE 和构建工具面对整棵树被替换，索引和增量缓存全部失效；stash 里的东西一多，很容易 pop 错。</p>
+<p>另一种做法是再 clone 一份。隔离是彻底了，但历史要重新下载，两份仓库的分支和 fetch 状态也互不相通。</p>
+<p><code>git worktree</code> 介于两者之间：<strong>一个仓库、多个工作目录，每个目录检出不同的分支或提交</strong>，对象库和分支引用只有一份。</p>
+<h2 id="原理：一个对象库，多份-HEAD-与索引"><a href="#原理：一个对象库，多份-HEAD-与索引" class="headerlink" title="原理：一个对象库，多份 HEAD 与索引"></a>原理：一个对象库，多份 HEAD 与索引</h2><pre class="mermaid">flowchart LR
+  subgraph common["主仓库 app/.git（共享）"]
+    O["objects/ 对象库"]
+    R["refs/heads、refs/tags、refs/stash"]
+    C["config、hooks/"]
+    W["worktrees/app-hotfix/&lt;br/&gt;HEAD、index、logs"]
+  end
+  M["app/（主工作树）&lt;br/&gt;main"] --&gt; common
+  H["app-hotfix/（链接工作树）&lt;br/&gt;.git 是一个文件"] --&gt;|gitdir: 指针| W
+  W --&gt;|commondir| common</pre>
+
+
+<p>新建一个链接工作树后，它根目录下的 <code>.git</code> 不是目录，而是一行指针：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5" data-cmds="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span><span class="built_in">cat</span> ../app-hotfix/.git</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">gitdir: /Users/you/code/app/.git/worktrees/app-hotfix</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="4"><span class="cb-tx"><span class="cb-prompt">$ </span><span class="built_in">ls</span> app/.git/worktrees/app-hotfix/</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">HEAD  ORIG_HEAD  commondir  gitdir  index  logs  refs</span></span></code></pre></div></div></figure>
+
+<p>分工很清楚：</p>
+<table>
+<thead>
+<tr>
+<th>归属</th>
+<th>内容</th>
+<th>实际影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>每个 worktree 独有</td>
+<td><code>HEAD</code>、<code>index</code>（暂存区）、工作目录文件、<code>refs/bisect</code> 等少数私有引用</td>
+<td>各自提交、各自暂存、各自 bisect，互不干扰</td>
+</tr>
+<tr>
+<td>所有 worktree 共享</td>
+<td>对象库、分支与标签、<code>refs/stash</code>、<code>config</code>、<code>hooks/</code>、远端跟踪分支</td>
+<td>在任一目录 <code>git fetch</code>，其他目录立刻看到新提交；<strong>stash 列表也是同一份</strong></td>
+</tr>
+</tbody></table>
+<p>最后一行容易被忽略：在 worktree A 里 <code>git stash</code>，主工作树 <code>git stash list</code> 能看到 <code>stash@{0}: WIP on agent/t2: ...</code>。并行开发时尽量不用 stash，改用临时提交。</p>
+<p>三种隔离方式的取舍：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>同目录切分支</th>
+<th>worktree</th>
+<th>再 clone 一份</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>同时打开多个分支</td>
+<td>否</td>
+<td>是</td>
+<td>是</td>
+</tr>
+<tr>
+<td>历史与对象</td>
+<td>一份</td>
+<td>一份</td>
+<td>两份，需重新下载</td>
+</tr>
+<tr>
+<td>分支、fetch 状态</td>
+<td>—</td>
+<td>实时共享</td>
+<td>各管各的，要来回 push&#x2F;fetch</td>
+</tr>
+<tr>
+<td>依赖目录（<code>.venv</code>、<code>node_modules</code>）</td>
+<td>一份，切分支可能错配</td>
+<td>每个目录一份</td>
+<td>每个目录一份</td>
+</tr>
+<tr>
+<td>适合</td>
+<td>短暂切换、改动已提交</td>
+<td>并行开发、Review、长任务、多 Agent</td>
+<td>需要完全独立的配置或远端</td>
+</tr>
+</tbody></table>
+<h2 id="子命令全集（实测）"><a href="#子命令全集（实测）" class="headerlink" title="子命令全集（实测）"></a>子命令全集（实测）</h2><p>以下输出在一个沙箱仓库中实测，设置了 <code>LC_ALL=C</code> 以得到英文提示（中文环境下提示会被翻译，含义相同），绝对路径缩写为 <code>~/code</code>。仓库有 <code>main</code> 分支和一个 <code>v1.0</code> 标签。</p>
+<h3 id="add：创建"><a href="#add：创建" class="headerlink" title="add：创建"></a>add：创建</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="18"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 基于 main 新建分支并检出到同级目录</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">git worktree add -b hotfix/login-timeout ../app-hotfix main</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># Preparing worktree (new branch &#x27;hotfix/login-timeout&#x27;)</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># HEAD is now at 01a00af second</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># 检出已有分支</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">git worktree add ../app-pay feature/pay</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="comment"># 不建分支，分离头指针检出某个标签或提交（只读对比、跑老版本）</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">git worktree add --detach ../app-v1 v1.0</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="comment"># Preparing worktree (detached HEAD c870a97)</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="comment"># 省略分支名：以目录名为分支名自动新建</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">git worktree add ../quick-fix</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="comment"># Preparing worktree (new branch &#x27;quick-fix&#x27;)</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="comment"># 新建一个没有任何历史的孤儿分支（例如独立的文档站分支，Git 2.42+）</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">git worktree add --orphan -b docs-site ../app-docs</span></span></code></pre></div></div></figure>
+
+<p>基于远端跟踪分支创建时要留意上游设置。<code>git worktree add -b agent/x ../x origin/main</code> 会输出 <code>branch &#39;agent/x&#39; set up to track &#39;origin/main&#39;</code>，新分支把 <code>origin/main</code> 当成了上游，之后在里面 <code>git pull</code> 拉的是 main、<code>git push</code> 的目标也不是你以为的分支。加 <code>--no-track</code>，首次推送时再用 <code>git push -u origin agent/x</code> 建立正确的上游。</p>
+<h3 id="list：查看"><a href="#list：查看" class="headerlink" title="list：查看"></a>list：查看</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree list</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">~/code/app         01a00af [main]</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">~/code/app-hotfix  01a00af [hotfix/login-timeout]</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">~/code/app-pay     01a00af [feature/pay]</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">~/code/app-v1      c870a97 (detached HEAD)</span></span></code></pre></div></div></figure>
+
+<p>写脚本时用 <code>--porcelain</code>，每个 worktree 一段，段与段之间空一行，加锁和可清理状态也会单独成行：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="13" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree list --porcelain</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">worktree ~/code/app</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">HEAD 01a00afa9dc15b735aebb17d9a08995e0a6e9564</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">branch refs/heads/main</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">worktree ~/code/app-pay</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">HEAD 01a00afa9dc15b735aebb17d9a08995e0a6e9564</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">branch refs/heads/feature/pay</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">locked on external disk</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">worktree ~/code/app-v1</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">HEAD c870a977287cc4892e2384b653ac6eaeae3908a8</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">detached</span></span></code></pre></div></div></figure>
+
+<p><code>git worktree list -v</code> 会把锁的原因、可清理的原因展开显示，人工排查时比 porcelain 好读。另外 <code>git branch</code> 的输出里，被其他 worktree 检出的分支前面标 <code>+</code>，当前目录的分支标 <code>*</code>。</p>
+<h3 id="remove-与-prune：删除"><a href="#remove-与-prune：删除" class="headerlink" title="remove 与 prune：删除"></a>remove 与 prune：删除</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree remove ../app-hotfix</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">fatal: <span class="string">&#x27;../app-hotfix&#x27;</span> contains modified or untracked files, use --force to delete it</span></span></code></pre></div></div></figure>
+
+<p>实测三条行为，写清理脚本前必须知道：</p>
+<ol>
+<li><strong>已修改的跟踪文件和未跟踪文件都会阻止删除</strong>，需要 <code>--force</code>。</li>
+<li><strong>被 <code>.gitignore</code> 忽略的文件不会阻止删除，而且会被一并删掉。</strong> 在 worktree 里建了 <code>.venv/</code> 和 <code>node_modules/</code>，<code>remove</code> 直接成功、目录消失。这意味着 <code>.env</code>、本地 SQLite、上传目录这类被忽略的数据，删的时候没有任何提示。</li>
+<li><strong>分支不会跟着删</strong>。<code>remove</code> 之后分支还在，要自己 <code>git branch -d</code>。反过来，分支正被某个 worktree 检出时删不掉：<code>error: cannot delete branch &#39;feature/pay&#39; used by worktree at &#39;~/code/app-payment&#39;</code>。</li>
+</ol>
+<p>如果目录是被 <code>rm -rf</code> 或 Finder 直接删掉的，Git 的登记信息还留在 <code>.git/worktrees/</code> 里，<code>list</code> 会标记 <code>prunable</code>：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8" data-cmds="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree list</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">~/code/app     875fa0a [main]</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">~/code/app-v1  c870a97 (detached HEAD) prunable</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="5"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree prune --dry-run -v</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">Removing worktrees/app-v1: gitdir file points to non-existent location</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="8"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree prune -v</span></span></code></pre></div></div></figure>
+
+<p>不清理的后果是那个分支一直被视为”已检出”，别处无法再检出它。</p>
+<h3 id="lock-unlock：防误删"><a href="#lock-unlock：防误删" class="headerlink" title="lock &#x2F; unlock：防误删"></a>lock &#x2F; unlock：防误删</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6" data-cmds="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree lock --reason <span class="string">&quot;on external disk&quot;</span> ../app-pay</span></span>
+<span class="cb-line is-cmd" data-ln="2"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree remove ../app-pay</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">fatal: cannot remove a locked working tree, lock reason: on external disk</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">use <span class="string">&#x27;remove -f -f&#x27;</span> to override or unlock first</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="6"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree unlock ../app-pay</span></span></code></pre></div></div></figure>
+
+<p>锁的本意是保护放在移动硬盘、网络盘上的 worktree 不被 <code>prune</code> 清掉，但它同样适合标记”有人（或 Agent）正在里面工作”，后文的回收脚本就靠它跳过进行中的任务。</p>
+<h3 id="move-与-repair：搬家"><a href="#move-与-repair：搬家" class="headerlink" title="move 与 repair：搬家"></a>move 与 repair：搬家</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git worktree move ../app-pay ../app-payment    <span class="comment"># 推荐：Git 同时更新两端指针</span></span></span></code></pre></div></div></figure>
+
+<p>如果已经用 <code>mv</code> 手动挪了目录，worktree 本身还能用（它的 <code>.git</code> 文件仍指向主仓库），但主仓库那一侧的登记指向旧路径，<code>list</code> 会显示 <code>prunable</code>，此时一 <code>prune</code> 就会丢掉登记。在主仓库里执行 <code>repair</code> 修复：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3" data-cmds="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span><span class="built_in">mv</span> ../quick-fix ../quick-fix-moved</span></span>
+<span class="cb-line is-cmd" data-ln="2"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree repair ../quick-fix-moved</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">repair: gitdir incorrect: ~/code/app/.git/worktrees/quick-fix/gitdir</span></span></code></pre></div></div></figure>
+
+<p>反过来，如果挪的是主仓库，就到每个链接工作树里执行一次 <code>git worktree repair</code>。</p>
+<p>Git 2.48（2025 年 1 月）起可以用 <code>git worktree add --relative-paths</code> 或配置 <code>worktree.useRelativePaths=true</code> 让两端互存相对路径，整体搬动父目录后不必再 repair：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3" data-cmds="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>git worktree add --relative-paths -b wt/rel ../app-rel</span></span>
+<span class="cb-line is-cmd" data-ln="2"><span class="cb-tx"><span class="cb-prompt">$ </span><span class="built_in">cat</span> ../app-rel/.git</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">gitdir: ../app/.git/worktrees/app-rel</span></span></code></pre></div></div></figure>
+
+<p>代价是仓库会开启 <code>extensions.relativeWorktrees</code> 扩展，<strong>更老版本的 Git 无法再操作这个仓库</strong>。IDE 自带的 Git、CI 镜像里的 Git 版本低于 2.48 时不要开。</p>
+<h3 id="每个-worktree-独立的配置"><a href="#每个-worktree-独立的配置" class="headerlink" title="每个 worktree 独立的配置"></a>每个 worktree 独立的配置</h3><p><code>config</code> 默认共享。需要某个 worktree 单独开 sparse checkout、换提交身份时，先开启扩展，再用 <code>--worktree</code> 写：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git config extensions.worktreeConfig <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">git -C ../app-rel config --worktree core.sparseCheckout <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># 写入的是 .git/worktrees/app-rel/config.worktree，主工作树不受影响</span></span></span></code></pre></div></div></figure>
+
+<h3 id="子命令速查"><a href="#子命令速查" class="headerlink" title="子命令速查"></a>子命令速查</h3><table>
+<thead>
+<tr>
+<th>目的</th>
+<th>命令</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>新分支 + 新目录</td>
+<td><code>git worktree add -b &lt;分支&gt; &lt;路径&gt; [&lt;起点&gt;]</code></td>
+</tr>
+<tr>
+<td>检出已有分支</td>
+<td><code>git worktree add &lt;路径&gt; &lt;分支&gt;</code></td>
+</tr>
+<tr>
+<td>只读看某个提交</td>
+<td><code>git worktree add --detach &lt;路径&gt; &lt;提交或标签&gt;</code></td>
+</tr>
+<tr>
+<td>列表 &#x2F; 机器可读 &#x2F; 详细</td>
+<td><code>git worktree list</code> &#x2F; <code>--porcelain</code> &#x2F; <code>-v</code></td>
+</tr>
+<tr>
+<td>删除（干净的）</td>
+<td><code>git worktree remove &lt;路径&gt;</code></td>
+</tr>
+<tr>
+<td>删除（有改动或含子模块）</td>
+<td><code>git worktree remove --force &lt;路径&gt;</code></td>
+</tr>
+<tr>
+<td>清理失效登记</td>
+<td><code>git worktree prune -v</code>（先加 <code>--dry-run</code> 看）</td>
+</tr>
+<tr>
+<td>加锁 &#x2F; 解锁</td>
+<td><code>git worktree lock --reason &quot;&lt;原因&gt;&quot; &lt;路径&gt;</code> &#x2F; <code>unlock</code></td>
+</tr>
+<tr>
+<td>挪目录</td>
+<td><code>git worktree move &lt;旧&gt; &lt;新&gt;</code>；手动挪过则 <code>git worktree repair</code></td>
+</tr>
+</tbody></table>
+<h2 id="四个典型场景"><a href="#四个典型场景" class="headerlink" title="四个典型场景"></a>四个典型场景</h2><h3 id="Hotfix-不打断当前工作"><a href="#Hotfix-不打断当前工作" class="headerlink" title="Hotfix 不打断当前工作"></a>Hotfix 不打断当前工作</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cd</span> ~/code/app                                   <span class="comment"># 功能分支上，改动都还没提交</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">git fetch origin</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">git worktree add --no-track -b hotfix/login-timeout ../app-hotfix origin/main</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">cd</span> ../app-hotfix</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># 修复、测试</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">git commit -am <span class="string">&quot;fix: 登录超时阈值改为 30s&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">git push -u origin hotfix/login-timeout</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="built_in">cd</span> ../app &amp;&amp; git worktree remove ../app-hotfix</span></span></code></pre></div></div></figure>
+
+<p>原来的工作目录一个文件都没动，IDE 索引和本地进程也没被打断。</p>
+<h3 id="PR-Review-边写边看"><a href="#PR-Review-边写边看" class="headerlink" title="PR Review 边写边看"></a>PR Review 边写边看</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git fetch origin pull/128/head:pr-128           <span class="comment"># GitHub 的 PR 引用；GitLab 为 merge-requests/&lt;id&gt;/head</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">git worktree add ../app-pr-128 pr-128</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">cd</span> ../app-pr-128 &amp;&amp; make <span class="built_in">test</span>                   <span class="comment"># 在独立目录里跑测试、起服务、开 IDE 窗口</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">cd</span> ../app &amp;&amp; git worktree remove ../app-pr-128 &amp;&amp; git branch -D pr-128</span></span></code></pre></div></div></figure>
+
+<p>Review 用的分支是临时拉下来的，看完用 <code>-D</code> 删掉即可。不要用 <code>gh pr checkout</code>：它会切换当前目录的分支，正好是要避免的事。</p>
+<h3 id="长任务与当前开发并行"><a href="#长任务与当前开发并行" class="headerlink" title="长任务与当前开发并行"></a>长任务与当前开发并行</h3><p>跑完整测试、做数据迁移演练、打包镜像这类十几分钟的任务，最怕的是跑到一半你改了代码，结果不知道测的是哪个版本。先提交，再把这个提交检出到独立目录去跑：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git worktree add --detach ../app-ci HEAD</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">(<span class="built_in">cd</span> ../app-ci &amp;&amp; uv <span class="built_in">sync</span> &amp;&amp; uv run pytest -x) &gt; /tmp/app-ci.log 2&gt;&amp;1 &amp;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># 当前目录继续改代码，测试跑的是固定快照</span></span></span></code></pre></div></div></figure>
+
+<h3 id="多版本对比构建"><a href="#多版本对比构建" class="headerlink" title="多版本对比构建"></a>多版本对比构建</h3><p>对比两个版本的产物体积、启动时间或基准测试，检出两个 detached worktree 并排构建：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git worktree add --detach ../app-v1.0 v1.0</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">git worktree add --detach ../app-main origin/main</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">for</span> d <span class="keyword">in</span> ../app-v1.0 ../app-main; <span class="keyword">do</span> (<span class="built_in">cd</span> <span class="string">&quot;<span class="variable">$d</span>&quot;</span> &amp;&amp; npm ci &amp;&amp; npm run build &amp;&amp; <span class="built_in">du</span> -sh dist); <span class="keyword">done</span></span></span></code></pre></div></div></figure>
+
+<p>比来回 checkout 再构建快，也不会让两次构建共用同一份增量缓存导致结果失真。</p>
+<h2 id="AI-编程并行：一个-Agent-一个-worktree"><a href="#AI-编程并行：一个-Agent-一个-worktree" class="headerlink" title="AI 编程并行：一个 Agent 一个 worktree"></a>AI 编程并行：一个 Agent 一个 worktree</h2><p>Claude Code、Codex CLI、Cursor 这类工具的 Agent 都在某个目录里读写文件、跑命令。两个 Agent 共用一个目录，就会出现 A 改到一半、B 跑测试时读到半成品，或者两边同时改同一个文件。worktree 是这种并行的最小隔离单位：<strong>一个任务一个分支，一个分支一个 worktree，一个 worktree 一个 Agent</strong>。</p>
+<h3 id="目录与分支约定"><a href="#目录与分支约定" class="headerlink" title="目录与分支约定"></a>目录与分支约定</h3><p>两种放法：</p>
+<table>
+<thead>
+<tr>
+<th>布局</th>
+<th>例子</th>
+<th>优点</th>
+<th>问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>仓库同级</td>
+<td><code>~/code/app/</code>、<code>~/code/app.worktrees/&lt;任务&gt;/</code></td>
+<td>不会被主仓库的 IDE、文件监听、<code>rg</code>、测试发现扫到</td>
+<td>目录多一层，需要约定</td>
+</tr>
+<tr>
+<td>仓库内部</td>
+<td><code>~/code/app/.worktrees/&lt;任务&gt;/</code></td>
+<td>集中，一眼能看到</td>
+<td>必须加入 <code>.gitignore</code>；IDE 索引、<code>pytest</code> 收集、热重载监听都可能扫进去，要逐个排除</td>
+</tr>
+</tbody></table>
+<p>推荐同级布局。分支统一用 <code>agent/&lt;任务名&gt;</code>，任务名用短横线小写（<code>agent/export-csv</code>），这样 <code>git branch --list &#39;agent/*&#39;</code> 就能列出所有 Agent 分支，回收时也不会误伤人手建的分支。</p>
+<h3 id="Git-管不到的资源"><a href="#Git-管不到的资源" class="headerlink" title="Git 管不到的资源"></a>Git 管不到的资源</h3><p>worktree 只隔离了 Git 跟踪的文件。下面这些要自己处理：</p>
+<table>
+<thead>
+<tr>
+<th>资源</th>
+<th>默认情况</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>依赖目录</td>
+<td>每个 worktree 一份，新建时为空</td>
+<td>进目录后 <code>uv sync</code> &#x2F; <code>pnpm install</code>。两者都有全局缓存并用链接或写时复制装包，第二份通常只要几秒、额外空间很小</td>
+</tr>
+<tr>
+<td><code>.env</code> 等被忽略的配置</td>
+<td>新 worktree 里没有</td>
+<td>创建时从主工作树复制</td>
+</tr>
+<tr>
+<td>端口</td>
+<td>各 worktree 都读同一个默认端口，第二个服务起不来</td>
+<td>每个 worktree 分配独立 <code>APP_PORT</code></td>
+</tr>
+<tr>
+<td>Docker Compose</td>
+<td>默认项目名取目录名，容器和卷自动分开；但宿主机端口映射仍会冲突</td>
+<td>显式设置 <code>COMPOSE_PROJECT_NAME</code>，端口走变量</td>
+</tr>
+<tr>
+<td>数据库</td>
+<td>都连 <code>localhost:5432</code> 的同一个库，A 的迁移会让 B 的测试失败</td>
+<td>每个 worktree 用独立库名，或跟着 Compose 项目起独立实例</td>
+</tr>
+</tbody></table>
+<p>Compose 支持重复传 <code>--env-file</code>，后面的文件覆盖前面的，正好把”公共配置 + worktree 私有配置”叠起来。实测：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># compose.yaml</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">services:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">api:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">nginx:alpine</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;$&#123;APP_PORT:-8000&#125;:80&quot;</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="7" data-cmds="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>docker compose config | grep -E <span class="string">&#x27;^name:|published&#x27;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">name: app-login-timeout</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">        published: <span class="string">&quot;8000&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="5"><span class="cb-tx"><span class="cb-prompt">$ </span>docker compose --env-file .<span class="built_in">env</span> --env-file .env.worktree config | grep -E <span class="string">&#x27;^name:|published&#x27;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">name: app-export-csv</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        published: <span class="string">&quot;8002&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>应用侧读配置时也叠加两份，例如 pydantic-settings 的 <code>env_file=(&quot;.env&quot;, &quot;.env.worktree&quot;)</code>，后面的文件优先。</p>
+<h3 id="创建脚本：wt-new"><a href="#创建脚本：wt-new" class="headerlink" title="创建脚本：wt-new"></a>创建脚本：wt-new</h3><p>放到 <code>~/bin/wt-new</code> 并 <code>chmod +x</code>。在主工作树或任一 worktree 里执行都可以，目录总会落到 <code>&lt;仓库名&gt;.worktrees/</code> 下。</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="28"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">#!/usr/bin/env bash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 用法：wt-new &lt;任务名&gt; [基线，默认 origin/main]</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">set</span> -euo pipefail</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">task=<span class="string">&quot;<span class="variable">$&#123;1:?用法: wt-new &lt;任务名&gt; [基线]&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">base=<span class="string">&quot;<span class="variable">$&#123;2:-origin/main&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">main_wt=<span class="string">&quot;<span class="subst">$(dirname <span class="string">&quot;<span class="subst">$(git rev-parse --path-format=absolute --git-common-dir)</span>&quot;</span>)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">repo=<span class="string">&quot;<span class="subst">$(basename <span class="string">&quot;<span class="variable">$main_wt</span>&quot;</span>)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="built_in">dir</span>=<span class="string">&quot;<span class="subst">$(dirname <span class="string">&quot;<span class="variable">$main_wt</span>&quot;</span>)</span>/<span class="variable">$&#123;repo&#125;</span>.worktrees/<span class="variable">$&#123;task&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">branch=<span class="string">&quot;agent/<span class="variable">$&#123;task&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">git -C <span class="string">&quot;<span class="variable">$main_wt</span>&quot;</span> fetch -q origin</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="comment"># --no-track：不让新分支把 origin/main 当上游，避免 git push 推错目标</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">git -C <span class="string">&quot;<span class="variable">$main_wt</span>&quot;</span> worktree add --no-track -b <span class="string">&quot;<span class="variable">$branch</span>&quot;</span> <span class="string">&quot;<span class="variable">$dir</span>&quot;</span> <span class="string">&quot;<span class="variable">$base</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="comment"># 加锁：Agent 工作期间，清理脚本和误操作都删不掉它</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">git -C <span class="string">&quot;<span class="variable">$main_wt</span>&quot;</span> worktree lock --reason <span class="string">&quot;agent running: <span class="variable">$task</span>&quot;</span> <span class="string">&quot;<span class="variable">$dir</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="comment"># 被 .gitignore 忽略的本地配置不会出现在新 worktree，按需复制</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="keyword">for</span> f <span class="keyword">in</span> .<span class="built_in">env</span> .env.local; <span class="keyword">do</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="keyword">if</span> [[ -f <span class="string">&quot;<span class="variable">$main_wt</span>/<span class="variable">$f</span>&quot;</span> ]]; <span class="keyword">then</span> <span class="built_in">cp</span> <span class="string">&quot;<span class="variable">$main_wt</span>/<span class="variable">$f</span>&quot;</span> <span class="string">&quot;<span class="variable">$dir</span>/<span class="variable">$f</span>&quot;</span>; <span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="keyword">done</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="comment"># 端口：从 8001 起找一个其他 worktree 没登记过的</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">used=<span class="string">&quot;<span class="subst">$(cat <span class="string">&quot;<span class="subst">$(dirname <span class="string">&quot;<span class="variable">$dir</span>&quot;</span>)</span>&quot;</span>/*/.env.worktree 2&gt;/dev/null | sed -n &#x27;s/^APP_PORT=//p&#x27; || true)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">port=8001</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="keyword">while</span> grep -qx <span class="string">&quot;<span class="variable">$port</span>&quot;</span> &lt;&lt;&lt;<span class="string">&quot;<span class="variable">$used</span>&quot;</span>; <span class="keyword">do</span> port=$((port + <span class="number">1</span>)); <span class="keyword">done</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"><span class="built_in">printf</span> <span class="string">&#x27;APP_PORT=%s\nCOMPOSE_PROJECT_NAME=%s\n&#x27;</span> <span class="string">&quot;<span class="variable">$port</span>&quot;</span> <span class="string">&quot;<span class="variable">$&#123;repo&#125;</span>-<span class="variable">$&#123;task&#125;</span>&quot;</span> &gt; <span class="string">&quot;<span class="variable">$dir</span>/.env.worktree&quot;</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"><span class="built_in">echo</span> <span class="string">&quot;<span class="variable">$dir</span>  [<span class="variable">$branch</span>]  APP_PORT=<span class="variable">$port</span>&quot;</span></span></span></code></pre></div></div></figure>
+
+<p><code>.env.worktree</code> 记得加进 <code>.gitignore</code>。端口按”已登记的端口集合”分配而不是按 worktree 个数递增，回收掉中间某个之后，空出的端口会被下一个任务复用，不会越涨越高。</p>
+<h3 id="派发、合并与回收"><a href="#派发、合并与回收" class="headerlink" title="派发、合并与回收"></a>派发、合并与回收</h3><pre class="mermaid">flowchart LR
+  A["wt-new 任务名&lt;br/&gt;建分支、加锁、分端口"] --&gt; B["在该目录启动 Agent&lt;br/&gt;只在这里读写"]
+  B --&gt; C&#123;"结果可用？"&#125;
+  C --&gt;|是| D["提交、推送、开 PR&lt;br/&gt;或本地 merge --ff-only"]
+  C --&gt;|否| E["git worktree remove --force&lt;br/&gt;git branch -D"]
+  D --&gt; F["worktree unlock"]
+  F --&gt; G["wt-gc --apply&lt;br/&gt;回收已合入的"]</pre>
+
+
+<p>几条纪律：</p>
+<ul>
+<li><strong>任务要正交。</strong> 两个 Agent 同时改同一个模块，worktree 只是把冲突从”写文件时”推迟到”合并时”。拆任务时按目录或模块划界。</li>
+<li><strong>并行数量看 Review 带宽，而不是机器性能。</strong> 同时开五个 Agent，最后卡在人读 diff 上。实践中三到四个比较能跟得上。</li>
+<li><strong>合并前在 worktree 里跑完测试再 unlock。</strong> unlock 是”这个任务我不再碰了”的信号。</li>
+</ul>
+<p>回收脚本 <code>~/bin/wt-gc</code>，默认只打印，加 <code>--apply</code> 才动手：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="25"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">#!/usr/bin/env bash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 用法：wt-gc [--apply]；默认只列出可回收项，不删除</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">set</span> -euo pipefail</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">base=<span class="string">&quot;origin/main&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">git fetch -q --prune origin</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">main_wt=<span class="string">&quot;<span class="subst">$(dirname <span class="string">&quot;<span class="subst">$(git rev-parse --path-format=absolute --git-common-dir)</span>&quot;</span>)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">git worktree list --porcelain |</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  awk <span class="string">&#x27;/^worktree /&#123;p=substr($0,10); b=&quot;&quot;; l=0&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="string">       /^branch /&#123;b=$2; sub(&quot;refs/heads/&quot;,&quot;&quot;,b)&#125;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="string">       /^locked/&#123;l=1&#125;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="string">       /^$/&#123;if (b != &quot;&quot;) print p &quot;\t&quot; b &quot;\t&quot; l&#125;&#x27;</span> |</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="keyword">while</span> IFS=$<span class="string">&#x27;\t&#x27;</span> <span class="built_in">read</span> -r path branch locked; <span class="keyword">do</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    [[ <span class="string">&quot;<span class="variable">$path</span>&quot;</span> == <span class="string">&quot;<span class="variable">$main_wt</span>&quot;</span> ]] &amp;&amp; <span class="built_in">continue</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="keyword">if</span> [[ <span class="string">&quot;<span class="variable">$locked</span>&quot;</span> == 1 ]]; <span class="keyword">then</span> <span class="built_in">echo</span> <span class="string">&quot;跳过（已加锁）: <span class="variable">$path</span>&quot;</span>; <span class="built_in">continue</span>; <span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    git merge-base --is-ancestor <span class="string">&quot;<span class="variable">$branch</span>&quot;</span> <span class="string">&quot;<span class="variable">$base</span>&quot;</span> || <span class="built_in">continue</span>   <span class="comment"># 尚未合入基线</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="keyword">if</span> [[ -n <span class="string">&quot;<span class="subst">$(git -C <span class="string">&quot;<span class="variable">$path</span>&quot;</span> status --porcelain)</span>&quot;</span> ]]; <span class="keyword">then</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="built_in">echo</span> <span class="string">&quot;跳过（有未提交改动）: <span class="variable">$path</span>&quot;</span>; <span class="built_in">continue</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="built_in">echo</span> <span class="string">&quot;可回收: <span class="variable">$path</span>  [<span class="variable">$branch</span>]&quot;</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="keyword">if</span> [[ <span class="string">&quot;<span class="variable">$&#123;1:-&#125;</span>&quot;</span> == <span class="string">&quot;--apply&quot;</span> ]]; <span class="keyword">then</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      git worktree remove <span class="string">&quot;<span class="variable">$path</span>&quot;</span> &amp;&amp; git branch -d <span class="string">&quot;<span class="variable">$branch</span>&quot;</span> || <span class="built_in">echo</span> <span class="string">&quot;  失败，手动检查: <span class="variable">$path</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">  <span class="keyword">done</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">git worktree prune</span></span></code></pre></div></div></figure>
+
+<p>沙箱实测：t1 已合入并解锁，t2 仍加锁，t3 已解锁但一行没改：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>wt-gc --apply</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">可回收: ~/code/app.worktrees/t1  [agent/t1]</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">Deleted branch agent/t1 (was c54d038).</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">跳过（已加锁）: ~/code/app.worktrees/t2</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">可回收: ~/code/app.worktrees/t3  [agent/t3]</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">Deleted branch agent/t3 (was f52973f).</span></span></code></pre></div></div></figure>
+
+<p>t3 被回收是符合预期的：分支上没有新提交，本身就是基线的祖先，删掉不丢任何东西。如果不想让刚建好、Agent 还没开工的 worktree 被收走，就让它保持加锁，这正是 <code>wt-new</code> 创建时默认加锁的原因。</p>
+<p>脚本的边界：</p>
+<ul>
+<li><strong>Squash 合并识别不了。</strong> 分支被压成一个新提交合进 main 后，原分支不再是 main 的祖先。团队用 squash 时，改用”远端分支已被删除”作为合入信号：<code>git fetch --prune</code> 之后执行 <code>git for-each-ref --format=&#39;%(refname:short) %(upstream:track)&#39; refs/heads</code>，上游显示 <code>[gone]</code> 的就是已合入的，删分支要用 <code>-D</code>。</li>
+<li><strong>被忽略的文件不在 <code>status --porcelain</code> 里。</strong> worktree 里如果有本地数据库文件、上传目录，脚本会连同目录一起删掉。重要数据放到 worktree 之外，或者对这种 worktree 一直加锁。</li>
+</ul>
+<h2 id="坑与边界"><a href="#坑与边界" class="headerlink" title="坑与边界"></a>坑与边界</h2><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fatal: &#39;feature/pay&#39; is already used by worktree at ...</code></td>
+<td>同一分支同一时刻只能被一个 worktree 检出；主工作树里 <code>git switch</code> 过去也会报同样的错</td>
+<td>只读查看用 <code>--detach</code>；要改就从它拉新分支 <code>-b</code></td>
+</tr>
+<tr>
+<td>新 worktree 里子模块目录是空的，<code>git submodule status</code> 前面带 <code>-</code></td>
+<td>子模块不随 worktree 自动初始化</td>
+<td>每个 worktree 里各执行一次 <code>git submodule update --init</code></td>
+</tr>
+<tr>
+<td><code>fatal: working trees containing submodules cannot be moved or removed</code></td>
+<td>含子模块的 worktree 不能 <code>move</code>，<code>remove</code> 也要强制</td>
+<td>确认子模块里没有未推送的改动后 <code>remove --force</code></td>
+</tr>
+<tr>
+<td>worktree 删了，<code>.env</code> 和本地数据也没了</td>
+<td>被忽略的文件不阻止 <code>remove</code>，会被一起删掉</td>
+<td>数据放 worktree 之外；进行中的加锁</td>
+</tr>
+<tr>
+<td>分支残留越来越多</td>
+<td><code>remove</code> 不删分支</td>
+<td>回收流程里配套 <code>git branch -d</code></td>
+</tr>
+<tr>
+<td>两个目录的 <code>git stash list</code> 一样</td>
+<td><code>refs/stash</code> 是共享引用</td>
+<td>并行开发时用临时提交代替 stash</td>
+</tr>
+<tr>
+<td>hook 在所有 worktree 生效</td>
+<td><code>hooks/</code> 在共享目录里</td>
+<td>需要差异化时用 <code>extensions.worktreeConfig</code> + <code>config --worktree core.hooksPath</code></td>
+</tr>
+<tr>
+<td>IDE 卡顿、全局搜索出现重复结果</td>
+<td>worktree 放在仓库内部被索引</td>
+<td>用同级布局；或在 IDE 里把该目录标记为排除</td>
+</tr>
+<tr>
+<td>磁盘占用上涨</td>
+<td>对象库共享，但工作树文件、依赖、构建产物每份都有</td>
+<td>定期 <code>du -sh ../app.worktrees/*</code> 并回收；构建产物目录别留</td>
+</tr>
+<tr>
+<td>开了 <code>--relative-paths</code> 后 IDE 报仓库格式不支持</td>
+<td><code>extensions.relativeWorktrees</code> 需要 Git 2.48+</td>
+<td>升级工具链里的 Git，或不用相对路径</td>
+</tr>
+</tbody></table>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>worktree 解决的是”同一个仓库同时处在几个状态”的问题，原理只有一句：对象和引用共享，HEAD、索引、文件分开。日常用到的就是 <code>add</code>、<code>list</code>、<code>remove</code>、<code>prune</code> 四个；<code>lock</code> 和 <code>--porcelain</code> 则是把它脚本化的关键。多 Agent 并行时，Git 这一层几乎不用操心，真正要设计的是依赖、端口、数据库的隔离，以及”谁在用、何时能删”的约定。</p>
+<h2 id="2026-09-补记：AI-编程工具开始原生管理-worktree"><a href="#2026-09-补记：AI-编程工具开始原生管理-worktree" class="headerlink" title="2026-09 补记：AI 编程工具开始原生管理 worktree"></a>2026-09 补记：AI 编程工具开始原生管理 worktree</h2><p>本文写于 2025 年 7 月，当时 worktree 要靠自己的脚本管理。到 2026 年，主流工具陆续把它做成了内置能力：</p>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>内置能力</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Claude Code</td>
+<td><code>claude --worktree &lt;名称&gt;</code>（简写 <code>-w</code>）在 <code>.claude/worktrees/&lt;名称&gt;/</code> 下创建 worktree，分支名为 <code>worktree-&lt;名称&gt;</code>；项目根的 <code>.worktreeinclude</code>（<code>.gitignore</code> 语法）指定要复制进去的被忽略文件，如 <code>.env</code>；子 Agent 可在 frontmatter 写 <code>isolation: worktree</code>；Agent 运行期间对其 worktree 持有 <code>git worktree lock</code>。2026-02-20 起提供 <code>WorktreeCreate</code> &#x2F; <code>WorktreeRemove</code> hooks，可替换默认的 git 逻辑（例如改放到别的目录，或支持非 Git 版本库）</td>
+</tr>
+<tr>
+<td>Codex app</td>
+<td>2026-02-02 发布的桌面应用，多个线程并行，内置 worktree 支持</td>
+</tr>
+<tr>
+<td>Cursor 3.0</td>
+<td>2026-04-02 发布，Agents Window 可让多个 Agent 分别在本地、worktree、云端或 SSH 环境并行</td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td>v0.36 起支持 Git worktree</td>
+</tr>
+</tbody></table>
+<p>对本文工作流的影响：</p>
+<ul>
+<li><strong>创建环节可以交给工具。</strong> <code>wt-new</code> 里的建分支、复制 <code>.env</code>、加锁，Claude Code 已经内置了同样的做法（<code>.worktreeinclude</code> 对应复制，运行期加锁对应 lock），说明这套约定方向是对的。</li>
+<li><strong>端口和数据库隔离仍要自己做。</strong> 工具只负责文件隔离，<code>.env.worktree</code> 分端口、独立 Compose 项目名这一层没有被替代。</li>
+<li><strong>布局不同要注意。</strong> Claude Code 默认放在仓库内部的 <code>.claude/worktrees/</code>，官方文档建议把它加入 <code>.gitignore</code>；它和本文的同级布局可以共存，但同一个 worktree 只交给一方管理。Claude Code 的定期清理只处理它自己创建的 worktree，手工 <code>git worktree add</code> 的不会被它删掉，回收仍需要 <code>wt-gc</code> 这类脚本。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2024/06/18/engineering-practice/Linux%E4%B8%8EmacOS%E6%90%9C%E7%B4%A2%E5%B7%A5%E5%85%B7/">Linux 与 macOS 搜索工具指南</a></h3>
+        <p>由浅入深覆盖 glob、find、grep、ripgrep / fd / fzf、结构化语义搜索与管道工程的文件与文本检索实战手册…</p>
+        <a class="btn primary" href="/2024/06/18/engineering-practice/Linux%E4%B8%8EmacOS%E6%90%9C%E7%B4%A2%E5%B7%A5%E5%85%B7/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/03/03/ai-tools/Gemini-CLI%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Gemini CLI 实战：配置、MCP、扩展与 Hooks</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E9%97%AE%E9%A2%98%EF%BC%9A%E5%88%87%E5%88%86%E6%94%AF%E7%9A%84%E4%BB%A3%E4%BB%B7" data-toc-target="问题：切分支的代价"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">问题：切分支的代价</span></a><a class="toc-level-2" href="#%E5%8E%9F%E7%90%86%EF%BC%9A%E4%B8%80%E4%B8%AA%E5%AF%B9%E8%B1%A1%E5%BA%93%EF%BC%8C%E5%A4%9A%E4%BB%BD-HEAD-%E4%B8%8E%E7%B4%A2%E5%BC%95" data-toc-target="原理：一个对象库，多份-HEAD-与索引"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">原理：一个对象库，多份 HEAD 与索引</span></a><a class="toc-level-2" href="#%E5%AD%90%E5%91%BD%E4%BB%A4%E5%85%A8%E9%9B%86%EF%BC%88%E5%AE%9E%E6%B5%8B%EF%BC%89" data-toc-target="子命令全集（实测）"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">子命令全集（实测）</span></a><a class="toc-level-3" href="#add%EF%BC%9A%E5%88%9B%E5%BB%BA" data-toc-target="add：创建"><span class="toc-text">add：创建</span></a><a class="toc-level-3" href="#list%EF%BC%9A%E6%9F%A5%E7%9C%8B" data-toc-target="list：查看"><span class="toc-text">list：查看</span></a><a class="toc-level-3" href="#remove-%E4%B8%8E-prune%EF%BC%9A%E5%88%A0%E9%99%A4" data-toc-target="remove-与-prune：删除"><span class="toc-text">remove 与 prune：删除</span></a><a class="toc-level-3" href="#lock-unlock%EF%BC%9A%E9%98%B2%E8%AF%AF%E5%88%A0" data-toc-target="lock-unlock：防误删"><span class="toc-text">lock / unlock：防误删</span></a><a class="toc-level-3" href="#move-%E4%B8%8E-repair%EF%BC%9A%E6%90%AC%E5%AE%B6" data-toc-target="move-与-repair：搬家"><span class="toc-text">move 与 repair：搬家</span></a><a class="toc-level-3" href="#%E6%AF%8F%E4%B8%AA-worktree-%E7%8B%AC%E7%AB%8B%E7%9A%84%E9%85%8D%E7%BD%AE" data-toc-target="每个-worktree-独立的配置"><span class="toc-text">每个 worktree 独立的配置</span></a><a class="toc-level-3" href="#%E5%AD%90%E5%91%BD%E4%BB%A4%E9%80%9F%E6%9F%A5" data-toc-target="子命令速查"><span class="toc-text">子命令速查</span></a><a class="toc-level-2" href="#%E5%9B%9B%E4%B8%AA%E5%85%B8%E5%9E%8B%E5%9C%BA%E6%99%AF" data-toc-target="四个典型场景"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">四个典型场景</span></a><a class="toc-level-3" href="#Hotfix-%E4%B8%8D%E6%89%93%E6%96%AD%E5%BD%93%E5%89%8D%E5%B7%A5%E4%BD%9C" data-toc-target="Hotfix-不打断当前工作"><span class="toc-text">Hotfix 不打断当前工作</span></a><a class="toc-level-3" href="#PR-Review-%E8%BE%B9%E5%86%99%E8%BE%B9%E7%9C%8B" data-toc-target="PR-Review-边写边看"><span class="toc-text">PR Review 边写边看</span></a><a class="toc-level-3" href="#%E9%95%BF%E4%BB%BB%E5%8A%A1%E4%B8%8E%E5%BD%93%E5%89%8D%E5%BC%80%E5%8F%91%E5%B9%B6%E8%A1%8C" data-toc-target="长任务与当前开发并行"><span class="toc-text">长任务与当前开发并行</span></a><a class="toc-level-3" href="#%E5%A4%9A%E7%89%88%E6%9C%AC%E5%AF%B9%E6%AF%94%E6%9E%84%E5%BB%BA" data-toc-target="多版本对比构建"><span class="toc-text">多版本对比构建</span></a><a class="toc-level-2" href="#AI-%E7%BC%96%E7%A8%8B%E5%B9%B6%E8%A1%8C%EF%BC%9A%E4%B8%80%E4%B8%AA-Agent-%E4%B8%80%E4%B8%AA-worktree" data-toc-target="AI-编程并行：一个-Agent-一个-worktree"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">AI 编程并行：一个 Agent 一个 worktree</span></a><a class="toc-level-3" href="#%E7%9B%AE%E5%BD%95%E4%B8%8E%E5%88%86%E6%94%AF%E7%BA%A6%E5%AE%9A" data-toc-target="目录与分支约定"><span class="toc-text">目录与分支约定</span></a><a class="toc-level-3" href="#Git-%E7%AE%A1%E4%B8%8D%E5%88%B0%E7%9A%84%E8%B5%84%E6%BA%90" data-toc-target="Git-管不到的资源"><span class="toc-text">Git 管不到的资源</span></a><a class="toc-level-3" href="#%E5%88%9B%E5%BB%BA%E8%84%9A%E6%9C%AC%EF%BC%9Awt-new" data-toc-target="创建脚本：wt-new"><span class="toc-text">创建脚本：wt-new</span></a><a class="toc-level-3" href="#%E6%B4%BE%E5%8F%91%E3%80%81%E5%90%88%E5%B9%B6%E4%B8%8E%E5%9B%9E%E6%94%B6" data-toc-target="派发、合并与回收"><span class="toc-text">派发、合并与回收</span></a><a class="toc-level-2" href="#%E5%9D%91%E4%B8%8E%E8%BE%B9%E7%95%8C" data-toc-target="坑与边界"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">坑与边界</span></a><a class="toc-level-2" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">总结</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9AAI-%E7%BC%96%E7%A8%8B%E5%B7%A5%E5%85%B7%E5%BC%80%E5%A7%8B%E5%8E%9F%E7%94%9F%E7%AE%A1%E7%90%86-worktree" data-toc-target="2026-09-补记：AI-编程工具开始原生管理-worktree"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">2026-09 补记：AI 编程工具开始原生管理 worktree</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/ai-coding-toolchain/" style="--rail: 57%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">4 / 7</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E9%97%AE%E9%A2%98%EF%BC%9A%E5%88%87%E5%88%86%E6%94%AF%E7%9A%84%E4%BB%A3%E4%BB%B7" data-toc-target="问题：切分支的代价" data-title="01 · 问题：切分支的代价" aria-label="问题：切分支的代价"></a><a class="toc-strip__dot" href="#%E5%8E%9F%E7%90%86%EF%BC%9A%E4%B8%80%E4%B8%AA%E5%AF%B9%E8%B1%A1%E5%BA%93%EF%BC%8C%E5%A4%9A%E4%BB%BD-HEAD-%E4%B8%8E%E7%B4%A2%E5%BC%95" data-toc-target="原理：一个对象库，多份-HEAD-与索引" data-title="02 · 原理：一个对象库，多份 HEAD 与索引" aria-label="原理：一个对象库，多份 HEAD 与索引"></a><a class="toc-strip__dot" href="#%E5%AD%90%E5%91%BD%E4%BB%A4%E5%85%A8%E9%9B%86%EF%BC%88%E5%AE%9E%E6%B5%8B%EF%BC%89" data-toc-target="子命令全集（实测）" data-title="03 · 子命令全集（实测）" aria-label="子命令全集（实测）"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E4%B8%AA%E5%85%B8%E5%9E%8B%E5%9C%BA%E6%99%AF" data-toc-target="四个典型场景" data-title="04 · 四个典型场景" aria-label="四个典型场景"></a><a class="toc-strip__dot" href="#AI-%E7%BC%96%E7%A8%8B%E5%B9%B6%E8%A1%8C%EF%BC%9A%E4%B8%80%E4%B8%AA-Agent-%E4%B8%80%E4%B8%AA-worktree" data-toc-target="AI-编程并行：一个-Agent-一个-worktree" data-title="05 · AI 编程并行：一个 Agent 一个 worktree" aria-label="AI 编程并行：一个 Agent 一个 worktree"></a><a class="toc-strip__dot" href="#%E5%9D%91%E4%B8%8E%E8%BE%B9%E7%95%8C" data-toc-target="坑与边界" data-title="06 · 坑与边界" aria-label="坑与边界"></a><a class="toc-strip__dot" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结" data-title="07 · 总结" aria-label="总结"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9AAI-%E7%BC%96%E7%A8%8B%E5%B7%A5%E5%85%B7%E5%BC%80%E5%A7%8B%E5%8E%9F%E7%94%9F%E7%AE%A1%E7%90%86-worktree" data-toc-target="2026-09-补记：AI-编程工具开始原生管理-worktree" data-title="08 · 2026-09 补记：AI 编程工具开始原生管理 worktree" aria-label="2026-09 补记：AI 编程工具开始原生管理 worktree"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/Git-Worktree应用实践","title":"Git Worktree 实践：从 Hotfix 并行到「一个 Agent 一个工作树」","url":"/2025/07/22/engineering-practice/Git-Worktree%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5/","path":"ai-coding-toolchain","index":3,"total":7,"next":{"title":"Linux 与 macOS 搜索工具指南","url":"/2024/06/18/engineering-practice/Linux%E4%B8%8EmacOS%E6%90%9C%E7%B4%A2%E5%B7%A5%E5%85%B7/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,983 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Open-GSD 源码解析（五）：核心源码阅读与 Skill 开发 · 飞轮之道</title>
+<meta name="description" content="Open-GSD 源码解析系列第五篇：逐模块解读 Runtime、Parser、Dispatcher 等核心源码与调用图，复现 Hello Skill 开发教程，并把 Skill Graph、Chain 等高阶概念映射到真实机制。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/08/12/engineering-practice/Open-GSD-05-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B8%8ESkill%E5%BC%80%E5%8F%91/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Open-GSD 源码解析（五）：核心源码阅读与 Skill 开发 · 飞轮之道">
+<meta property="og:description" content="Open-GSD 源码解析系列第五篇：逐模块解读 Runtime、Parser、Dispatcher 等核心源码与调用图，复现 Hello Skill 开发教程，并把 Skill Graph、Chain 等高阶概念映射到真实机制。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/08/12/engineering-practice/Open-GSD-05-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B8%8ESkill%E5%BC%80%E5%8F%91/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / <a href="/paths/spec-driven-development/">源码深读</a><a class="series-chip" href="/paths/spec-driven-development/" title="查看学习路径">第 7 / 10 篇</a>
+    </div>
+    <h1>Open-GSD 源码解析（五）：核心源码阅读与 Skill 开发</h1>
+    <p class="article-deck">Open-GSD 源码解析系列第五篇：逐模块解读 Runtime、Parser、Dispatcher 等核心源码与调用图，复现 Hello Skill 开发教程…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>37 分钟</span>
+      <span>发布于 2026.08</span>
+      <a class="article-meta__tag" href="/tags/AI-%E7%BC%96%E7%A8%8B/">#AI 编程</a><a class="article-meta__tag" href="/tags/Open-GSD/">#Open-GSD</a><a class="article-meta__tag" href="/tags/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">#源码解析</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Plan / Execute 分离不只是五阶段循环的宏观哲学，也被复用到 worktree-safety.cts 的函数签名级别。</li><li>防原型污染纪律以多种技术手段反复出现，是团队内化的标准动作，而非一次性补丁。</li><li>Verifier 的 Data-Flow Trace 沿数据流反向追溯真实来源，专门针对“UI 层完美但数据源是假的”这类缺陷。</li><li>开发自定义能力时，contribution 与 step 是平级但不同的 Prompt 组织方式，gsd loop render-hooks --raw 是最直接的调试手段。</li><li>gsd-spike --wrap-up 是 GSD 中唯一完整、有源码实证的动态技能生成机制。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p><strong>本篇导读</strong>：本篇从“读文档”切换到“读源码与动手写”：先逐模块解读 Runtime、Parser、Dispatcher、Executor、Verifier、Planner、Git Integration 的核心实现并画出调用图，再完整复现官方 Hello Skill 教程，最后把多 Skill、Skill Graph、Chain、Composite 等高阶概念映射到 GSD 中真实存在的机制。上一篇解析了 Skill 的规范与加载链路，本篇在此基础上补齐源码细节与开发实践。</p>
+<h2 id="第十一部分-·-源码阅读（核心模块逐一分析-调用图）"><a href="#第十一部分-·-源码阅读（核心模块逐一分析-调用图）" class="headerlink" title="第十一部分 · 源码阅读（核心模块逐一分析 + 调用图）"></a>第十一部分 · 源码阅读（核心模块逐一分析 + 调用图）</h2><blockquote>
+<p>前十部分（本系列前四篇）大量依赖官方文档（<code>docs/</code>）与说明性引用文档（<code>gsd-core/references/</code>）。本部分换一种读法：直接摘录并解读<strong>本次研究实际读到的 TypeScript 源码</strong>（<code>src/*.cts</code>）与 <strong>Agent Prompt 源文件</strong>（<code>agents/*.md</code>）的具体实现，覆盖七个核心模块——Runtime、Parser、Dispatcher、Executor、Verifier、Planner、Git Integration。</p>
+</blockquote>
+<h3 id="11-0-七个模块与源码文件的对应关系"><a href="#11-0-七个模块与源码文件的对应关系" class="headerlink" title="11.0 七个模块与源码文件的对应关系"></a>11.0 七个模块与源码文件的对应关系</h3><table>
+<thead>
+<tr>
+<th>需求模块</th>
+<th>对应源码</th>
+<th>规模（本次实测）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Parser</td>
+<td><code>src/frontmatter.cts</code></td>
+<td>754 行</td>
+</tr>
+<tr>
+<td>Dispatcher</td>
+<td><code>src/command-routing-hub.cts</code></td>
+<td>413 行</td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td><code>src/state-transition.cts</code>（状态机） + <code>capability-loader.cjs</code>（运行时能力覆盖组装，本系列第二篇第三部分已详解）</td>
+<td>2,109 行</td>
+</tr>
+<tr>
+<td>Planner</td>
+<td><code>agents/gsd-planner.md</code> + <code>src/phase-estimation.cts</code>（本系列第三篇第四部分已详解）</td>
+<td>992 行</td>
+</tr>
+<tr>
+<td>Executor</td>
+<td><code>agents/gsd-executor.md</code></td>
+<td>852 行</td>
+</tr>
+<tr>
+<td>Verifier</td>
+<td><code>agents/gsd-verifier.md</code> + <code>src/verification.cts</code></td>
+<td>970 + 498 行</td>
+</tr>
+<tr>
+<td>Git Integration</td>
+<td><code>src/worktree-safety.cts</code> + <code>gsd-core/references/git-integration.md</code>（本系列第二篇第三部分已引用）</td>
+<td>1,812 行</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="11-1-Parser-模块：src-frontmatter-cts"><a href="#11-1-Parser-模块：src-frontmatter-cts" class="headerlink" title="11.1 Parser 模块：src/frontmatter.cts"></a>11.1 Parser 模块：<code>src/frontmatter.cts</code></h3><h4 id="重要-Function：parseYamlRegion"><a href="#重要-Function：parseYamlRegion" class="headerlink" title="重要 Function：parseYamlRegion()"></a>重要 Function：<code>parseYamlRegion()</code></h4><p>这是一个<strong>手写的、不依赖任何外部 YAML 库</strong>的解析器（本系列第二篇第二部分已记录 <code>package.json</code> 的 <code>dependencies</code> 只有 <code>@anthropic-ai/claude-agent-sdk</code> 与 <code>ws</code> 两项，不含 <code>js-yaml</code> 之类的库，这里得到了直接印证）。核心结构是一个<strong>按缩进层级维护的栈</strong>：</p>
+<figure class="highlight typescript cb" data-lang="typescript" data-label="TypeScript" data-ext="ts" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">type</span> <span class="title class_">StackEntry</span> = &#123; <span class="attr">obj</span>: <span class="title class_">Record</span>&lt;<span class="built_in">string</span>, <span class="built_in">unknown</span>&gt; | <span class="built_in">unknown</span>[]; <span class="attr">key</span>: <span class="built_in">string</span> | <span class="literal">null</span>; <span class="attr">indent</span>: <span class="built_in">number</span> &#125;;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">const</span> <span class="attr">stack</span>: <span class="title class_">StackEntry</span>[] = [&#123; <span class="attr">obj</span>: frontmatter, <span class="attr">key</span>: <span class="literal">null</span>, <span class="attr">indent</span>: -<span class="number">1</span> &#125;];</span></span></code></pre></div></div></figure>
+
+<p>逐行处理时：计算当前行缩进 → 把栈弹回到”缩进小于等于栈顶”的层级 → 用正则 <code>^(\s*)([a-zA-Z0-9_-]+):\s*(.*)</code> 匹配 <code>key: value</code>。三种取值情况分别处理：值为空或为 <code>[</code>（可能是嵌套对象或数组的开始，压入新栈帧）、值形如 <code>[a, b, c]</code>（行内数组，交给 <code>splitInlineArray</code> 做<strong>引号感知</strong>的切分）、普通标量值（去除首尾引号）。数组项（<code>- item</code> 形式的行）额外处理了一种边界情况——<strong>如果当前上下文是一个空对象，就把它就地转换成数组</strong>（因为在遇到第一个 <code>- item</code> 之前，解析器还不知道即将到来的是对象还是数组）。</p>
+<h4 id="重要-Function：extractFrontmatter-——一段值得逐字学习的启发式推理"><a href="#重要-Function：extractFrontmatter-——一段值得逐字学习的启发式推理" class="headerlink" title="重要 Function：extractFrontmatter() ——一段值得逐字学习的启发式推理"></a>重要 Function：<code>extractFrontmatter()</code> ——一段值得逐字学习的启发式推理</h4><p>这个函数的文档注释本身就是一篇小型的”如何设计一个不产生误报的启发式检测器”教程，值得完整还原其推理链条：</p>
+<blockquote>
+<p><strong>要解决的问题</strong>：文档没有 frontmatter 时返回 <code>{}</code>；frontmatter 围栏被打开但从未闭合时（自 <code>#1882</code> 起）<strong>同样</strong>返回 <code>{}</code>——这个返回值被有意保留（ADR-1411 的修正案要求保留它，因为改变它会破坏那些把”没有 frontmatter”和”frontmatter 不可用”同等对待的调用方）。<code>#1882</code> <strong>真正新增的</strong>是：第二种情况不再是<strong>静默</strong>的。</p>
+<p><strong>判别式为什么不是”围栏未闭合”本身</strong>：一份 Markdown 文档，如果第一行恰好是一个”主题分隔线”（<code>---</code>），就会恰好走进这个分支——所以只依据”围栏缺失”来报”损坏”，会把完全正常的 Markdown 也判定为损坏。于是转而把这段未终止的区域<strong>喂给这个模块自己的解析器</strong>，只有当它解析出<strong>两个或更多</strong>键时才报告。</p>
+<p><strong>为什么是二，不是一</strong>：单独一行 <code>key: value</code> 本身就是真正的歧义——<code>---</code> 后面跟一行 <code>Note: this is a paragraph.</code>（或 <code>Author:</code>、<code>TODO:</code>、<code>See:</code>）是完全正常的技术写作：一条主题分隔线上面接一行带标签的文字，它解析出来<strong>恰好是一个键</strong>。没有任何文本信号能把这种情况和”写到第一个键就被中断”区分开来，所以阈值被设在”歧义结束”的那个点上。代价是<strong>漏报</strong>“恰好在第一个键之后被截断的文件”；收益是<strong>对一种非常常见的 Markdown 形状保持沉默</strong>。这个取舍方向是刻意的，与”零个键”时已经做出的选择一致——<strong>因为这个诊断是无条件触发、无法关闭的，在合法 Markdown 上的一次误报，比漏掉一个边界情况更糟</strong>。GSD 守护的每一种制品（STATE.md、PLAN.md、ROADMAP.md、SUMMARY.md、agent&#x2F;command 文档）都携带两个或更多 frontmatter 键，所以现实中的”截断窗口”依然被覆盖到了。</p>
+</blockquote>
+<p><strong>这段推理值得被当作一个通用方法论提炼</strong>：设计任何”无法关闭的自动诊断”时，<strong>误报的代价与漏报的代价从来不是对称的</strong>——一个不可关闭的诊断如果误报，会持续骚扰用户直到有人去改代码；而一个漏报只是”没有额外帮上忙”，回到了不做这项检测之前的状态。<strong>因此不可关闭的启发式检测器，应当把阈值设在”歧义消除”而非”检测覆盖率最大化”的位置</strong>，这是一条可以直接写进本系列第六篇（第十六部分）自研框架编码规范的原则。</p>
+<hr>
+<h3 id="11-2-Dispatcher-模块：src-command-routing-hub-cts"><a href="#11-2-Dispatcher-模块：src-command-routing-hub-cts" class="headerlink" title="11.2 Dispatcher 模块：src/command-routing-hub.cts"></a>11.2 Dispatcher 模块：<code>src/command-routing-hub.cts</code></h3><h4 id="重要-Class（类型）：封闭的-Result-判别联合"><a href="#重要-Class（类型）：封闭的-Result-判别联合" class="headerlink" title="重要 Class（类型）：封闭的 Result 判别联合"></a>重要 Class（类型）：封闭的 <code>Result</code> 判别联合</h4><figure class="highlight typescript cb" data-lang="typescript" data-label="TypeScript" data-ext="ts" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">type</span> <span class="title class_">Result</span> =</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  | &#123; <span class="attr">ok</span>: <span class="literal">true</span>; <span class="attr">data</span>: <span class="built_in">unknown</span> &#125;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  | &#123; <span class="attr">ok</span>: <span class="literal">false</span>; <span class="attr">kind</span>: <span class="string">&#x27;UnknownCommand&#x27;</span>; <span class="attr">command</span>: <span class="built_in">string</span> &#125;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  | &#123; <span class="attr">ok</span>: <span class="literal">false</span>; <span class="attr">kind</span>: <span class="string">&#x27;InvalidArgs&#x27;</span>; <span class="attr">arg</span>: <span class="built_in">string</span>; <span class="attr">reason</span>: <span class="built_in">string</span>; <span class="attr">exitReason</span>?: <span class="built_in">string</span> &#125;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  | &#123; <span class="attr">ok</span>: <span class="literal">false</span>; <span class="attr">kind</span>: <span class="string">&#x27;HandlerRefusal&#x27;</span>; <span class="attr">reason</span>: <span class="built_in">string</span> &#125;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  | &#123; <span class="attr">ok</span>: <span class="literal">false</span>; <span class="attr">kind</span>: <span class="string">&#x27;HandlerFailure&#x27;</span>; <span class="attr">message</span>: <span class="built_in">string</span>; <span class="attr">cause</span>?: <span class="title class_">Error</span> &#125;;</span></span></code></pre></div></div></figure>
+
+<p>配套一个冻结的错误分类常量：</p>
+<figure class="highlight typescript cb" data-lang="typescript" data-label="TypeScript" data-ext="ts" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">const</span> <span class="variable constant_">ERROR_KINDS</span> = <span class="title class_">Object</span>.<span class="title function_">freeze</span>(&#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="title class_">UnknownCommand</span>: <span class="string">&#x27;UnknownCommand&#x27;</span>,</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="title class_">InvalidArgs</span>: <span class="string">&#x27;InvalidArgs&#x27;</span>,</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="title class_">HandlerRefusal</span>: <span class="string">&#x27;HandlerRefusal&#x27;</span>,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="title class_">HandlerFailure</span>: <span class="string">&#x27;HandlerFailure&#x27;</span>,</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">&#125;);</span></span></code></pre></div></div></figure>
+
+<h4 id="重要-Function：hub-dispatch-family-subcommand-args-cwd-raw"><a href="#重要-Function：hub-dispatch-family-subcommand-args-cwd-raw" class="headerlink" title="重要 Function：hub.dispatch({ family, subcommand, args, cwd, raw })"></a>重要 Function：<code>hub.dispatch({ family, subcommand, args, cwd, raw })</code></h4><p>源码注释直接列出的<strong>不变量</strong>（本文认为这是全篇最简洁有力的一段”契约声明”，逐条翻译）：</p>
+<ul>
+<li><strong>Hub 永远只通过 CJS 处理器路由——没有 SDK 路径</strong>（<code>#175</code>：<code>SdkLoadFailed</code>&#x2F;<code>SdkDispatchFailed</code> 两个错误类型已被移除，Hub 现在是纯 CJS）；</li>
+<li><strong>Hub 从不向 stdout&#x2F;stderr 打印，从不调用 <code>process.exit</code></strong>——它是一个<strong>纯函数式</strong>的调度核心，I&#x2F;O 副作用留给上层调用者；</li>
+<li><strong>Hub 从不抛出异常</strong>——内部所有 <code>throw</code> 都会被捕获并转换成 <code>{ ok:false, kind:&#39;HandlerFailure&#39;, message, cause }</code>；</li>
+<li><strong><code>kind</code> 分类法是封闭的</strong>——调用方对 <code>ERROR_KINDS</code> 的值做 <code>switch</code>，而不是猜测字符串；</li>
+<li><strong>每个错误变体只携带自己的类型化载荷</strong>（<code>#176</code>）——不存在跨变体的 <code>message</code>&#x2F;<code>details</code> 逃生舱。</li>
+</ul>
+<p><strong>历史演进</strong>（<code>#3788</code> 起源 → <code>#175</code> 简化 → <code>#176</code> 类型化 → <code>#177</code> 可观测性）是一处清晰的”逐步收敛到纯净契约”的重构轨迹——最初可能同时支持 CJS 与某种 SDK 双路径（呼应本系列第二篇第二部分记录的 <code>docs/adr/0174-retire-gsd-sdk-package-boundary.md</code>），后来 SDK 路径被整个退役，错误类型也从松散的字符串收敛成了判别联合。</p>
+<p><strong>这是”Railway-Oriented Programming”（铁路编程，一种把错误处理内建进类型系统而非依赖异常的函数式模式）在一个 CLI 调度核心里的教科书级实现</strong>——对本系列第六篇（第十六部分）设计企业级 Skill Runtime 的调度层而言，这个 <code>Result</code> 类型定义几乎可以原样搬用。</p>
+<hr>
+<h3 id="11-3-Runtime-模块：src-state-transition-cts-的表驱动状态机"><a href="#11-3-Runtime-模块：src-state-transition-cts-的表驱动状态机" class="headerlink" title="11.3 Runtime 模块：src/state-transition.cts 的表驱动状态机"></a>11.3 Runtime 模块：<code>src/state-transition.cts</code> 的表驱动状态机</h3><p>这是本次研究读到的<strong>规模最大、也最能体现”确定性逻辑”复杂度</strong>的模块（2,109 行，24 个导出&#x2F;内部函数）。</p>
+<h4 id="重要-Class（数据结构）：FIELD-CLASSIFICATION-表"><a href="#重要-Class（数据结构）：FIELD-CLASSIFICATION-表" class="headerlink" title="重要 Class（数据结构）：FIELD_CLASSIFICATION 表"></a>重要 Class（数据结构）：<code>FIELD_CLASSIFICATION</code> 表</h4><p><code>STATE.md</code> 的每一个字段被归类到一张常量表里，每行两个维度：</p>
+<figure class="highlight typescript cb" data-lang="typescript" data-label="TypeScript" data-ext="ts" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">type</span> <span class="title class_">FieldClassification</span> = &#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">source</span>: <span class="string">&#x27;body&#x27;</span> | <span class="string">&#x27;free&#x27;</span> | <span class="string">&#x27;disk&#x27;</span> | <span class="string">&#x27;curated&#x27;</span>;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">preservation</span>: <span class="string">&#x27;preserve-when-unchanged&#x27;</span> | <span class="string">&#x27;derive&#x27;</span> | <span class="string">&#x27;preserve-always&#x27;</span>;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">&#125;;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment">// 节选：</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">status</span>:        &#123; <span class="attr">source</span>: <span class="string">&#x27;body&#x27;</span>,    <span class="attr">preservation</span>: <span class="string">&#x27;preserve-when-unchanged&#x27;</span> &#125;</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">last_updated</span>:  &#123; <span class="attr">source</span>: <span class="string">&#x27;free&#x27;</span>,   <span class="attr">preservation</span>: <span class="string">&#x27;derive&#x27;</span> &#125;               <span class="comment">// 每次都刷新为当前时间</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">progress</span>:      &#123; <span class="attr">source</span>: <span class="string">&#x27;curated&#x27;</span>, <span class="attr">preservation</span>: <span class="string">&#x27;preserve-always&#x27;</span> &#125;     <span class="comment">// #3242, #1446：整体豁免覆盖</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="string">&#x27;progress.percent&#x27;</span>: &#123; <span class="attr">source</span>: <span class="string">&#x27;disk&#x27;</span>, <span class="attr">preservation</span>: <span class="string">&#x27;derive&#x27;</span> &#125;            <span class="comment">// 每次都从磁盘重算</span></span></span></code></pre></div></div></figure>
+
+<p><code>source</code> 回答”这个字段的权威值应该从哪来”（正文文本 &#x2F; 自由生成如时间戳 &#x2F; 磁盘扫描 &#x2F; 人工策展），<code>preservation</code> 回答”一次状态转换（Discuss→Plan、Plan→Execute 等）发生时这个字段该怎么办”（值不变就保留 &#x2F; 每次都重新推导 &#x2F; 无条件保留旧值）。</p>
+<h4 id="重要-Function：getFieldClassification-field-——第四处防原型污染实例"><a href="#重要-Function：getFieldClassification-field-——第四处防原型污染实例" class="headerlink" title="重要 Function：getFieldClassification(field) ——第四处防原型污染实例"></a>重要 Function：<code>getFieldClassification(field)</code> ——第四处防原型污染实例</h4><figure class="highlight typescript cb" data-lang="typescript" data-label="TypeScript" data-ext="ts" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">export</span> <span class="keyword">function</span> <span class="title function_">getFieldClassification</span>(<span class="params"><span class="attr">field</span>: <span class="built_in">string</span></span>): <span class="title class_">FieldClassification</span> | <span class="literal">null</span> &#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="keyword">if</span> (!<span class="title class_">Object</span>.<span class="property"><span class="keyword">prototype</span></span>.<span class="property">hasOwnProperty</span>.<span class="title function_">call</span>(<span class="variable constant_">FIELD_CLASSIFICATION</span>, field)) <span class="keyword">return</span> <span class="literal">null</span>;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="keyword">return</span> <span class="variable constant_">FIELD_CLASSIFICATION</span>[field];</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>本系列第四篇（第十部分）归纳过”防原型污染”这条贯穿代码库的纪律出现在 <code>install-profiles.cts</code>（<code>BANNED</code> 数组）与 <code>gsd-prompt-guard.js</code>（用 <code>Map</code> 代替对象字面量）两处；<strong>这里是第三处、也是第四种实现手法</strong>——显式调用 <code>Object.prototype.hasOwnProperty.call()</code> 而非直接用 <code>in</code> 或裸访问，防止查询 <code>toString</code>&#x2F;<code>valueOf</code> 这类继承自原型链的”字段名”时返回一个看似合法却完全无意义的函数引用。<strong>同一条安全纪律，在这个代码库里至少用三种不同的技术手段（显式排除数组、<code>Map</code> 数据结构、<code>hasOwnProperty</code> 显式调用）反复实现</strong>——这比”团队记得要小心”更有说服力：它说明这条规则已经变成了代码评审中会被反复要求的<strong>标准动作</strong>，而不是依赖某个人记性好。</p>
+<h4 id="重要-Function：applyStatePreservation-——一次三合一去重的真实案例"><a href="#重要-Function：applyStatePreservation-——一次三合一去重的真实案例" class="headerlink" title="重要 Function：applyStatePreservation() ——一次三合一去重的真实案例"></a>重要 Function：<code>applyStatePreservation()</code> ——一次三合一去重的真实案例</h4><p>源码注释直白地记录了这次重构的<strong>动机</strong>：</p>
+<blockquote>
+<p>吸收了此前散落在 <code>readModifyWriteStateMd</code>（<code>state.cts</code>）里的”同步后保留”逻辑块。<strong>一个纯粹的、由字段分类表驱动的实现，取代了此前三处正在漂移的编码</strong>（RMW 同步后逻辑块、<code>syncStateFrontmatter</code>、<code>cmdStateBuildFrontmatter</code> 的读路径复制）。现在每一个被保留的字段——<code>progress</code>、<code>status</code>、<code>stopped_at</code>、<code>current_phase_name</code>——都由它在 <code>FIELD_CLASSIFICATION</code> 表里的那一行统一治理，<strong>策略变更从”改好几处调用点”变成了”改表里一行”</strong>。</p>
+</blockquote>
+<p><strong>这是”多处重复实现同一逻辑、随时间彼此漂移、最终收敛成一张数据表”这一常见工程债生命周期的一个完整真实样本</strong>——从”发现漂移”（多个函数各自维护一份相似但不完全一致的保留逻辑）到”消除漂移”（<code>ADR-1769</code>&#x2F;<code>#1796</code> 把它们统一收编进一张显式的分类表）。本系列第六篇（第十九部分）会把这条模式列为可迁移的最佳实践之一。</p>
+<h4 id="Runtime-的另一面：能力覆盖层的运行时组装"><a href="#Runtime-的另一面：能力覆盖层的运行时组装" class="headerlink" title="Runtime 的另一面：能力覆盖层的运行时组装"></a>Runtime 的另一面：能力覆盖层的运行时组装</h4><p>本系列第二篇（第三部分）3.11 节已详解 <code>loadRegistry({ includeInstalled })</code> 的四阶段激活链，此处不重复，只做一次交叉引用——如果把 <code>state-transition.cts</code> 看作”<strong>项目状态</strong>的运行时”，那么 <code>capability-loader.cjs</code> 就是”<strong>能力集合</strong>的运行时”：前者在每次状态转换时决定”哪些字段该保留、该重算”，后者在每次工具调用时决定”哪些第三方能力该生效、该跳过”。<strong>两者都遵循同一条设计哲学：把”运行时该如何决策”外化成一张显式的、可审计的规则&#x2F;数据表，而不是散落在调用点的 if-else 里。</strong></p>
+<hr>
+<h3 id="11-4-Planner-模块：agents-gsd-planner-md"><a href="#11-4-Planner-模块：agents-gsd-planner-md" class="headerlink" title="11.4 Planner 模块：agents/gsd-planner.md"></a>11.4 Planner 模块：<code>agents/gsd-planner.md</code></h3><p>这是一份 992 行的 Agent Prompt，语义块划分极细（<code>&lt;role&gt;</code>、<code>&lt;documentation_lookup&gt;</code>、<code>&lt;project_context&gt;</code>、<code>&lt;context_fidelity&gt;</code>、<code>&lt;scope_reduction_prohibition&gt;</code>、<code>&lt;planner_authority_limits&gt;</code>、<code>&lt;philosophy&gt;</code>、<code>&lt;discovery_levels&gt;</code>、<code>&lt;task_breakdown&gt;</code>、<code>&lt;verify&gt;</code>、<code>&lt;comment_text_discipline&gt;</code>、<code>&lt;region_scoped_negative_gate&gt;</code>、<code>&lt;dependency_graph&gt;</code>、<code>&lt;scope_estimation&gt;</code>、<code>&lt;plan_format&gt;</code> 等）。挑三处最能体现设计哲学的片段：</p>
+<ul>
+<li><strong><code>&lt;context_fidelity&gt;</code></strong> 标题就是”CRITICAL: User Decision Fidelity”（用户决策保真度）——这与本系列第三篇（第五部分）记录的”决策覆盖门禁在 Plan 阶段是阻断型”（<code>#2492</code>）形成呼应：<strong>规划者被 Prompt 层面直接告知”用户的决策必须被忠实地落实到计划里”，而门禁机制是这条 Prompt 指令的程序化兜底</strong>——Prompt 约束与程序化门禁双管齐下，而不是只靠其中一种；</li>
+<li><strong><code>&lt;scope_reduction_prohibition&gt;</code></strong> 标题是”CRITICAL: Never Simplify User Decisions — Split Instead”（绝不简化用户决策——拆分，而不是简化），并要求每套计划都要做”Multi-Source Coverage Audit”（多来源覆盖审计，<strong>标注为 MANDATORY</strong>）——这条规则直接回应了一种真实的 LLM 失效模式：当一个需求”太复杂”时，模型的本能反应往往是悄悄削减范围而不明说，这条规则把这个本能显式地禁止了，并给出正确替代方案——拆分成更多计划，而不是砍掉部分需求；</li>
+<li><strong><code>&lt;planner_authority_limits&gt;</code></strong> 标题是”The Planner Does Not Decide What Is Too Hard”——<strong>这是一条授权边界声明</strong>：规划者没有权限单方面判断”这个需求太难了、跳过它”，这类判断必须升级给人类（对应本系列第三篇第四部分的 Escalation Gate），而不能由规划者自己悄悄拍板。</li>
+</ul>
+<p><strong>三条规则合起来讲的是同一件事的三个角度</strong>：<strong>规划阶段的最大风险不是”规划者能力不够”，而是”规划者会在无人察觉的情况下悄悄让步”</strong>——三条 CRITICAL&#x2F;MANDATORY 标注的规则，都是在用 Prompt 语言把这种”悄悄让步”的空间堵死。</p>
+<hr>
+<h3 id="11-5-Executor-模块：agents-gsd-executor-md"><a href="#11-5-Executor-模块：agents-gsd-executor-md" class="headerlink" title="11.5 Executor 模块：agents/gsd-executor.md"></a>11.5 Executor 模块：<code>agents/gsd-executor.md</code></h3><p>852 行，语义块包括 <code>&lt;role&gt;</code>、<code>&lt;execution_flow&gt;</code>、<code>&lt;worktree_metadata_capture&gt;</code>、<code>&lt;deviation_rules&gt;</code>、<code>&lt;analysis_paralysis_guard&gt;</code>、<code>&lt;authentication_gates&gt;</code>、<code>&lt;auto_mode_detection&gt;</code>、<code>&lt;checkpoint_protocol&gt;</code>、<code>&lt;checkpoint_return_format&gt;</code>、<code>&lt;continuation_handling&gt;</code>、<code>&lt;tdd_execution&gt;</code>、<code>&lt;task_commit_protocol&gt;</code>、<code>&lt;destructive_git_prohibition&gt;</code>、<code>&lt;summary_creation&gt;</code>、<code>&lt;self_check&gt;</code>、<code>&lt;state_updates&gt;</code>。</p>
+<p><strong>一处三个 Agent 共享的、之前未被提及的运行时细节</strong>：<code>gsd-executor.md</code>、<code>gsd-planner.md</code>、<code>gsd-verifier.md</code> 的 frontmatter 都注释了同一段 Hook 配置：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># hooks:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment">#   PostToolUse:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment">#     - matcher: &quot;Write|Edit&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment">#       hooks:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment">#         - type: command</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment">#           command: &quot;npx eslint --fix $FILE 2&gt;/dev/null || true&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>即<strong>任何一次这三类 Agent 执行的写文件&#x2F;改文件操作之后，都会自动跑一次 <code>eslint --fix</code></strong>（失败也不影响流程，<code>|| true</code> 兜底）。这是”Agent 级别的 Hook”而非”会话级别的 Hook”（本系列第一篇第一部分 1.10 节的 <code>hooks/</code> 目录讨论的是会话级 Hook）——<strong>把代码风格自愈这件事下沉到每一次写操作本身，而不是留到 Verify 阶段才发现风格问题</strong>。</p>
+<p><code>&lt;destructive_git_prohibition&gt;</code> 这个专门的语义块名称本身就说明了设计取向：<strong>与其在文档里提醒”小心别用危险的 git 命令”，不如把”禁止破坏性 git 操作”做成 Prompt 里一个显式命名的、独立的段落</strong>——这与本系列第四篇（第十部分）<code>universal-anti-patterns.md</code> 里”不要用 <code>git add .</code>&#x2F;<code>git add -A</code>“是同一层纪律在不同粒度上的体现（那条是全局反模式，这条是 Executor 专属的、更细致的展开）。</p>
+<p><code>&lt;task_commit_protocol&gt;</code> 里的真实 Bash 注释也值得引用——“Obtain the canonical worktree root”与”Verify absolute path containment with boundary safety (not glob prefix which allows siblings)”——<strong>后半句是一处安全编码的精确措辞</strong>：用”glob 前缀匹配”做路径包含校验是不安全的（因为 <code>/repo/foo</code> 会被误判为”包含于” <code>/repo/foo-evil</code> 这样的兄弟目录前缀），必须用真正的绝对路径边界校验。这与本系列第四篇（第六部分）记录的”消毒规则要具体到字符集&#x2F;长度上限&#x2F;拒绝模式”是同一种”安全表述必须精确到可执行细节，而不能停留在原则层面”的写作纪律。</p>
+<hr>
+<h3 id="11-6-Verifier-模块：agents-gsd-verifier-md-src-verification-cts"><a href="#11-6-Verifier-模块：agents-gsd-verifier-md-src-verification-cts" class="headerlink" title="11.6 Verifier 模块：agents/gsd-verifier.md + src/verification.cts"></a>11.6 Verifier 模块：<code>agents/gsd-verifier.md</code> + <code>src/verification.cts</code></h3><h4 id="：一个专门命名的对抗性姿态语义块"><a href="#：一个专门命名的对抗性姿态语义块" class="headerlink" title="&lt;adversarial_stance&gt;：一个专门命名的对抗性姿态语义块"></a><code>&lt;adversarial_stance&gt;</code>：一个专门命名的对抗性姿态语义块</h4><p>970 行的 Verifier Prompt 专门辟出一个 <code>&lt;adversarial_stance&gt;</code> 段落，这与本系列第三篇（第五部分）引用的 plan-checker “不要让通过的维度锚定判断”是同一条设计哲学在 Verifier 身上的对应版本——<strong>验证者的默认姿态被 Prompt 层面设定为”假设有问题，去找证据推翻这个假设”，而不是”假设做对了，去确认一下”</strong>。</p>
+<h4 id="：五步走查，其中-Step-4b-是全系列最精妙的验证技术"><a href="#：五步走查，其中-Step-4b-是全系列最精妙的验证技术" class="headerlink" title="&lt;verification_process&gt;：五步走查，其中 Step 4b 是全系列最精妙的验证技术"></a><code>&lt;verification_process&gt;</code>：五步走查，其中 Step 4b 是全系列最精妙的验证技术</h4><ul>
+<li>Step 0：检查是否存在既往验证记录（避免重复劳动）；</li>
+<li>Step 1（仅初次模式）：加载上下文；</li>
+<li>Step 2（仅初次模式）：建立”必真断言”（Must-Haves）；</li>
+<li>Step 3：逐条验证”可观察的事实”（Observable Truths）；</li>
+<li>Step 3b：核查验证覆盖的例外规则（Verification Overrides）；</li>
+<li>Step 4：三层级验证制品（源码里有真实的 Bash 伪代码注释——“Import check”&#x2F;“Usage check (beyond imports)”）；</li>
+<li><strong>Step 4b：数据流追溯（Data-Flow Trace，”Level 4”）</strong>；</li>
+<li>Step 5：验证关键链路（Wiring）——细分为”Component → API”与”API → Database”两种模式。</li>
+</ul>
+<p><strong>Step 4b 值得完整还原其追溯路径</strong>（源码内联的 Bash 注释串成的推理链）：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">① 找出在 JSX/TSX 里被渲染的 state 变量</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">② 找出填充这个 state 的 fetch/query 调用</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">③ 检查对应的 API 路由或数据源：是真实的数据库查询，还是静态返回值</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">④ 标记：&quot;静态返回值 + 没有真实查询&quot;为可疑</span></span></code></pre></div></div></figure>
+
+<p><strong>这条追溯路径直接针对的正是本系列第三篇（第五部分）反复强调的”确信地造出一个内部自洽但偏离目标的东西”这个失效模式的一个极具体子类</strong>——一个前端组件可以完美渲染、通过所有 UI 层的测试，但如果它渲染的数据其实来自一个写死的 mock 返回值而非真实的数据库查询，<strong>普通的”跑起来了&#x2F;测试通过了”这类验证完全抓不出这个问题</strong>，因为从 UI 层看一切正常。Data-Flow Trace 的价值在于它<strong>沿着数据流向反向追溯到数据的真正来源</strong>，专门用来捕获这类”表面完整、内里空心”的实现。<strong>这是本文认为整个 GSD 框架里最值得原样搬进任何 AI 辅助验证流程的一条具体技术</strong>，因为它精确命中了 LLM 生成代码时最容易出现、又最难通过表层测试发现的一类缺陷。</p>
+<h4 id="verification-cts-的-readVerificationStatus"><a href="#verification-cts-的-readVerificationStatus" class="headerlink" title="verification.cts 的 readVerificationStatus()"></a><code>verification.cts</code> 的 <code>readVerificationStatus()</code></h4><p>（本系列第三篇第四部分已引用其行为，此处补充”为什么”）——它读取第一个 <code>*-VERIFICATION.md</code> 的 frontmatter <code>status</code>，通过 <code>VERIFICATION_ROUTING_TABLE</code> 映射，<strong>且明确”fail-closed”：只有 <code>{passed}</code> 这一种状态满足”canonical gate”（规范意义上的通过），<code>missing</code>&#x2F;<code>unknown</code>&#x2F;<code>gaps_found</code>&#x2F;<code>human_needed</code>&#x2F;<code>stale</code> 全部路由为”未通过”</strong>。这是”宁可保守判定为未通过，也不要在状态含糊时误判为通过”的 fail-closed 原则，与本系列第四篇（第九部分）<code>readVerificationStatus</code> 的”任何文件系统错误都无声降级为 <code>missing</code>&#x2F;非陈旧”（<code>opts.fs</code> 可注入、无抛出契约）合起来看，构成了一套”对外严格 fail-closed、对内部错误 fail-safe（不崩溃）”的一致设计。</p>
+<hr>
+<h3 id="11-7-Git-Integration-模块：src-worktree-safety-cts（1-812-行）"><a href="#11-7-Git-Integration-模块：src-worktree-safety-cts（1-812-行）" class="headerlink" title="11.7 Git Integration 模块：src/worktree-safety.cts（1,812 行）"></a>11.7 Git Integration 模块：<code>src/worktree-safety.cts</code>（1,812 行）</h3><p>这是全部七个模块里<strong>函数数量最多</strong>的一个，梳理出的完整生命周期呈现出一个反复出现的架构模式——<strong>“Plan &#x2F; Execute” 拆分</strong>（注意：这与 SDD 五阶段循环里的 Plan&#x2F;Execute 阶段是两个不同层面的同名概念，此处特指”先算出一个只读的执行计划对象，再单独执行它”这一函数级模式）：</p>
+<table>
+<thead>
+<tr>
+<th>关注点</th>
+<th>Plan 函数（只读，产出一个计划对象）</th>
+<th>Execute 函数（真正调用 git，产生副作用）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>清理陈旧 Worktree</td>
+<td><code>planWorktreePrune()</code></td>
+<td><code>executeWorktreePrunePlan()</code></td>
+</tr>
+<tr>
+<td>波次执行后清理</td>
+<td><code>planWorktreeWaveCleanup()</code></td>
+<td><code>executeWorktreeWaveCleanupPlan()</code>（内部调用 <code>rescueSummaryArtifacts()</code> ——<strong>清理前先抢救 <code>SUMMARY.md</code></strong>，防止波次清理误删尚未被读取的执行记录）</td>
+</tr>
+<tr>
+<td>创建新 Worktree</td>
+<td><code>planWorktreeCreate()</code></td>
+<td><code>executeWorktreeCreatePlan()</code>（失败时调用 <code>rollbackPartialWorktree()</code> 做原子回滚）</td>
+</tr>
+<tr>
+<td>登记 Agent 归属</td>
+<td><code>planWorktreeRecordAgent()</code></td>
+<td><code>cmdWorktreeRecordAgent()</code></td>
+</tr>
+</tbody></table>
+<p><strong>为什么要把”计划”和”执行”拆成两个函数</strong>：这让计划生成逻辑可以被<strong>单元测试而不触碰真实 git</strong>（纯函数，输入状态、输出一个描述”打算做什么”的对象），也天然支持”预览&#x2F;dry-run”能力——调用方可以先看一眼计划对象再决定要不要真的执行。<strong>这是”Plan&#x2F;Execute 分离”这一 SDD 核心哲学，在一个具体子系统的函数签名级别上的自我印证</strong>——GSD 不仅在宏观的五阶段循环里应用这个分离原则，在微观的 git 操作封装里也复用了同一个模式。</p>
+<p>其余几个函数揭示的细节同样值得记录：</p>
+<ul>
+<li><strong><code>reapOrphanWorktrees()</code></strong> + <strong><code>defaultIsPidAlive(pid)</code></strong>——检测”孤儿 Worktree”（其宿主进程已经死掉，但 Worktree 本身还留在磁盘上）的机制，直接对应本系列第三篇（第五部分）讨论过的”会话崩溃后如何安全续跑”这一场景在 Git 层面的具体实现：通过检查记录在案的 PID 是否还存活，来判断一个 Worktree 是不是该被回收；</li>
+<li><strong><code>inspectWorktreeHealth()</code></strong> &#x2F; <strong><code>snapshotWorktreeInventory()</code></strong>——都接受 <code>staleAfterMs</code>&#x2F;<code>nowMs</code> 参数，说明”陈旧”判定是<strong>基于可注入的时钟而非硬编码的 <code>Date.now()</code></strong>，这是让涉及时间的逻辑变得可确定性测试的标准手法；</li>
+<li><strong><code>normalizeCleanupManifestEntry()</code></strong> &#x2F; <strong><code>normalizeCleanupManifest()</code></strong>——对清理清单条目做归一化校验，<strong>这类”先归一化再处理”的模式在一个要接受可能不可信&#x2F;不完整输入的系统里反复出现</strong>，与本系列第四篇（第八部分）讨论的”归一化规则”（技能发现契约）是同一种防御性编程思路的不同应用场景。</li>
+</ul>
+<hr>
+<h3 id="11-8-一次-Plan→Execute→Verify-全链路的完整调用图（贯穿本部分七个模块）"><a href="#11-8-一次-Plan→Execute→Verify-全链路的完整调用图（贯穿本部分七个模块）" class="headerlink" title="11.8 一次 Plan→Execute→Verify 全链路的完整调用图（贯穿本部分七个模块）"></a>11.8 一次 Plan→Execute→Verify 全链路的完整调用图（贯穿本部分七个模块）</h3><pre class="mermaid">sequenceDiagram
+    participant WF as plan-phase / execute-phase workflow
+    participant PARSE as Parser&lt;br/&gt;frontmatter.cts
+    participant DISP as Dispatcher&lt;br/&gt;command-routing-hub.cts
+    participant RT as Runtime&lt;br/&gt;state-transition.cts
+    participant PL as Planner Agent&lt;br/&gt;gsd-planner.md
+    participant GIT as Git Integration&lt;br/&gt;worktree-safety.cts
+    participant EX as Executor Agent&lt;br/&gt;gsd-executor.md
+    participant VER as Verifier&lt;br/&gt;gsd-verifier.md + verification.cts
+
+    WF-&gt;&gt;DISP: hub.dispatch(&#123;family:'state', subcommand:'planned-phase', ...&#125;)
+    DISP-&gt;&gt;RT: plannedPhaseCore(content, deps)
+    RT-&gt;&gt;PARSE: extractFrontmatter(STATE.md)
+    PARSE--&gt;&gt;RT: Frontmatter（若围栏未闭合且≥2键则报告）
+    RT-&gt;&gt;RT: applyStatePreservation()&lt;br/&gt;按 FIELD_CLASSIFICATION 逐字段决策
+    RT--&gt;&gt;DISP: &#123; ok: true, data: 更新后的 STATE.md &#125;
+    DISP--&gt;&gt;WF: Result
+
+    WF-&gt;&gt;PL: 派生 Planner（&lt;planner_authority_limits&gt; 生效：&lt;br/&gt;遇到"太难"只能升级，不能自行砍需求）
+    PL-&gt;&gt;PARSE: 读取 CONTEXT.md / REQUIREMENTS.md frontmatter
+    PL--&gt;&gt;WF: PLAN.md（含 &lt;context_fidelity&gt; 保证的用户决策映射）
+
+    WF-&gt;&gt;GIT: planWorktreeCreate() 为每个并行波次
+    GIT--&gt;&gt;WF: WorktreeCreatePlan（只读对象）
+    WF-&gt;&gt;GIT: executeWorktreeCreatePlan(plan)
+    alt 创建失败
+        GIT-&gt;&gt;GIT: rollbackPartialWorktree()
+    end
+    GIT--&gt;&gt;WF: 实际创建的 Worktree 路径
+
+    WF-&gt;&gt;EX: 派生 Executor（携带隔离的 Worktree）
+    EX-&gt;&gt;EX: &lt;task_commit_protocol&gt;：&lt;br/&gt;绝对路径边界校验 + 原子提交
+    Note over EX: PostToolUse Hook：每次 Write/Edit 后自动 eslint --fix
+    EX--&gt;&gt;WF: SUMMARY.md + 提交记录
+
+    WF-&gt;&gt;GIT: planWorktreeWaveCleanup(manifest)
+    GIT-&gt;&gt;GIT: rescueSummaryArtifacts()（清理前抢救 SUMMARY.md）
+    GIT--&gt;&gt;WF: WaveCleanupPlan
+    WF-&gt;&gt;GIT: executeWorktreeWaveCleanupPlan(plan)
+
+    WF-&gt;&gt;VER: 派生 Verifier（&lt;adversarial_stance&gt; 生效）
+    VER-&gt;&gt;VER: Step 4b 数据流追溯：&lt;br/&gt;state→fetch→API路由→DB查询&lt;br/&gt;标记"静态返回值+无查询"
+    VER-&gt;&gt;DISP: hub.dispatch(&#123;family:'verification', ...&#125;)
+    DISP-&gt;&gt;RT: readVerificationStatus()（fail-closed，仅 passed 视为通过）
+    RT--&gt;&gt;VER: VerificationStatusResult
+    VER--&gt;&gt;WF: VERIFICATION.md</pre>
+
+
+<h3 id="11-9-关键对象关系图（Class-Diagram-风格）"><a href="#11-9-关键对象关系图（Class-Diagram-风格）" class="headerlink" title="11.9 关键对象关系图（Class Diagram 风格）"></a>11.9 关键对象关系图（Class Diagram 风格）</h3><pre class="mermaid">classDiagram
+    class Result &#123;
+        &lt;&lt;discriminated union&gt;&gt;
+        +boolean ok
+    &#125;
+    class OkResult &#123;
+        +ok: true
+        +data: unknown
+    &#125;
+    class UnknownCommandResult &#123;
+        +ok: false
+        +kind: "UnknownCommand"
+        +command: string
+    &#125;
+    class InvalidArgsResult &#123;
+        +ok: false
+        +kind: "InvalidArgs"
+        +arg: string
+        +reason: string
+        +exitReason?: string
+    &#125;
+    class HandlerRefusalResult &#123;
+        +ok: false
+        +kind: "HandlerRefusal"
+        +reason: string
+    &#125;
+    class HandlerFailureResult &#123;
+        +ok: false
+        +kind: "HandlerFailure"
+        +message: string
+        +cause?: Error
+    &#125;
+    Result &lt;|-- OkResult
+    Result &lt;|-- UnknownCommandResult
+    Result &lt;|-- InvalidArgsResult
+    Result &lt;|-- HandlerRefusalResult
+    Result &lt;|-- HandlerFailureResult
+
+    class FieldClassification &#123;
+        +source: "body"|"free"|"disk"|"curated"
+        +preservation: "preserve-when-unchanged"|"derive"|"preserve-always"
+    &#125;
+    class StatePreservationInput &#123;
+        +preFm: object|null
+        +postFm: object
+        +resync: boolean
+        +deriveProgressKeys?: boolean
+    &#125;
+    class StatePreservationResult &#123;
+        +postFm: object
+        +mutated: boolean
+    &#125;
+    FieldClassification "1" --&gt; "many" StatePreservationInput : 逐字段治理
+
+    class WorktreeCreatePlan &#123;
+        &lt;&lt;只读计划对象&gt;&gt;
+    &#125;
+    class WorktreeCreateResult &#123;
+        &lt;&lt;真实副作用结果&gt;&gt;
+    &#125;
+    class WaveCleanupPlan &#123;
+        &lt;&lt;只读计划对象&gt;&gt;
+    &#125;
+    class WaveCleanupResult &#123;
+        &lt;&lt;真实副作用结果&gt;&gt;
+    &#125;
+    WorktreeCreatePlan ..&gt; WorktreeCreateResult : executeWorktreeCreatePlan()
+    WaveCleanupPlan ..&gt; WaveCleanupResult : executeWorktreeWaveCleanupPlan()</pre>
+
+
+<h3 id="11-10-本部分小结与下文预告"><a href="#11-10-本部分小结与下文预告" class="headerlink" title="11.10 本部分小结与下文预告"></a>11.10 本部分小结与下文预告</h3><p>第十一部分逐模块解读了七类核心源码，三条最值得带走的结论：</p>
+<ol>
+<li><strong>“Plan &#x2F; Execute 分离”不只是 SDD 五阶段循环的宏观哲学，在 <code>worktree-safety.cts</code> 这样的具体子系统里，同一个分离原则被复用到了函数签名级别</strong>——先产出只读计划对象，再单独执行，天然支持单元测试与预览；</li>
+<li><strong>防原型污染纪律至少以四种不同技术手段（<code>BANNED</code> 数组、<code>Map</code> 数据结构、<code>hasOwnProperty</code> 显式调用、以及尚待本系列第六篇第十四部分核实的第四处）反复出现</strong>——这已经足以确认它是团队内化的标准动作，而非一次性补丁；</li>
+<li><strong>Verifier 的 Data-Flow Trace（Step 4b）是本文认为最值得直接搬运的具体验证技术</strong>——它专门针对”UI 层完美但数据源是假的”这一 LLM 代码生成的高发缺陷模式，沿数据流反向追溯到真实来源。</li>
+</ol>
+<p>下一部分（第十二部分 · Skill 开发教程）将从”读源码”切换到”动手写”，提供零基础的 Hello Skill 教程，覆盖参数、Prompt、模板、测试、调试、发布、版本升级与兼容性的完整流程。</p>
+<hr>
+<h2 id="第十二部分-·-Skill-开发教程（零基础上手）"><a href="#第十二部分-·-Skill-开发教程（零基础上手）" class="headerlink" title="第十二部分 · Skill 开发教程（零基础上手）"></a>第十二部分 · Skill 开发教程（零基础上手）</h2><h3 id="12-0-先选对路径：改-GSD-Core-本身，还是以-Capability-形式扩展"><a href="#12-0-先选对路径：改-GSD-Core-本身，还是以-Capability-形式扩展" class="headerlink" title="12.0 先选对路径：改 GSD Core 本身，还是以 Capability 形式扩展"></a>12.0 先选对路径：改 GSD Core 本身，还是以 Capability 形式扩展</h3><p>前十一部分（本系列前四篇）反复出现两种”新增能力”的方式，这里第一次把它们并排讲清楚，因为这是动手之前必须做的第一个决策：</p>
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>适用场景</th>
+<th>具体做法</th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>改 GSD Core 本身</strong></td>
+<td>你在给上游仓库贡献代码，或维护一个私有 fork</td>
+<td>在 <code>commands/gsd/</code> 新增 <code>.md</code>，跑 <code>gen-plugin-skills.cjs</code> 生成对应 <code>SKILL.md</code>（本系列第四篇第六、七部分已详解）</td>
+<td>与框架原生能力平级</td>
+<td>需要理解整个仓库的生成&#x2F;校验流水线，升级时要处理合并冲突</td>
+</tr>
+<tr>
+<td><strong>以 Capability 形式扩展</strong>（本部分主线）</td>
+<td>绝大多数读者的真实场景——不想 fork，只想给自己的项目加能力</td>
+<td>在项目里建 <code>capabilities/&lt;id&gt;/</code>，写 <code>capability.json</code> + Prompt 片段，<code>gsd capability install</code></td>
+<td>不需要 fork；升级 GSD 时自动兼容（<code>engines.gsd</code> 门禁）；第一方权威不受影响（本系列第二篇第三部分）</td>
+<td>只能”新增”，不能覆盖已有行为（本系列第四篇第六、十部分已详解的”覆盖被禁止”规则）</td>
+</tr>
+</tbody></table>
+<p>本部分以<strong>第二条路径</strong>为主线，因为它是官方教程（<code>docs/tutorials/build-your-first-capability.md</code>）实际覆盖的路径，也是本文认为对绝大多数读者最现实的路径。教程本身<strong>完全真实</strong>——以下每一步、每一段命令输出都直接来自该文档，未做任何演绎。</p>
+<hr>
+<h3 id="12-1-Hello-Skill：完整复现官方教程"><a href="#12-1-Hello-Skill：完整复现官方教程" class="headerlink" title="12.1 Hello Skill：完整复现官方教程"></a>12.1 Hello Skill：完整复现官方教程</h3><p>官方教程构建的第一个能力叫 <code>hello-note</code>：在 <code>plan:pre</code> 扩展点注入一句问候语，并声明它会产出一个 <code>HELLO.md</code> 文件。<strong>全程不需要写一行可执行代码</strong>——这是一个纯声明式能力（只有 Prompt 片段 + Hook 声明，没有可执行 Hook 脚本或 MCP Server），因此<strong>不需要经过本系列第二篇（第三部分）详述的信任提示</strong>。</p>
+<h4 id="Step-1-—-搭建能力目录"><a href="#Step-1-—-搭建能力目录" class="headerlink" title="Step 1 — 搭建能力目录"></a>Step 1 — 搭建能力目录</h4><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">mkdir</span> -p capabilities/hello-note/fragments</span></span></code></pre></div></div></figure>
+
+<h4 id="Step-2-—-写-Prompt-片段"><a href="#Step-2-—-写-Prompt-片段" class="headerlink" title="Step 2 — 写 Prompt 片段"></a>Step 2 — 写 Prompt 片段</h4><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cat</span> &gt; capabilities/hello-note/fragments/plan-pre.md &lt;&lt; <span class="string">&#x27;EOF&#x27;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment">## Hello from hello-note</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">This planning session was started with the hello-note capability active.</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">Record a brief note <span class="keyword">in</span> HELLO.md summarising the plan goal <span class="keyword">in</span> one sentence.</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">EOF</span></span></code></pre></div></div></figure>
+
+<p>片段就是一段普通的 Markdown 文字——能力系统会在加载时读取这个文件，等循环走到 <code>plan:pre</code> 时把它渲染进规划者的 Prompt。</p>
+<h4 id="Step-3-—-写-capability-json"><a href="#Step-3-—-写-capability-json" class="headerlink" title="Step 3 — 写 capability.json"></a>Step 3 — 写 <code>capability.json</code></h4><figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="26"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hello-note&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;feature&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.1.0&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;title&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Hello Note&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Injects a greeting note at plan:pre and produces HELLO.md.&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">&quot;tier&quot;</span><span class="punctuation">:</span> <span class="string">&quot;standard&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">&quot;requires&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">&quot;engines&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;gsd&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&gt;=1.6.0&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="attr">&quot;runtimeCompat&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;supported&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;*&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span> <span class="attr">&quot;unsupported&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="attr">&quot;skills&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="attr">&quot;agents&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="attr">&quot;config&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="attr">&quot;steps&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="attr">&quot;contributions&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="attr">&quot;point&quot;</span><span class="punctuation">:</span> <span class="string">&quot;plan:pre&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="attr">&quot;into&quot;</span><span class="punctuation">:</span> <span class="string">&quot;planner&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">      <span class="attr">&quot;fragment&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;fragments/plan-pre.md&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">      <span class="attr">&quot;produces&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;HELLO.md&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      <span class="attr">&quot;consumes&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="attr">&quot;onError&quot;</span><span class="punctuation">:</span> <span class="string">&quot;skip&quot;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">  <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">  <span class="attr">&quot;gates&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>五处必须理解的细节</strong>（官方教程原文逐条说明）：</p>
+<ol>
+<li><strong><code>version</code> 在 1.6.0 起是必填项</strong>，用 semver；<code>engines.gsd</code> 是一道硬性门禁——GSD 会拒绝在低于 1.6.0 的版本上安装或加载这个能力；</li>
+<li><strong><code>role: &quot;feature&quot;</code></strong> 意味着这个能力给循环增加的是<strong>可选行为</strong>，不是运行时描述符；一个 <code>feature</code> 能力必须声明 <code>runtimeCompat</code>，<code>{&quot;supported&quot;: [&quot;*&quot;]}</code> 意为”支持全部运行时”；</li>
+<li><strong>这是一个 <code>contribution</code>，不是一个 <code>step</code></strong>——<code>contribution</code> 把一段 Prompt 片段注入某个具名的 Agent 角色（<code>into</code>），不需要调度目标；<code>step</code> 则<strong>必须</strong>携带 <code>ref</code>，且 <code>ref</code> 恰好是 <code>skill</code>&#x2F;<code>agent</code>&#x2F;<code>command</code> 三者之一——所以一个”只做纯片段注入”的能力<strong>永远是</strong> <code>contribution</code>，这正是为什么这里 <code>steps</code> 留空；</li>
+<li><strong><code>into: &quot;planner&quot;</code></strong> 指定接收这段片段的 Agent 角色——<code>planner</code> 是 <code>plan:pre</code> 这个扩展点所”发布”的角色之一（另外还有 <code>researcher</code>、<code>checker</code>）；这个值必须是该扩展点确实发布过的角色，否则清单校验会失败；</li>
+<li><strong><code>produces</code></strong> 告诉注册表”这个 contribution 会写出 <code>HELLO.md</code>“，供注册表在更复杂的场景下排序 Hook 与检测未满足的依赖；<strong><code>onError: &quot;skip&quot;</code></strong> 意味着即便这个 contribution 失败，循环也会继续——对第一个能力而言这是安全的默认选择。</li>
+</ol>
+<h4 id="Step-4-—-安装进项目"><a href="#Step-4-—-安装进项目" class="headerlink" title="Step 4 — 安装进项目"></a>Step 4 — 安装进项目</h4><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">gsd capability install ./capabilities/hello-note --scope project</span></span></code></pre></div></div></figure>
+
+<p>返回：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="string">&quot;installed&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hello-note&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.1.0&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;scope&quot;</span><span class="punctuation">:</span> <span class="string">&quot;project&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;disclosure&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="string">&quot;This capability ships no executable surfaces (declarative only).&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>GSD 把这份 bundle 复制进 <code>.gsd/capabilities/hello-note/</code>，登记进项目账本 <code>.gsd-capabilities.json</code>。因为 <code>hello-note</code> 不声明任何可执行面，安装<strong>没有信任提示</strong>——<code>disclosure</code> 那一行明确确认了”没有可执行代码需要审阅”。</p>
+<h4 id="Step-5-—-确认安装"><a href="#Step-5-—-确认安装" class="headerlink" title="Step 5 — 确认安装"></a>Step 5 — 确认安装</h4><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">gsd capability list</span></span></code></pre></div></div></figure>
+
+<p>在返回的数组末尾能看到你的条目，<code>status</code> 字段为 <code>active</code>——已安装、与当前 GSD 版本兼容、会真的生效。（另外两个可能的状态是 <code>incompatible</code>——宿主 GSD 版本超出了 <code>engines.gsd</code> 声明的区间；<code>inactive</code>——一个项目级能力尚未在本机获得同意，回顾本系列第二篇第三部分 3.11 节的”项目级信任边界”。）</p>
+<p>还可以直接查询某个扩展点当前生效的 Hook 集合——<strong>这是不需要真的跑一次完整规划会话就能验证接线是否正确的方法</strong>：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">gsd loop render-hooks plan:pre --raw</span></span></code></pre></div></div></figure>
+
+<p>返回的信封是 <code>{ point, activeHooks, rendered }</code>，你的 contribution 会出现在 <code>activeHooks</code> 里：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;capId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hello-note&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;kind&quot;</span><span class="punctuation">:</span> <span class="string">&quot;contribution&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;into&quot;</span><span class="punctuation">:</span> <span class="string">&quot;planner&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;fragment&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">&quot;inline&quot;</span><span class="punctuation">:</span> <span class="string">&quot;## Hello from hello-note\n\n...&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">&quot;path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;fragments/plan-pre.md&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">&quot;produces&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;HELLO.md&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="attr">&quot;onError&quot;</span><span class="punctuation">:</span> <span class="string">&quot;skip&quot;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><code>fragment.inline</code> 此刻已经是加载时从 <code>fragments/plan-pre.md</code> 物化出来的完整文本——GSD 在加载时读入并内联，同时保留原始 <code>path</code> 供参考。信封顶层的 <code>rendered</code> 字段则是同一段片段被格式化成 <code>&lt;contribution from=&quot;hello-note&quot; into=&quot;planner&quot;&gt;…&lt;/contribution&gt;</code> 之后的样子——<strong>这正是规划者最终实际收到的内容</strong>。</p>
+<h4 id="Step-6-—-观察-contribution-真正抵达规划者"><a href="#Step-6-—-观察-contribution-真正抵达规划者" class="headerlink" title="Step 6 — 观察 contribution 真正抵达规划者"></a>Step 6 — 观察 contribution 真正抵达规划者</h4><p>规划是由斜杠命令而非 <code>gsd</code> 子命令驱动的——在你的 AI 助手里跑 <code>/gsd:plan-phase</code> 即可，规划者会在提示词里收到这段 contribution，按照片段里的指示在 <code>HELLO.md</code> 里记一句话。<strong>但你不需要真的跑一次完整会话来确认接线是否正确</strong>——第五步的 <code>gsd loop render-hooks plan:pre --raw</code> 已经展示了规划者会收到的<strong>逐字内容</strong>（<code>rendered</code> 字段），这就是最直接的调试手段（详见 12.6 节）。</p>
+<h4 id="Step-7-—-移除"><a href="#Step-7-—-移除" class="headerlink" title="Step 7 — 移除"></a>Step 7 — 移除</h4><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">gsd capability remove hello-note --scope project</span></span></code></pre></div></div></figure>
+
+<p>返回：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="string">&quot;removed&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hello-note&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;scope&quot;</span><span class="punctuation">:</span> <span class="string">&quot;project&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;removedFiles&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;.gsd/capabilities/hello-note&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;strippedEdits&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">&quot;dataPreserved&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>移除<strong>不会</strong>动你在 <code>capabilities/hello-note/</code> 下自己维护的源文件夹——那是你的作者副本；要重装，重跑 Step 4 的命令即可。</p>
+<hr>
+<h3 id="12-2-参数：-ARGUMENTS-的解析规范"><a href="#12-2-参数：-ARGUMENTS-的解析规范" class="headerlink" title="12.2 参数：$ARGUMENTS 的解析规范"></a>12.2 参数：<code>$ARGUMENTS</code> 的解析规范</h3><p>本系列第四篇（第六、七部分）已详解 <code>argument-hint</code>（简短提示）与 <code>argument-instructions</code>（多行详细指导，仅 1&#x2F;71 使用）的取舍标准——多数场景一行 <code>argument-hint</code> 就够，只有参数结构本身很复杂（如混合整数&#x2F;小数&#x2F;字母后缀的 phase 编号 + 可选自由文本）时才值得追加 <code>argument-instructions</code>。写自己的能力&#x2F;命令时，<strong>先尝试用一行 <code>argument-hint</code> 说清楚，写不清楚再升级</strong>，而不是一开始就写一大段说明。</p>
+<h3 id="12-3-Prompt：contribution-还是-step——本次教程带来的关键新区分"><a href="#12-3-Prompt：contribution-还是-step——本次教程带来的关键新区分" class="headerlink" title="12.3 Prompt：contribution 还是 step——本次教程带来的关键新区分"></a>12.3 Prompt：<code>contribution</code> 还是 <code>step</code>——本次教程带来的关键新区分</h3><p>前十一部分（本系列前四篇）聚焦的都是 <code>commands/gsd/</code>&#x2F;<code>skills/</code> 这条路径的 Prompt 结构（<code>&lt;objective&gt;</code>&#x2F;<code>&lt;execution_context&gt;</code>&#x2F;<code>&lt;process&gt;</code> 等语义块）。本次教程揭示了 Capability 路径下<strong>平级但不同</strong>的 Prompt 组织方式——<code>contribution</code> 与 <code>step</code> 的选择：</p>
+<ul>
+<li><strong>只需要往某个 Agent 的 Prompt 里”塞一段话”</strong> → 用 <code>contribution</code>，指定 <code>into</code>（目标角色）+ <code>fragment</code>（片段路径）；</li>
+<li><strong>需要真正调度一个具体的技能&#x2F;子代理&#x2F;命令去执行动作</strong> → 用 <code>step</code>，必须携带 <code>ref</code>，且 <code>ref</code> 恰好是 <code>skill</code>&#x2F;<code>agent</code>&#x2F;<code>command</code> 三者之一。</li>
+</ul>
+<p><strong>判断标准</strong>：问自己”这次扩展是要<strong>改变 Agent 怎么想</strong>，还是要<strong>让某件事真的发生</strong>“——前者是 contribution，后者是 step。<code>hello-note</code> 只是往规划者脑子里加了一句提醒，所以是纯 contribution；如果你想让”生成 HELLO.md”这件事由一个专门的子代理去做（而不是指望规划者读了提示后顺手写），就该用 step 去调度一个 Agent。</p>
+<h3 id="12-4-模板：片段的”引用-加载时物化”机制"><a href="#12-4-模板：片段的”引用-加载时物化”机制" class="headerlink" title="12.4 模板：片段的”引用 + 加载时物化”机制"></a>12.4 模板：片段的”引用 + 加载时物化”机制</h3><p><code>gsd-core/templates/</code>（34 个文件，本系列第二篇第二部分已详解）是<strong>规划制品</strong>模板，与 Capability 的 Prompt 片段是两套不同的机制，不要混淆。Capability 片段的模板性体现在：<code>capability.json</code> 里只写 <code>fragment: { path: &quot;fragments/plan-pre.md&quot; }</code>（一个相对路径引用），<strong>加载时</strong>由能力系统读入文件内容并写进注册表的 <code>fragment.inline</code> 字段——这与本系列第二、三篇（第三、四部分）反复强调的”惰性加载&#x2F;渐进式披露”是同一哲学：<strong>manifest 本身保持精简（只存路径），真正的文本内容只在被加载的那一刻才物化</strong>。</p>
+<h3 id="12-5-测试：六大测试严谨性契约"><a href="#12-5-测试：六大测试严谨性契约" class="headerlink" title="12.5 测试：六大测试严谨性契约"></a>12.5 测试：六大测试严谨性契约</h3><p><code>TESTING-STANDARDS.md</code>（依据 <code>ADR-456</code>）定义了<strong>每一个测试都必须满足</strong>的六条契约：</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>契约</th>
+<th>一句话含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>检验真实代码，而非源码或输出文本</td>
+<td>调用导出的函数，或跑 CLI 并解析结构化输出；<strong>绝不</strong> <code>readFileSync</code> 源文件去断言其文本内容，也不对原始 stdout&#x2F;stderr 字符串做断言（退出码除外）——由自定义 ESLint 规则 <code>local/no-source-grep</code> 强制</td>
+</tr>
+<tr>
+<td>2</td>
+<td>不做”永真断言”</td>
+<td>断言的左值必须在被测系统出现合理缺陷时<strong>有可能失败</strong>；<code>assert(true)</code> 或断言一个此前已被无条件赋值的变量”不是 undefined”都不算数</td>
+</tr>
+<tr>
+<td>3</td>
+<td>不做”永过测试”</td>
+<td>（标题清单已列出，第 3 条与第 2 条呼应，强调测试必须有真正失败的可能路径）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>测试所声称的那条路径</td>
+<td>测试标题声称测的是什么，断言就必须真的覆盖那条路径</td>
+</tr>
+<tr>
+<td>5</td>
+<td>完整的 Mock</td>
+<td>Mock 掉的依赖必须覆盖被测代码实际会用到的全部接口面，而非只覆盖”恰好让测试跑过”的那一小块</td>
+</tr>
+<tr>
+<td>6</td>
+<td>为”负空间”写反向测试</td>
+<td>不仅要测”该发生的事发生了”，也要测”不该发生的事确实没发生”</td>
+</tr>
+</tbody></table>
+<p><code>TEST-EXAMPLES.md</code> 给出的具体范例之一是 <strong>“CLI 负向矩阵”</strong>——用真实的子进程执行（<code>spawnSync</code>）而非拼接 shell 字符串去测试恶意&#x2F;边界输入（空 phase、路径穿越 <code>../../outside</code>、重复标志、看起来像标志的值如 <code>--weird</code>），每一条都断言一个具体的 <code>expectedReason</code> 错误码。<strong>”用真实进程执行、把危险值当作 argv 元素传入而非拼进 shell 字符串”</strong>这条具体写法，与本系列第四篇（第六、十部分）反复出现的”消毒&#x2F;边界校验必须具体到可执行细节”是同一种工程纪律的测试侧体现。</p>
+<h3 id="12-6-调试：不用真的跑一次完整会话"><a href="#12-6-调试：不用真的跑一次完整会话" class="headerlink" title="12.6 调试：不用真的跑一次完整会话"></a>12.6 调试：不用真的跑一次完整会话</h3><p>本部分 12.1 节 Step 5&#x2F;6 已经展示了最关键的调试手段：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">gsd loop render-hooks &lt;extension-point&gt; --raw</span></span></code></pre></div></div></figure>
+
+<p>这个命令直接输出”如果现在真的触发这个扩展点，Agent 会收到的逐字内容”（<code>rendered</code> 字段）——<strong>把”我的能力有没有正确接线”这个问题，从”跑一次真实规划会话再肉眼检查产物”，降级成了一条本地命令</strong>。这是本文认为整个 Capability 开发流程里最实用的一条调试捷径，值得在设计任何类似的 Prompt 注入系统时提供等价能力。</p>
+<h3 id="12-7-发布"><a href="#12-7-发布" class="headerlink" title="12.7 发布"></a>12.7 发布</h3><p>官方教程末尾指向了 <a href="%E6%B7%B1%E5%BA%A6%E6%9C%AA%E5%9C%A8%E6%9C%AC%E6%AC%A1%E7%A0%94%E7%A9%B6%E4%B8%AD%E9%80%9A%E8%AF%BB"><code>docs/how-to/publish-a-capability.md</code></a> 与 <a href="%E6%B7%B1%E5%BA%A6%E6%9C%AA%E5%9C%A8%E6%9C%AC%E6%AC%A1%E7%A0%94%E7%A9%B6%E4%B8%AD%E9%80%9A%E8%AF%BB"><code>docs/how-to/import-a-capability-from-a-url.md</code></a>——<strong>如实说明</strong>：本文尚未对这两份文档做逐段核实，只能确认它们存在且被官方教程引用为”下一步”，覆盖”把能力打包分享到 URL&#x2F;注册表”与”从 git URL&#x2F;tarball&#x2F;npm 包安装第三方能力”两个场景。感兴趣的读者应直接查阅这两份文档获取权威细节，本文不做未经核实的展开。</p>
+<h3 id="12-8-版本升级"><a href="#12-8-版本升级" class="headerlink" title="12.8 版本升级"></a>12.8 版本升级</h3><p><code>VERSIONING.md</code> 定义的是 <strong>GSD Core 自身</strong>的发版策略（三级：Patch&#x2F;Minor&#x2F;Major，对应 npm 的 <code>latest</code>&#x2F;<code>next</code> 两个 dist-tag，主版本走 <code>beta</code> 预发布、次版本走 <code>rc</code> 预发布），这套体系不直接约束你自己写的 Capability，但<strong>理念可以照搬</strong>：</p>
+<ul>
+<li>你的 <code>capability.json</code> 的 <code>version</code> 应遵循语义化版本；</li>
+<li><code>engines.gsd</code> 区间应该诚实反映”这个能力实际测试过的 GSD 版本范围”，而不是随手写一个 <code>&gt;=0.0.0</code>——本系列第二篇（第三部分）已述，GSD 自身升级后会在<strong>加载期</strong>重新校验这个区间，不满足的能力会被跳过并响亮告警（而不是静默失败）。</li>
+</ul>
+<h3 id="12-9-兼容性"><a href="#12-9-兼容性" class="headerlink" title="12.9 兼容性"></a>12.9 兼容性</h3><p><code>runtimeCompat: { supported, unsupported }</code> 字段（12.1 节已示范 <code>{&quot;supported&quot;: [&quot;*&quot;]}</code>）用于声明这个能力兼容哪些宿主 Runtime——如果你的能力依赖某个特定宿主才有的行为（比如某个仅 Claude Code 支持的 Hook 事件），应该把 <code>unsupported</code> 列出来，而不是让它在不兼容的宿主上默默产生未定义行为。这与本系列第四篇（第六部分）6.4 节”插件提供的技能形态仅 Claude 可用，其他运行时跳过并告警”是同一套”显式声明兼容边界，而非隐式假设全宿主通用”的纪律。</p>
+<h3 id="12-10-最佳实践清单（汇总本教程与前十一部分）"><a href="#12-10-最佳实践清单（汇总本教程与前十一部分）" class="headerlink" title="12.10 最佳实践清单（汇总本教程与前十一部分）"></a>12.10 最佳实践清单（汇总本教程与前十一部分）</h3><ol>
+<li>先问”这是 contribution 还是 step”，别一上来就假设需要调度一个完整 Agent；</li>
+<li><code>onError</code> 默认写 <code>&quot;skip&quot;</code>，除非你确实需要一个失败就要整体中止的强约束（那种情况该用 <code>gate</code>，本系列第二篇第三部分已述）；</li>
+<li><code>description</code>（若你的能力包含 <code>skills</code>）严格控制在 100 字符内，参考竖线关键词标签写法（本系列第四篇第七、九部分）；</li>
+<li>写完 <code>capability.json</code> 后先跑 <code>gsd loop render-hooks &lt;point&gt; --raw</code> 确认接线，再去跑真实会话；</li>
+<li>版本号与 <code>engines.gsd</code> 区间要诚实，不要为了”图省事”写成通配；</li>
+<li>测试要覆盖负空间——想清楚”这个能力在什么输入下应该拒绝&#x2F;跳过”，并为之写断言；</li>
+<li>能不写可执行代码就不写——纯声明式能力（只有 Prompt 片段 + Hook 声明）不需要经过信任提示，能大幅降低你自己团队采纳的门槛。</li>
+</ol>
+<h3 id="12-11-本部分小结与下文预告"><a href="#12-11-本部分小结与下文预告" class="headerlink" title="12.11 本部分小结与下文预告"></a>12.11 本部分小结与下文预告</h3><p>第十二部分完整复现了官方”Hello Skill”教程的全部七步，并把参数、Prompt、模板、测试、调试、发布、版本、兼容性八个维度逐一对应到本文前十一部分（本系列前四篇）已建立的概念体系上。<code>contribution</code> vs <code>step</code> 的区分，以及 <code>gsd loop render-hooks --raw</code> 这条调试命令，是本部分两个最具体、最可立即上手使用的收获。</p>
+<p>下一部分（第十三部分 · 高级 Skill）将探讨多 Skill 组合、Skill Graph、Skill Chain、Composite&#x2F;Dynamic&#x2F;Conditional&#x2F;Context-Aware&#x2F;Domain&#x2F;Enterprise Skill 这些更高阶的设计模式——沿用本系列第一篇（第〇部分）建立的纪律，凡是 GSD 源码中能找到直接对应机制的，给出实证；凡是需要从多处证据综合推导的，明确标注为”推导”而非”官方原文”。</p>
+<hr>
+<h2 id="第十三部分-·-高级-Skill"><a href="#第十三部分-·-高级-Skill" class="headerlink" title="第十三部分 · 高级 Skill"></a>第十三部分 · 高级 Skill</h2><blockquote>
+<p>本部分讨论九个高阶概念（多 Skill、Skill Graph、Skill Chain、Composite Skill、Dynamic Skill、Conditional Skill、Context Aware Skill、Domain Skill、Enterprise Skill）。GSD 源码里<strong>没有任何一处使用这些确切英文术语</strong>——这九个词是分析性的概念框架，不是 GSD 的原生词汇。本部分对每一个概念都做同一件事：<strong>先诚实说明”GSD 里最接近的真实机制是什么”，再展开该机制的源码依据</strong>；凡是本文自己做的归纳、类比或推导，都会显式标注，不会包装成”GSD 官方设计”。</p>
+</blockquote>
+<h3 id="13-1-多-Skill-组合-Skill-Graph：两张真实存在的图"><a href="#13-1-多-Skill-组合-Skill-Graph：两张真实存在的图" class="headerlink" title="13.1 多 Skill 组合 &#x2F; Skill Graph：两张真实存在的图"></a>13.1 多 Skill 组合 &#x2F; Skill Graph：两张真实存在的图</h3><p>GSD 源码里能找到<strong>两张性质不同的图</strong>，都可以承载用户所问的”Skill Graph”概念：</p>
+<p><strong>图一：构建期的依赖图</strong>——<code>requires:</code> 字段构成的有向图（本系列第四篇第六、八部分已详解），<code>computeClosure()</code> 对它做闭包展开，<code>lint-skill-deps.cjs</code> 校验它在每个 profile 裁剪子集上都自洽。</p>
+<p><strong>图二：命名空间路由的 DAG</strong>——<code>gsd-ns-*</code> 路由技能与其下具体技能构成的图，且<strong>已被源码实证不是一棵树</strong>：<code>spec-phase</code> 同时挂在 <code>gsd-ns-workflow</code> 与 <code>gsd-ns-manage</code> 两个父节点下（本系列第四篇第八、九部分的 <code>seenNamesInRoot</code> 去重逻辑正是为此存在）。</p>
+<pre class="mermaid">flowchart TB
+    subgraph G1["图一：requires: 依赖图（构建期）"]
+        A1[core profile 8个基础技能] --&gt;|closure展开| A2[传递依赖技能]
+    end
+    subgraph G2["图二：命名空间路由 DAG（运行期发现）"]
+        R1[gsd-ns-workflow] --&gt; S1[spec-phase]
+        R2[gsd-ns-manage] --&gt; S1
+        R1 --&gt; S2[plan-phase]
+        R2 --&gt; S3[config]
+    end</pre>
+
+
+<p><strong>两张图不能混为一谈</strong>：图一回答”装什么”，图二回答”从哪条语义路径能找到它”——一个技能可以在图二里有多个父节点，但在图一里的依赖关系是单一确定的。</p>
+<h3 id="13-2-Skill-Chain：workflow-内部的-Agent-派生序列"><a href="#13-2-Skill-Chain：workflow-内部的-Agent-派生序列" class="headerlink" title="13.2 Skill Chain：workflow 内部的 Agent 派生序列"></a>13.2 Skill Chain：workflow 内部的 Agent 派生序列</h3><p>GSD 没有”Skill 调用 Skill”意义上的 Chain（本系列第四篇第六部分已述，Skill 委托后自身生命周期即告终）。<strong>最接近”Chain”这个概念的真实机制</strong>，是一个 workflow 内部按顺序派生多个 Agent、通过磁盘制品传递状态的序列——本系列第三篇（第五部分）详解的 <code>plan-phase</code> 三段式（Researcher → Planner → Plan-Checker，带修订循环）就是最典型的样本。</p>
+<p><strong>本文的推导</strong>（非 GSD 原文用语）：如果把”一次 workflow 编排”整体看作一条 Chain，那么链上每一环的”输入契约”就是磁盘上的某份具体制品（<code>RESEARCH.md</code>→<code>PLAN.md</code>→校验结果），这与传统”Skill A 的输出直接管道给 Skill B”的 Chain 概念在效果上等价，但<strong>实现机制完全不同</strong>——GSD 的链条环环相扣靠的是”共享文件系统 + 编排器路由”，而不是”技能之间直接互相调用”。这个区别很重要：<strong>它意味着链条上任意一环可以在完全不同的会话里执行</strong>（本系列第三篇第四部分讨论过的”跨会话续接”），因为环与环之间不存在运行时的直接耦合，只有文件系统上的间接耦合。</p>
+<h3 id="13-3-Composite-Skill：Capability-的多贡献点组合"><a href="#13-3-Composite-Skill：Capability-的多贡献点组合" class="headerlink" title="13.3 Composite Skill：Capability 的多贡献点组合"></a>13.3 Composite Skill：Capability 的多贡献点组合</h3><p><code>capability.json</code> 允许一个能力同时声明 <code>skills</code>、<code>agents</code>、<code>commands</code>、<code>hooks</code>、<code>steps</code>、<code>contributions</code>、<code>gates</code> 多个字段——<strong>一个能力包本身就是一个”复合体”</strong>，这是 GSD 里最接近”Composite Skill”的真实机制。第十二部分的 <code>hello-note</code> 是最简单的复合（只用了 1 个 <code>contributions</code> 条目）；本系列第二篇（第三部分）引用过的 <code>graphify</code> 能力则复合了 <code>skills: [&quot;graphify&quot;]</code> + <code>commands</code>（<code>family: &quot;graphify&quot;</code> 路由到 <code>graphify-command-router.cjs</code>）+ 一个 <code>activationKey</code> 控制的 <code>config</code> 项——<strong>同一个能力包，同时是一个 Skill 的提供者、一个 CLI 命令族的提供者、一个配置项的提供者</strong>。</p>
+<h3 id="13-4-Dynamic-Skill：gsd-spike-wrap-up——一个真实的、源码实证的动态技能生成机制"><a href="#13-4-Dynamic-Skill：gsd-spike-wrap-up——一个真实的、源码实证的动态技能生成机制" class="headerlink" title="13.4 Dynamic Skill：gsd-spike --wrap-up——一个真实的、源码实证的动态技能生成机制"></a>13.4 Dynamic Skill：<code>gsd-spike --wrap-up</code>——一个真实的、源码实证的动态技能生成机制</h3><p>这是本部分含金量最高的一节——GSD <strong>确实有</strong>一个把”探索过程的产出”自动固化成一个新技能的真实机制，源码：<code>commands/gsd/spike.md</code> + <code>gsd-core/workflows/spike-wrap-up.md</code>。</p>
+<p><strong>完整流程</strong>：</p>
+<pre class="mermaid">flowchart TB
+    A["/gsd:spike 'some idea' --quick"] --&gt; B["快速实验，产出 .planning/spikes/&amp;lt;NNN&amp;gt;/README.md&lt;br/&gt;（含 YAML frontmatter：验证状态）"]
+    B --&gt; C&#123;"验证结果"&#125;
+    C --&gt;|"VALIDATED"| D1["提供已证实的模式"]
+    C --&gt;|"PARTIAL"| D2["提供受约束的模式"]
+    C --&gt;|"INVALIDATED"| D3["提供地雷与死胡同——&lt;br/&gt;明确记录'此路不通'"]
+    D1 --&gt; E["/gsd:spike --wrap-up"]
+    D2 --&gt; E
+    D3 --&gt; E
+    E --&gt; F["读 .planning/spikes/MANIFEST.md&lt;br/&gt;+ 遍历全部 spikes/*/README.md"]
+    F --&gt; G&#123;"项目已有&lt;br/&gt;spike-findings-* SKILL.md?"&#125;
+    G --&gt;|"是"| H["读其 processed_spikes 元数据&lt;br/&gt;过滤掉已处理的 spike&lt;br/&gt;——只处理新增的"]
+    G --&gt;|"否"| I["全部 spike 都是候选"]
+    H --&gt; J["按 feature area 自动分组&lt;br/&gt;（依据 tags/名称/related字段/内容）"]
+    I --&gt; J
+    J --&gt; K["每组合成生成技能里的一份 reference 文件"]
+    K --&gt; L["写出 ./.claude/skills/spike-findings-[project]/SKILL.md&lt;br/&gt;（项目本地，持久化）&lt;br/&gt;+ .planning/spikes/WRAP-UP-SUMMARY.md"]</pre>
+
+
+<p><strong>四处值得特别记录的设计细节</strong>：</p>
+<ol>
+<li><strong>增量而非重建</strong>：每次 <code>--wrap-up</code> 只处理<strong>上次生成之后新增</strong>的 spike（靠读取已生成 SKILL.md 里的 <code>processed_spikes</code> 元数据做差集）——这个动态技能会随着项目积累的探索次数<strong>持续生长</strong>，而不是每次都从零重新合成；</li>
+<li><strong>连”此路不通”也被固化</strong>：<code>INVALIDATED</code> 的 spike 不会被丢弃，而是作为”地雷与死胡同”被写进生成的技能里——<strong>这意味着这个动态技能不仅告诉未来的 Agent “怎么做”，还告诉它”已经试过且确认行不通的路”</strong>，这对防止未来的 Agent 重复踩同一个坑有直接价值；</li>
+<li><strong>按语义分组而非按时间顺序</strong>：多个 spike 依据 <code>tags</code>&#x2F;名称&#x2F;<code>related</code> 字段与内容被自动归类到同一个 feature area，每组产出生成技能里的<strong>一份</strong>独立 reference 文件，而不是简单地把所有 spike 记录顺序拼接；</li>
+<li><strong>落地位置是项目本地、非官方生成脚本产物</strong>：与本系列第二篇（第二部分）讨论的”declare→generate→lint 漂移校验”三件套（那是 GSD <strong>自身仓库</strong>治理自己的 44 个能力&#x2F;71 个技能的机制）不同，这里生成的 <code>spike-findings-[project]</code> 技能是<strong>面向单个使用者项目</strong>、<strong>没有</strong> CI 漂移校验保护的产物——它的正确性依赖 <code>spike-wrap-up</code> 这个 workflow 本身的实现质量，而不是构建期的自动化校验。</li>
+</ol>
+<p><strong>这是本文认为最值得迁移到设备诊断平台的一个具体机制</strong>：如果诊断技能生态里也存在”先探索性诊断、再固化为可复用诊断技能”的场景（例如工程师对一类新出现的故障做了几次探索性排查，想把排查经验固化成技能），<code>spike --wrap-up</code> 提供了一个<strong>已经被验证可行的、含增量处理 + 三态经验分类（验证过的模式&#x2F;受限模式&#x2F;死胡同）+ 自动语义分组</strong>的现成范式，比从零设计一套”经验固化机制”要可靠得多。</p>
+<blockquote>
+<p><strong>旁注（划界，呼应本系列第一篇第〇部分）</strong>：生态里还存在一个第三方插件 <code>Tibsfox/gsd-skill-creator</code>，其定位是”观察你在 GSD 生命周期内的工作模式（工具序列、文件模式、纠正行为），检测到重复出现 3 次以上的模式后建议生成新技能”——这是一个<strong>概念上相似但实现完全独立</strong>的第三方”动态技能生成”尝试，<strong>不属于 GSD Core 官方仓库</strong>，本文不对其源码做核实，只做生态背景提及，避免读者把它误当作 GSD Core 自带能力。</p>
+</blockquote>
+<h3 id="13-5-Conditional-Skill：三层条件化生效机制"><a href="#13-5-Conditional-Skill：三层条件化生效机制" class="headerlink" title="13.5 Conditional Skill：三层条件化生效机制"></a>13.5 Conditional Skill：三层条件化生效机制</h3><p>GSD 里”技能&#x2F;能力是否生效”从来不是非黑即白的静态开关，而是叠加了至少三层条件判断：</p>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>机制</th>
+<th>源码依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>功能开关条件</strong></td>
+<td><code>capability.json</code> 的 <code>activationKey</code> + <code>config</code> 字段（如 <code>graphify.enabled</code>，默认 <code>false</code>）</td>
+<td>本系列第二篇（第二部分）已引用的 <code>graphify/capability.json</code></td>
+</tr>
+<tr>
+<td><strong>版本兼容条件</strong></td>
+<td><code>engines.gsd</code> 区间——加载期二次门禁，不满足则跳过并告警</td>
+<td>本系列第二篇（第三部分）3.11 节、第十二部分 12.8 节</td>
+</tr>
+<tr>
+<td><strong>运行时兼容条件</strong></td>
+<td><code>runtimeCompat.supported</code>&#x2F;<code>unsupported</code></td>
+<td>第十二部分 12.9 节</td>
+</tr>
+</tbody></table>
+<p><strong>本文的归纳</strong>（非 GSD 原文用语）：这三层条件分别回答”用户是否主动打开了它””版本是否兼容””宿主是否兼容”三个正交的问题，任何一层不满足都会导致该能力<strong>不生效但不报错崩溃</strong>（本系列第二篇第三部分详述的”fail-open 但响亮告警”原则在此再次适用）——这是一套天然支持”Conditional Skill”这一诉求的、已经过 Capability 系统统一实现的机制，不需要在 Skill 层再造一套条件判断。</p>
+<h3 id="13-6-Context-Aware-Skill：两处真实的上下文感知机制"><a href="#13-6-Context-Aware-Skill：两处真实的上下文感知机制" class="headerlink" title="13.6 Context Aware Skill：两处真实的上下文感知机制"></a>13.6 Context Aware Skill：两处真实的上下文感知机制</h3><ul>
+<li><strong>自适应上下文增强</strong>（本系列第一篇第一部分、第二篇第三部分已详解）——当 <code>context_window &gt;= 500000</code> 时，Executor&#x2F;Verifier 会收到比 200K 窗口下更丰富的上下文（前序波次 <code>SUMMARY.md</code>、<code>REQUIREMENTS.md</code> 等），这是”<strong>同一个 Agent 角色</strong>，依据宿主模型的上下文容量，感知并调整自己实际接收的信息量”；</li>
+<li><strong>discuss-phase 的 assumptions 模式</strong>（本系列第三篇第五部分已详解）——子代理主动读 5–15 个代码库文件、依据代码库现状形成”带证据与置信度”的假设，是”<strong>依据项目的实际代码上下文，动态生成问题&#x2F;假设</strong>“的具体样本。</li>
+</ul>
+<h3 id="13-7-Domain-Skill：capabilities-目录本身就是按领域组织的"><a href="#13-7-Domain-Skill：capabilities-目录本身就是按领域组织的" class="headerlink" title="13.7 Domain Skill：capabilities/ 目录本身就是按领域组织的"></a>13.7 Domain Skill：<code>capabilities/</code> 目录本身就是按领域组织的</h3><p>本系列第二篇（第二部分）已完整列出 44 个能力子目录，天然分成两类——<strong>按宿主 Runtime 划分的领域</strong>（<code>claude</code>&#x2F;<code>codex</code>&#x2F;<code>cursor</code>&#x2F;<code>codebuddy</code> 等 22 个）与<strong>按横切功能划分的领域</strong>（<code>security</code>&#x2F;<code>tdd</code>&#x2F;<code>code-review</code>&#x2F;<code>ai-integration</code> 等 22 个）。每个能力还携带一个 <code>tier</code> 字段（<code>hello-note</code> 示范为 <code>&quot;standard&quot;</code>，<code>graphify</code> 为 <code>&quot;full&quot;</code>）——<strong>本文推断</strong>（未在源码中找到 <code>tier</code> 的完整取值枚举与语义文档，如实标注）这大概率是一种”能力分级”机制，用于区分核心&#x2F;标准&#x2F;完整等不同重要程度的领域能力，具体的分级语义留待读者查阅 <code>docs/reference/capability-manifest.md</code>（本文未逐段核实）自行确认。</p>
+<h3 id="13-8-Enterprise-Skill：信任模型全套-企业锁定杠杆"><a href="#13-8-Enterprise-Skill：信任模型全套-企业锁定杠杆" class="headerlink" title="13.8 Enterprise Skill：信任模型全套 + 企业锁定杠杆"></a>13.8 Enterprise Skill：信任模型全套 + 企业锁定杠杆</h3><p>“企业级”在 GSD 里对应的不是某一种特殊的 Skill 类型，而是本系列第二篇（第三部分）已完整展开的<strong>整套 Capability 信任模型</strong>——同意（Consent）+ 完整性（Integrity）+ 可逆性（Reversibility）三重屏障、”第一方永远赢”的覆盖规则、<code>strictKnownRegistries</code> 三态开关（未设&#x3D;许可制&#x2F;空数组&#x3D;锁死仅本地&#x2F;非空数组&#x3D;按 host 白名单）、以及本系列第一篇（第一部分）提及的 <strong>Reviewer Lane Registry</strong>（第三方 Reviewer Lane 的公开目录，供企业按 <code>docs/reference/gsd-capability-command.md</code>——本文未逐段核实——的流程安装受信的第三方评审工具）。</p>
+<p><strong>本文的归纳</strong>：一个”企业级”能力，实践中应该同时具备——诚实声明的 <code>engines.gsd</code>&#x2F;<code>runtimeCompat</code> 边界（12.8&#x2F;12.9 节）、<code>tier</code> 定位清晰、通过 <code>strictKnownRegistries</code> 可被管理员纳入白名单管控、可执行面（若有）经过 SHA 完整性定版、且可通过 <code>gsd capability remove</code> 完全撤销不留孤儿状态。这五点合起来，就是把本系列第二篇与本篇（第三、十二部分）的具体机制拼装成一份”企业能力自查清单”。</p>
+<h3 id="13-9-本部分小结与下文预告"><a href="#13-9-本部分小结与下文预告" class="headerlink" title="13.9 本部分小结与下文预告"></a>13.9 本部分小结与下文预告</h3><p>第十三部分对九个高阶概念逐一做了”最接近的真实机制”映射，其中 <code>gsd-spike --wrap-up</code> 是本部分唯一一处<strong>完整的、源码实证的、名副其实的”动态技能生成”机制</strong>，含增量处理、三态经验分类（验证&#x2F;受限&#x2F;死胡同）、自动语义分组三个具体设计点，是本文认为最值得直接迁移到设备诊断平台的单一机制。其余概念（Graph&#x2F;Chain&#x2F;Composite&#x2F;Conditional&#x2F;Context-Aware&#x2F;Domain&#x2F;Enterprise）在 GSD 中都能找到对应的真实机制，但都是本文基于源码证据做的<strong>归纳性映射</strong>，而非 GSD 官方使用这些确切术语。</p>
+<p>下一篇《Open-GSD 源码解析（六）：企业级设计模式、自建 Runtime 与最佳实践》将从第十四部分企业级 Skill 设计模式开始，针对代码生成、Code Review、API 设计、架构评审、安全评审、性能、DevOps、数据库、微服务、RAG、Agent、Prompt、MCP、知识管理、文档、测试、发布、Git、CI&#x2F;CD、可观测性、根因分析、日志分析、设备诊断、OTA、CAN、遥测、汽车 AI 等领域逐一设计目录结构、SKILL.md、Prompt、Workflow 与最佳实践，其中设备诊断相关设计将直接对接一个示例诊断技能包的既有架构决策。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/08/14/engineering-practice/Open-GSD-06-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5/">Open-GSD 源码解析（六）：企业级设计模式、自建 Runtime 与最佳实践</a></h3>
+        <p>Open-GSD 源码解析系列第六篇：给出 27 个领域的企业级 Skill 设计模式与跨领域迁移方法…</p>
+        <a class="btn primary" href="/2026/08/14/engineering-practice/Open-GSD-06-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/08/10/engineering-practice/Open-GSD-04-Skill%E6%A1%86%E6%9E%B6/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Open-GSD 源码解析（四）：Skill 框架、SKILL.md、加载与命中</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 3 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E4%B8%80%E9%83%A8%E5%88%86-%C2%B7-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%EF%BC%88%E6%A0%B8%E5%BF%83%E6%A8%A1%E5%9D%97%E9%80%90%E4%B8%80%E5%88%86%E6%9E%90-%E8%B0%83%E7%94%A8%E5%9B%BE%EF%BC%89" data-toc-target="第十一部分-·-源码阅读（核心模块逐一分析-调用图）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第十一部分 · 源码阅读（核心模块逐一分析 + 调用图）</span></a><a class="toc-level-3" href="#11-0-%E4%B8%83%E4%B8%AA%E6%A8%A1%E5%9D%97%E4%B8%8E%E6%BA%90%E7%A0%81%E6%96%87%E4%BB%B6%E7%9A%84%E5%AF%B9%E5%BA%94%E5%85%B3%E7%B3%BB" data-toc-target="11-0-七个模块与源码文件的对应关系"><span class="toc-text">11.0 七个模块与源码文件的对应关系</span></a><a class="toc-level-3" href="#11-1-Parser-%E6%A8%A1%E5%9D%97%EF%BC%9Asrc-frontmatter-cts" data-toc-target="11-1-Parser-模块：src-frontmatter-cts"><span class="toc-text">11.1 Parser 模块：src/frontmatter.cts</span></a><a class="toc-level-3" href="#11-2-Dispatcher-%E6%A8%A1%E5%9D%97%EF%BC%9Asrc-command-routing-hub-cts" data-toc-target="11-2-Dispatcher-模块：src-command-routing-hub-cts"><span class="toc-text">11.2 Dispatcher 模块：src/command-routing-hub.cts</span></a><a class="toc-level-3" href="#11-3-Runtime-%E6%A8%A1%E5%9D%97%EF%BC%9Asrc-state-transition-cts-%E7%9A%84%E8%A1%A8%E9%A9%B1%E5%8A%A8%E7%8A%B6%E6%80%81%E6%9C%BA" data-toc-target="11-3-Runtime-模块：src-state-transition-cts-的表驱动状态机"><span class="toc-text">11.3 Runtime 模块：src/state-transition.cts 的表驱动状态机</span></a><a class="toc-level-3" href="#11-4-Planner-%E6%A8%A1%E5%9D%97%EF%BC%9Aagents-gsd-planner-md" data-toc-target="11-4-Planner-模块：agents-gsd-planner-md"><span class="toc-text">11.4 Planner 模块：agents/gsd-planner.md</span></a><a class="toc-level-3" href="#11-5-Executor-%E6%A8%A1%E5%9D%97%EF%BC%9Aagents-gsd-executor-md" data-toc-target="11-5-Executor-模块：agents-gsd-executor-md"><span class="toc-text">11.5 Executor 模块：agents/gsd-executor.md</span></a><a class="toc-level-3" href="#11-6-Verifier-%E6%A8%A1%E5%9D%97%EF%BC%9Aagents-gsd-verifier-md-src-verification-cts" data-toc-target="11-6-Verifier-模块：agents-gsd-verifier-md-src-verification-cts"><span class="toc-text">11.6 Verifier 模块：agents/gsd-verifier.md + src/verification.cts</span></a><a class="toc-level-3" href="#11-7-Git-Integration-%E6%A8%A1%E5%9D%97%EF%BC%9Asrc-worktree-safety-cts%EF%BC%881-812-%E8%A1%8C%EF%BC%89" data-toc-target="11-7-Git-Integration-模块：src-worktree-safety-cts（1-812-行）"><span class="toc-text">11.7 Git Integration 模块：src/worktree-safety.cts（1,812 行）</span></a><a class="toc-level-3" href="#11-8-%E4%B8%80%E6%AC%A1-Plan%E2%86%92Execute%E2%86%92Verify-%E5%85%A8%E9%93%BE%E8%B7%AF%E7%9A%84%E5%AE%8C%E6%95%B4%E8%B0%83%E7%94%A8%E5%9B%BE%EF%BC%88%E8%B4%AF%E7%A9%BF%E6%9C%AC%E9%83%A8%E5%88%86%E4%B8%83%E4%B8%AA%E6%A8%A1%E5%9D%97%EF%BC%89" data-toc-target="11-8-一次-Plan→Execute→Verify-全链路的完整调用图（贯穿本部分七个模块）"><span class="toc-text">11.8 一次 Plan→Execute→Verify 全链路的完整调用图（贯穿本部分七个模块）</span></a><a class="toc-level-3" href="#11-9-%E5%85%B3%E9%94%AE%E5%AF%B9%E8%B1%A1%E5%85%B3%E7%B3%BB%E5%9B%BE%EF%BC%88Class-Diagram-%E9%A3%8E%E6%A0%BC%EF%BC%89" data-toc-target="11-9-关键对象关系图（Class-Diagram-风格）"><span class="toc-text">11.9 关键对象关系图（Class Diagram 风格）</span></a><a class="toc-level-3" href="#11-10-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="11-10-本部分小结与下文预告"><span class="toc-text">11.10 本部分小结与下文预告</span></a><a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E4%BA%8C%E9%83%A8%E5%88%86-%C2%B7-Skill-%E5%BC%80%E5%8F%91%E6%95%99%E7%A8%8B%EF%BC%88%E9%9B%B6%E5%9F%BA%E7%A1%80%E4%B8%8A%E6%89%8B%EF%BC%89" data-toc-target="第十二部分-·-Skill-开发教程（零基础上手）"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">第十二部分 · Skill 开发教程（零基础上手）</span></a><a class="toc-level-3" href="#12-0-%E5%85%88%E9%80%89%E5%AF%B9%E8%B7%AF%E5%BE%84%EF%BC%9A%E6%94%B9-GSD-Core-%E6%9C%AC%E8%BA%AB%EF%BC%8C%E8%BF%98%E6%98%AF%E4%BB%A5-Capability-%E5%BD%A2%E5%BC%8F%E6%89%A9%E5%B1%95" data-toc-target="12-0-先选对路径：改-GSD-Core-本身，还是以-Capability-形式扩展"><span class="toc-text">12.0 先选对路径：改 GSD Core 本身，还是以 Capability 形式扩展</span></a><a class="toc-level-3" href="#12-1-Hello-Skill%EF%BC%9A%E5%AE%8C%E6%95%B4%E5%A4%8D%E7%8E%B0%E5%AE%98%E6%96%B9%E6%95%99%E7%A8%8B" data-toc-target="12-1-Hello-Skill：完整复现官方教程"><span class="toc-text">12.1 Hello Skill：完整复现官方教程</span></a><a class="toc-level-3" href="#12-2-%E5%8F%82%E6%95%B0%EF%BC%9A-ARGUMENTS-%E7%9A%84%E8%A7%A3%E6%9E%90%E8%A7%84%E8%8C%83" data-toc-target="12-2-参数：-ARGUMENTS-的解析规范"><span class="toc-text">12.2 参数：$ARGUMENTS 的解析规范</span></a><a class="toc-level-3" href="#12-3-Prompt%EF%BC%9Acontribution-%E8%BF%98%E6%98%AF-step%E2%80%94%E2%80%94%E6%9C%AC%E6%AC%A1%E6%95%99%E7%A8%8B%E5%B8%A6%E6%9D%A5%E7%9A%84%E5%85%B3%E9%94%AE%E6%96%B0%E5%8C%BA%E5%88%86" data-toc-target="12-3-Prompt：contribution-还是-step——本次教程带来的关键新区分"><span class="toc-text">12.3 Prompt：contribution 还是 step——本次教程带来的关键新区分</span></a><a class="toc-level-3" href="#12-4-%E6%A8%A1%E6%9D%BF%EF%BC%9A%E7%89%87%E6%AE%B5%E7%9A%84%E2%80%9D%E5%BC%95%E7%94%A8-%E5%8A%A0%E8%BD%BD%E6%97%B6%E7%89%A9%E5%8C%96%E2%80%9D%E6%9C%BA%E5%88%B6" data-toc-target="12-4-模板：片段的”引用-加载时物化”机制"><span class="toc-text">12.4 模板：片段的”引用 + 加载时物化”机制</span></a><a class="toc-level-3" href="#12-5-%E6%B5%8B%E8%AF%95%EF%BC%9A%E5%85%AD%E5%A4%A7%E6%B5%8B%E8%AF%95%E4%B8%A5%E8%B0%A8%E6%80%A7%E5%A5%91%E7%BA%A6" data-toc-target="12-5-测试：六大测试严谨性契约"><span class="toc-text">12.5 测试：六大测试严谨性契约</span></a><a class="toc-level-3" href="#12-6-%E8%B0%83%E8%AF%95%EF%BC%9A%E4%B8%8D%E7%94%A8%E7%9C%9F%E7%9A%84%E8%B7%91%E4%B8%80%E6%AC%A1%E5%AE%8C%E6%95%B4%E4%BC%9A%E8%AF%9D" data-toc-target="12-6-调试：不用真的跑一次完整会话"><span class="toc-text">12.6 调试：不用真的跑一次完整会话</span></a><a class="toc-level-3" href="#12-7-%E5%8F%91%E5%B8%83" data-toc-target="12-7-发布"><span class="toc-text">12.7 发布</span></a><a class="toc-level-3" href="#12-8-%E7%89%88%E6%9C%AC%E5%8D%87%E7%BA%A7" data-toc-target="12-8-版本升级"><span class="toc-text">12.8 版本升级</span></a><a class="toc-level-3" href="#12-9-%E5%85%BC%E5%AE%B9%E6%80%A7" data-toc-target="12-9-兼容性"><span class="toc-text">12.9 兼容性</span></a><a class="toc-level-3" href="#12-10-%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%B8%85%E5%8D%95%EF%BC%88%E6%B1%87%E6%80%BB%E6%9C%AC%E6%95%99%E7%A8%8B%E4%B8%8E%E5%89%8D%E5%8D%81%E4%B8%80%E9%83%A8%E5%88%86%EF%BC%89" data-toc-target="12-10-最佳实践清单（汇总本教程与前十一部分）"><span class="toc-text">12.10 最佳实践清单（汇总本教程与前十一部分）</span></a><a class="toc-level-3" href="#12-11-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="12-11-本部分小结与下文预告"><span class="toc-text">12.11 本部分小结与下文预告</span></a><a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E4%B8%89%E9%83%A8%E5%88%86-%C2%B7-%E9%AB%98%E7%BA%A7-Skill" data-toc-target="第十三部分-·-高级-Skill"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">第十三部分 · 高级 Skill</span></a><a class="toc-level-3" href="#13-1-%E5%A4%9A-Skill-%E7%BB%84%E5%90%88-Skill-Graph%EF%BC%9A%E4%B8%A4%E5%BC%A0%E7%9C%9F%E5%AE%9E%E5%AD%98%E5%9C%A8%E7%9A%84%E5%9B%BE" data-toc-target="13-1-多-Skill-组合-Skill-Graph：两张真实存在的图"><span class="toc-text">13.1 多 Skill 组合 / Skill Graph：两张真实存在的图</span></a><a class="toc-level-3" href="#13-2-Skill-Chain%EF%BC%9Aworkflow-%E5%86%85%E9%83%A8%E7%9A%84-Agent-%E6%B4%BE%E7%94%9F%E5%BA%8F%E5%88%97" data-toc-target="13-2-Skill-Chain：workflow-内部的-Agent-派生序列"><span class="toc-text">13.2 Skill Chain：workflow 内部的 Agent 派生序列</span></a><a class="toc-level-3" href="#13-3-Composite-Skill%EF%BC%9ACapability-%E7%9A%84%E5%A4%9A%E8%B4%A1%E7%8C%AE%E7%82%B9%E7%BB%84%E5%90%88" data-toc-target="13-3-Composite-Skill：Capability-的多贡献点组合"><span class="toc-text">13.3 Composite Skill：Capability 的多贡献点组合</span></a><a class="toc-level-3" href="#13-4-Dynamic-Skill%EF%BC%9Agsd-spike-wrap-up%E2%80%94%E2%80%94%E4%B8%80%E4%B8%AA%E7%9C%9F%E5%AE%9E%E7%9A%84%E3%80%81%E6%BA%90%E7%A0%81%E5%AE%9E%E8%AF%81%E7%9A%84%E5%8A%A8%E6%80%81%E6%8A%80%E8%83%BD%E7%94%9F%E6%88%90%E6%9C%BA%E5%88%B6" data-toc-target="13-4-Dynamic-Skill：gsd-spike-wrap-up——一个真实的、源码实证的动态技能生成机制"><span class="toc-text">13.4 Dynamic Skill：gsd-spike --wrap-up——一个真实的、源码实证的动态技能生成机制</span></a><a class="toc-level-3" href="#13-5-Conditional-Skill%EF%BC%9A%E4%B8%89%E5%B1%82%E6%9D%A1%E4%BB%B6%E5%8C%96%E7%94%9F%E6%95%88%E6%9C%BA%E5%88%B6" data-toc-target="13-5-Conditional-Skill：三层条件化生效机制"><span class="toc-text">13.5 Conditional Skill：三层条件化生效机制</span></a><a class="toc-level-3" href="#13-6-Context-Aware-Skill%EF%BC%9A%E4%B8%A4%E5%A4%84%E7%9C%9F%E5%AE%9E%E7%9A%84%E4%B8%8A%E4%B8%8B%E6%96%87%E6%84%9F%E7%9F%A5%E6%9C%BA%E5%88%B6" data-toc-target="13-6-Context-Aware-Skill：两处真实的上下文感知机制"><span class="toc-text">13.6 Context Aware Skill：两处真实的上下文感知机制</span></a><a class="toc-level-3" href="#13-7-Domain-Skill%EF%BC%9Acapabilities-%E7%9B%AE%E5%BD%95%E6%9C%AC%E8%BA%AB%E5%B0%B1%E6%98%AF%E6%8C%89%E9%A2%86%E5%9F%9F%E7%BB%84%E7%BB%87%E7%9A%84" data-toc-target="13-7-Domain-Skill：capabilities-目录本身就是按领域组织的"><span class="toc-text">13.7 Domain Skill：capabilities/ 目录本身就是按领域组织的</span></a><a class="toc-level-3" href="#13-8-Enterprise-Skill%EF%BC%9A%E4%BF%A1%E4%BB%BB%E6%A8%A1%E5%9E%8B%E5%85%A8%E5%A5%97-%E4%BC%81%E4%B8%9A%E9%94%81%E5%AE%9A%E6%9D%A0%E6%9D%86" data-toc-target="13-8-Enterprise-Skill：信任模型全套-企业锁定杠杆"><span class="toc-text">13.8 Enterprise Skill：信任模型全套 + 企业锁定杠杆</span></a><a class="toc-level-3" href="#13-9-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="13-9-本部分小结与下文预告"><span class="toc-text">13.9 本部分小结与下文预告</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/spec-driven-development/" style="--rail: 70%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">7 / 10</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E4%B8%80%E9%83%A8%E5%88%86-%C2%B7-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%EF%BC%88%E6%A0%B8%E5%BF%83%E6%A8%A1%E5%9D%97%E9%80%90%E4%B8%80%E5%88%86%E6%9E%90-%E8%B0%83%E7%94%A8%E5%9B%BE%EF%BC%89" data-toc-target="第十一部分-·-源码阅读（核心模块逐一分析-调用图）" data-title="01 · 第十一部分 · 源码阅读（核心模块逐一分析 + 调用图）" aria-label="第十一部分 · 源码阅读（核心模块逐一分析 + 调用图）"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E4%BA%8C%E9%83%A8%E5%88%86-%C2%B7-Skill-%E5%BC%80%E5%8F%91%E6%95%99%E7%A8%8B%EF%BC%88%E9%9B%B6%E5%9F%BA%E7%A1%80%E4%B8%8A%E6%89%8B%EF%BC%89" data-toc-target="第十二部分-·-Skill-开发教程（零基础上手）" data-title="02 · 第十二部分 · Skill 开发教程（零基础上手）" aria-label="第十二部分 · Skill 开发教程（零基础上手）"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E4%B8%89%E9%83%A8%E5%88%86-%C2%B7-%E9%AB%98%E7%BA%A7-Skill" data-toc-target="第十三部分-·-高级-Skill" data-title="03 · 第十三部分 · 高级 Skill" aria-label="第十三部分 · 高级 Skill"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/Open-GSD-05-源码阅读与Skill开发","title":"Open-GSD 源码解析（五）：核心源码阅读与 Skill 开发","url":"/2026/08/12/engineering-practice/Open-GSD-05-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B8%8ESkill%E5%BC%80%E5%8F%91/","path":"spec-driven-development","index":6,"total":10,"next":{"title":"Open-GSD 源码解析（六）：企业级设计模式、自建 Runtime 与最佳实践","url":"/2026/08/14/engineering-practice/Open-GSD-06-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

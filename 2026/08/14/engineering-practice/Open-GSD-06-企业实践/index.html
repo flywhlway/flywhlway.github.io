@@ -1,0 +1,2443 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Open-GSD 源码解析（六）：企业级设计模式、自建 Runtime 与最佳实践 · 飞轮之道</title>
+<meta name="description" content="Open-GSD 源码解析系列第六篇：给出 27 个领域的企业级 Skill 设计模式与跨领域迁移方法，设计下一代 Enterprise Skill Runtime 与车辆纯日志诊断平台，并总结源码阅读路线与最佳实践。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/08/14/engineering-practice/Open-GSD-06-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Open-GSD 源码解析（六）：企业级设计模式、自建 Runtime 与最佳实践 · 飞轮之道">
+<meta property="og:description" content="Open-GSD 源码解析系列第六篇：给出 27 个领域的企业级 Skill 设计模式与跨领域迁移方法，设计下一代 Enterprise Skill Runtime 与车辆纯日志诊断平台，并总结源码阅读路线与最佳实践。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/08/14/engineering-practice/Open-GSD-06-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / <a href="/paths/spec-driven-development/">源码深读</a><a class="series-chip" href="/paths/spec-driven-development/" title="查看学习路径">第 8 / 10 篇</a>
+    </div>
+    <h1>Open-GSD 源码解析（六）：企业级设计模式、自建 Runtime 与最佳实践</h1>
+    <p class="article-deck">Open-GSD 源码解析系列第六篇：给出 27 个领域的企业级 Skill 设计模式与跨领域迁移方法…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>79 分钟</span>
+      <span>发布于 2026.08</span>
+      <a class="article-meta__tag" href="/tags/AI-%E7%BC%96%E7%A8%8B/">#AI 编程</a><a class="article-meta__tag" href="/tags/Open-GSD/">#Open-GSD</a><a class="article-meta__tag" href="/tags/Agent-Skill/">#Agent Skill</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>一套统一模板可以覆盖 27 个领域的企业级 Skill 设计，领域差异主要落在“替换”与“扩展”，可复用抽象几乎不需要改动。</li><li>自研 Enterprise Skill Runtime 的绝大多数设计是 GSD 原则的服务化放大，只有沙箱一条因多租户威胁模型而做了相反选择。</li><li>纯日志诊断必须区分察觉新颖、刻画结构与命名解释三种能力，平台目标不是消除专家，而是把专家的边际产出最大化。</li><li>面对全新故障时的自信错误是最大的生产级风险，把“新模板数 &gt; 0”接入弃权决策是投入产出比最高的修复。</li><li>能在 CI 期强制的约束绝不留到运行期，这一原则同时贯穿 GSD 与诊断平台设计。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p><strong>本篇导读</strong>：本篇是系列的最后一篇，把前五篇核实的源码事实转化为工程设计：27 个领域的企业级 Skill 设计模式、跨业务领域的迁移方法、一套下一代 Enterprise Skill Runtime 设计、车辆纯日志诊断场景的平台设计，以及源码阅读路线、最佳实践与十大系列总结。与前五篇以研究为主不同，本篇以设计为主，每一处设计都标注其依据的 GSD 机制或实测来源。</p>
+<h2 id="第十四部分-·-企业级-Skill-设计模式（27-个领域范例）"><a href="#第十四部分-·-企业级-Skill-设计模式（27-个领域范例）" class="headerlink" title="第十四部分 · 企业级 Skill 设计模式（27 个领域范例）"></a>第十四部分 · 企业级 Skill 设计模式（27 个领域范例）</h2><h3 id="14-0-方法论说明：两个完整示范-一份紧凑目录"><a href="#14-0-方法论说明：两个完整示范-一份紧凑目录" class="headerlink" title="14.0 方法论说明：两个完整示范 + 一份紧凑目录"></a>14.0 方法论说明：两个完整示范 + 一份紧凑目录</h3><p>本部分要覆盖的领域多达 <strong>27 个</strong>（代码生成、Code Review、API 设计、架构评审、安全评审、性能、DevOps、数据库、微服务、RAG、Agent、Prompt、MCP、知识管理、文档、测试、发布、Git、CI&#x2F;CD、可观测性、根因分析、日志分析、设备诊断、OTA、CAN、遥测、汽车 AI）。逐一展开”目录+SKILL.md+Prompt+Workflow+最佳实践”五件套，会让本部分本身膨胀成一份独立的大文档，稀释可读性。本部分采取的策略是：</p>
+<ol>
+<li><strong>两个完整示范</strong>——第一个（Code Review）<strong>100% 基于 GSD 仓库里真实存在的 <code>gsd:code-review</code> 技能与 <code>gsd-code-reviewer</code> Agent</strong>逐字段复现，不是虚构范例；第二个（设备诊断集群）直接对接一个示例诊断技能包已完成的架构决策，给出 GSD 模式与该诊断技能包既有架构的对照，而非另起炉灶设计一套。</li>
+<li><strong>其余 25 个领域</strong>给出统一模板下的<strong>紧凑目录</strong>（目录结构一行、SKILL.md 核心字段一行、Prompt 要点一行、Workflow 骨架一行、2-3 条最佳实践），按集群分组呈现，保持信息密度的同时避免与前两个示范重复展开已经讲过的通用机制。</li>
+</ol>
+<hr>
+<h3 id="14-1-完整示范一：Code-Review-——直接复现-GSD-真实实现"><a href="#14-1-完整示范一：Code-Review-——直接复现-GSD-真实实现" class="headerlink" title="14.1 完整示范一：Code Review ——直接复现 GSD 真实实现"></a>14.1 完整示范一：Code Review ——直接复现 GSD 真实实现</h3><p>这不是本文设计的范例，而是对仓库里已经存在的 <code>commands/gsd/code-review.md</code> + <code>agents/gsd-code-reviewer.md</code> 的逐字段还原，用意是给读者一份”教科书级别的、已经跑在生产环境里的” SKILL.md + Agent 设计范本。</p>
+<h4 id="目录"><a href="#目录" class="headerlink" title="目录"></a>目录</h4><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">commands/gsd/code-review.md         # Skill/Command 源文件</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">gsd-core/workflows/code-review.md   # 编排逻辑（本文未展开其正文，仅引用其被调用方式）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">agents/gsd-code-reviewer.md         # 审查 Agent</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">agents/gsd-code-fixer.md            # 修复 Agent（--fix 时派生）</span></span></code></pre></div></div></figure>
+
+<h4 id="SKILL-md-核心字段（真实内容）"><a href="#SKILL-md-核心字段（真实内容）" class="headerlink" title="SKILL.md 核心字段（真实内容）"></a>SKILL.md 核心字段（真实内容）</h4><figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">name:</span> <span class="string">gsd:code-review</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">description:</span> <span class="string">Review</span> <span class="string">source</span> <span class="string">files</span> <span class="string">changed</span> <span class="string">during</span> <span class="string">a</span> <span class="string">phase</span> <span class="string">for</span> <span class="string">bugs,</span> <span class="string">security</span> <span class="string">issues,</span> <span class="string">and</span> <span class="string">code</span> <span class="string">quality</span> <span class="string">problems</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">argument-hint:</span> <span class="string">&quot;&lt;phase-number&gt; [--depth=quick|standard|deep] [--files file1,file2,...] [--fix [--all] [--auto]]&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">allowed-tools:</span> [<span class="string">Read</span>, <span class="string">Bash</span>, <span class="string">Glob</span>, <span class="string">Grep</span>, <span class="string">Write</span>, <span class="string">Agent</span>]</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">requires:</span> [<span class="string">config</span>, <span class="string">import</span>, <span class="string">phase</span>, <span class="string">quick</span>, <span class="string">review</span>]</span></span></code></pre></div></div></figure>
+
+<p><strong>三档深度</strong>（真实定义，附耗时估计——这是本文在 71 个技能里少见的、<strong>把预期耗时也写进 description&#x2F;objective</strong> 的样本）：</p>
+<table>
+<thead>
+<tr>
+<th>深度</th>
+<th>内容</th>
+<th>预期耗时</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>quick</code></td>
+<td>仅模式匹配</td>
+<td>~2 分钟</td>
+</tr>
+<tr>
+<td><code>standard</code>（默认）</td>
+<td>逐文件分析 + 语言特定检查</td>
+<td>~5–15 分钟</td>
+</tr>
+<tr>
+<td><code>deep</code></td>
+<td>跨文件分析，含 import 图与调用链</td>
+<td>~15–30 分钟</td>
+</tr>
+</tbody></table>
+<p><strong>文件范围裁定优先级</strong>（真实决策编号 <code>D-08</code>）：<code>--files</code> 显式列表 &gt; <code>SUMMARY.md</code> 提取 &gt; <code>git diff</code> 兜底——这与本系列第三篇（第五部分）讨论的”多个可能来源，需要显式优先级”是同一治理风格。</p>
+<h4 id="Prompt：gsd-code-reviewer-md-的关键语义块"><a href="#Prompt：gsd-code-reviewer-md-的关键语义块" class="headerlink" title="Prompt：gsd-code-reviewer.md 的关键语义块"></a>Prompt：<code>gsd-code-reviewer.md</code> 的关键语义块</h4><ul>
+<li><strong><code>&lt;adversarial_stance&gt;</code></strong>——与本系列第五篇（第十一部分）Verifier 共享同一种”默认假设有问题、去找证据推翻”的姿态设定，证实这不是 Verifier 独有，而是<strong>一切”审查类” Agent 的共同底色</strong>；</li>
+<li><strong><code>&lt;review_scope&gt;</code></strong>——“Issues to Detect” 明确列出检测类别，且给出了具体的检测模式样本：”Hardcoded secrets”（硬编码密钥）、”Dangerous functions”（危险函数）、”Debug artifacts”（调试残留）、”Empty catch”（空 catch 块）——<strong>四个都是可以直接映射成正则&#x2F;AST 规则的具体代码异味</strong>，而不是”注意代码质量”这种空泛表述；</li>
+<li><strong>严重度分类与编号</strong>——<code>REVIEW.md</code> 产出里用 <code>CR-01</code>&#x2F;<code>WR-01</code>&#x2F;<code>IN-01</code> 分别编号 Critical&#x2F;Warning&#x2F;Info 三级发现，与本系列第三篇（第五部分）plan-checker 的”每个问题必须携带显式严重度”是同一条纪律的落地；</li>
+<li><strong>一处特殊 Hook</strong>：<code>before_write</code>（与本系列第五篇第十一部分记录的 <code>PostToolUse Write|Edit</code> 不同的另一种 Hook 触发时机）——本文未深入核实其具体行为，但从命名推断大概率是在 Agent 真正落笔写 <code>REVIEW.md</code> 之前做某种前置校验。</li>
+</ul>
+<h4 id="Workflow：三个门禁-修复迭代闭环"><a href="#Workflow：三个门禁-修复迭代闭环" class="headerlink" title="Workflow：三个门禁 + 修复迭代闭环"></a>Workflow：三个门禁 + 修复迭代闭环</h4><p>命令本身是”薄分发层”（<code>&lt;process&gt;</code> 原文自陈：”This command is a thin dispatch layer”），真正的门禁在 workflow 里：Phase 校验 → 配置门禁（<code>workflow.code_review</code> 开关）→ 文件范围裁定 → 空范围检查（无文件则跳过）→ 派生 <code>gsd-code-reviewer</code> → 呈现结果。<code>--fix --auto</code> 会触发”修复→重新审查”迭代闭环，<strong>上限 3 次</strong>——与本系列第三篇（第五部分）Plan-Checker 的修订循环、本系列第二篇（第三部分）Escalation Gate 的迭代上限是同一条”有限迭代，达到上限就升级给人”的纪律。</p>
+<h4 id="最佳实践（从这个真实样本提炼）"><a href="#最佳实践（从这个真实样本提炼）" class="headerlink" title="最佳实践（从这个真实样本提炼）"></a>最佳实践（从这个真实样本提炼）</h4><ol>
+<li>深度分级要给出<strong>具体耗时预期</strong>，而不是只给”快&#x2F;慢”这种相对描述；</li>
+<li>文件范围来源多于一个时，<strong>显式写出优先级顺序</strong>并给它一个可引用的决策编号（如 <code>D-08</code>）；</li>
+<li>检测类别要具体到”硬编码密钥””空 catch 块”这种可执行细节，而非”检查代码质量”。</li>
+</ol>
+<hr>
+<h3 id="14-2-完整示范二：设备诊断集群——与既有诊断技能包架构对照"><a href="#14-2-完整示范二：设备诊断集群——与既有诊断技能包架构对照" class="headerlink" title="14.2 完整示范二：设备诊断集群——与既有诊断技能包架构对照"></a>14.2 完整示范二：设备诊断集群——与既有诊断技能包架构对照</h3><h4 id="目录对照"><a href="#目录对照" class="headerlink" title="目录对照"></a>目录对照</h4><table>
+<thead>
+<tr>
+<th>诊断技能包既有结构</th>
+<th>GSD 对应机制</th>
+<th>可引入的增量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>14 个 <code>diag-*</code> 技能，统一前缀</td>
+<td>GSD 的 <code>gsd-*</code> 命名前缀 + <code>capability.json</code> 的 <code>gsd-</code>&#x2F;<code>gsd-core-</code> 保留前缀机制</td>
+<td>可以把 <code>diag-</code> 前缀本身注册为保留前缀，防止未来第三方诊断技能包冒用</td>
+</tr>
+<tr>
+<td>11 个知识树节点（OTA 6 完整 + 3 占位降级）</td>
+<td><code>capabilities/</code> 的 44 个能力目录，每个含独立 <code>capability.json</code></td>
+<td>每个知识树节点可以对应一个独立 <code>capability.json</code>，携带自己的 <code>engines</code>&#x2F;<code>activationKey</code>&#x2F;<code>tier</code>，让”占位降级”从代码里的 if-else 变成声明式的”未启用”状态</td>
+</tr>
+<tr>
+<td>5 个 SubAgent，严格 JSON 回传契约</td>
+<td><code>agent-contracts.md</code>（本系列第五篇第十一部分已引用）——完成标记 + 交接契约的统一登记表</td>
+<td>可以为 5 个 SubAgent 建一张类似的”契约登记表”，明确每个 Agent 的完成标记与交接字段，供未来新增 SubAgent 时对照</td>
+</tr>
+<tr>
+<td>领域技能不可被用户显式调用，须 Agent 内部触发</td>
+<td>GSD 的”进阶&#x2F;专用 Agent”（如 <code>gsd-pattern-mapper</code>）同样不作为用户可见命令</td>
+<td>已经是同一种设计——<strong>不需要改动</strong>，只是确认了这条约束在 GSD 生态里也有先例</td>
+</tr>
+</tbody></table>
+<h4 id="SKILL-md-Prompt-Workflow：可直接引入的三个具体增量"><a href="#SKILL-md-Prompt-Workflow：可直接引入的三个具体增量" class="headerlink" title="SKILL.md &#x2F; Prompt &#x2F; Workflow：可直接引入的三个具体增量"></a>SKILL.md &#x2F; Prompt &#x2F; Workflow：可直接引入的三个具体增量</h4><ol>
+<li><p><strong>用 <code>contribution</code> 机制承载”领域降级提示”</strong>——示例诊断技能包当前对 TSP 远控&#x2F;智驾&#x2F;座舱的处理是”占位并降级引导 Agent 回复暂不支持”。用 GSD 的语言重新表述：这正是一个 <code>contribution</code>（往某个诊断入口 Agent 的 Prompt 里注入”该领域尚不支持”的提示片段），而不需要在主 Agent 逻辑里写死判断——这样新增第四个完整领域时，只需要新增一个 <code>capability.json</code> + 撤销对应的降级 <code>contribution</code>，而不需要改动主流程代码。</p>
+</li>
+<li><p><strong>用 Verifier 的 Data-Flow Trace 技术校验诊断报告的证据链</strong>——本系列第五篇（第十一部分）详解的”沿 UI 渲染反向追溯到真实数据源、标记静态返回值”技术，直接翻译到设备诊断场景就是：<strong>沿着诊断报告里的每一条结论，反向追溯到它引用的证据工具输出，标记”结论存在但证据链断裂或指向伪造证据”的情况</strong>。诊断技能包已有的”伪造 row_hash 被质量门 block 拦截”正是这一思路的一个具体实例（校验证据指纹的真实性）；Data-Flow Trace 提供的是一个更<strong>系统化</strong>的版本——不只校验单个证据的真实性，还校验”结论→证据”这条引用链本身是否完整、有没有中间环节被静默跳过。</p>
+</li>
+<li><p><strong>用 <code>gsd-spike --wrap-up</code> 的模式固化探索性诊断经验</strong>——本系列第五篇（第十三部分）详解的这个机制，可以直接对应到”工程师对一类新故障做了几次探索性排查”的场景：每次探索性诊断产出一份带验证状态（验证有效&#x2F;部分有效&#x2F;已证伪）的记录，达到一定数量后自动按故障特征分组、合成一个新的领域诊断技能——<strong>连”已确认无效的排查方向”也要被固化</strong>，这对应诊断技能包未来扩展 TSP&#x2F;智驾&#x2F;座舱领域时，可以先用一种”探索模式”积累诊断经验，成熟后再固化成正式的知识树节点，而不必一开始就要求完整设计。</p>
+</li>
+</ol>
+<h4 id="最佳实践"><a href="#最佳实践" class="headerlink" title="最佳实践"></a>最佳实践</h4><ol>
+<li>领域降级用声明式 <code>contribution</code> 承载，而不是主流程里的硬编码分支；</li>
+<li>证据链校验从”单点证据真实性”升级到”结论到证据的引用链完整性”（Data-Flow Trace 思路）；</li>
+<li>新领域先用探索模式积累经验（含”确认无效”的死胡同记录），成熟后再固化为正式知识树节点，避免过早设计。</li>
+</ol>
+<hr>
+<h3 id="14-3-其余-25-个领域的紧凑目录"><a href="#14-3-其余-25-个领域的紧凑目录" class="headerlink" title="14.3 其余 25 个领域的紧凑目录"></a>14.3 其余 25 个领域的紧凑目录</h3><p>以下按集群分组，每个领域给出统一模板：<strong>目录 · SKILL.md 核心 · Prompt 要点 · Workflow 骨架 · 最佳实践</strong>。这些领域 GSD 源码中<strong>没有同名的现成技能</strong>，以下设计是本文依据前十四部分（本系列前五篇）已验证的 GSD 设计模式（Skill&#x2F;Workflow&#x2F;Agent 三层切分、<code>allowed-tools</code> 最小权限、<code>requires</code> 依赖声明、severity 分级、Gate 分类法）做的<strong>推导性应用</strong>，而非官方原文，此处统一声明，不再逐条重复标注。</p>
+<h4 id="集群-A：软件工程核心（11-个）"><a href="#集群-A：软件工程核心（11-个）" class="headerlink" title="集群 A：软件工程核心（11 个）"></a>集群 A：软件工程核心（11 个）</h4><table>
+<thead>
+<tr>
+<th>领域</th>
+<th>目录</th>
+<th>SKILL.md 核心</th>
+<th>Prompt 要点</th>
+<th>Workflow 骨架</th>
+<th>最佳实践</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>代码生成</strong></td>
+<td><code>skills/gen-code/</code></td>
+<td><code>allowed-tools:[Read,Write,Edit,Bash]</code>；<code>requires:[project-conventions]</code></td>
+<td>参照 <code>&lt;review_scope&gt;</code> 模式，明确”生成范围边界”（哪些文件可碰）</td>
+<td>Researcher(读既有约定)→Generator→Self-Reviewer(套用14.1 adversarial_stance)</td>
+<td>生成前先读 <code>project-conventions</code> 技能，禁止凭空发明风格</td>
+</tr>
+<tr>
+<td><strong>API 设计</strong></td>
+<td><code>skills/api-design/</code></td>
+<td><code>requires:[architecture-rules]</code></td>
+<td>契约先行——先产出 OpenAPI&#x2F;接口契约草案，再实现</td>
+<td>Contract-Draft→Review-Gate(Pre-flight)→Implement</td>
+<td>契约变更需要决策覆盖门禁（引用第三篇第五部分、第二篇第三部分的 BLOCKING 覆盖检查）</td>
+</tr>
+<tr>
+<td><strong>架构评审</strong></td>
+<td><code>skills/architecture-review/</code></td>
+<td><code>effort: max</code>（重编排器，参照第四篇第七部分）</td>
+<td>输出物对照 ADR 格式（<code>docs/adr/</code> 惯例）</td>
+<td>Multi-researcher 并行(参照 gsd-project-researcher 4 路并行模式,第一篇第一部分)</td>
+<td>结论必须落成 ADR 文档，不接受口头结论</td>
+</tr>
+<tr>
+<td><strong>安全评审</strong></td>
+<td><code>skills/security-review/</code></td>
+<td><code>requires:[security-baseline]</code></td>
+<td>复用 <code>untrusted-input-boundary.md</code> 三层防御（第四篇第十部分）作为评审基线</td>
+<td>Threat-Model→Scan(pattern)→Adversarial-Review</td>
+<td>STRIDE 分类法（第三篇第五部分提到 T-{phase}-SC STRIDE 行，可直接借用）</td>
+</tr>
+<tr>
+<td><strong>性能</strong></td>
+<td><code>skills/performance/</code></td>
+<td><code>requires:[profiling-tools]</code></td>
+<td>Data-Flow Trace 思路同样适用——沿性能瓶颈反向追溯到真实调用链而非猜测</td>
+<td>Profile→Trace→Fix→Re-measure(带迭代上限)</td>
+<td>每次优化都要有前后测量数据，不接受”感觉更快了”</td>
+</tr>
+<tr>
+<td><strong>DevOps</strong></td>
+<td><code>skills/devops/</code></td>
+<td><code>allowed-tools</code> 需含 Bash，但要有明确白名单（参照 gsd-quick 的最小权限原则）</td>
+<td>复用 <code>&lt;destructive_git_prohibition&gt;</code> 式的”禁止破坏性操作”命名段落</td>
+<td>Plan(只读)→Execute(受限)→Verify</td>
+<td>危险操作一律走 <code>gate=&quot;blocking-human&quot;</code>（第三篇第四部分、第五篇第十一部分），不可自动模式绕过</td>
+</tr>
+<tr>
+<td><strong>数据库</strong></td>
+<td><code>skills/database/</code></td>
+<td><code>requires:[schema-registry]</code></td>
+<td>Schema 变更需要”Schema-drift 检测”（源码里已有 <code>schema-detect.cts</code> 模块，第二篇第二部分提及）</td>
+<td>Migration-Plan→Dry-Run→Apply→Verify</td>
+<td>迁移计划与执行分离（参照第五篇第十一部分的 Plan&#x2F;Execute 函数拆分模式）</td>
+</tr>
+<tr>
+<td><strong>微服务</strong></td>
+<td><code>skills/microservice/</code></td>
+<td><code>requires:[service-boundary-rules]</code></td>
+<td>服务边界评审对照”跨计划数据契约”维度（第三篇第五部分 Plan-Checker Dimension 9）</td>
+<td>Boundary-Review→Contract-Check→Implement</td>
+<td>服务间契约变更需要双向的”跨计划数据契约”校验</td>
+</tr>
+<tr>
+<td><strong>测试</strong></td>
+<td><code>skills/testing/</code></td>
+<td>直接复用 GSD 自己的六大测试契约（第五篇第十二部分）</td>
+<td>契约 1-6 逐条作为 Prompt 里的检查清单</td>
+<td>Generate-Test→Self-Check(六契约)→Run</td>
+<td>禁止”永真断言”与”源码文本断言”，与 GSD 自身标准完全一致</td>
+</tr>
+<tr>
+<td><strong>发布</strong></td>
+<td><code>skills/release/</code></td>
+<td>复用 <code>VERSIONING.md</code> 的三级发布 + 两个 dist-tag 模式（第五篇第十二部分）</td>
+<td>Semver 判定规则直接照搬</td>
+<td>Changelog-Draft→Version-Bump→Tag→Publish</td>
+<td>Beta&#x2F;RC 预发布区分主版本&#x2F;次版本，不混用</td>
+</tr>
+<tr>
+<td><strong>Git</strong></td>
+<td><code>skills/git-workflow/</code></td>
+<td>复用 <code>git-integration.md</code>“commit outcomes not process”原则（第二篇第三部分）</td>
+<td>Conventional Commits 格式 <code>{type}({scope}): {desc}</code></td>
+<td>Stage→Commit(原子)→（可选）PR</td>
+<td>不用 <code>git add .</code>&#x2F;<code>-A</code>（第四篇第十部分 universal-anti-patterns 已有此规则）</td>
+</tr>
+</tbody></table>
+<h4 id="集群-B：平台工程（5-个）"><a href="#集群-B：平台工程（5-个）" class="headerlink" title="集群 B：平台工程（5 个）"></a>集群 B：平台工程（5 个）</h4><table>
+<thead>
+<tr>
+<th>领域</th>
+<th>目录</th>
+<th>SKILL.md 核心</th>
+<th>Prompt 要点</th>
+<th>Workflow 骨架</th>
+<th>最佳实践</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CI&#x2F;CD</strong></td>
+<td><code>skills/cicd/</code></td>
+<td><code>requires:[deploy-checklist]</code></td>
+<td>复用 Gate 四分类法（第二篇第三部分）：Pre-flight 检查环境、Abort Gate 应对危险状态</td>
+<td>Lint→Test→Build→Deploy-Gate</td>
+<td>部署前置检查清单化，而非人工记忆</td>
+</tr>
+<tr>
+<td><strong>可观测性</strong></td>
+<td><code>skills/observability/</code></td>
+<td><code>requires:[logging-standard]</code></td>
+<td>参照本系列第一篇（第一部分）引用的 GSD 自身可观测性设计（<code>observability/event.cjs</code>&#x2F;<code>logger.cjs</code>，第五篇第十一部分提及）</td>
+<td>Instrument→Dashboard→Alert-Rule</td>
+<td>日志&#x2F;指标&#x2F;追踪三件套要有统一 schema，而非各写各的</td>
+</tr>
+<tr>
+<td><strong>根因分析</strong></td>
+<td><code>skills/root-cause/</code></td>
+<td><code>effort: max</code></td>
+<td><strong>直接复用 Verifier Step 4b 数据流追溯技术</strong>（第五篇第十一部分、14.2 节）作为核心分析方法</td>
+<td>Symptom→Trace-Back→Hypothesis→Verify</td>
+<td>每个假设必须有可验证的证据支持，禁止”大概率是这个原因”式结论</td>
+</tr>
+<tr>
+<td><strong>日志分析</strong></td>
+<td><code>skills/log-analysis/</code></td>
+<td><code>requires:[log-format-registry]</code></td>
+<td>复用诊断技能包已验证的”证据指纹+五级预算压缩”思路（14.2 已述）</td>
+<td>Parse→Index→Query→Summarize(预算感知)</td>
+<td>稀有模式全保留、高频模式压缩摘要（诊断技能包已验证的具体比例：99.4% 压缩率零根因链丢失）</td>
+</tr>
+<tr>
+<td><strong>知识管理</strong></td>
+<td><code>skills/knowledge/</code></td>
+<td>复用 <code>docs/skills/discovery-contract.md</code> 式的”发现契约”（第四篇第六、八部分）设计知识条目发现规则</td>
+<td>谓词化知识库（复用第三篇第四部分的 <code>CLASS.subkey=value</code> 机器可 grep 谓词格式）</td>
+<td>Ingest→Classify→Index→Query</td>
+<td>知识条目要可被逐条引用（如 <code>META.RULE.brief-must-cite-doc</code>），而非整篇转述</td>
+</tr>
+</tbody></table>
+<h4 id="集群-C：AI-Agent-平台（4-个）"><a href="#集群-C：AI-Agent-平台（4-个）" class="headerlink" title="集群 C：AI &#x2F; Agent 平台（4 个）"></a>集群 C：AI &#x2F; Agent 平台（4 个）</h4><table>
+<thead>
+<tr>
+<th>领域</th>
+<th>目录</th>
+<th>SKILL.md 核心</th>
+<th>Prompt 要点</th>
+<th>Workflow 骨架</th>
+<th>最佳实践</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>RAG</strong></td>
+<td><code>skills/rag/</code></td>
+<td><code>requires:[embedding-adapter]</code>（源码确有 <code>embedding-adapter.cts</code> 模块，第二篇第二部分提及）</td>
+<td>复用 Research Store 的内容寻址缓存思路（第四篇第六部分：<code>sha256(...)</code> 键 + 按来源分级 TTL）</td>
+<td>Index→Retrieve→Rerank→Synthesize</td>
+<td>检索结果要标注置信度分级（复用第三篇第四部分估算体系”不允许自评，路由到实测历史”的精神——检索质量应基于历史命中率而非模型自称的相关度）</td>
+</tr>
+<tr>
+<td><strong>Agent 设计</strong></td>
+<td><code>skills/agent-design/</code></td>
+<td>直接复用本系列第四、五篇（第六～十一部分）建立的 Skill&#x2F;Workflow&#x2F;Agent 三层模型</td>
+<td><code>allowed-tools</code> 最小化 + 完成标记契约（<code>agent-contracts.md</code> 式登记表）</td>
+<td>Design→Contract-Definition→Implement→Test</td>
+<td>新 Agent 上线前先在 <code>agent-contracts.md</code> 式登记表里定义完成标记，而非事后补</td>
+</tr>
+<tr>
+<td><strong>Prompt 工程</strong></td>
+<td><code>skills/prompt-eng/</code></td>
+<td>直接复用本系列第四篇（第十部分）的五层 Prompt 模型</td>
+<td>三层注入防御（写入侧&#x2F;读取侧&#x2F;自我护栏，第四篇第十部分）作为任何新 Prompt 系统的默认安全基线</td>
+<td>Draft→Red-Team(注入测试)→Refine</td>
+<td>新增任何”引用外部内容”的 Prompt 路径，默认套用随机化分隔符（第四篇第十部分 PPA 技术）</td>
+</tr>
+<tr>
+<td><strong>MCP</strong></td>
+<td><code>skills/mcp-integration/</code></td>
+<td>复用 GSD 自身的 <code>bin/gsd-mcp-server.js</code> 协议化集成模式（第二篇第二、三部分）</td>
+<td>讲清楚”声明式&#x2F;命令式&#x2F;协议化”三条路径的取舍（第二篇 3.3 节）</td>
+<td>Define-Interface→Implement-Server→Register</td>
+<td>优先协议化（MCP）而非为每个宿主写专属插件，除非目标宿主明确不支持 MCP</td>
+</tr>
+</tbody></table>
+<h4 id="集群-D：文档（1-个）"><a href="#集群-D：文档（1-个）" class="headerlink" title="集群 D：文档（1 个）"></a>集群 D：文档（1 个）</h4><table>
+<thead>
+<tr>
+<th>领域</th>
+<th>目录</th>
+<th>SKILL.md 核心</th>
+<th>Prompt 要点</th>
+<th>Workflow 骨架</th>
+<th>最佳实践</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>文档</strong></td>
+<td><code>skills/docs/</code></td>
+<td>直接复用 GSD 自己的四象限文档体系（tutorials&#x2F;how-to&#x2F;reference&#x2F;explanation，第二篇第二部分）</td>
+<td>复用”声明→生成→校验漂移”三件套确保文档不脱节代码</td>
+<td>Classify(四象限归类)→Draft→Doc-Verifier(校验事实性,参照 gsd-doc-verifier)</td>
+<td>生成型文档（如 INVENTORY.md）与手写型文档严格区分，前者禁止手改</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="14-4-跨领域通用-SKILL-md-骨架（供未覆盖领域自行套用）"><a href="#14-4-跨领域通用-SKILL-md-骨架（供未覆盖领域自行套用）" class="headerlink" title="14.4 跨领域通用 SKILL.md 骨架（供未覆盖领域自行套用）"></a>14.4 跨领域通用 SKILL.md 骨架（供未覆盖领域自行套用）</h3><p>汇总前十四部分（本系列前五篇）的全部纪律，得到一份可直接复制的骨架：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="30"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">---</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">name:</span> <span class="string">&lt;domain&gt;-&lt;action&gt;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">description:</span> <span class="string">&quot;&lt;100字符内，动词开头，说明做什么+什么时候不该用&gt;&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">argument-hint:</span> <span class="string">&quot;&lt;必要参数&gt; [--可选标志]&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">allowed-tools:</span> [<span class="string">&lt;按最小需要声明，不要图省事全给&gt;</span>]</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">requires:</span> [<span class="string">&lt;构建期依赖，运行时会被剥离&gt;</span>]</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">effort:</span> <span class="string">&lt;max|low，仅重编排器/轻状态类需要声明&gt;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="meta">---</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="string">&lt;objective&gt;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="string">一句话说清做什么；如果和相近技能容易混淆，补一句&quot;什么时候不该用这个&quot;。</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="string">&lt;/objective&gt;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="string">&lt;execution_context&gt;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="string">@&lt;指向</span> <span class="string">workflow</span> <span class="string">文件的路径&gt;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="string">&lt;/execution_context&gt;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="string">&lt;context&gt;</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="string">$ARGUMENTS</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="string">解析规则写在这里，或明确交给</span> <span class="string">workflow</span> <span class="string">的</span> <span class="string">init</span> <span class="string">处理。</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="string">&lt;/context&gt;</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="string">&lt;process&gt;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="string">Parse</span> <span class="string">$ARGUMENTS</span> <span class="string">for</span> <span class="string">subcommands</span> <span class="string">FIRST（如有子命令）。</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="string">只读分支显式</span> <span class="string">STOP，不要往下继续执行有副作用的步骤。</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="string">&lt;/process&gt;</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"><span class="string">&lt;security_notes&gt;</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"><span class="string">如果处理任何用户提供的、会被用作路径片段或</span> <span class="string">shell</span> <span class="string">参数的自由文本，</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx"><span class="string">在这里明确写出：允许字符集、长度上限、拒绝模式、显示前的二次消毒规则。</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx"><span class="string">&lt;/security_notes&gt;</span></span></span></code></pre></div></div></figure>
+
+<p>配套 Workflow 骨架建议遵循本系列第二篇（第三部分）3.2.1 节的字节预算分级与渐进式披露原则；配套测试建议直接套用本系列第五篇（第十二部分）的六大测试严谨性契约；配套 Agent（若需要派生）建议参照本系列第五篇（第十一部分）Planner&#x2F;Executor&#x2F;Verifier 三份 Prompt 的语义块划分方式，按”角色→范围限制→执行流程→自检”的顺序组织。</p>
+<h3 id="14-5-本部分小结与下文预告"><a href="#14-5-本部分小结与下文预告" class="headerlink" title="14.5 本部分小结与下文预告"></a>14.5 本部分小结与下文预告</h3><p>第十四部分用两个完全真实的 GSD 范例（Code Review 直接复现源码、设备诊断集群对接诊断技能包既有架构）打底，再用统一模板紧凑覆盖了其余 25 个领域，最后提炼出一份可直接复制的通用 SKILL.md 骨架。三条最值得带走的具体增量已经在 14.2 节写明，可直接用于诊断技能包的后续迭代：用声明式 <code>contribution</code> 替代硬编码降级分支、用 Data-Flow Trace 思路升级证据链校验、用 <code>spike --wrap-up</code> 式的探索期积累新领域诊断经验。</p>
+<p>下一部分（第十五部分 · 迁移到其它业务领域）将从”27 个领域各自怎么设计”抽象一层，回答”哪些抽象可复用、哪些该保持不变、哪些该替换、哪些该扩展、哪些该插件化、哪些该配置化”这个更元一层的问题，覆盖医疗、金融、教育、制造、产业物联网、企业知识库、AI Agent、代码助手、诊断平台、客服平台、Workflow Agent、Copilot 等目标领域。</p>
+<hr>
+<h2 id="第十五部分-·-迁移到其它业务领域"><a href="#第十五部分-·-迁移到其它业务领域" class="headerlink" title="第十五部分 · 迁移到其它业务领域"></a>第十五部分 · 迁移到其它业务领域</h2><blockquote>
+<p>本部分不需要新的源码研究——它是对前十四部分（本系列前五篇）已核实事实的一次<strong>综合与抽象</strong>。核心方法是把 GSD 的每一个组成部分放进六个筐里：<strong>可复用抽象</strong>（跨领域都成立的设计原理）、<strong>保持不变</strong>（工程基础设施，与领域无关）、<strong>替换</strong>（领域特定，必须重新设计）、<strong>扩展</strong>（GSD 有雏形但深度不够）、<strong>插件化</strong>（该用 Capability 机制承载的可选点）、<strong>配置化</strong>（该做成 <code>config.json</code> 参数而非代码）。凡是本部分的判断，均标注其依据前十四部分的哪一节，不重新发明术语。</p>
+</blockquote>
+<h3 id="15-1-六维分类框架"><a href="#15-1-六维分类框架" class="headerlink" title="15.1 六维分类框架"></a>15.1 六维分类框架</h3><h4 id="可复用抽象——原理而非代码"><a href="#可复用抽象——原理而非代码" class="headerlink" title="可复用抽象——原理而非代码"></a>可复用抽象——原理而非代码</h4><table>
+<thead>
+<tr>
+<th>抽象</th>
+<th>依据</th>
+<th>为什么能跨领域复用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>五阶段纪律（先对齐决策、再规划、再执行、再核验、再归档）</td>
+<td>第三篇第五部分</td>
+<td>这是”如何对抗歧义、如何验证目标达成”的通用工作法，与”造的是代码还是别的东西”无关</td>
+</tr>
+<tr>
+<td>新鲜上下文子代理隔离</td>
+<td>第三篇第四部分</td>
+<td>只要执行者是 LLM，Context Rot 就存在，与领域无关</td>
+</tr>
+<tr>
+<td>Skill&#x2F;Workflow&#x2F;Agent 三层成本切分</td>
+<td>第四篇第六部分</td>
+<td>“触发轻、编排中、执行重”这个成本分层是 token 经济学，不是软件工程特有的</td>
+</tr>
+<tr>
+<td>“制品对等≠信任对等”的信任模型</td>
+<td>第二篇第三部分</td>
+<td>任何允许第三方扩展的平台都要回答”谁能做什么、谁负责什么”，这与扩展的内容是代码还是诊疗规则无关</td>
+</tr>
+<tr>
+<td>Gate 四分类法（Pre-flight&#x2F;Revision&#x2F;Escalation&#x2F;Abort）</td>
+<td>第二篇第三部分、第五篇第十一部分</td>
+<td>“何时拦、何时问人、何时整体中止”是任何自动化流程的通用决策拓扑</td>
+</tr>
+<tr>
+<td>“声明→生成→校验漂移”三件套</td>
+<td>第二篇第二部分</td>
+<td>任何”多份产物必须保持一致”的场景都适用，不限于代码与文档</td>
+</tr>
+<tr>
+<td>Data-Flow Trace（沿结论反向追溯证据源）</td>
+<td>第五篇第十一部分、第十四部分</td>
+<td>“确认结论有真实数据支撑，而非看起来对但其实是假的”是通用的验证方法论</td>
+</tr>
+</tbody></table>
+<h4 id="应该保持不变——工程基础设施，与领域无关"><a href="#应该保持不变——工程基础设施，与领域无关" class="headerlink" title="应该保持不变——工程基础设施，与领域无关"></a>应该保持不变——工程基础设施，与领域无关</h4><ul>
+<li><strong>三层独立注入防御</strong>（第四篇第十部分）——只要系统会读取外部&#x2F;用户输入喂给 LLM，这套写入侧&#x2F;读取侧&#x2F;Prompt 自我护栏就该原样搬；</li>
+<li><strong>防原型污染纪律</strong>（第四篇第十部分、第五篇第十一部分）——纯 JavaScript&#x2F;TypeScript 工程实践，与业务领域无关；</li>
+<li><strong>测试六大契约</strong>（第五篇第十二部分）——“测真实代码不测源码文本””不做永真断言”这类纪律不因领域而变；</li>
+<li><strong>构建-安装-发现-加载的分层解耦</strong>（第四篇第八部分）——扫描逻辑不关心宿主是谁、也不该关心业务领域是什么。</li>
+</ul>
+<h4 id="应该替换——领域特定，不能照搬"><a href="#应该替换——领域特定，不能照搬" class="headerlink" title="应该替换——领域特定，不能照搬"></a>应该替换——领域特定，不能照搬</h4><ul>
+<li><strong>具体 Agent 角色</strong>——<code>gsd-planner</code>&#x2F;<code>gsd-executor</code>&#x2F;<code>gsd-verifier</code> 是”软件工程”语境的具体化身；换到医疗领域，对应的应该是”诊疗方案规划者&#x2F;执行记录员&#x2F;复核医师”这类完全不同的角色定义，<strong>共享的只是”规划者→执行者→核验者”这个三段式骨架</strong>，不是这三个 Agent 的 Prompt 内容；</li>
+<li><strong>具体制品格式</strong>——<code>PLAN.md</code>&#x2F;<code>SUMMARY.md</code> 是为”代码变更”设计的字段（<code>files_modified</code>、commit hash 等）；金融领域的对应制品可能是”交易审批单”（字段是金额、风险评级、审批链），字段集合必须重新设计；</li>
+<li><strong>Git Layer 整个概念</strong>——“用 Git 记录变更”是软件工程独有的；金融&#x2F;医疗领域的”变更留痕系统”通常是审计日志或电子病历版本控制，这个替换不是”换个工具”这么简单，而是<strong>换一套完全不同的留痕哲学</strong>（Git 允许历史重写与分支实验，多数强合规场景不允许）。</li>
+</ul>
+<h4 id="应该扩展——GSD-有雏形但深度不够"><a href="#应该扩展——GSD-有雏形但深度不够" class="headerlink" title="应该扩展——GSD 有雏形但深度不够"></a>应该扩展——GSD 有雏形但深度不够</h4><ul>
+<li><strong>合规&#x2F;监管维度</strong>——第十四部分的”安全评审”领域目前只对应到 STRIDE 威胁建模层面；金融（PCI-DSS&#x2F;反洗钱）、医疗（HIPAA&#x2F;临床数据保护）领域需要在 Gate 体系里新增一类”合规 Gate”，且这类 Gate 的判定标准往往需要外部权威数据源（监管规则库）而非纯静态代码分析；</li>
+<li><strong>领域知识注入</strong>——<code>agent_skills</code> 机制（第四篇第六部分）足以注入”编码规范”，但医疗&#x2F;金融领域需要注入的是<strong>结构化的领域本体</strong>（ICD 编码、金融产品分类），这比一份 Markdown Skill 文件承载的信息密度要求更高，需要扩展成”本体&#x2F;术语表”这一新的引用类型；</li>
+<li><strong>多级审批链</strong>——GSD 的 <code>checkpoint:human-verify</code>&#x2F;<code>checkpoint:decision</code>（第三篇第四部分）是”一个人确认一次”模型；企业客服升级、金融大额审批场景常需要”A 批准后 B 才能看见”的<strong>链式</strong>审批，这是当前 Gate 体系里没有的一种新拓扑，需要在 Escalation Gate 基础上扩展出”多签”变体。</li>
+</ul>
+<h4 id="应该插件化——用-Capability-机制承载"><a href="#应该插件化——用-Capability-机制承载" class="headerlink" title="应该插件化——用 Capability 机制承载"></a>应该插件化——用 Capability 机制承载</h4><ul>
+<li>领域特定的规则库（车辆 DTC 码库、医疗 ICD 编码、金融产品分类）——每一套规则库对应一个独立 <code>capability.json</code>，声明自己的 <code>config</code>&#x2F;<code>activationKey</code>，可以独立开关、独立升级，不与主框架代码耦合（第五篇第十二、十三部分已示范这一模式）；</li>
+<li>第三方合规工具&#x2F;评审服务——直接复用 <strong>Reviewer Lane</strong>（第二篇第三部分已述其”披露解析后的目标主机而非仅二进制名”的信任模型）这一机制，企业可以把”KYC 检查服务””临床指南比对服务”接成一条 Reviewer Lane，而不需要为每个合规工具单独设计集成方式。</li>
+</ul>
+<h4 id="应该配置化——config-json-式参数，不需要改代码"><a href="#应该配置化——config-json-式参数，不需要改代码" class="headerlink" title="应该配置化——config.json 式参数，不需要改代码"></a>应该配置化——<code>config.json</code> 式参数，不需要改代码</h4><ul>
+<li>审批阈值（金额、风险等级门槛）；</li>
+<li>数据保留期限（合规要求因司法辖区而异）；</li>
+<li>语言&#x2F;术语表（客服、教育领域天然多语言）；</li>
+<li>模型分级策略（第四篇第六部分的 Model Profile 机制——不同领域对”准确性 vs 成本”的权衡完全不同，金融风控可能永远选最高档模型，客服闲聊可能优先选便宜档）。</li>
+</ul>
+<hr>
+<h3 id="15-2-十二个目标领域的六维应用（紧凑对照）"><a href="#15-2-十二个目标领域的六维应用（紧凑对照）" class="headerlink" title="15.2 十二个目标领域的六维应用（紧凑对照）"></a>15.2 十二个目标领域的六维应用（紧凑对照）</h3><p>以下表格把 15.1 节的通用框架应用到十二个目标领域。<strong>产业物联网&#x2F;诊断平台</strong>已在第十四部分做过完整的正面设计（对接示例诊断技能包），此处只做简短交叉引用，不重复展开；<strong>AI Agent&#x2F;Workflow Agent&#x2F;Copilot</strong> 三者与 GSD 自身定位高度重叠，重点讨论”迁移到这些领域时哪些反而应该做减法”。</p>
+<table>
+<thead>
+<tr>
+<th>领域</th>
+<th>替换（核心）</th>
+<th>扩展（核心）</th>
+<th>插件化（核心）</th>
+<th>配置化（核心）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>医疗</strong></td>
+<td>Agent 角色→诊疗规划&#x2F;执行&#x2F;复核；制品→诊疗记录而非 PLAN.md&#x2F;SUMMARY.md；Git Layer→电子病历版本控制（不允许历史重写）</td>
+<td>合规 Gate（HIPAA）；领域本体注入（ICD&#x2F;临床指南）</td>
+<td>ICD 编码库、临床指南比对服务（Reviewer Lane）</td>
+<td>数据保留期限、审批链层级、地区法规差异</td>
+</tr>
+<tr>
+<td><strong>金融</strong></td>
+<td>Agent 角色→风控规划&#x2F;交易执行&#x2F;合规复核；制品→交易审批单；Git Layer→不可篡改审计日志</td>
+<td>合规 Gate（PCI-DSS&#x2F;反洗钱）；多级审批链（Escalation Gate 多签变体）</td>
+<td>KYC&#x2F;AML 检查服务（Reviewer Lane）；产品分类规则库</td>
+<td>审批金额阈值、风险评级模型、模型分级（风控永远高档）</td>
+</tr>
+<tr>
+<td><strong>教育</strong></td>
+<td>Agent 角色→教案规划&#x2F;授课执行&#x2F;学习效果复核；制品→学习路径文档</td>
+<td>Context Aware——依据学生历史学习记录动态调整（对应第五篇第十三部分 discuss-phase assumptions 模式的教育版）</td>
+<td>学科知识库、题库（作为独立 capability）</td>
+<td>语言&#x2F;难度分级、学习节奏参数</td>
+</tr>
+<tr>
+<td><strong>制造</strong></td>
+<td>Agent 角色→工艺规划&#x2F;产线执行&#x2F;质检复核；制品→工艺卡片而非 PLAN.md</td>
+<td>合规 Gate（安全生产标准）；数据流追溯用于溯源缺陷根因（第五篇第十一部分 Data-Flow Trace 的制造业版：从次品反向追溯到具体工序参数）</td>
+<td>设备协议适配（类比 GSD 的 Runtime Layer 多宿主适配思路，第二篇 3.3 节）</td>
+<td>良率阈值、工艺参数容差</td>
+</tr>
+<tr>
+<td><strong>产业物联网 &#x2F; 诊断平台</strong></td>
+<td>见第十四部分 14.2 完整设计（已对接示例诊断技能包）</td>
+<td>同上</td>
+<td>同上（领域知识树节点即 capability）</td>
+<td>同上</td>
+</tr>
+<tr>
+<td><strong>企业知识库</strong></td>
+<td>制品→知识条目而非代码文件；Verifier→事实核查而非目标回溯</td>
+<td>谓词化知识库（复用第三篇第四部分的 <code>CLASS.subkey=value</code> 机器可 grep 格式）</td>
+<td>各业务线知识源接入（每个数据源一个 capability）</td>
+<td>更新频率、权威源优先级</td>
+</tr>
+<tr>
+<td><strong>AI Agent 平台</strong>（通用）</td>
+<td>几乎不需要替换——GSD 本身就是为此设计的</td>
+<td>Skill Layer 需要为”非编码类”任务扩展新的制品类型（不是所有 Agent 任务都产出代码 diff）</td>
+<td>各类工具集成（本就是 MCP 的用武之地，第二篇 3.3 节）</td>
+<td>Model Profile、Context Window 阈值</td>
+</tr>
+<tr>
+<td><strong>代码助手</strong></td>
+<td>几乎不需要替换——这是 GSD 的原生领域</td>
+<td>（无特别需要扩展之处——GSD 本身已经是一个成熟的代码助手编排框架）</td>
+<td>语言特定的 Lint&#x2F;格式化工具（本就是 Capability 系统设计初衷）</td>
+<td>代码风格规则、审查深度默认值</td>
+</tr>
+<tr>
+<td><strong>诊断平台</strong>（通用，非车辆特定）</td>
+<td>见”产业物联网”行，抽象掉车辆特定部分后即为通用诊断平台设计</td>
+<td>同上</td>
+<td>同上</td>
+<td>同上</td>
+</tr>
+<tr>
+<td><strong>客服平台</strong></td>
+<td>Agent 角色→意图识别&#x2F;话术执行&#x2F;满意度复核；制品→会话记录摘要</td>
+<td>多级审批链（升级到人工客服的场景本身就是一种 Escalation Gate）；情绪&#x2F;意图的 Context Aware 判断</td>
+<td>各业务线 FAQ&#x2F;知识库（每类问题域一个 capability）</td>
+<td>语言、话术风格、升级阈值</td>
+</tr>
+<tr>
+<td><strong>Workflow Agent</strong>（通用工作流自动化）</td>
+<td>几乎不需要替换——本质与 GSD 自身是同构问题</td>
+<td>需要泛化”制品类型”这个概念——GSD 硬编码假设制品是 Markdown&#x2F;JSON，通用工作流可能需要产出任意结构化数据</td>
+<td>各业务系统的连接器（本就是 MCP 定位）</td>
+<td>触发条件、超时策略</td>
+</tr>
+<tr>
+<td><strong>Copilot</strong>（IDE 内嵌助手类）</td>
+<td>几乎不需要替换——这几乎就是”Runtime Layer 声明式路径”（第二篇 3.3 节）本身描述的场景</td>
+<td>更轻量的交互模型（IDE 内嵌场景往往不适合五阶段循环的仪式感，<code>/gsd-quick</code>&#x2F;<code>/gsd-fast</code> 这类轻量原语，第三篇 5.10 节，才是更合适的参照物）</td>
+<td>IDE 特定能力（语法高亮、跳转等）</td>
+<td>触发灵敏度、建议展示密度</td>
+</tr>
+</tbody></table>
+<h3 id="15-3-一条贯穿全部十二个领域的元观察"><a href="#15-3-一条贯穿全部十二个领域的元观察" class="headerlink" title="15.3 一条贯穿全部十二个领域的元观察"></a>15.3 一条贯穿全部十二个领域的元观察</h3><p>把上表逐行看下来会发现一个规律：<strong>“替换”栏目的内容几乎总是集中在两处——Agent 的角色定义，以及承载状态的”留痕系统”（Git 对代码、病历系统对医疗、审计日志对金融）</strong>；而”可复用抽象”栏目（15.1 节）里的内容几乎从不出现在任何一行的”替换”列里。这印证了一条本文认为整个二十部分里最重要的迁移原则：</p>
+<blockquote>
+<p><strong>GSD 真正可迁移的不是它的 Agent Prompt 内容或制品格式，而是它对”上下文经济学””信任边界””验证方法论””工程一致性纪律”这几个问题的回答方式。</strong> 把这套回答方式原封不动地应用到新领域时唯一要换的，是”回答对象”——从”代码变更”换成”诊疗决策”或”交易审批”——而不是”回答方式”本身。</p>
+</blockquote>
+<p>这也是为什么第十四部分能够用一套统一模板覆盖 27 个差异巨大的领域：<strong>模板里真正不变的部分（Skill&#x2F;Workflow&#x2F;Agent 分层、Gate 分类法、最小权限声明）就是本节归纳的”可复用抽象”与”保持不变”两栏；每个领域独有的部分，全部落在”替换”这一栏，且换的东西天然是有限的（角色定义 + 制品格式 + 留痕系统三样）</strong>。</p>
+<h3 id="15-4-本部分小结与下文预告"><a href="#15-4-本部分小结与下文预告" class="headerlink" title="15.4 本部分小结与下文预告"></a>15.4 本部分小结与下文预告</h3><p>第十五部分把前十四部分（本系列前五篇）的具体发现收拢进一个六维分类框架，并归纳出”可迁移的是回答方式、要换的只有角色定义&#x2F;制品格式&#x2F;留痕系统三样”这条元原则。这条原则将直接指导下一部分的框架设计决策。</p>
+<p>下一部分（第十六部分 · 构建自己的 Skill Framework）将站在 GSD 已验证的基础上，正面设计一套面向企业的下一代 Enterprise Skill Runtime——需要支持 FastAPI&#x2F;LangGraph&#x2F;Temporal&#x2F;OpenTelemetry&#x2F;Langfuse&#x2F;MCP&#x2F;A2A 等技术栈整合，覆盖 Skill Registry&#x2F;Marketplace&#x2F;Version&#x2F;Dependency&#x2F;Security&#x2F;Sandbox&#x2F;Signature&#x2F;Permission&#x2F;Observability&#x2F;Metrics&#x2F;Cost&#x2F;Governance&#x2F;Distribution&#x2F;Hot Reload 等全部治理维度。</p>
+<hr>
+<h2 id="第十六部分-·-构建自己的-Skill-Framework-——-下一代-Enterprise-Skill-Runtime-设计"><a href="#第十六部分-·-构建自己的-Skill-Framework-——-下一代-Enterprise-Skill-Runtime-设计" class="headerlink" title="第十六部分 · 构建自己的 Skill Framework —— 下一代 Enterprise Skill Runtime 设计"></a>第十六部分 · 构建自己的 Skill Framework —— 下一代 Enterprise Skill Runtime 设计</h2><blockquote>
+<p><strong>本部分的性质与前十五部分根本不同</strong>：前面是<strong>研究</strong>（读源码、读文档、如实记录），本部分是<strong>设计</strong>（在已验证事实的基础上做工程决策）。为遵守本系列第一篇（第〇部分）确立的纪律，本部分的每一处设计都会标注它源自 GSD 的哪一条已验证机制，而不会把设计当作 GSD 的既有事实来陈述。凡是本文新增的判断、取舍与推导，均用”<strong>设计决策</strong>“标注。</p>
+<p>为便于引用，本部分把设计的这套运行时称为 <strong>ESR</strong>（Enterprise Skill Runtime）。这是本文的临时代号，不是任何真实产品的名字。</p>
+</blockquote>
+<h3 id="16-0-设计前提：为什么不直接用-GSD"><a href="#16-0-设计前提：为什么不直接用-GSD" class="headerlink" title="16.0 设计前提：为什么不直接用 GSD"></a>16.0 设计前提：为什么不直接用 GSD</h3><p>一个诚实的问题：既然 GSD 已经这么成熟，为什么不直接用？基于前十五部分的核实，有四条真实的边界：</p>
+<table>
+<thead>
+<tr>
+<th>GSD 的边界（均为前文已核实事实）</th>
+<th>企业场景的诉求</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>不是服务，是安装进宿主的 Prompt 文件集</strong></td>
+<td>企业需要一个可被多团队并发访问、有 API、可审计的<strong>服务</strong></td>
+<td>第一篇 1.5 节定位 &#x2F; 第二篇第二部分三条集成路径</td>
+</tr>
+<tr>
+<td><strong>状态在本地 <code>.planning/</code> 目录</strong></td>
+<td>企业需要状态可跨机器、可备份、可查询、可做租户隔离</td>
+<td>第一篇 1.8 节 File-Based State</td>
+</tr>
+<tr>
+<td><strong>没有沙箱</strong>（文档明确自陈）</td>
+<td>企业无法接受”第三方能力与主程序同权限运行”作为唯一形态</td>
+<td>第二篇 3.11 节 &#x2F; 第四篇第六部分⑨</td>
+</tr>
+<tr>
+<td><strong>没有成本&#x2F;用量的集中核算</strong></td>
+<td>企业需要按团队&#x2F;项目分摊 token 成本，并设配额</td>
+<td>第三篇 4.7 节只有单项目的估算校准，无集中核算</td>
+</tr>
+</tbody></table>
+<p><strong>设计决策 0</strong>：ESR 不是 GSD 的替代品，而是<strong>把 GSD 已验证的方法论托举到服务化形态</strong>。GSD 依然可以作为 ESR 的一个”宿主适配器”存在——即企业开发者本地仍然用 Claude Code + GSD 工作，但技能来源、审批、观测、计费统一走 ESR。</p>
+<hr>
+<h3 id="16-1-总体架构"><a href="#16-1-总体架构" class="headerlink" title="16.1 总体架构"></a>16.1 总体架构</h3><pre class="mermaid">flowchart TB
+    subgraph CLIENTS["接入层（多形态宿主，沿用 GSD 三条集成路径的经验，第二篇第二部分、3.3 节）"]
+        C1["Claude Code / CodeBuddy&lt;br/&gt;（声明式：拉取 Skill 包）"]
+        C2["OpenCode / IDE 插件&lt;br/&gt;（命令式：SDK 调用）"]
+        C3["任意 MCP 宿主&lt;br/&gt;（协议化：ESR 暴露 MCP Server）"]
+        C4["A2A 对端 Agent&lt;br/&gt;（Agent 间协作）"]
+    end
+
+    subgraph GATEWAY["网关层 · FastAPI"]
+        GW["Skill Gateway&lt;br/&gt;认证 / 租户路由 / 配额 / 限流"]
+    end
+
+    subgraph CONTROL["控制平面"]
+        REG["Skill Registry&lt;br/&gt;（第四篇第八部分 buildSkillManifest 的服务化）"]
+        RES["Resolver&lt;br/&gt;（第四篇第八部分 computeClosure/resolveProfile 的服务化）"]
+        GOV["Governance&lt;br/&gt;审批 / 签名 / 权限 / 供应链"]
+        MKT["Marketplace&lt;br/&gt;（第二篇第三部分信任模型的服务化）"]
+    end
+
+    subgraph EXEC["执行平面"]
+        ORCH["Orchestrator · LangGraph&lt;br/&gt;（第三篇第五部分五阶段循环的图化）"]
+        DUR["Durable Layer · Temporal&lt;br/&gt;（第三篇第五部分断点续跑的持久化）"]
+        SBX["Sandbox Runner&lt;br/&gt;（补上 GSD 明确没有的那一层）"]
+    end
+
+    subgraph DATA["数据平面"]
+        ST["State Store&lt;br/&gt;（.planning/ 的服务化，第一篇 1.8 节、第五篇 11.3 节）"]
+        EV["Evidence Store&lt;br/&gt;内容寻址 + 不可变"]
+        KG["Knowledge / RAG"]
+    end
+
+    subgraph OBS["可观测平面"]
+        OT["OpenTelemetry&lt;br/&gt;trace / metric / log"]
+        LF["Langfuse&lt;br/&gt;LLM 调用级观测与评估"]
+        COST["Cost Ledger&lt;br/&gt;（第三篇 4.7 节估算校准的集中化）"]
+    end
+
+    C1 --&gt; GW
+    C2 --&gt; GW
+    C3 --&gt; GW
+    C4 --&gt; GW
+    GW --&gt; REG
+    GW --&gt; ORCH
+    REG --&gt; RES
+    REG --&gt; GOV
+    GOV --&gt; MKT
+    ORCH --&gt; DUR
+    ORCH --&gt; SBX
+    ORCH --&gt; ST
+    ORCH --&gt; EV
+    ORCH --&gt; KG
+    ORCH -.span.-&gt; OT
+    ORCH -.trace.-&gt; LF
+    ORCH -.计量.-&gt; COST
+    SBX -.span.-&gt; OT</pre>
+
+
+<hr>
+<h3 id="16-2-逐组件设计（含技术选型理由）"><a href="#16-2-逐组件设计（含技术选型理由）" class="headerlink" title="16.2 逐组件设计（含技术选型理由）"></a>16.2 逐组件设计（含技术选型理由）</h3><h4 id="16-2-1-Skill-Gateway（FastAPI）"><a href="#16-2-1-Skill-Gateway（FastAPI）" class="headerlink" title="16.2.1 Skill Gateway（FastAPI）"></a>16.2.1 Skill Gateway（FastAPI）</h4><p><strong>设计决策 1</strong>：网关只做四件事——认证&#x2F;租户路由&#x2F;配额&#x2F;限流，<strong>不做任何编排</strong>。这直接沿用 GSD 的”薄编排器”原则（第一篇 1.8 节）在服务层的对应版本：网关如果开始承载业务逻辑，就会变成一个所有团队都要改、所有变更都要过它的瓶颈。</p>
+<p>选 FastAPI 的理由：Python 生态与 LangGraph&#x2F;Langfuse&#x2F;主流 LLM SDK 天然同栈，避免跨语言序列化开销；异步模型适合大量 I&#x2F;O 等待（LLM 调用是典型的长等待）。</p>
+<p>核心接口（示意，非实现）：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">POST /v1/skills/resolve       # 依据 profile + 租户策略解析出技能集合（对应第四篇第八部分 resolveProfile）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">GET  /v1/skills/&#123;id&#125;/manifest # 取单个技能清单（对应第四篇第八部分 skill-manifest）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">POST /v1/runs                 # 发起一次编排（返回 run_id，异步）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">GET  /v1/runs/&#123;run_id&#125;        # 查询状态（对应第三篇第五部分 STATE.md 的查询侧）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">POST /v1/runs/&#123;run_id&#125;/decide # 人工检查点回执（对应第三篇第四部分 checkpoint）</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">GET  /v1/runs/&#123;run_id&#125;/evidence # 证据链查询</span></span></code></pre></div></div></figure>
+
+<h4 id="16-2-2-Skill-Registry-Resolver"><a href="#16-2-2-Skill-Registry-Resolver" class="headerlink" title="16.2.2 Skill Registry &amp; Resolver"></a>16.2.2 Skill Registry &amp; Resolver</h4><p><strong>直接源自第四篇第八部分的两段真实源码</strong>：<code>buildSkillManifest()</code>（发现与清单）与 <code>computeClosure()</code>&#x2F;<code>resolveProfile()</code>（依赖闭包与 Profile 解析）。服务化后的三处<strong>设计决策</strong>：</p>
+<p><strong>设计决策 2 —— 保留”依赖是构建期概念”这一判断</strong>（第四篇第六、七部分实证：<code>requires</code> 在生成 SKILL.md 时被剥离）。ESR 的 Registry 同样把依赖闭包计算放在<strong>发布期</strong>而非<strong>调用期</strong>：技能发布时就算好闭包并固化成一个”技能包快照”，调用期只做快照查表，不做图遍历。理由与 GSD 一致——闭包计算的输入（依赖声明）在发布后不再变化，没有必要每次调用都重算。</p>
+<p><strong>设计决策 3 —— 保留”无有效输入时回退到过度安装”的防御性默认值</strong>（第四篇第八部分实证：<code>resolveProfile()</code> 在 mode 全部无效时返回 <code>full</code> 而非空集，源码注释”避免空安装”）。ESR 的对应实现是：租户策略解析失败时，回退到<strong>该租户的最小可用集</strong>而非空集——注意这里做了一处<strong>方向调整</strong>：GSD 单机场景下”过度安装”是安全的（大不了多占点 token），但企业多租户场景下”过度授予”是危险的，所以 ESR 回退到<strong>最小可用集</strong>而非全集。<strong>这是本文对 GSD 原则做的一次有意识的方向反转，理由是威胁模型不同</strong>。</p>
+<p><strong>设计决策 4 —— 把 <code>lint-skill-deps.cjs</code> 的两项检查提升为发布门禁</strong>（第四篇第六部分已归纳其价值：把悬空引用从运行时问题变成构建期失败）。ESR 在技能发布 API 上强制执行：①技能正文引用的其他技能必须在依赖声明里；②每个可发布 profile 的闭包必须自洽。<strong>不通过则拒绝发布</strong>，而不是发布后再靠运行时告警。</p>
+<h4 id="16-2-3-Orchestrator（LangGraph）：五阶段循环的图化"><a href="#16-2-3-Orchestrator（LangGraph）：五阶段循环的图化" class="headerlink" title="16.2.3 Orchestrator（LangGraph）：五阶段循环的图化"></a>16.2.3 Orchestrator（LangGraph）：五阶段循环的图化</h4><p><strong>设计决策 5</strong>：把第三篇第五部分的五阶段循环建模为 LangGraph 的状态图，而不是自研编排 DSL。理由是五阶段循环本质就是一个带条件边与有界循环的状态机（第三篇第五部分的状态机图已完整给出），LangGraph 的原生能力恰好覆盖：条件边（Gate 分支）、循环上限（修订循环最多 3 轮）、检查点（人工介入点）、并行分支（Execute 阶段的波次并行）。</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Discuss
+    Discuss --&gt; Plan: CONTEXT 制品就绪
+    Plan --&gt; PlanCheck
+    PlanCheck --&gt; Plan: 打回（有界，≤3，含停滞检测）
+    PlanCheck --&gt; Execute: 通过
+    Execute --&gt; Execute: 下一波次（并行分支汇合后）
+    Execute --&gt; Verify
+    Verify --&gt; Plan: gap-closure 回流
+    Verify --&gt; Ship: 通过
+    Ship --&gt; [*]
+
+    Discuss --&gt; HumanGate: gate=blocking-human
+    Plan --&gt; HumanGate
+    Execute --&gt; HumanGate
+    HumanGate --&gt; Discuss: 人工回执
+    HumanGate --&gt; Plan
+    HumanGate --&gt; Execute</pre>
+
+
+<p><strong>设计决策 6 —— Gate 四分类法直接作为图的边类型词汇表</strong>（第二篇第三部分、第五篇第十一部分的 <code>gates.md</code> 四类：Pre-flight&#x2F;Revision&#x2F;Escalation&#x2F;Abort）。这不是新发明，而是把 GSD 已有的分类法固化为编排引擎的一等公民概念，好处是<strong>任何新增的 Gate 都必须先归入四类之一</strong>，避免出现”这个检查点算什么类型说不清楚”的模糊状态。</p>
+<p><strong>设计决策 7 —— 保留”Gate 必须响亮地 fail-open”这一取舍</strong>（第二篇 3.11 节实证：<code>#2009</code> 的维护者决定）。ESR 的实现是：Gate 提供方不可用时，编排<strong>继续</strong>但同时向三个通道告警——OTel span 标记为 <code>gate.skipped</code>、Langfuse trace 打标、运维告警通道。<strong>绝不静默通过</strong>。</p>
+<h4 id="16-2-4-Durable-Layer（Temporal）：把断点续跑做成基础设施"><a href="#16-2-4-Durable-Layer（Temporal）：把断点续跑做成基础设施" class="headerlink" title="16.2.4 Durable Layer（Temporal）：把断点续跑做成基础设施"></a>16.2.4 Durable Layer（Temporal）：把断点续跑做成基础设施</h4><p><strong>设计决策 8</strong>：第三篇第五部分详解的”断点续跑三选项”（close out manually &#x2F; re-execute from scratch &#x2F; mark-and-skip）与第三篇第四部分的检查点续接机制，在单机 GSD 里靠”检查 SUMMARY.md 是否存在”这类文件系统探测实现；服务化后应当交给 Temporal 的持久化工作流引擎，因为它原生提供：任务重试、超时、幂等、长时间等待人工回执（可以等数天而不占用计算资源）、以及最关键的——<strong>故障后从确切位置恢复而非从头重跑</strong>。</p>
+<p>一个具体的映射：第三篇第五部分记录的”提交存在但 SUMMARY.md 缺失”这个边界情况，在 Temporal 模型下对应”Activity 已执行但结果未持久化”——这是 Temporal 有成熟解法（幂等键 + 结果查询）的一类已知问题，不需要每个团队自己重新设计三选项菜单。</p>
+<p><strong>设计决策 9 —— 冷启动成本必须被计量</strong>（第三篇第四部分实证：<code>#3309</code> 数据”每次中断&#x3D;一次完全冷启动&#x3D;数万 token”）。ESR 在 Temporal 的每个 Activity 边界埋点，把”因中断导致的重复上下文加载”单独计量为一项成本指标，让”这个流程的人工检查点是不是设得太多了”变成一个<strong>有数据支撑的问题</strong>，而不是靠感觉。</p>
+<h4 id="16-2-5-Sandbox-Runner：补上-GSD-明确没有的那一层"><a href="#16-2-5-Sandbox-Runner：补上-GSD-明确没有的那一层" class="headerlink" title="16.2.5 Sandbox Runner：补上 GSD 明确没有的那一层"></a>16.2.5 Sandbox Runner：补上 GSD 明确没有的那一层</h4><p>第二篇 3.11 节已完整引用 GSD 拒绝沙箱的理由：Node 级沙箱要么需要独立进程+IPC 开销，要么需要剥掉能力合法需要的 Node 全局对象；完整制品对等与有意义的沙箱互相冲突，维护者选择了完整对等。</p>
+<p><strong>设计决策 10 —— ESR 做相反的选择，因为约束条件不同。</strong> GSD 是单机开发者工具，用户对自己机器上跑什么有完全的知情与控制；ESR 是多租户服务，一个租户提交的技能代码可能在承载其他租户数据的基础设施上执行——这是一个<strong>质变</strong>，使得”没有沙箱”从”可接受的诚实取舍”变成”不可接受的风险”。</p>
+<p>分级沙箱设计：</p>
+<table>
+<thead>
+<tr>
+<th>技能类型</th>
+<th>沙箱级别</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>纯声明式（只有 Prompt 片段 + Hook 声明）</td>
+<td><strong>无需沙箱</strong></td>
+<td>直接沿用 GSD 的判断（第五篇第十二部分：声明式能力不需要信任提示，因为没有可执行代码）</td>
+</tr>
+<tr>
+<td>确定性脚本（数据处理、格式转换）</td>
+<td>容器沙箱（无网络、只读挂载输入、限时限内存）</td>
+<td>——</td>
+</tr>
+<tr>
+<td>需要网络&#x2F;外部调用</td>
+<td>容器沙箱 + 出网白名单 + 全量出网审计</td>
+<td>对应第二篇第三部分对 Reviewer Lane”出口通道”的特别关注</td>
+</tr>
+<tr>
+<td>需要访问租户数据</td>
+<td>容器沙箱 + 数据面代理（技能拿不到原始凭据，只能通过代理按已授权范围取数）</td>
+<td>——</td>
+</tr>
+</tbody></table>
+<p><strong>设计决策 11 —— 沿用”披露解析后的实际目标”而非”仅披露二进制名”</strong>（第二篇第三部分实证：Reviewer Lane 的 spawned 型披露完整参数，因为声明 <code>python3</code> 的 lane 可以事后把参数改成 <code>-c &lt;任意程序&gt;</code> 而二进制名不变；HTTP 型披露目标主机而非 <code>curl</code>；且 Consent 绑定<strong>解析后的实际 host</strong> 而非配置键）。ESR 的出网白名单同样绑定解析后的实际目标，且配置变更触发重新审批。</p>
+<h4 id="16-2-6-State-Store-Evidence-Store"><a href="#16-2-6-State-Store-Evidence-Store" class="headerlink" title="16.2.6 State Store &amp; Evidence Store"></a>16.2.6 State Store &amp; Evidence Store</h4><p><strong>设计决策 12 —— 状态用 <code>FIELD_CLASSIFICATION</code> 式的数据表驱动</strong>（第五篇第十一部分实证：<code>state-transition.cts</code> 用 <code>source × preservation</code> 两维表统一治理每个字段，把”三处漂移实现”收敛成”改表里一行”）。ESR 的状态模型同样用一张显式的字段分类表定义每个字段的来源（用户输入&#x2F;派生&#x2F;外部系统&#x2F;人工策展）与转换时的保留策略，而不是把这些规则散落在各个状态转换函数里。这是本文认为 GSD 最值得原样搬运的<strong>架构级</strong>模式之一。</p>
+<p><strong>设计决策 13 —— 证据存储采用内容寻址 + 不可变</strong>。依据两条：第四篇第六部分记录的 Research Store 已经用了 <code>sha256(...)</code> 内容寻址 + 分级 TTL；示例诊断技能包已验证的 <code>row_hash</code> 行级证据指纹与”伪造 row_hash 被质量门拦截”实践。企业场景下证据链的可审计性要求更高，因此 ESR 的证据一旦写入不可修改，任何”更正”都表现为一条新证据 + 一条指向旧证据的作废记录。</p>
+<h4 id="16-2-7-可观测平面：OTel-Langfuse-Cost-Ledger"><a href="#16-2-7-可观测平面：OTel-Langfuse-Cost-Ledger" class="headerlink" title="16.2.7 可观测平面：OTel + Langfuse + Cost Ledger"></a>16.2.7 可观测平面：OTel + Langfuse + Cost Ledger</h4><p><strong>设计决策 14 —— 三层观测各司其职，不重复造轮子</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>工具</th>
+<th>观测对象</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>系统层</td>
+<td>OpenTelemetry</td>
+<td>HTTP&#x2F;DB&#x2F;队列&#x2F;沙箱调用的 trace、metric、log</td>
+<td>通用可观测性实践；GSD 自身也有 <code>observability/event.cjs</code>&#x2F;<code>logger.cjs</code>&#x2F;<code>redaction.cjs</code> 模块（第二篇第二部分、第五篇第十一部分提及），说明这个关注点在框架层就该存在</td>
+</tr>
+<tr>
+<td>LLM 层</td>
+<td>Langfuse</td>
+<td>每次模型调用的输入&#x2F;输出&#x2F;token&#x2F;延迟&#x2F;评分</td>
+<td>GSD 缺失这一层（第三篇第四部分的余量监控是单机 Hook，非集中式）</td>
+</tr>
+<tr>
+<td>成本层</td>
+<td>Cost Ledger</td>
+<td>按租户&#x2F;项目&#x2F;技能&#x2F;run 归集的 token 与费用</td>
+<td>第三篇 4.7 节的估算校准是单项目局部实现，企业需要集中核算</td>
+</tr>
+</tbody></table>
+<p><strong>设计决策 15 —— 沿用”拒绝模型自评、路由到实测历史”</strong>（第三篇第四部分实证：GSD 的 <code>confidence</code> 由校准样本数推导，不允许模型自评；原文明确说明该项目实测过自评置信度并发现它很弱）。ESR 的技能质量评分<strong>同样不接受模型自评</strong>，而是由 Langfuse 上累积的真实评估数据（成功率、人工回执的通过率、返工率）计算得出。这条原则在企业场景下比单机场景更重要，因为”技能质量分”会直接影响 Marketplace 的排序与推荐。</p>
+<p><strong>设计决策 16 —— 观测数据的脱敏是一等公民</strong>。GSD 源码里有 <code>observability/redaction.cts</code> 模块（第二篇第二部分目录清点时记录），说明这个问题在单机场景就已被意识到；服务化后风险更高（观测数据集中存储、多人可查），因此 ESR 的脱敏必须发生在<strong>数据离开执行环境之前</strong>，而不是在查询侧过滤。</p>
+<h4 id="16-2-8-MCP-与-A2A"><a href="#16-2-8-MCP-与-A2A" class="headerlink" title="16.2.8 MCP 与 A2A"></a>16.2.8 MCP 与 A2A</h4><p><strong>设计决策 17 —— MCP 作为”对外暴露”与”对内消费”的双向标准</strong>。第二篇第二、三部分已核实 GSD 用顶层 <code>bin/gsd-mcp-server.js</code> 把核心能力暴露成标准 MCP Server，理由是”任何消费 MCP 的宿主都能驱动它，无需为每个宿主写专属插件”。ESR 沿用这条路径：对外把 Skill 调用暴露为 MCP 工具（任何 MCP 宿主可用），对内把企业既有系统（工单、CMDB、知识库）通过 MCP 接入。</p>
+<p><strong>设计决策 18 —— A2A 用于跨团队 Agent 协作，但必须过同一套治理</strong>。这是本文的推导（GSD 中无 A2A 相关实现）：当 A 团队的 Agent 调用 B 团队的 Agent 时，这次调用应当被视为一次”跨租户技能调用”，同样经过网关的认证&#x2F;配额&#x2F;审计，而不是绕过控制平面直连。<strong>理由直接来自第二篇第三部分的信任模型</strong>——“制品对等不等于信任对等”：A2A 让对端 Agent 具备了与本地 Agent 同等的调用能力（制品对等），但它的信任地位不应因此自动等同于本地 Agent。</p>
+<h4 id="16-2-9-Marketplace-Governance"><a href="#16-2-9-Marketplace-Governance" class="headerlink" title="16.2.9 Marketplace &amp; Governance"></a>16.2.9 Marketplace &amp; Governance</h4><p><strong>设计决策 19 —— 直接移植 GSD 的三重屏障 + 第一方永远赢</strong>（第二篇第三部分完整引用）：</p>
+<ul>
+<li><strong>同意（Consent）</strong>：技能安装时披露其全部可执行面（Hook&#x2F;MCP Server&#x2F;命令模块&#x2F;出网目标），且<strong>可执行面集合变化触发重新审批</strong>；</li>
+<li><strong>完整性（Integrity）</strong>：SHA 定版；</li>
+<li><strong>可逆性（Reversibility）</strong>：卸载精确撤销登记过的一切，不留孤儿状态；</li>
+<li><strong>第一方永远赢</strong>：企业自有的核心技能永远不能被第三方技能通过同名碰撞遮蔽（第二篇第三部分的理由：否则”安装”本身就成了攻击面）；</li>
+<li><strong>保留前缀</strong>：企业应保留自己的技能命名空间前缀（如 <code>corp-</code>），拒绝第三方使用。</li>
+</ul>
+<p><strong>设计决策 20 —— 但增加 GSD 明确拒绝的那一项：分级审核</strong>。第二篇第三部分记录了 GSD 拒绝 Obsidian 式中心化审核的理由——会让维护者成为无穷尾部的瓶颈，复刻 Obsidian 自己都在承受的痛苦。<strong>但企业场景的约束不同</strong>：技能总量有界（不是开放生态的无穷尾部），且合规要求往往强制人工审核。因此 ESR 采用<strong>分层</strong>方案：核心&#x2F;共享层技能强制人工审核，团队内部技能仅需团队负责人批准，个人实验技能免审但<strong>不可被他人安装</strong>。这样既避免了全量人工审核的瓶颈，又满足了对高影响面技能的管控。</p>
+<hr>
+<h3 id="16-3-治理维度对照总表"><a href="#16-3-治理维度对照总表" class="headerlink" title="16.3 治理维度对照总表"></a>16.3 治理维度对照总表</h3><p>企业 Skill 平台需要考虑的全部治理维度，逐项给出 ESR 的落点与其 GSD 依据：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>ESR 落点</th>
+<th>GSD 依据 &#x2F; 差异说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Skill Registry</td>
+<td>控制平面 Registry 服务</td>
+<td>第四篇第八部分 <code>buildSkillManifest()</code> 服务化</td>
+</tr>
+<tr>
+<td>Skill Marketplace</td>
+<td>Marketplace + 分级审核</td>
+<td>第二篇第三部分信任模型 + <strong>增加</strong> GSD 拒绝的分级审核（决策 20）</td>
+</tr>
+<tr>
+<td>Skill Version</td>
+<td>语义化版本 + <code>engines</code> 式兼容区间 + 加载期二次校验</td>
+<td>第五篇第十二、十三部分完整移植</td>
+</tr>
+<tr>
+<td>Skill Dependency</td>
+<td>发布期闭包计算 + 闭包自洽门禁</td>
+<td>第四篇第六、八部分完整移植（决策 2、4）</td>
+</tr>
+<tr>
+<td>Skill Security</td>
+<td>三重屏障 + 出网白名单绑定解析后目标</td>
+<td>第二篇第三部分完整移植（决策 11、19）</td>
+</tr>
+<tr>
+<td>Skill Sandbox</td>
+<td>四级分级沙箱</td>
+<td><strong>GSD 明确没有</strong>，ESR 补上（决策 10）</td>
+</tr>
+<tr>
+<td>Skill Signature</td>
+<td>发布签名 + 供应链溯源（对应 GSD 的 SLSA provenance 提及）</td>
+<td>第二篇第三部分提及 provenance 字段</td>
+</tr>
+<tr>
+<td>Skill Permission</td>
+<td>最小权限工具白名单 + 数据面代理</td>
+<td>第四篇第七部分 <code>allowed-tools</code> 的服务化强化</td>
+</tr>
+<tr>
+<td>Skill Observability</td>
+<td>OTel + Langfuse 双层</td>
+<td><strong>GSD 缺失集中式</strong>，ESR 补上（决策 14）</td>
+</tr>
+<tr>
+<td>Skill Metrics</td>
+<td>成功率&#x2F;返工率&#x2F;人工回执通过率</td>
+<td>第三篇第四部分拒绝自评原则的延伸（决策 15）</td>
+</tr>
+<tr>
+<td>Skill Cost</td>
+<td>Cost Ledger + 冷启动成本单列</td>
+<td>第三篇 4.7 节局部估算的集中化（决策 9）</td>
+</tr>
+<tr>
+<td>Skill Governance</td>
+<td>分级审核 + 保留前缀 + 第一方永远赢</td>
+<td>第二篇第三部分 + 决策 20</td>
+</tr>
+<tr>
+<td>Skill Distribution</td>
+<td>三条集成路径（声明式&#x2F;命令式&#x2F;协议化）</td>
+<td>第二篇第二部分、3.3 节完整移植</td>
+</tr>
+<tr>
+<td>Skill Hot Reload</td>
+<td>配置热重载（对应 GSD 的 <code>FileChanged</code> Hook 机制）</td>
+<td>第三篇第四部分记录的 Claude Code 配置热重载</td>
+</tr>
+<tr>
+<td>Skill Remote Loading</td>
+<td>Registry 拉取 + 完整性校验</td>
+<td>第二篇第三部分</td>
+</tr>
+<tr>
+<td>Skill Package &#x2F; SDK &#x2F; CLI &#x2F; API</td>
+<td>四种客户端形态并存</td>
+<td>第二篇第二部分三条集成路径的延伸</td>
+</tr>
+<tr>
+<td>Skill YAML &#x2F; DSL</td>
+<td>清单用 YAML&#x2F;JSON，编排用 LangGraph 而非自研 DSL</td>
+<td>决策 5</td>
+</tr>
+<tr>
+<td>Skill Testing &#x2F; Benchmark</td>
+<td>六大测试契约 + Langfuse 评估集</td>
+<td>第五篇第十二部分完整移植 + 补充评估</td>
+</tr>
+<tr>
+<td>Skill CI&#x2F;CD &#x2F; Release</td>
+<td>发布门禁串联全部 lint&#x2F;闭包&#x2F;签名检查</td>
+<td>第二篇第二部分的”声明→生成→校验漂移”三件套</td>
+</tr>
+<tr>
+<td>Skill Store &#x2F; Hub</td>
+<td>即 Marketplace</td>
+<td>——</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="16-4-从-GSD-到-ESR-的映射总表"><a href="#16-4-从-GSD-到-ESR-的映射总表" class="headerlink" title="16.4 从 GSD 到 ESR 的映射总表"></a>16.4 从 GSD 到 ESR 的映射总表</h3><pre class="mermaid">flowchart LR
+    subgraph GSD["GSD（单机 / 开发者工具）"]
+        G1["skills/*/SKILL.md 文件"]
+        G2["buildSkillManifest 扫描"]
+        G3["computeClosure 闭包"]
+        G4[".planning/ 目录"]
+        G5["Markdown workflow 编排"]
+        G6["文件系统探测续跑"]
+        G7["无沙箱（诚实声明）"]
+        G8["单机 Hook 余量监控"]
+        G9["单项目估算校准"]
+        G10["Consent+Integrity+Reversibility"]
+    end
+    subgraph ESR["ESR（服务化 / 企业平台）"]
+        E1["Registry 服务 + 技能包快照"]
+        E2["发布期发现 + 索引"]
+        E3["发布期闭包 + 自洽门禁"]
+        E4["State Store + Evidence Store"]
+        E5["LangGraph 状态图"]
+        E6["Temporal 持久化工作流"]
+        E7["四级分级沙箱"]
+        E8["OTel + Langfuse"]
+        E9["Cost Ledger（含冷启动成本）"]
+        E10["三重屏障 + 分级审核"]
+    end
+    G1 --&gt; E1
+    G2 --&gt; E2
+    G3 --&gt; E3
+    G4 --&gt; E4
+    G5 --&gt; E5
+    G6 --&gt; E6
+    G7 -.“唯一一处方向反转”.-&gt; E7
+    G8 --&gt; E8
+    G9 --&gt; E9
+    G10 --&gt; E10</pre>
+
+
+<p><strong>注意图中唯一一条虚线</strong>——沙箱是全部映射里<strong>唯一一处 ESR 与 GSD 做了相反选择</strong>的地方，其余全部是”同一原则的服务化放大”。这本身就是对第十五部分那条元原则的又一次验证：可迁移的是回答方式，变的只是约束条件（单机 vs 多租户）导致的具体取舍。</p>
+<h3 id="16-5-实施路线建议（四个阶段）"><a href="#16-5-实施路线建议（四个阶段）" class="headerlink" title="16.5 实施路线建议（四个阶段）"></a>16.5 实施路线建议（四个阶段）</h3><p><strong>设计决策 21 —— 用 GSD 自己的方法论来建这套东西</strong>（这不是玩笑，而是最省心的路径：五阶段循环本身就是为”如何在不确定中稳步交付”设计的）：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>目标</th>
+<th>关键验收</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>阶段一</strong></td>
+<td>Registry + Resolver + Gateway 最小闭环</td>
+<td>能发布一个技能、能按 profile 解析出闭包、能被一个宿主拉取；闭包自洽门禁生效</td>
+</tr>
+<tr>
+<td><strong>阶段二</strong></td>
+<td>Orchestrator + Durable Layer</td>
+<td>五阶段循环跑通，含有界修订循环与人工检查点；故障后能从确切位置恢复</td>
+</tr>
+<tr>
+<td><strong>阶段三</strong></td>
+<td>Sandbox + Governance</td>
+<td>四级沙箱分级生效；分级审核流程跑通；出网白名单绑定解析后目标</td>
+</tr>
+<tr>
+<td><strong>阶段四</strong></td>
+<td>可观测 + 成本</td>
+<td>OTel&#x2F;Langfuse 接入；Cost Ledger 按租户出账；冷启动成本单列可查</td>
+</tr>
+</tbody></table>
+<p>每个阶段都应当先产出一份”决策记录”（对应 GSD 的 <code>CONTEXT.md</code>&#x2F;ADR 实践），再规划、再执行、再核验——<strong>用被验证过的方法去建造建造方法的工具本身</strong>，这是本部分最后一条建议。</p>
+<h3 id="16-6-本部分小结与下文预告"><a href="#16-6-本部分小结与下文预告" class="headerlink" title="16.6 本部分小结与下文预告"></a>16.6 本部分小结与下文预告</h3><p>第十六部分在 GSD 已验证机制的基础上，设计了一套服务化的 Enterprise Skill Runtime，给出 21 条明确标注的设计决策，并逐条追溯其 GSD 依据。最关键的三条：</p>
+<ol>
+<li><strong>绝大多数设计是”同一原则的服务化放大”</strong>，而非重新发明——21 条决策里只有沙箱一条（决策 10）与 GSD 做了相反选择，且理由明确（单机 vs 多租户的威胁模型质变）；</li>
+<li><strong>两处对 GSD 原则做了有意识的方向调整</strong>：回退默认值从”过度安装”改为”最小可用集”（决策 3，因为多租户下过度授予是危险的）；审核从”拒绝中心化”改为”分级审核”（决策 20，因为企业技能总量有界且合规强制）；</li>
+<li><strong><code>FIELD_CLASSIFICATION</code> 式的表驱动状态治理</strong>（决策 12）是本文认为 GSD 最值得原样搬运的架构级模式——它把”策略变更”从”改多处调用点”降级成”改表里一行”。</li>
+</ol>
+<p>下一部分（第十七部分 · Vehicle AI Diagnosis Skill Platform）将把本部分的通用 ESR 设计，具体落到设备智能分析这一垂直场景，对接示例诊断技能包的既有架构，输出 Skill Center&#x2F;Registry&#x2F;Runtime&#x2F;Gateway&#x2F;Marketplace&#x2F;Repository&#x2F;Package&#x2F;Version&#x2F;Review&#x2F;Approval&#x2F;Publish&#x2F;Security&#x2F;Metrics&#x2F;Audit&#x2F;Cost&#x2F;Observability&#x2F;Sandbox&#x2F;SDK&#x2F;Generator&#x2F;Builder&#x2F;AI Generator 的完整架构。</p>
+<hr>
+<h2 id="第十七部分-·-Vehicle-AI-Diagnosis-Skill-Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南"><a href="#第十七部分-·-Vehicle-AI-Diagnosis-Skill-Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南" class="headerlink" title="第十七部分 · Vehicle AI Diagnosis Skill Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南"></a>第十七部分 · Vehicle AI Diagnosis Skill Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南</h2><blockquote>
+<p><strong>本部分的证据来源与前十六部分不同，必须先声明清楚。</strong> 前面各部分的事实来自对 <code>open-gsd/gsd-core</code> 仓库的直接源码研究；本部分则融合三类来源：</p>
+<ol>
+<li><strong>GSD 机制</strong>（标注出处篇章，如”第三篇第四部分”）——来自本系列前十六部分已核实的源码事实；</li>
+<li><strong>示例诊断平台的自研资产与实测数据</strong>（标注”已验证”）——来自诊断技能包的落地实践、根因分析原型（RCA MVP）实测与示例诊断平台设计；这些数字是该示例项目自己跑出来的实测结果，不是 GSD 的数据，也不是本文的推测；</li>
+<li><strong>本文的设计推导</strong>（标注”<strong>设计</strong>“）——在前两类基础上做的新工程判断。</li>
+</ol>
+<p>三类来源全程严格区分，不混用。</p>
+</blockquote>
+<hr>
+<h3 id="17-1-先把问题定义准：什么是”纯日志故障诊断”，为什么它是最难的一档"><a href="#17-1-先把问题定义准：什么是”纯日志故障诊断”，为什么它是最难的一档" class="headerlink" title="17.1 先把问题定义准：什么是”纯日志故障诊断”，为什么它是最难的一档"></a>17.1 先把问题定义准：什么是”纯日志故障诊断”，为什么它是最难的一档</h3><p>车辆故障诊断按可用信号强度可以分成四档，”纯日志”是其中最难的一档：</p>
+<table>
+<thead>
+<tr>
+<th>档位</th>
+<th>可用信号</th>
+<th>诊断难度</th>
+<th>典型手段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>一档</strong></td>
+<td>DTC 故障码 + 冻结帧</td>
+<td>低</td>
+<td>查码表，DTC→故障映射基本是确定的</td>
+</tr>
+<tr>
+<td><strong>二档</strong></td>
+<td>CAN 信号 + 时序数据</td>
+<td>中</td>
+<td>信号阈值判定、时序模式匹配</td>
+</tr>
+<tr>
+<td><strong>三档</strong></td>
+<td>结构化埋点日志（有 schema、有 traceId）</td>
+<td>中高</td>
+<td>链路追踪、指标聚合</td>
+</tr>
+<tr>
+<td><strong>四档：纯日志</strong></td>
+<td><strong>只有各 ECU&#x2F;组件写出的自由格式文本日志，无统一 schema、无全局 traceId、无 DTC 对应</strong></td>
+<td><strong>最高</strong></td>
+<td>本部分讨论的全部内容</td>
+</tr>
+</tbody></table>
+<p><strong>为什么第四档质变地难</strong>，五个结构性原因：</p>
+<ol>
+<li><strong>黑盒 ECU</strong>——日志由不同供应商的不同团队按各自习惯打印，没有统一规范。示例项目的实测数据：单车单次 OTA 升级的日志压缩包内含 <strong>10 多种组件模块、20 多种日志文本格式、分布在数十个目录、数百万行</strong>（已验证，某 OTA 日志分析项目）。</li>
+<li><strong>没有全局因果链</strong>——不同 ECU 的时钟可能不同步，无法凭时间先后断言因果。这正是 RCA MVP 里设计”因果四条件”（两 ECU 时钟对不上就不能凭时间说谁导致谁）的原因（已验证）。</li>
+<li><strong>证据是可消失的</strong>——车端日志有保留期，等到复盘时原始日志可能已过期。这是”证据快照双源解析（10 年追溯）”成为核心设计的直接动因（已验证）。</li>
+<li><strong>正常与异常高度混杂</strong>——一次升级失败的日志里，99% 以上是正常流水。实测压缩率 <strong>99.4%（3004→18 行）且根因链零丢失</strong>（已验证，诊断技能包），反过来说明信噪比之低。</li>
+<li><strong>最危险的一类失效：症状同构的新故障</strong>——两个完全不同的根因可能产生几乎一样的日志症状。实测暴露了这一点的严重性：把某类故障移出知识窗口后，<strong>25 个全新故障会话中 0 次弃权、25&#x2F;25 全部给出错误命名</strong>（已验证，实验 B）——系统从不说”我不认识”。</li>
+</ol>
+<hr>
+<h3 id="17-2-能力边界：必须先承认三件事的区别"><a href="#17-2-能力边界：必须先承认三件事的区别" class="headerlink" title="17.2 能力边界：必须先承认三件事的区别"></a>17.2 能力边界：必须先承认三件事的区别</h3><p>这是本部分最重要的一节，也是已经用四臂对照实验证明过的硬约束（已验证，RCA MVP）。任何纯日志诊断平台的设计，都必须建立在对这三种能力的清醒区分之上：</p>
+<pre class="mermaid">flowchart TB
+    subgraph CAN["✅ 确定性通道能做到（已实测验证）"]
+        A1["察觉'这是没见过的'&lt;br/&gt;判据：新模板数&gt;0&lt;br/&gt;实测召回100.0% / 误报0.0%&lt;br/&gt;（7组种子×2种故障类型交叉验证）"]
+        A2["刻画未知故障的结构特征&lt;br/&gt;模块 / 时间窗 / 新模板 /&lt;br/&gt;违反的不变式 / 首次偏离点"]
+    end
+    subgraph CANNOT["❌ 确定性通道做不到（四臂实验已证明是硬约束）"]
+        B1["给新根因命名并解释成因&lt;br/&gt;B3/B4臂（无语义标注）&lt;br/&gt;命名级 Top-1 = 0"]
+    end
+    subgraph IMPLICATION["→ 由此推出的职责定义"]
+        C1["确定性通道的职责不是&lt;br/&gt;'发现并命名新故障'&lt;br/&gt;而是'可靠识别自己不认识它&lt;br/&gt;并刻画清楚后交出去'"]
+    end
+    CAN --&gt; IMPLICATION
+    CANNOT --&gt; IMPLICATION</pre>
+
+
+<p><strong>四臂归因分离实验的结论必须被反复强调</strong>（已验证）：语义标注是根因<strong>命名</strong>的<strong>必要条件</strong>；架构图脱离标注后的独立定位增益仅 <strong>+0.022 且 McNemar p&#x3D;0.4035 不显著</strong>。这条发现推翻了”架构中间表示是 RCA 收益主要来源”的早期表述，收敛为条件性表述——<strong>在给定症状—根因语义标注的前提下</strong>，经验证的架构图带来 +0.688 命中增益（p&lt;1e-6）。</p>
+<p><strong>这对平台设计的直接含义</strong>（<strong>设计</strong>）：任何声称”全自动学习出新故障根因”的纯日志诊断方案，如果没有人工语义标注环节，都应当被视为<strong>尚未被证明可行</strong>。平台的正确设计目标不是消除专家，而是<strong>把专家的边际产出最大化</strong>——让专家只在”命名与解释”这个不可替代的环节投入，其余全部自动化。</p>
+<hr>
+<h3 id="17-3-平台总体架构：从诊断技能包到示例诊断平台"><a href="#17-3-平台总体架构：从诊断技能包到示例诊断平台" class="headerlink" title="17.3 平台总体架构：从诊断技能包到示例诊断平台"></a>17.3 平台总体架构：从诊断技能包到示例诊断平台</h3><p><strong>设计决策 1</strong>：诊断技能包（插件形态，跑在 Claude Code &#x2F; CodeBuddy 本地）与本部分设计的示例诊断平台（Vehicle Diagnosis Platform，下文简称”平台”）<strong>不是替代关系，而是”同一诊断内核的两种投影”</strong>——这直接沿用 GSD 的”三条集成路径”经验（第二篇第二部分、3.3 节：声明式&#x2F;命令式&#x2F;协议化并存，同一核心逻辑多种分发形态）。</p>
+<pre class="mermaid">flowchart TB
+    subgraph CLIENTS["接入层：同一内核的多种投影"]
+        V1["诊断技能包形态&lt;br/&gt;（Claude Code / CodeBuddy 本地）&lt;br/&gt;工程师单车深度排查"]
+        V2["Web 控制台&lt;br/&gt;质量/售后批量分析"]
+        V3["MCP Server&lt;br/&gt;被既有诊断/运维平台调用"]
+        V4["批处理 API&lt;br/&gt;研发回归、灰度监控"]
+    end
+    subgraph GW["网关：认证/租户/配额/审计"]
+        G1["Diagnosis Gateway"]
+    end
+    subgraph SKILLPLANE["技能平面（本部分重点）"]
+        S1["Skill Center / Registry"]
+        S2["Skill Runtime"]
+        S3["Marketplace / Repository"]
+        S4["Review / Approval / Publish"]
+        S5["Generator / Builder / AI Generator"]
+    end
+    subgraph DIAGCORE["诊断内核六平面（沿用既有诊断平台设计）"]
+        D1["证据平面：解析/时间基准/脱敏/行级指纹/DTL/缺口检测"]
+        D2["知识平面：模板画像/断言提议/ACRV五关/四值判决/准入子图"]
+        D3["推理平面：故障存在性判定→Tier-A/Tier-B 双通道"]
+        D4["表达平面：引用校验/证据快照双源/渲染校验"]
+        D5["演进平面：反馈治理/影响域/三集门禁/影子探针"]
+        D6["治理平面：AI网关/多租户/审计/OTLP"]
+    end
+    V1 --&gt; G1
+    V2 --&gt; G1
+    V3 --&gt; G1
+    V4 --&gt; G1
+    G1 --&gt; SKILLPLANE
+    SKILLPLANE --&gt; DIAGCORE</pre>
+
+
+<p><strong>设计决策 2 —— 诊断技能包形态必须保留，不能被 Web 平台取代。</strong> 理由来自 GSD 的定位经验（第一篇 1.5 节）：GSD 之所以选择”安装进宿主 Agent”而非”做一个独立产品”，是因为工程师的深度排查工作天然发生在他们已有的工具环境里。诊断专家在排查疑难故障时需要的是<strong>贴着自己的工作流</strong>的能力，而不是切换到另一个 Web 系统。<strong>Web 控制台服务的是批量场景（质量部门看趋势、售后查历史），插件服务的是深度场景（专家排查单车疑难），二者的用户与任务形态本就不同。</strong></p>
+<hr>
+<h3 id="17-4-纯日志诊断流水线：七阶段全景"><a href="#17-4-纯日志诊断流水线：七阶段全景" class="headerlink" title="17.4 纯日志诊断流水线：七阶段全景"></a>17.4 纯日志诊断流水线：七阶段全景</h3><p>这是本部分的技术主线。每个阶段标注其在诊断技能包中的已有实现状态。</p>
+<pre class="mermaid">flowchart LR
+    P1["①接入与解压&lt;br/&gt;已实现"] --&gt; P2["②证据化&lt;br/&gt;已实现"]
+    P2 --&gt; P3["③降维&lt;br/&gt;已实现"]
+    P3 --&gt; P4["④故障存在性判定&lt;br/&gt;MVP已验证/插件待接入"]
+    P4 --&gt; P5["⑤新颖性判定&lt;br/&gt;★当前最大缺口"]
+    P5 --&gt; P6["⑥双通道诊断&lt;br/&gt;Tier-A已实现/Tier-B部分"]
+    P6 --&gt; P7["⑦证据链表达与固化&lt;br/&gt;已实现"]</pre>
+
+
+<h4 id="阶段①-接入与解压"><a href="#阶段①-接入与解压" class="headerlink" title="阶段① 接入与解压"></a>阶段① 接入与解压</h4><table>
+<thead>
+<tr>
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>输入</td>
+<td>车端日志压缩包（多层嵌套目录，10+ 组件、20+ 格式，数百万行）（已验证）</td>
+</tr>
+<tr>
+<td>诊断技能包现状</td>
+<td><code>diag-*</code> 技能中的 ingestor SubAgent + Python 引擎；7 种日志格式识别（已验证）</td>
+</tr>
+<tr>
+<td>关键设计</td>
+<td>解压&#x2F;提取&#x2F;合并全部是<strong>确定性逻辑</strong>，绝不交给 LLM（已验证，诊断技能包架构决策）</td>
+</tr>
+<tr>
+<td><strong>设计</strong>增量</td>
+<td>格式识别应输出<strong>置信度</strong>而非二元判定，未识别格式走”未知格式”分支保留原文而非丢弃——因为一个新供应商 ECU 的新格式，恰恰可能是新故障的载体</td>
+</tr>
+</tbody></table>
+<h4 id="阶段②-证据化：时间基准-行级指纹-脱敏"><a href="#阶段②-证据化：时间基准-行级指纹-脱敏" class="headerlink" title="阶段② 证据化：时间基准 + 行级指纹 + 脱敏"></a>阶段② 证据化：时间基准 + 行级指纹 + 脱敏</h4><p><strong>这是整条流水线可信度的地基</strong>，三个机制缺一不可：</p>
+<ol>
+<li><strong>两遍法时间基准推断</strong>（已验证）——优先级：文件内时间戳 &gt; 文件 mtime &gt; 上传时间，并打 <code>ts_quality</code> 标记做置信度传播。<strong>为什么必须做</strong>：纯日志场景下，跨 ECU 时钟不同步是常态，如果不标记时间质量，后续所有”A 先于 B 所以 A 导致 B”的推理都建立在流沙上。</li>
+<li><strong>行级证据指纹 <code>row_hash</code></strong>（已验证）——每一行日志的稳定指纹，是”结论→证据”引用可解析性的锚。实测<strong>伪造 row_hash 被质量门 block 拦截</strong>（已验证）。</li>
+<li><strong>掩码脱敏</strong>——VIN、手机号、位置等敏感字段在<strong>离开执行环境之前</strong>脱敏。<strong>设计</strong>：这里直接沿用 GSD 的一条纪律（第十六部分决策 16 引用的 <code>observability/redaction.cts</code> 存在性）——脱敏必须发生在数据产生侧，而不是查询侧过滤。</li>
+</ol>
+<h4 id="阶段③-降维：DTL-模板挖掘"><a href="#阶段③-降维：DTL-模板挖掘" class="headerlink" title="阶段③ 降维：DTL 模板挖掘"></a>阶段③ 降维：DTL 模板挖掘</h4><table>
+<thead>
+<tr>
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>实测效果</td>
+<td><strong>44,073 行 → 35 模板，降维比 1259:1</strong>（已验证，RCA MVP）；另一组实测 3.1 万行→30 模板（1042:1），覆盖率 99.7%</td>
+</tr>
+<tr>
+<td>技术选择</td>
+<td>内置 MiniDrain 而非依赖第三方 drain3（已验证，既有平台 ADR）——理由是确定性可控</td>
+</tr>
+<tr>
+<td><strong>★关键设计</strong></td>
+<td><strong>新模板数是新颖性的黄金信号</strong>（见阶段⑤）——因此 DTL 必须持久化”本次会话出现了哪些历史上没见过的模板”，这个副产品比降维本身更有价值</td>
+</tr>
+</tbody></table>
+<h4 id="阶段④-故障存在性判定：先回答”到底有没有故障”"><a href="#阶段④-故障存在性判定：先回答”到底有没有故障”" class="headerlink" title="阶段④ 故障存在性判定：先回答”到底有没有故障”"></a>阶段④ 故障存在性判定：先回答”到底有没有故障”</h4><p><strong>这是一个容易被跳过、但代价极高的阶段。</strong> 实测暴露了跳过它的后果：不做存在性判定时，<strong>健康车假阳性率高达 47.5%</strong>——即近一半的正常车辆会被硬安一个根因；引入依终态证据的三态判定后降至 <strong>0.0% 且 Top-1 零损失</strong>（已验证，存在性判定机制）。</p>
+<p><strong>一个已被实测排除的错误做法</strong>：单纯提高弃权分数阈值<strong>无效</strong>，因为良性噪声与真故障的分数分布重叠（已验证）。这说明存在性判定必须依据<strong>终态证据的结构性特征</strong>，而不是给现有打分器加一道阈值。</p>
+<h4 id="阶段⑤-新颖性判定：★当前最大缺口，也是最高优先级修复项"><a href="#阶段⑤-新颖性判定：★当前最大缺口，也是最高优先级修复项" class="headerlink" title="阶段⑤ 新颖性判定：★当前最大缺口，也是最高优先级修复项"></a>阶段⑤ 新颖性判定：★当前最大缺口，也是最高优先级修复项</h4><p><strong>问题现状</strong>（已验证，实验 A&#x2F;B）：</p>
+<ul>
+<li>实验 A（保留语义标注、移出知识图）：25 个全新故障会话中 <strong>0 次弃权、18 次正确命名、7 次自信答错</strong>；</li>
+<li>实验 B（真·全新故障，标注与传播边一并移除）：<strong>0 次弃权、25&#x2F;25 全部给出错误命名</strong>（19 次误归 <code>cert_expired</code>、6 次误归 <code>network_loss</code>）。</li>
+</ul>
+<p><strong>这是一个必须修复的生产级风险</strong>：面对完全没见过的故障，系统 100% 硬安已知标签，从不说”我不认识”。在售后场景下，这意味着把维修人员导向完全错误的方向。</p>
+<p><strong>决定性发现</strong>（已验证）：纯确定性的新颖性信号<strong>一直存在，只是没有接进弃权决策</strong>。7 组种子 × 2 种故障类型交叉验证的判据对比：</p>
+<table>
+<thead>
+<tr>
+<th>判据</th>
+<th>召回</th>
+<th>误报</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>新模板数 &gt; 0</strong></td>
+<td><strong>100.0%</strong></td>
+<td><strong>0.0%</strong></td>
+<td>★最佳单一判据（全新故障会话平均 2.76 个新模板；已知故障 0.00 个）</td>
+</tr>
+<tr>
+<td>未解释症状 &gt; 0</td>
+<td>100%</td>
+<td>33.9%~55.7%</td>
+<td>不可单用</td>
+</tr>
+<tr>
+<td>未解释症状 ≥ 2</td>
+<td>—</td>
+<td>0%</td>
+<td>召回仅 47%~79%，漏检</td>
+</tr>
+</tbody></table>
+<p><strong>修复方案（P0，工作量小、收益极大）</strong>（已验证的建议）：</p>
+<ol>
+<li>把”新模板数 &gt; 0”直接接入弃权决策；</li>
+<li>新模板存在时，<strong>已知根因置信度封顶</strong>；</li>
+<li>输出<strong>结构化”未知故障签名”</strong>（模块&#x2F;时间窗&#x2F;新模板列表&#x2F;违反的不变式&#x2F;首次偏离点）<strong>替代猜一个名字</strong>。</li>
+</ol>
+<p><strong>设计</strong>补充：这三步实施后，新增验收指标 <strong>NV-3「自信错误率」从当前实测的 100% 降至接近 0</strong>——这是整个平台从”demo 可用”跨向”生产可用”最关键的一道门槛。</p>
+<h4 id="阶段⑥-双通道诊断"><a href="#阶段⑥-双通道诊断" class="headerlink" title="阶段⑥ 双通道诊断"></a>阶段⑥ 双通道诊断</h4><p>沿用既有诊断平台的双通道设计（已验证的设计决策）：</p>
+<pre class="mermaid">flowchart TB
+    START["故障存在性判定通过&lt;br/&gt;+ 新颖性判定"] --&gt; NOVEL&#123;"是全新故障？&lt;br/&gt;（新模板&gt;0）"&#125;
+    NOVEL --&gt;|"是"| UNKNOWN["输出结构化未知故障签名&lt;br/&gt;不猜名字&lt;br/&gt;转人工/转Tier-B探索"]
+    NOVEL --&gt;|"否"| TIERA["Tier-A 确定性通道&lt;br/&gt;零 LLM 调用（硬性）&lt;br/&gt;P95≤5s，覆盖 90%+ 会话"]
+    TIERA --&gt; SCORE&#123;"置信度是否达标？"&#125;
+    SCORE --&gt;|"达标"| RESULT["确定性打分器给出结论"]
+    SCORE --&gt;|"弃权"| TIERB["Tier-B 探索通道&lt;br/&gt;Agent 七节点迭代，P50≤3min"]
+    UNKNOWN -.可选.-&gt; TIERB
+    TIERB --&gt; CAND["★产出物是候选断言&lt;br/&gt;而非结论"]
+    CAND --&gt; ACRV["必须过 ACRV 五道关卡"]
+    ACRV --&gt;|"通过"| GRAPH["入生产准入子图"]
+    ACRV --&gt;|"拒绝"| REJECT["拒绝并计入拒绝统计报表"]
+    GRAPH --&gt; RESULT</pre>
+
+
+<p><strong>三条不可妥协的红线</strong>（已验证的设计原则）：</p>
+<ol>
+<li><strong>结论恒由确定性打分器给出</strong>——Tier-B 的产出物是<strong>候选断言</strong>，不是结论；</li>
+<li><strong>三层准入模型</strong>：L0 结论层禁 LLM &#x2F; L1 检索层有条件允许 Agent（需轨迹存证 + 轮数上限）&#x2F; L2 表达层允许但需引用校验；</li>
+<li><strong>代码层面强制</strong>——<code>tier_a</code> 模块禁止 <code>import ai_gateway</code>，用 import-linter &#x2F; ArchUnit 静态检查 + K8s NetworkPolicy 双重阻断（已验证的工程约束）。</li>
+</ol>
+<p><strong>设计</strong>：这第 3 条与 GSD 的一条纪律高度同构——GSD 用 <code>lint-skill-deps.cjs</code> 把”悬空技能引用”从运行时问题变成构建期 CI 失败（第四篇第六部分）。<strong>同一个哲学：能在编译&#x2F;CI 期强制的约束，绝不留到运行期靠自觉。</strong></p>
+<h4 id="阶段⑦-证据链表达与固化"><a href="#阶段⑦-证据链表达与固化" class="headerlink" title="阶段⑦ 证据链表达与固化"></a>阶段⑦ 证据链表达与固化</h4><table>
+<thead>
+<tr>
+<th>机制</th>
+<th>内容</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>预算感知压缩</td>
+<td>五级压缩，<strong>稀有模板全保留为关键设计</strong>；实测压缩至 8%~12%，另一实测 99.4%（3004→18 行）根因链零丢失</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>引用校验</td>
+<td>系统级校验报告中每条引用是否可解析</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>证据快照双源解析</td>
+<td>原始日志过期后仍可通过快照追溯（10 年）</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>质量门</td>
+<td>6 项检查 + 引用可解析校验；伪造指纹被拦截</td>
+<td>已验证</td>
+</tr>
+</tbody></table>
+<p><strong>设计增量 —— 引入 GSD 的 Data-Flow Trace 思路</strong>（第五篇第十一部分 Verifier Step 4b）：当前质量门校验的是<strong>单点证据的真实性</strong>（row_hash 是否被伪造）；Data-Flow Trace 提供的是更系统的版本——<strong>沿着报告里的每一条结论，反向追溯”结论→引用的证据工具输出→原始日志行”这条完整引用链，标记链路中断或中间环节被静默跳过的情况</strong>。GSD 用它捕获”UI 渲染完美但数据源是假 mock”这类缺陷；翻译到诊断场景就是捕获”结论看起来有证据支撑，但证据与结论之间的推理环节其实是断的”。</p>
+<hr>
+<h3 id="17-5-技能平面：把诊断能力做成可治理的技能资产"><a href="#17-5-技能平面：把诊断能力做成可治理的技能资产" class="headerlink" title="17.5 技能平面：把诊断能力做成可治理的技能资产"></a>17.5 技能平面：把诊断能力做成可治理的技能资产</h3><h4 id="17-5-1-Skill-Center-Registry"><a href="#17-5-1-Skill-Center-Registry" class="headerlink" title="17.5.1 Skill Center &#x2F; Registry"></a>17.5.1 Skill Center &#x2F; Registry</h4><p><strong>设计决策 3 —— 领域知识技能树的每个节点做成一个独立能力清单。</strong> 诊断技能包现有 11 个知识树节点（OTA 6 个完整 + 3 个领域占位降级）（已验证）。直接引入 GSD 的 <code>capability.json</code> 模式（第二篇第三部分、第五篇第十二部分），每个节点携带：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;diag-domain-ota-upgrade-timeout&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;domain&quot;</span><span class="punctuation">:</span> <span class="string">&quot;ota&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;version&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1.2.0&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;tier&quot;</span><span class="punctuation">:</span> <span class="string">&quot;production&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;engines&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;diag-platform&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&gt;=2.0.0&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">&quot;requires&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;diag-evidence-tools&quot;</span><span class="punctuation">,</span> <span class="string">&quot;diag-template-profile&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">&quot;activationKey&quot;</span><span class="punctuation">:</span> <span class="string">&quot;domain.ota.enabled&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">&quot;contributions&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="punctuation">&#123;</span> <span class="attr">&quot;point&quot;</span><span class="punctuation">:</span> <span class="string">&quot;diagnose:pre&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;into&quot;</span><span class="punctuation">:</span> <span class="string">&quot;analyst&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;fragment&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;fragments/ota-timeout-hints.md&quot;</span><span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="attr">&quot;assertions&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;assertions/ota-timeout.acrv&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="attr">&quot;evidence_tools&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;count&quot;</span><span class="punctuation">,</span> <span class="string">&quot;templates&quot;</span><span class="punctuation">,</span> <span class="string">&quot;context&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="attr">&quot;provenance&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;author&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;reviewed_by&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;validated_sessions&quot;</span><span class="punctuation">:</span> <span class="number">47</span> <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>四处相对 GSD 的领域特化</strong>（<strong>设计</strong>）：</p>
+<ol>
+<li>新增 <code>assertions</code> 字段——指向该节点的 ACRV 断言文件，这是诊断领域独有的；</li>
+<li>新增 <code>evidence_tools</code> 声明——该节点需要哪些证据工具，用于<strong>最小权限</strong>（对应 GSD 的 <code>allowed-tools</code>，第四篇第七部分）；</li>
+<li>新增 <code>provenance.validated_sessions</code>——该知识节点在多少个真实会话上被验证过，直接影响它在 Marketplace 的可信度排序；</li>
+<li><code>tier</code> 取值定义为 <code>experimental</code>&#x2F;<code>candidate</code>&#x2F;<code>production</code>——对应知识的成熟度，与 17.6 节的审批分级挂钩。</li>
+</ol>
+<p><strong>设计决策 4 —— 三个占位领域用声明式 <code>contribution</code> 承载降级提示，而非硬编码分支</strong>（第十四部分已给出此建议，此处落实）。TSP&#x2F;智驾&#x2F;座舱三个领域各自有一个 <code>capability.json</code>，其 contribution 注入”该领域尚不支持，建议…”的提示片段。<strong>收益</strong>：开放第四个领域时只需新增一份清单 + 撤销降级 contribution，主流程代码零改动。</p>
+<h4 id="17-5-2-Skill-Runtime"><a href="#17-5-2-Skill-Runtime" class="headerlink" title="17.5.2 Skill Runtime"></a>17.5.2 Skill Runtime</h4><p>沿用 GSD 的三层成本模型（第四篇第六部分：Skill 每轮付费&#x2F;Workflow 每次调用付费&#x2F;Agent 在别人上下文付费）：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>诊断场景对应</th>
+<th>成本约束</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Skill</td>
+<td>14 个 <code>diag-*</code> 技能的 description</td>
+<td><strong>≤100 字符</strong>（直接沿用 GSD 硬约束），总预算 &#x3D; 上下文窗口 1%</td>
+</tr>
+<tr>
+<td>Workflow</td>
+<td>3 份工作流（orchestrate&#x2F;plan&#x2F;help）</td>
+<td>字节预算分级（GSD 的 XL&#x2F;LARGE&#x2F;DEFAULT 三档）</td>
+</tr>
+<tr>
+<td>SubAgent</td>
+<td>5 个（ingestor&#x2F;planner&#x2F;retriever&#x2F;analyst&#x2F;reporter）</td>
+<td>严格 JSON 回传契约（已验证，诊断技能包）</td>
+</tr>
+</tbody></table>
+<p><strong>设计决策 5 —— 冷启动成本必须计量。</strong> GSD 的实测数据（第三篇第四部分，<code>#3309</code>）：每次中断 &#x3D; 一次完全冷启动 &#x3D; 数万 token。诊断技能包大量使用 SubAgent 保护主上下文（已验证的架构决策），这是对的，但<strong>收益必须扣除冷启动成本后再评估</strong>。平台应在每次 SubAgent 派生边界埋点，让”这个诊断流程的 SubAgent 是不是切得太碎”变成一个有数据支撑的问题。</p>
+<h4 id="17-5-3-Package-Version-Distribution"><a href="#17-5-3-Package-Version-Distribution" class="headerlink" title="17.5.3 Package &#x2F; Version &#x2F; Distribution"></a>17.5.3 Package &#x2F; Version &#x2F; Distribution</h4><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>设计</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Package</td>
+<td>离线包（tar.gz&#x2F;zip）+ 在线 Registry 拉取双形态</td>
+<td>诊断技能包已支持离线包（已验证）；在线形态沿用第二篇第三部分</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>语义化版本 + <code>engines.diag-platform</code> 兼容区间 + <strong>加载期二次校验</strong></td>
+<td>第五篇第十二、十三部分</td>
+</tr>
+<tr>
+<td>知识树版本</td>
+<td><strong>知识树随插件一同版本维护</strong>（已验证的既有决策）——<strong>设计</strong>建议演进为”技能树独立版本 + 插件声明兼容区间”，理由是知识更新频率远高于引擎更新频率</td>
+<td></td>
+</tr>
+<tr>
+<td>Distribution</td>
+<td>声明式（插件包）&#x2F; 协议化（MCP）&#x2F; 命令式（SDK）三路并存</td>
+<td>第二篇第二部分、3.3 节</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="17-6-治理平面：Review-Approval-Publish-Security-Audit"><a href="#17-6-治理平面：Review-Approval-Publish-Security-Audit" class="headerlink" title="17.6 治理平面：Review &#x2F; Approval &#x2F; Publish &#x2F; Security &#x2F; Audit"></a>17.6 治理平面：Review &#x2F; Approval &#x2F; Publish &#x2F; Security &#x2F; Audit</h3><h4 id="17-6-1-分级审核（设计，对应第十六部分决策-20）"><a href="#17-6-1-分级审核（设计，对应第十六部分决策-20）" class="headerlink" title="17.6.1 分级审核（设计，对应第十六部分决策 20）"></a>17.6.1 分级审核（<strong>设计</strong>，对应第十六部分决策 20）</h4><p>诊断知识的错误代价远高于代码技能——一条错误的诊断断言可能把整个售后网络导向错误方向。因此审核分级比通用平台更严格：</p>
+<table>
+<thead>
+<tr>
+<th>技能层级</th>
+<th>审核要求</th>
+<th>可见范围</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>experimental</code></td>
+<td>免审</td>
+<td><strong>仅作者本人</strong>，不可被他人安装</td>
+</tr>
+<tr>
+<td><code>candidate</code></td>
+<td>领域专家 1 人评审 + 必须附 ≥N 个验证会话</td>
+<td>本部门可见，报告中标注”候选知识”</td>
+</tr>
+<tr>
+<td><code>production</code></td>
+<td>领域专家 2 人 + 质量部门会签 + 盲测集通过</td>
+<td>全网可见，可进入正式诊断报告</td>
+</tr>
+</tbody></table>
+<p><strong>设计决策 6 —— 晋级必须靠数据而非资历。</strong> 直接沿用 GSD 的”拒绝模型自评、路由到实测历史”原则（第三篇第四部分）：<code>candidate → production</code> 的晋级依据是该知识节点在<strong>盲测集</strong>上的实测表现，而不是提出人的判断或评审人的印象。示例项目既有的评测方法论纪律 D1~D6（报 CI 而非点估计 &#x2F; McNemar 显著性 ns 不计贡献 &#x2F; 必须纳入健康会话负样本 &#x2F; 口径可辩护 &#x2F; 自证指标单列 &#x2F; 负面结果如实记载）（已验证）直接作为晋级评审的判定标准。</p>
+<h4 id="17-6-2-反馈治理与三集门禁"><a href="#17-6-2-反馈治理与三集门禁" class="headerlink" title="17.6.2 反馈治理与三集门禁"></a>17.6.2 反馈治理与三集门禁</h4><p>示例平台既有的机制（已验证）：反馈治理 + 影响域 + 按提交人隔离的三集门禁；实测<strong>投毒反馈被门禁 REJECT</strong>。</p>
+<p><strong>MVP 开发中发现并修复的四个真 bug 必须写进平台设计</strong>（已验证，且这些是极有价值的踩坑记录）：</p>
+<ol>
+<li>必须区分 <code>NOT_APPLICABLE</code>（前件不适用，不罚）与 <code>UNDETERMINED</code>（缺口&#x2F;时钟不可判），否则<strong>罕见故障传播断言会被系统性埋没</strong>；</li>
+<li><code>apply_patch</code> 须 pin 住被反馈命中的断言，不被重放覆盖；</li>
+<li>投毒必须针对<strong>承重根因边</strong>，且门禁须用严格正增益 <code>τ_gain&gt;0</code>——因为图有冗余路径，回归集检测拦不住单点投毒；</li>
+<li>三集隔离的作者分派须避免全员被污染。</li>
+</ol>
+<p><strong>设计</strong>：这四条应当作为平台的<strong>回归测试用例</strong>永久保留——它们是”曾经真的出过问题”的证据，对应 GSD 的做法（第四篇第十部分：<code>universal-anti-patterns.md</code> 把踩过的坑固化成 29 条规则；<code>eslint-rules/</code> 把教训固化成 15 条自定义静态检查）。</p>
+<h4 id="17-6-3-Security-Sandbox-Audit"><a href="#17-6-3-Security-Sandbox-Audit" class="headerlink" title="17.6.3 Security &#x2F; Sandbox &#x2F; Audit"></a>17.6.3 Security &#x2F; Sandbox &#x2F; Audit</h4><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>设计</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>沙箱</td>
+<td>四级分级（纯声明式无需沙箱 &#x2F; 确定性脚本容器 &#x2F; 需网络加白名单 &#x2F; 需数据加代理）</td>
+<td>第十六部分决策 10</td>
+</tr>
+<tr>
+<td>数据安全</td>
+<td>诊断技能<strong>拿不到原始 VIN 与车主信息</strong>，只能通过数据面代理按已授权范围取数</td>
+<td>第十六部分决策 10 第四级</td>
+</tr>
+<tr>
+<td>审计</td>
+<td>每次诊断的完整轨迹（含 Tier-B 的 Agent 迭代轨迹）存证</td>
+<td>已验证的 L1 层要求</td>
+</tr>
+<tr>
+<td>供应链</td>
+<td>技能包 SHA 定版 + 可执行面变化触发重新审批</td>
+<td>第二篇第三部分三重屏障</td>
+</tr>
+</tbody></table>
+<p><strong>一条来自示例平台实践的安全纪律</strong>（已验证）：示例平台的技术选型中<strong>明确否决 LiteLLM</strong>，理由是其 1.82.7&#x2F;1.82.8 版本的供应链后门事件，改为自研 AI 网关。<strong>设计</strong>：这条决策应当上升为平台的通用供应链准入规则——<strong>任何进入诊断关键路径的第三方依赖，必须有明确的供应链安全评估记录</strong>，而不是”能用就用”。</p>
+<hr>
+<h3 id="17-7-Generator-Builder-AI-Generator：让专家的边际产出最大化"><a href="#17-7-Generator-Builder-AI-Generator：让专家的边际产出最大化" class="headerlink" title="17.7 Generator &#x2F; Builder &#x2F; AI Generator：让专家的边际产出最大化"></a>17.7 Generator &#x2F; Builder &#x2F; AI Generator：让专家的边际产出最大化</h3><p>这是 17.2 节那条结论的直接工程化：<strong>既然语义标注是不可替代的人工环节，平台的核心价值就在于把专家在这个环节的产出效率提到最高。</strong></p>
+<pre class="mermaid">flowchart TB
+    A["① 探索期：工程师用诊断技能包排查疑难故障&lt;br/&gt;（每次排查自然产生轨迹）"] --&gt; B["② 轨迹沉淀：记录 VALIDATED / PARTIAL / INVALIDATED 三态&lt;br/&gt;★连'确认走不通的方向'也固化"]
+    B --&gt; C["③ AI Generator：按故障特征自动分组&lt;br/&gt;为每组生成候选知识节点草案"]
+    C --&gt; D["④ Builder：专家只做'命名与解释'&lt;br/&gt;——不可替代的那一步"]
+    D --&gt; E["⑤ ACRV 五关自动验证"]
+    E --&gt;|"通过"| F["⑥ 进入 candidate 层，累积验证会话"]
+    E --&gt;|"拒绝"| G["计入拒绝统计报表，反馈给生成器"]
+    F --&gt; H["⑦ 盲测集达标 → 晋级 production"]</pre>
+
+
+<p><strong>设计决策 7 —— 这套流程直接移植 GSD 的 <code>spike --wrap-up</code> 机制</strong>（第五篇第十三部分，本文唯一完整源码实证的动态技能生成机制）。三个可直接照搬的设计点：</p>
+<ol>
+<li><strong>增量而非重建</strong>——每次只处理上次生成之后新增的排查轨迹（靠 <code>processed_*</code> 元数据做差集），知识随排查次数持续生长；</li>
+<li><strong>三态经验分类，连死胡同也固化</strong>——<code>INVALIDATED</code> 的排查方向不丢弃，作为”地雷与死胡同”写进知识节点，<strong>防止未来的 Agent 重复踩同一个坑</strong>。这在诊断场景下价值极高：一个有经验的诊断专家的核心资产，恰恰是”我知道哪些方向不用查”；</li>
+<li><strong>按语义分组而非时间顺序</strong>——多次排查依据故障特征自动归类，每组产出一个独立的知识节点草案。</li>
+</ol>
+<p><strong>设计决策 8 —— AI Generator 只生成草案，绝不自动入库。</strong> 依据是 17.2 节的硬约束（无语义标注时命名级 Top-1 &#x3D; 0）与三层准入模型（L0 结论层禁 LLM）。生成器可以做的是：聚类、提取共性模板、列出候选证据、起草结构；<strong>不能做的是</strong>：给根因命名、断言因果、直接写入生产准入子图。</p>
+<hr>
+<h3 id="17-8-可观测-Metrics-Cost"><a href="#17-8-可观测-Metrics-Cost" class="headerlink" title="17.8 可观测 &#x2F; Metrics &#x2F; Cost"></a>17.8 可观测 &#x2F; Metrics &#x2F; Cost</h3><table>
+<thead>
+<tr>
+<th>层</th>
+<th>内容</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>系统层</td>
+<td>OTLP 单埋点多后端（Tempo&#x2F;Prometheus&#x2F;Loki）</td>
+<td>已验证的既有平台 ADR</td>
+</tr>
+<tr>
+<td>LLM 层</td>
+<td>Langfuse——Tier-B 的每次模型调用可追溯</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>诊断质量层</td>
+<td>Top-1 命中率 &#x2F; 特异度 &#x2F; 下游误判率 &#x2F; 幻觉率 &#x2F; 自信错误率 NV-3</td>
+<td>已验证的 AC 指标体系</td>
+</tr>
+<tr>
+<td>成本层</td>
+<td>按车型&#x2F;领域&#x2F;技能归集；<strong>冷启动成本单列</strong></td>
+<td>第十六部分决策 9</td>
+</tr>
+</tbody></table>
+<p><strong>核心质量基线（示例项目的实测数据，作为平台的验收锚点）</strong>（已验证，10 种子 ×140 会话，pooled n&#x3D;1000）：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>基线 A0</th>
+<th>完整 A6</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Top-1 命中率</td>
+<td>0.226</td>
+<td><strong>0.914</strong> [0.897, 0.931]</td>
+<td>——</td>
+</tr>
+<tr>
+<td>特异度（健康车不误报）</td>
+<td>0.408</td>
+<td><strong>1.000</strong></td>
+<td>对应故障存在性判定（17.4 阶段④）</td>
+</tr>
+<tr>
+<td>下游误判率</td>
+<td>0.774</td>
+<td><strong>0.000</strong></td>
+<td>——</td>
+</tr>
+<tr>
+<td>ECU 定位准确率</td>
+<td>—</td>
+<td><strong>0.914</strong></td>
+<td>——</td>
+</tr>
+<tr>
+<td>幻觉率</td>
+<td>25.70%</td>
+<td><strong>0.22%</strong></td>
+<td>ACRV 五关</td>
+</tr>
+<tr>
+<td><strong>自信错误率 NV-3</strong></td>
+<td>—</td>
+<td><strong>当前 100%，必须修复</strong></td>
+<td>★17.4 阶段⑤</td>
+</tr>
+</tbody></table>
+<p><strong>设计决策 9 —— 负面与不显著结果必须在平台指标看板上如实呈现</strong>，而不是只展示漂亮数字。示例项目既有的记录（已验证）：上溯机制使 Top-1 显著下降 0.069（p&lt;1e-6）但消除下游误判（0.067→0.000），<strong>记为权衡而非提升</strong>；另外三项机制（含存在性判定）在 Top-1 上均 p&#x3D;1.000 不显著，价值分别在合规性&#x2F;排序质量&#x2F;安全性维度。这种诚实的指标呈现方式，与 GSD 文档中反复出现的”trade-offs”章节（第三篇第四部分：明确列出开销、延迟、小任务上的过度仪式感）是同一种工程文化。</p>
+<hr>
+<h3 id="17-9-生产落地最佳实践指南（十二条）"><a href="#17-9-生产落地最佳实践指南（十二条）" class="headerlink" title="17.9 生产落地最佳实践指南（十二条）"></a>17.9 生产落地最佳实践指南（十二条）</h3><p>综合前八节，给出可直接执行的实践清单：</p>
+<ol>
+<li><strong>先修 NV-3</strong>——把”新模板数 &gt; 0”接入弃权决策是投入产出比最高的一项：工作量小，把自信错误率从 100% 降到接近 0（已验证的判据，100% 召回&#x2F;0% 误报）。</li>
+<li><strong>永远不要跳过故障存在性判定</strong>——否则健康车假阳性率 47.5%（已验证）。且注意：提高分数阈值这条路已被实测证伪。</li>
+<li><strong>时间质量必须标记并传播</strong>——跨 ECU 时钟不同步是纯日志场景的常态，<code>ts_quality</code> 标记是所有时序因果推理的前提。</li>
+<li><strong>压缩必须保留稀有模板</strong>——这是已验证的关键设计（99.4% 压缩率下根因链零丢失的原因）。稀有 ≠ 不重要，恰恰相反，纯日志场景下罕见模板往往就是故障信号。</li>
+<li><strong>Tier-A 零 LLM 是硬性约束，且要在 CI 层面强制</strong>——<code>import-linter</code>&#x2F;<code>ArchUnit</code> 静态检查 + NetworkPolicy 双重阻断（已验证），不要靠代码评审自觉。</li>
+<li><strong>确定性必须有跨进程回归测试</strong>——示例项目踩过这个坑（集合迭代顺序受哈希随机化影响 + 分数并列依赖插入顺序，导致同一输入三次运行结果 0.49&#x2F;0.40&#x2F;0.81）（已验证）。修复方式：全程定序 + 按字典序消解并列 + 三独立进程输出逐位比对进 CI。</li>
+<li><strong>诊断专家是瓶颈资源，按此排产</strong>——语义标注是根因命名的必要条件（四臂实验已证），排期时应把专家时间当作最稀缺资源来规划（已验证的实施计划判断）。</li>
+<li><strong>知识晋级靠盲测数据，不靠资历</strong>——<code>candidate → production</code> 的门槛是盲测集表现，评测口径遵循 D1~D6 纪律。</li>
+<li><strong>把踩过的坑固化成回归测试</strong>——17.6.2 节的四个真 bug 应永久保留为测试用例（对应 GSD 把教训固化成 eslint 规则与反模式清单的做法）。</li>
+<li><strong>报告里的每条结论都必须可追溯到 row_hash</strong>，且质量门要校验引用可解析性——已验证有效（伪造指纹被拦截）。建议进一步引入 Data-Flow Trace 校验完整引用链而非单点。</li>
+<li><strong>第三方依赖进入诊断关键路径前必须做供应链评估</strong>——LiteLLM 供应链事件是示例平台的真实教训（已验证）。</li>
+<li><strong>指标看板要诚实</strong>——不显著的项标 ns，权衡项标为权衡而非提升，自证指标单列不与外部验证指标混排。</li>
+</ol>
+<hr>
+<h3 id="17-10-常见误区与反模式（六条）"><a href="#17-10-常见误区与反模式（六条）" class="headerlink" title="17.10 常见误区与反模式（六条）"></a>17.10 常见误区与反模式（六条）</h3><table>
+<thead>
+<tr>
+<th>反模式</th>
+<th>为什么错</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>“让 LLM 直接读全量日志给结论”</td>
+<td>数百万行根本放不进上下文；且 L0 结论层禁 LLM 是硬性红线</td>
+<td>已验证的三层准入</td>
+</tr>
+<tr>
+<td>“调高弃权阈值来降假阳性”</td>
+<td>已实测无效——良性噪声与真故障分数分布重叠</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>“架构图是 RCA 收益主要来源”</td>
+<td>四臂实验证伪：脱离语义标注后独立增益仅 +0.022，p&#x3D;0.4035 不显著</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>“系统能自动发现并命名新故障”</td>
+<td>无标注时命名级 Top-1 &#x3D; 0，是硬约束</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>“有证据引用就等于结论可信”</td>
+<td>引用可解析 ≠ 推理链完整；需 Data-Flow Trace 校验整条链</td>
+<td>第五篇第十一部分 + <strong>设计</strong></td>
+</tr>
+<tr>
+<td>“知识树节点越多越好”</td>
+<td>无验证会话支撑的节点会稀释可信度排序；应按 <code>provenance.validated_sessions</code> 分级</td>
+<td><strong>设计</strong></td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="17-11-本部分小结与下文预告"><a href="#17-11-本部分小结与下文预告" class="headerlink" title="17.11 本部分小结与下文预告"></a>17.11 本部分小结与下文预告</h3><p>第十七部分把纯日志故障诊断这一最难档位的场景做了完整设计，核心结论三条：</p>
+<ol>
+<li><strong>必须区分三种能力</strong>——察觉新颖（能，实测 100% 召回 0% 误报）、刻画结构（能）、命名解释（不能，硬约束）。平台设计的正确目标不是消除专家，而是把专家的边际产出最大化；</li>
+<li><strong>当前最大的生产级风险是自信错误率 100%</strong>——面对全新故障从不弃权、100% 硬安已知标签。修复方案已验证可行且工作量小（把”新模板数&gt;0”接入弃权决策），应列为 P0；</li>
+<li><strong>GSD 的三条机制可直接迁移</strong>——<code>spike --wrap-up</code> 式的三态经验固化（含死胡同）用于知识生成、Data-Flow Trace 用于证据链完整性校验、”能在 CI 期强制的约束绝不留到运行期”用于 Tier-A 零 LLM 的硬性保障。</li>
+</ol>
+<p>下一部分（第十八部分 · 源码阅读路线）将给出三轮阅读法、重点源码清单、建议阅读顺序、Debug 顺序、断点位置与学习周期规划，把前十七部分的研究过程本身转化为可复用的方法论。</p>
+<hr>
+<h2 id="第十八部分-·-源码阅读路线与学习周期规划"><a href="#第十八部分-·-源码阅读路线与学习周期规划" class="headerlink" title="第十八部分 · 源码阅读路线与学习周期规划"></a>第十八部分 · 源码阅读路线与学习周期规划</h2><blockquote>
+<p>本部分把前十七部分的研究过程本身转化为一份可复用的方法论——如果读者（或团队里的另一位工程师）要独立读懂 <code>open-gsd/gsd-core</code>，应该按什么顺序、在哪里停留、怎么调试。全部建议标注为<strong>设计</strong>（本文基于研究过程本身的归纳），不是 GSD 官方给出的阅读指南。</p>
+</blockquote>
+<h3 id="18-1-三轮阅读法"><a href="#18-1-三轮阅读法" class="headerlink" title="18.1 三轮阅读法"></a>18.1 三轮阅读法</h3><h4 id="第一轮：建立心智模型（目标：不求记住任何函数名，只求能用自己的话讲清三件事）"><a href="#第一轮：建立心智模型（目标：不求记住任何函数名，只求能用自己的话讲清三件事）" class="headerlink" title="第一轮：建立心智模型（目标：不求记住任何函数名，只求能用自己的话讲清三件事）"></a>第一轮：建立心智模型（目标：不求记住任何函数名，只求能用自己的话讲清三件事）</h4><table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>读什么</th>
+<th>为什么是这个顺序</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>根 <code>README.md</code>（英文版）+ 对照 <code>README.zh-CN.md</code> 扫一眼</td>
+<td>建立”这是什么、解决什么问题”的第一印象；中英对照能快速发现术语的官方译法</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>docs/explanation/context-engineering.md</code></td>
+<td>这是”为什么”层面最核心的一篇——不理解 Context Rot，后面所有设计都会显得像是过度工程</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>docs/explanation/the-phase-loop.md</code></td>
+<td>五阶段循环是全框架的骨架，且这篇文档本身把”为什么每一步存在”讲得极透</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>docs/ARCHITECTURE.md</code>（只读到 “Component Architecture” 一节为止，先不深挖 CLI Tools 表）</td>
+<td>建立命令层→工作流层→Agent→CLI 工具层→文件系统这条主链路的空间感</td>
+</tr>
+<tr>
+<td>5</td>
+<td>亲手跑一遍 <code>docs/tutorials/build-your-first-capability.md</code></td>
+<td>从”读”切换到”做”——七步教程半小时内可以走完一遍，比读十遍文档更能建立直觉</td>
+</tr>
+</tbody></table>
+<p><strong>第一轮的验收标准</strong>（<strong>设计</strong>）：合上文档，能用三句话分别说清”Context Rot 是什么、GSD 怎么解决、五阶段循环里每一步分别防什么”，且不需要看着文档说。</p>
+<h4 id="第二轮：抓住数据流与真实源码（目标：能看着一个真实文件，说出它从”被发现”到”被执行”经过了哪些函数）"><a href="#第二轮：抓住数据流与真实源码（目标：能看着一个真实文件，说出它从”被发现”到”被执行”经过了哪些函数）" class="headerlink" title="第二轮：抓住数据流与真实源码（目标：能看着一个真实文件，说出它从”被发现”到”被执行”经过了哪些函数）"></a>第二轮：抓住数据流与真实源码（目标：能看着一个真实文件，说出它从”被发现”到”被执行”经过了哪些函数）</h4><table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>读什么</th>
+<th>关注点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>docs/skills/discovery-contract.md</code></td>
+<td>先读契约（做什么），再读实现（怎么做），顺序不要反</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>src/init.cts</code> 的 <code>buildSkillManifest()</code>（第 2392 行起）</td>
+<td>真实的技能发现算法——扁平&#x2F;嵌套双探测、去重、TRIGGER 提取</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>src/install-profiles.cts</code> 的 <code>computeClosure()</code>&#x2F;<code>resolveProfile()</code></td>
+<td>真实的依赖闭包与 Profile 解析</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>docs/explanation/capability-trust-model.md</code> + <code>capability-overlay-model.md</code></td>
+<td>全框架工程含金量最高的两篇，此时读比第一轮读更有收获，因为已经有了具体机制做锚点</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>src/command-routing-hub.cts</code></td>
+<td>真实的 Result 判别联合 + 无抛出契约——理解”薄编排器”如何在代码层面被强制</td>
+</tr>
+</tbody></table>
+<p><strong>第二轮的验收标准</strong>（<strong>设计</strong>）：能画出一张”用户敲下一个斜杠命令，到最终产出一个制品文件”的完整调用链草图，标出每一步对应的真实函数名。</p>
+<h4 id="第三轮：吃透边界情况与历史演进（目标：理解”为什么这个设计是这样，而不是更直觉的那样”）"><a href="#第三轮：吃透边界情况与历史演进（目标：理解”为什么这个设计是这样，而不是更直觉的那样”）" class="headerlink" title="第三轮：吃透边界情况与历史演进（目标：理解”为什么这个设计是这样，而不是更直觉的那样”）"></a>第三轮：吃透边界情况与历史演进（目标：理解”为什么这个设计是这样，而不是更直觉的那样”）</h4><table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>读什么</th>
+<th>关注点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>gsd-core/references/universal-anti-patterns.md</code> 全文</td>
+<td>29 条规则背后都是真实踩过的坑，逐条问自己”如果没有这条规则会怎样”</td>
+</tr>
+<tr>
+<td>2</td>
+<td>三份 Agent Prompt：<code>gsd-planner.md</code>、<code>gsd-executor.md</code>、<code>gsd-verifier.md</code></td>
+<td>此时读这三份能看懂 <code>&lt;planner_authority_limits&gt;</code>、<code>&lt;adversarial_stance&gt;</code> 这类语义块背后防的是哪一类失效模式</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>src/state-transition.cts</code> 的 <code>FIELD_CLASSIFICATION</code> 表 + <code>applyStatePreservation()</code></td>
+<td>理解”多处漂移实现收敛成一张表”这一具体重构的来龙去脉</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>src/worktree-safety.cts</code> 全文（或至少 <code>planWorktreeCreate</code>&#x2F;<code>executeWorktreeCreatePlan</code>&#x2F;<code>reapOrphanWorktrees</code> 三组）</td>
+<td>理解 Plan&#x2F;Execute 分离在函数签名级别的复现</td>
+</tr>
+<tr>
+<td>5</td>
+<td>挑 3-5 个 <code>CHANGELOG.md</code> 里提到的、本文引用过的 issue 编号（<code>#2009</code>&#x2F;<code>#2924</code>&#x2F;<code>#3309</code>&#x2F;<code>#2631</code>&#x2F;<code>#1882</code>），去读对应的变更说明</td>
+<td>历史演进往往比”当前状态”教会你更多——一个设计被改过，说明它曾经出过问题</td>
+</tr>
+</tbody></table>
+<p><strong>第三轮的验收标准</strong>（<strong>设计</strong>）：能对本文记录的至少三处”文档滞后&#x2F;版本分歧”（discovery-contract.md 缺失新根、ARCHITECTURE.md 与 git-integration.md 的 <code>--no-verify</code> 分歧、plan-checker 维度数量滞后）给出自己的解释，而不只是复述本文的记录。</p>
+<hr>
+<h3 id="18-2-重点源码分级清单"><a href="#18-2-重点源码分级清单" class="headerlink" title="18.2 重点源码分级清单"></a>18.2 重点源码分级清单</h3><table>
+<thead>
+<tr>
+<th>级别</th>
+<th>文件</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>必读</strong></td>
+<td><code>docs/explanation/context-engineering.md</code></td>
+<td>全框架存在的理由</td>
+</tr>
+<tr>
+<td><strong>必读</strong></td>
+<td><code>docs/explanation/the-phase-loop.md</code></td>
+<td>全框架的骨架</td>
+</tr>
+<tr>
+<td><strong>必读</strong></td>
+<td><code>docs/explanation/capability-trust-model.md</code></td>
+<td>全文工程含金量最高的一篇（第二篇第三部分、第十六部分反复引用）</td>
+</tr>
+<tr>
+<td><strong>必读</strong></td>
+<td><code>src/init.cts</code>（<code>buildSkillManifest</code> 附近）</td>
+<td>唯一的技能发现权威实现</td>
+</tr>
+<tr>
+<td><strong>必读</strong></td>
+<td><code>agents/gsd-verifier.md</code></td>
+<td>Data-Flow Trace 技术所在，本文认为最值得学的具体验证方法</td>
+</tr>
+<tr>
+<td><strong>精读</strong></td>
+<td><code>docs/explanation/capability-overlay-model.md</code></td>
+<td>与信任模型互补的另一半</td>
+</tr>
+<tr>
+<td><strong>精读</strong></td>
+<td><code>src/command-routing-hub.cts</code></td>
+<td>Result 判别联合的教科书实现</td>
+</tr>
+<tr>
+<td><strong>精读</strong></td>
+<td><code>src/install-profiles.cts</code></td>
+<td>依赖闭包 + Profile 解析的真实算法</td>
+</tr>
+<tr>
+<td><strong>精读</strong></td>
+<td><code>src/state-transition.cts</code></td>
+<td>表驱动状态治理，规模最大也最值得学</td>
+</tr>
+<tr>
+<td><strong>精读</strong></td>
+<td><code>gsd-core/references/universal-anti-patterns.md</code></td>
+<td>29 条真实教训</td>
+</tr>
+<tr>
+<td><strong>精读</strong></td>
+<td><code>gsd-core/references/untrusted-input-boundary.md</code></td>
+<td>引用真实学术研究的 Prompt 级注入防御</td>
+</tr>
+<tr>
+<td><strong>选读</strong></td>
+<td><code>src/worktree-safety.cts</code></td>
+<td>除非要深入 Git 集成细节</td>
+</tr>
+<tr>
+<td><strong>选读</strong></td>
+<td><code>src/frontmatter.cts</code></td>
+<td>除非要学手写解析器的边界情况处理</td>
+</tr>
+<tr>
+<td><strong>选读</strong></td>
+<td><code>docs/CONFIGURATION.md</code></td>
+<td>除非要配置具体行为</td>
+</tr>
+<tr>
+<td><strong>选读</strong></td>
+<td>各 <code>capabilities/&lt;id&gt;/capability.json</code> 样本</td>
+<td>除非要开发新能力</td>
+</tr>
+</tbody></table>
+<h3 id="18-3-建议-Debug-顺序：从外到内、从声明到执行"><a href="#18-3-建议-Debug-顺序：从外到内、从声明到执行" class="headerlink" title="18.3 建议 Debug 顺序：从外到内、从声明到执行"></a>18.3 建议 Debug 顺序：从外到内、从声明到执行</h3><p>当”某个能力&#x2F;技能为什么没有生效”时，按以下顺序排查（<strong>设计</strong>，综合第四篇第八部分、第五篇第十二部分已验证的调试手段）：</p>
+<pre class="mermaid">flowchart TB
+    Q["现象：某能力/技能似乎没生效"] --&gt; S1["① gsd loop render-hooks &amp;lt;point&amp;gt; --raw&lt;br/&gt;——检查它是否真的进入了运行时注册表&lt;br/&gt;（不需要跑真实会话）"]
+    S1 --&gt;|"不在 activeHooks 里"| S2["② gsd capability list&lt;br/&gt;——检查 status：active/incompatible/inactive"]
+    S1 --&gt;|"在，但内容不对"| S6["直接检查 fragment.inline 的实际渲染内容"]
+    S2 --&gt;|"incompatible"| FIX1["检查 engines.gsd 区间"]
+    S2 --&gt;|"inactive"| FIX2["检查本机 consent 记录（项目级能力）"]
+    S2 --&gt;|"active 但还是不对"| S3["③ gsd-tools skill-manifest&lt;br/&gt;——检查技能是否被正确发现（根路径/frontmatter）"]
+    S3 --&gt; S4["④ 检查 resolveProfile 输出&lt;br/&gt;——技能是否在当前 profile 闭包内"]
+    S4 --&gt; S5["⑤ 检查 STATE.md 的 status 字段&lt;br/&gt;——工作流是否处于预期阶段"]
+    S5 --&gt; S7["⑥ 最后才进入具体 Agent 的 Prompt 本身调试"]</pre>
+
+
+<p><strong>这个顺序的设计理由</strong>：越靠前的检查点，验证成本越低（一条命令、不涉及真实 LLM 调用）；<strong>先排除”根本没被系统看见”，再排除”看见了但没生效”，最后才排查”生效了但内容不对”</strong>——这与本系列第五篇（第十二部分）强调的”用 <code>render-hooks --raw</code> 而非跑一次完整会话去调试”是同一条纪律的延伸。</p>
+<h3 id="18-4-建议断点位置（面向真要用-Node-调试器单步调试-GSD-本身的场景）"><a href="#18-4-建议断点位置（面向真要用-Node-调试器单步调试-GSD-本身的场景）" class="headerlink" title="18.4 建议断点位置（面向真要用 Node 调试器单步调试 GSD 本身的场景）"></a>18.4 建议断点位置（面向真要用 Node 调试器单步调试 GSD 本身的场景）</h3><table>
+<thead>
+<tr>
+<th>函数</th>
+<th>建议断点位置</th>
+<th>为什么在这里</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>buildSkillManifest()</code> 内的 <code>pushSkillEntry()</code></td>
+<td>函数入口</td>
+<td>观察 <code>seenNamesInRoot</code> 去重逻辑实际触发的时刻——这是理解”一个技能可以有多个父路由”最直观的地方</td>
+</tr>
+<tr>
+<td><code>computeClosure()</code></td>
+<td><code>while (queue.length &gt; 0)</code> 循环体内</td>
+<td>观察闭包展开的每一步，尤其是能力贡献技能被并入 base 之后的展开过程</td>
+</tr>
+<tr>
+<td><code>resolveProfile()</code></td>
+<td><code>validModes.length === 0</code> 判断之后</td>
+<td>观察”回退到 full”这条防御性默认值实际触发的条件</td>
+</tr>
+<tr>
+<td><code>command-routing-hub.cts</code> 的 <code>dispatch()</code></td>
+<td>内部 <code>try/catch</code> 的 <code>catch</code> 块</td>
+<td>观察一次意外抛出是如何被转换成 <code>HandlerFailure</code> 的，这是”无抛出契约”最具体的落地点</td>
+</tr>
+<tr>
+<td><code>applyStatePreservation()</code></td>
+<td>函数入口，同时在调用前打印 <code>preFm</code>&#x2F;<code>postFm</code></td>
+<td>观察表驱动的字段保留策略在真实数据上如何生效</td>
+</tr>
+</tbody></table>
+<h3 id="18-5-学习周期规划（设计，一个具体可执行的四周计划）"><a href="#18-5-学习周期规划（设计，一个具体可执行的四周计划）" class="headerlink" title="18.5 学习周期规划（设计，一个具体可执行的四周计划）"></a>18.5 学习周期规划（<strong>设计</strong>，一个具体可执行的四周计划）</h3><table>
+<thead>
+<tr>
+<th>周次</th>
+<th>内容</th>
+<th>产出</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>第 1 周</td>
+<td>第一轮阅读 + 亲手跑通 Hello Capability 教程 + 跑通一次 <code>/gsd-new-project</code> 全流程</td>
+<td>能画出五阶段循环图，且有一次真实的端到端使用体验</td>
+</tr>
+<tr>
+<td>第 2 周</td>
+<td>第二轮阅读 + 用 Node 调试器单步走一遍 <code>buildSkillManifest()</code> 与 <code>resolveProfile()</code></td>
+<td>能画出”斜杠命令→制品文件”的完整调用链草图</td>
+</tr>
+<tr>
+<td>第 3 周</td>
+<td>第三轮阅读 + 挑 3 个真实 issue 编号读变更历史 + 尝试给自己的项目写一个真实的（非 hello-world）Capability</td>
+<td>一份能在自己项目里跑起来的自定义能力</td>
+</tr>
+<tr>
+<td>第 4 周</td>
+<td>结合第十四～十七部分，把学到的模式应用到自己的业务领域（设备诊断方向的读者可直接对应到诊断场景）</td>
+<td>一份领域化的技能&#x2F;能力设计草案，可与既有诊断技能包做对照评审</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="第十九部分-·-企业最佳实践总结"><a href="#第十九部分-·-企业最佳实践总结" class="headerlink" title="第十九部分 · 企业最佳实践总结"></a>第十九部分 · 企业最佳实践总结</h2><h3 id="19-1-官方推荐（有明确文档依据）"><a href="#19-1-官方推荐（有明确文档依据）" class="headerlink" title="19.1 官方推荐（有明确文档依据）"></a>19.1 官方推荐（有明确文档依据）</h3><table>
+<thead>
+<tr>
+<th>建议</th>
+<th>依据</th>
+<th>具体内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Phase 前做 MCP 审计</td>
+<td><code>references/context-budget.md</code></td>
+<td>检查是否有未用的浏览器&#x2F;平台工具、跨项目遗留 MCP、重复功能的 MCP，逐项关闭——每关一项，后续每一轮都省下对应的 schema token</td>
+</tr>
+<tr>
+<td>优先 <code>--minimal</code>&#x2F;<code>--profile=core</code> 起步，按需扩展</td>
+<td><code>docs/how-to/install-minimal-and-add-skills.md</code></td>
+<td>冷启动描述 token 从约 1200（full）降到约 130（core），大型项目&#x2F;受限模型场景显著受益</td>
+</tr>
+<tr>
+<td>安全默认多层并行、互不依赖</td>
+<td><code>docs/USER-GUIDE.md</code> “Defense-in-Depth (v1.27)”</td>
+<td>路径穿越校验 + 注入模式扫描 + <code>gsd-prompt-guard.js</code> 运行时钩子 + <code>prompt-injection-scan.security.test.cjs</code> CI 扫描器——<strong>四层各自独立生效</strong>，不因其中一层失效而整体失守</td>
+</tr>
+<tr>
+<td>警惕 Slopsquatting，强制包合法性审计</td>
+<td><code>docs/USER-GUIDE.md</code> “Package Legitimacy Gate”</td>
+<td>AI 编程工具会幻觉包名，攻击者预先在 npm&#x2F;PyPI&#x2F;crates.io 注册这些幻觉包名并植入恶意 post-install 脚本；<code>RESEARCH.md</code> 中强制生成”Package Legitimacy Audit”表，<code>[SLOP]</code> 直接移除、<code>[SUS]</code>&#x2F;<code>[ASSUMED]</code> 打标并触发人工确认</td>
+</tr>
+<tr>
+<td>好的 Phase 范围判据</td>
+<td><code>docs/explanation/the-phase-loop.md</code></td>
+<td>目标能一句话讲清、研究范围有界、能拆成少数几个不重叠的并行计划、有清晰可测的完成定义——“增加 HMAC-SHA256 签名校验中间件”是好范围，”构建整个认证系统”通常不是</td>
+</tr>
+<tr>
+<td>低于门槛的任务用轻量原语</td>
+<td>本系列第三篇（第五部分）5.10 节</td>
+<td>一句短提示能说清、一轮能做完、不需要进一步澄清——就跳过五阶段循环，用 <code>/gsd-quick</code>&#x2F;<code>/gsd-fast</code></td>
+</tr>
+</tbody></table>
+<h3 id="19-2-社区推荐（诚实的证据强度声明）"><a href="#19-2-社区推荐（诚实的证据强度声明）" class="headerlink" title="19.2 社区推荐（诚实的证据强度声明）"></a>19.2 社区推荐（诚实的证据强度声明）</h3><p><strong>必须如实声明</strong>：本文的研究方法（本系列第一篇第〇部分）以官方仓库源码与文档为唯一一手来源，<strong>未对 GSD Discord 社区讨论、社区博客、第三方教程做系统性核实</strong>。本系列第一篇（第一部分）引用的 Pulumi 博客（比较 GSD&#x2F;Superpowers&#x2F;GSTACK 三个框架）是本文唯一采信的外部生态背景来源，且明确注明其部分数字（Star 数统计口径）与仓库主页直接读取的数字不一致。<strong>本节不列出任何未经核实的”社区推荐”，以免把二手转述包装成事实</strong>——如需这部分内容，建议直接查阅 GSD 官方 Discord（README 中的邀请链接）。</p>
+<h3 id="19-3-优秀-Skill-范例（源码实证）"><a href="#19-3-优秀-Skill-范例（源码实证）" class="headerlink" title="19.3 优秀 Skill 范例（源码实证）"></a>19.3 优秀 Skill 范例（源码实证）</h3><table>
+<thead>
+<tr>
+<th>范例</th>
+<th>优秀之处</th>
+<th>出处</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gsd-quick</code></td>
+<td>参数分流置于最前；只读分支显式 STOP；<code>&lt;security_notes&gt;</code> 把消毒规则写到”允许字符集&#x2F;长度上限&#x2F;拒绝模式”的具体程度；两次消毒（入路径前 + 显示前）</td>
+<td>第四篇第六、七部分、第五篇第十二部分</td>
+</tr>
+<tr>
+<td><code>gsd-ns-workflow</code></td>
+<td>竖线分隔关键词标签的 description；二列路由表 + 末尾明确执行指令</td>
+<td>第一篇第一部分、第四篇第九部分</td>
+</tr>
+<tr>
+<td><code>gsd:code-review</code></td>
+<td>三档深度带具体耗时预期；文件范围裁定给出编号化的优先级决策（D-08）</td>
+<td>第十四部分</td>
+</tr>
+</tbody></table>
+<h3 id="19-4-优秀-Prompt-范例"><a href="#19-4-优秀-Prompt-范例" class="headerlink" title="19.4 优秀 Prompt 范例"></a>19.4 优秀 Prompt 范例</h3><table>
+<thead>
+<tr>
+<th>范例</th>
+<th>优秀之处</th>
+<th>出处</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>untrusted-input-boundary.md</code></td>
+<td>引用真实学术研究（self-guard&#x2F;task-anchor&#x2F;随机化分隔符），而非泛泛而谈”要小心”</td>
+<td>第四篇第十部分、第十八部分</td>
+</tr>
+<tr>
+<td><code>gsd-verifier.md</code> 的 <code>&lt;adversarial_stance&gt;</code> + Data-Flow Trace</td>
+<td>把”验证心态”显式命名为一个语义块，并给出具体到”UI→state→fetch→API→DB”的追溯路径而非抽象原则</td>
+<td>第五篇第十一部分</td>
+</tr>
+<tr>
+<td><code>gsd-planner.md</code> 的三个 CRITICAL 语义块</td>
+<td>用 Prompt 语言堵死”悄悄让步”这一具体失效模式，而不是笼统要求”认真规划”</td>
+<td>第五篇第十一部分</td>
+</tr>
+</tbody></table>
+<h3 id="19-5-优秀-Workflow-范例"><a href="#19-5-优秀-Workflow-范例" class="headerlink" title="19.5 优秀 Workflow 范例"></a>19.5 优秀 Workflow 范例</h3><table>
+<thead>
+<tr>
+<th>范例</th>
+<th>优秀之处</th>
+<th>出处</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>discuss-phase</code> 的模式化拆分</td>
+<td>父文件做薄分发器，<code>modes/</code> 下每个标志对应一个独立文件，只在命中时才被 Read</td>
+<td>第二篇第三部分</td>
+</tr>
+<tr>
+<td><code>spike-wrap-up</code></td>
+<td>增量差集处理 + 三态经验分类（含死胡同）+ 自动语义分组，是本文唯一完整源码实证的动态生成机制</td>
+<td>第五篇第十三部分</td>
+</tr>
+<tr>
+<td><code>execute-phase</code> 的波次分析</td>
+<td>打印执行计划表格 → 按依赖分组并行 → 断点续跑三选项</td>
+<td>第三篇第五部分</td>
+</tr>
+</tbody></table>
+<h3 id="19-6-常见误区（汇总-universal-anti-patterns-md-精选-本文过程中记录的额外误区）"><a href="#19-6-常见误区（汇总-universal-anti-patterns-md-精选-本文过程中记录的额外误区）" class="headerlink" title="19.6 常见误区（汇总 universal-anti-patterns.md 精选 + 本文过程中记录的额外误区）"></a>19.6 常见误区（汇总 <code>universal-anti-patterns.md</code> 精选 + 本文过程中记录的额外误区）</h3><table>
+<thead>
+<tr>
+<th>误区</th>
+<th>正确做法</th>
+<th>出处</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用通用 Agent 类型（<code>general-purpose</code> 等）代替领域专属 Agent</td>
+<td>领域 Agent 带项目感知 Prompt、审计日志、工作流上下文，通用 Agent 会绕开全部这些</td>
+<td>第四篇第十部分</td>
+</tr>
+<tr>
+<td>逐项走查检查清单式提问</td>
+<td>从宽到窄，往有趣的地方深挖</td>
+<td>第四篇第十部分</td>
+</tr>
+<tr>
+<td>直接 Write&#x2F;Edit 状态文件做变更</td>
+<td>走注册的状态处理器，避免多会话竞态</td>
+<td>第四篇第十部分</td>
+</tr>
+<tr>
+<td>用 <code>git add .</code>&#x2F;<code>-A</code></td>
+<td>只暂存具体文件</td>
+<td>第四篇第十部分</td>
+</tr>
+<tr>
+<td>把 MCP 工具成本归为”GSD 的问题”去优化 GSD 本身</td>
+<td>这是宿主层面的事，该去调 <code>.claude/settings.json</code> 的 MCP 开关，而不是折腾框架配置</td>
+<td>第三篇第四部分</td>
+</tr>
+<tr>
+<td>提高弃权&#x2F;置信度阈值来降低误报</td>
+<td>已被诊断场景实测证伪——良性噪声与真实信号的分数分布可能重叠，阈值调节解决不了分布重叠问题</td>
+<td>第十七部分</td>
+</tr>
+<tr>
+<td>迷信”覆盖率越高越安全”</td>
+<td>不可关闭的诊断，阈值应设在”歧义消除”而非”覆盖率最大化”——过度捕获会带来持续骚扰型的误报成本</td>
+<td>第五篇第十一部分</td>
+</tr>
+<tr>
+<td>只验证”结论有证据引用”而不验证”引用链完整”</td>
+<td>Data-Flow Trace 思路——反向追溯到真实数据源，而非止步于表面上”有个引用”</td>
+<td>第五篇第十一部分、第十七部分</td>
+</tr>
+</tbody></table>
+<h3 id="19-7-性能优化"><a href="#19-7-性能优化" class="headerlink" title="19.7 性能优化"></a>19.7 性能优化</h3><ul>
+<li><strong>两阶段命名空间路由</strong>——把非递归加载器宿主上的眼前候选池从约 67 压到约 6（第一篇第一部分、第四篇第六部分）；</li>
+<li><strong>字节预算分级</strong>——workflow 文件按 XL&#x2F;LARGE&#x2F;DEFAULT 三档强制上限，配合渐进式披露避免”文件变小但加载的上下文没变小”这种自欺（第二篇第三部分）；</li>
+<li><strong>波次并行执行</strong>——多文件特性完成耗时正比于最长依赖链而非任务总数之和（第二篇第三部分、第三篇第五部分）；</li>
+<li><strong>Research Store 内容寻址缓存</strong>——按来源分级 TTL，避免重复抓取（第四篇第六部分）。</li>
+</ul>
+<h3 id="19-8-Token-优化"><a href="#19-8-Token-优化" class="headerlink" title="19.8 Token 优化"></a>19.8 Token 优化</h3><ul>
+<li><strong><code>description</code> 硬约束 100 字符</strong>，总预算设定为上下文窗口的 1%（第四篇第六、九部分）；</li>
+<li><strong><code>requires</code> 等构建期字段在生成 SKILL.md 时被剥离</strong>，不进入每轮期成本（第四篇第六、七部分）；</li>
+<li><strong>Profile 精简安装</strong>——<code>core</code> 约 130 token vs <code>full</code> 约 1200 token（第四篇第六部分、19.1 节）；</li>
+<li><strong>读取深度随窗口大小自适应</strong>，但<strong>只放宽读多深、不放宽读多广</strong>（第三篇第四部分）。</li>
+</ul>
+<h3 id="19-9-Context-优化"><a href="#19-9-Context-优化" class="headerlink" title="19.9 Context 优化"></a>19.9 Context 优化</h3><ul>
+<li><strong>新鲜子代理隔离是结构性解法而非权宜之计</strong>（第一篇第一部分、第三篇第四部分）；</li>
+<li><strong>中断点数量本身是成本</strong>——冷启动代价数万 token&#x2F;次，检查点应批量后移而非逐点打断（第三篇第四部分，<code>#3309</code>）；</li>
+<li><strong><code>.planning/</code> 承载全部跨会话状态</strong>，对话历史本身随时可安全丢弃（第三篇第四部分）；</li>
+<li><strong><code>@</code>-导入是急切语义</strong>，条件分支背后的导入依然会被无条件加载，惰性引用必须用运行时 <code>Read</code> 而非导入（第二篇第三部分、第三篇第四部分）。</li>
+</ul>
+<h3 id="19-10-Prompt-优化"><a href="#19-10-Prompt-优化" class="headerlink" title="19.10 Prompt 优化"></a>19.10 Prompt 优化</h3><ul>
+<li><strong>路由型技能用竖线分隔关键词标签</strong>，终点型技能用”做什么+什么时候不该用”两句话（第四篇第七、九部分）；</li>
+<li><strong>安全约束要具体到可执行细节</strong>（字符集&#x2F;长度&#x2F;拒绝模式），而非”注意安全”这种空泛表述（第四篇第六部分、第五篇第十一部分）；</li>
+<li><strong>随机化分隔符优于固定分隔符</strong>——固定的 <code>DATA_START</code>&#x2F;<code>DATA_END</code> 可被伪造，每次生成新 token 才是真正的边界（第四篇第十部分）；</li>
+<li><strong>把安全规则写进 Prompt 本身</strong>（<code>&lt;security_notes&gt;</code> 语义块），而非只写在开发文档里——虽然 GSD 自己也只在 1&#x2F;71 的技能里做到了这一点，这恰恰说明”知道该怎么做”与”系统性做到”之间有真实差距（第四篇第七部分、19.6 节）。</li>
+</ul>
+<h3 id="19-11-Skill-优化"><a href="#19-11-Skill-优化" class="headerlink" title="19.11 Skill 优化"></a>19.11 Skill 优化</h3><ul>
+<li><strong>依赖检查提升为发布&#x2F;构建期门禁</strong>——<code>lint-skill-deps.cjs</code> 的两项检查把悬空引用从运行时问题变成 CI 失败（第四篇第六部分）；</li>
+<li><strong>Surface 层管理可见性，而非覆盖机制</strong>——第一方永远赢，用户只能”关闭”不能”覆盖”（第四篇第六、十部分）；</li>
+<li><strong>技能可以合法拥有多个父路由</strong>，不要强行追求分类互斥（第四篇第九部分）；</li>
+<li><strong>Agent 派生按”是否被技能正文实际引用”反向推导安装范围</strong>，而非维护一份手工的白名单（第四篇第八部分）。</li>
+</ul>
+<hr>
+<h2 id="第二十部分-·-最终总结"><a href="#第二十部分-·-最终总结" class="headerlink" title="第二十部分 · 最终总结"></a>第二十部分 · 最终总结</h2><blockquote>
+<p>这是本系列二十部分的收束。以下八个”十大”系列，是对前十九部分全部研究与设计内容的最终提炼——每一条都能追溯到前文的具体section，不重新引入未经论证的新观点。</p>
+</blockquote>
+<h3 id="20-1-Open-GSD-架构思想（一段话版）"><a href="#20-1-Open-GSD-架构思想（一段话版）" class="headerlink" title="20.1 Open-GSD 架构思想（一段话版）"></a>20.1 Open-GSD 架构思想（一段话版）</h3><p>GSD Core 的架构思想可以浓缩成一句话：<strong>把”如何让一个会退化的推理者，在一个不提供任何原生持久性保证的环境里，稳定完成复杂任务”这个问题，拆解成三个可以分别独立解决的子问题——上下文工程（对抗退化）、规范驱动开发（对抗歧义）、元提示（对抗知识流失）——然后用文件系统作为三者共享的、不依赖任何一次对话的真相之源。</strong> 它不试图让模型变得更强，而是设计一套让”当前这个模型”在恰当的约束与制品支持下稳定发挥的脚手架。</p>
+<h3 id="20-2-十大设计原则"><a href="#20-2-十大设计原则" class="headerlink" title="20.2 十大设计原则"></a>20.2 十大设计原则</h3><ol>
+<li><strong>薄编排器</strong>——编排层永不干重活，只路由、只更新状态（第一篇第一部分、第五篇第十一部分）；</li>
+<li><strong>新鲜上下文是结构性解法</strong>——不是权宜之计，是对 Context Rot 的直接回应（第一篇第一部分、第三篇第四部分）；</li>
+<li><strong>文件系统是唯一真相之源</strong>——对话历史随时可安全丢弃（第一篇第一部分、第三篇第四部分）；</li>
+<li><strong>缺省即启用</strong>——用户显式关闭而非显式开启默认行为（第一篇第一部分）；</li>
+<li><strong>纵深防御</strong>——多层独立机制各自生效，不依赖任何单一层完美（第一篇第一部分、第四篇第十部分、19.1 节）；</li>
+<li><strong>制品对等不等于信任对等</strong>——扩展能力可以对等，权威性不能对等（第二篇第三部分）；</li>
+<li><strong>第一方永远赢</strong>——覆盖被禁止，只能新增（第二篇第三部分、第四篇第六部分）；</li>
+<li><strong>响亮地失败开放</strong>——缺失一个控制点必须被看见，不能被静默吞掉（第二篇第三部分）；</li>
+<li><strong>拒绝模型自评，路由到实测历史</strong>——置信度必须来自历史数据而非自陈（第三篇第四部分）；</li>
+<li><strong>能在构建期&#x2F;CI 期强制的约束，绝不留到运行期靠自觉</strong>——从技能依赖到编译产物同步，一以贯之（第二篇第二部分、第四篇第六部分、第十七部分）。</li>
+</ol>
+<h3 id="20-3-十大源码亮点"><a href="#20-3-十大源码亮点" class="headerlink" title="20.3 十大源码亮点"></a>20.3 十大源码亮点</h3><ol>
+<li><code>extractFrontmatter()</code> 的”两键阈值”启发式推理——不可关闭诊断的阈值该设在哪（第五篇第十一部分、第十八部分）；</li>
+<li><code>command-routing-hub.cts</code> 的 <code>Result</code> 判别联合——Railway-Oriented Programming 的教科书实现（第五篇第十一部分）；</li>
+<li><code>state-transition.cts</code> 的 <code>FIELD_CLASSIFICATION</code> 表——三处漂移实现收敛成一张表的真实重构（第五篇第十一部分）；</li>
+<li><code>buildSkillManifest()</code> 的双重探测——扁平+条件性嵌套，与宿主运行时判断完全解耦（第四篇第八部分）；</li>
+<li><code>computeClosure()</code>&#x2F;<code>resolveProfile()</code>——含能力贡献技能的闭包前注入 + 原型污染防护（第四篇第八部分）；</li>
+<li><code>worktree-safety.cts</code> 的 Plan&#x2F;Execute 拆分——SDD 哲学在函数签名级别的自我印证（第五篇第十一部分）；</li>
+<li><code>gsd-verifier.md</code> 的 Data-Flow Trace（Step 4b）——沿数据流反向追溯到真实来源（第五篇第十一部分）；</li>
+<li>两阶段命名空间路由 + <code>spec-phase</code> 的双父节点——DAG 而非树的技能路由（第一篇第一部分、第四篇第八、九部分）；</li>
+<li><code>untrusted-input-boundary.md</code>——引用真实学术技术的 Prompt 级注入防御（第四篇第十部分）；</li>
+<li><code>spike-wrap-up.md</code>——增量 + 三态经验（含死胡同）+ 自动分组的动态技能生成（第五篇第十三部分）。</li>
+</ol>
+<h3 id="20-4-十大值得借鉴（面向自研平台）"><a href="#20-4-十大值得借鉴（面向自研平台）" class="headerlink" title="20.4 十大值得借鉴（面向自研平台）"></a>20.4 十大值得借鉴（面向自研平台）</h3><ol>
+<li>“声明→生成→校验漂移”三件套，把一致性从自觉变成 CI 门禁（第二篇第二部分）；</li>
+<li>Capability 信任模型的三重屏障（同意+完整性+可逆性），诚实面对”没有沙箱”（第二篇第三部分）；</li>
+<li>Gate 四分类法作为全流程统一词汇表（第二篇第三部分、第五篇第十一部分、第十六部分）；</li>
+<li>表驱动的状态治理模式（<code>FIELD_CLASSIFICATION</code>），策略变更降级为改一行（第五篇第十一部分、第十六部分）；</li>
+<li>Data-Flow Trace 验证方法论，适用于任何”表面完整、内里空心”的缺陷类别（第五篇第十一部分、第十四、十七部分）；</li>
+<li>双缝注入 + 去重守卫，应对”宿主特性不可靠”的通用模式（第四篇第六部分）；</li>
+<li>用确定性程序观测、用 Prompt 通道回传，绕开”LLM 无法自省”的死结（第三篇第四部分）；</li>
+<li>拒绝模型自评、路由到实测历史的估算&#x2F;置信度体系（第三篇第四部分）；</li>
+<li>分层路由降低单次分类熵，而非追求更聪明的分类器（第四篇第九部分）；</li>
+<li>把踩过的坑固化成可执行的静态检查规则（<code>eslint-rules/</code> 与反模式清单），而不是写进永远不会被重读的文档（第四篇第十部分、第十九部分）。</li>
+</ol>
+<h3 id="20-5-十大可迁移思想（跨行业）"><a href="#20-5-十大可迁移思想（跨行业）" class="headerlink" title="20.5 十大可迁移思想（跨行业）"></a>20.5 十大可迁移思想（跨行业）</h3><ol>
+<li>五阶段判据——“每一步防御上一步无法防御的失效模式”，任何行业的流程设计都可以用这条判据自检（第三篇第五部分、第十五部分）；</li>
+<li>“可迁移的是回答方式，不是回答内容”——上下文经济学&#x2F;信任边界&#x2F;验证方法论&#x2F;工程一致性纪律这四个问题的答案可搬，具体 Agent 角色与制品格式不能搬（第十五部分）；</li>
+<li>“替换”永远集中在角色定义与留痕系统两处，其余大概率可复用（第十五部分）；</li>
+<li>三层条件化生效（功能开关&#x2F;版本门禁&#x2F;运行时门禁）比单一 if-else 更适合长期演进（第五篇第十三部分）；</li>
+<li>探索期先积累经验（含死胡同），成熟后再固化为正式资产，不要求一步到位设计完整（第五篇第十三部分、第十七部分）；</li>
+<li>能力边界要靠受控实验诚实划定（如四臂归因分离实验），而不是靠直觉或愿望（第十七部分）；</li>
+<li>分级审核优于”全开放”与”全审核”两个极端，取舍依据是生态规模与合规约束（第十六部分）；</li>
+<li>观测数据脱敏是数据产生侧的责任，不是查询侧的责任（第十六部分）；</li>
+<li>负面与不显著结果要如实呈现在指标看板上，不能只展示漂亮数字（第十七部分）；</li>
+<li>用被验证过的方法论去建造承载这套方法论的工具本身（16.5 节，”用五阶段循环去建 ESR”）。</li>
+</ol>
+<h3 id="20-6-十大反模式"><a href="#20-6-十大反模式" class="headerlink" title="20.6 十大反模式"></a>20.6 十大反模式</h3><ol>
+<li>让通过的维度锚定判断——一份计划&#x2F;一次审查可以在多数维度上通过，仍在关键维度上失败（第三篇第五部分、第十四部分）；</li>
+<li>用非领域专属的通用 Agent 类型绕开审计与项目感知（第四篇第十部分、第十九部分）；</li>
+<li>逐项走查检查清单式提问（第四篇第十部分）；</li>
+<li>提高弃权&#x2F;置信度阈值来掩盖分布重叠问题（第十七、十九部分）；</li>
+<li>只验证”有引用”而不验证”引用链完整”（第五篇第十一部分、第十七部分）；</li>
+<li>把宿主层面的成本问题（如 MCP Schema）误当成框架自身问题去优化（第三篇第四部分）；</li>
+<li>固定分隔符包裹不可信内容（可被伪造）（第四篇第十部分）；</li>
+<li>为了”图省事”给技能声明全部工具权限而非最小必要集合（第四篇第七部分、第十四部分）；</li>
+<li>过度追求分类互斥性，牺牲可发现性（技能&#x2F;知识节点必须唯一归属一个类目）（第四篇第九部分、第十七部分）；</li>
+<li>声称”全自动学习出新知识&#x2F;新根因”而没有实证过语义标注环节的必要性（第五篇第十三部分、第十七部分）。</li>
+</ol>
+<h3 id="20-7-十大最佳实践（可直接落地执行）"><a href="#20-7-十大最佳实践（可直接落地执行）" class="headerlink" title="20.7 十大最佳实践（可直接落地执行）"></a>20.7 十大最佳实践（可直接落地执行）</h3><ol>
+<li>Phase&#x2F;任务开始前审计并关闭不需要的外部工具（MCP 等）接入（19.1 节）；</li>
+<li>优先精简安装，按需扩展，而非默认全量（19.1 节）；</li>
+<li>安全防线多层独立部署，不依赖单一层（19.1 节）；</li>
+<li>强制第三方依赖&#x2F;包合法性审计，警惕”幻觉包名被抢注”这类供应链攻击（第十七部分、19.1 节）；</li>
+<li>技能描述控制在极小字符预算内，总预算按上下文窗口的固定比例设定（19.10 节）；</li>
+<li>安全约束写到可执行细节（字符集&#x2F;长度&#x2F;拒绝模式），不停留在原则声明（19.10 节）；</li>
+<li>依赖闭包与命名冲突检查提升为构建期门禁（19.11 节）；</li>
+<li>把每一次真实故障复盘固化为一条永久回归测试，而非只写进文档（17.6.2、19.6 节）；</li>
+<li>中断点数量本身要被计量为成本，检查点尽量批量后移（第三篇第四部分、19.9 节）；</li>
+<li>指标看板如实呈现负面与不显著结果，权衡不等于提升（第十七部分、19.6 节）。</li>
+</ol>
+<h3 id="20-8-十大企业级落地建议"><a href="#20-8-十大企业级落地建议" class="headerlink" title="20.8 十大企业级落地建议"></a>20.8 十大企业级落地建议</h3><ol>
+<li>不要直接照搬 GSD 单机形态，服务化时明确”哪些原则不变、哪些取舍要反转”（沙箱是目前唯一确认要反转的一条）（第十六部分）；</li>
+<li>用编排图引擎（如状态图&#x2F;工作流引擎）实现五阶段循环，不要自研编排 DSL（第十六部分）；</li>
+<li>把断点续跑交给成熟的持久化工作流引擎，而不是自己维护文件探测逻辑（第十六部分）；</li>
+<li>观测三层分工——系统层&#x2F;LLM 调用层&#x2F;成本层各自用专门工具，不要试图一个工具包打天下（第十六部分）；</li>
+<li>Marketplace 治理采用分级审核而非全开放或全人工审核两个极端（第十六部分）；</li>
+<li>领域知识资产（诊断规则、合规条款、行业本体）用能力清单机制承载，独立版本、独立开关（第十四、十七部分）；</li>
+<li>涉及”发现新模式&#x2F;新故障&#x2F;新知识”的能力，必须先做受控实验诚实划定”能做到什么、做不到什么”，再设计产品形态（第十七部分）；</li>
+<li>涉及人身安全或高代价错误的领域（医疗、金融、设备诊断），验证层要比通用软件工程领域更重，且要有专门的合规 Gate（第十四、十五、十七部分）；</li>
+<li>把专家在系统中不可替代的环节（如语义标注、根因命名）识别出来，设计流程把专家的边际产出最大化，而不是试图让 AI 越俎代庖（第十七部分）；</li>
+<li>把”这套方法论如何指导自己的建设过程”作为验收标准之一——如果一个团队设计的 Skill 平台自己都不用五阶段循环去管理自己的开发，这本身就是一个信号（第二篇第二部分 GSD 自我 dogfooding 的印证 + 16.5 节）。</li>
+</ol>
+<hr>
+<h3 id="系列结语"><a href="#系列结语" class="headerlink" title="系列结语"></a>系列结语</h3><p>至此，Open-GSD 源码解析系列的全部二十部分（含研究方法说明）已经收束。全系列以 <code>open-gsd/gsd-core</code> 仓库 <code>next</code> 分支（commit <code>d2d2f7c088bed7d588749a05bc89d1012f870c48</code>，package.json 版本 1.9.1）为唯一一手研究对象，覆盖其架构定位、目录结构、十一层抽象、上下文工程机制、五阶段规范驱动开发、Skill 全生命周期、源码级模块解读、开发教程、高阶设计模式、跨行业迁移方法论、下一代企业级 Runtime 设计、车辆纯日志诊断垂直场景的完整落地方案、源码阅读方法论、最佳实践与最终总结。</p>
+<p>全系列明确标注了研究过程中发现的多处文档与源码之间的真实差异（<code>~/.agents/skills</code> 新根缺失于契约文档、<code>--no-verify</code> 默认行为的版本分歧、plan-checker 维度数量滞后、SDK 包边界退役后的路径残留），也明确标注了本文自身的每一处推导、设计与外推，与直接源码实证严格区分，未将任何未经核实的内容包装为 GSD 官方事实。</p>
+<p>第十四、十七两部分已把研究成果与示例诊断技能包的既有架构、OTA 日志分析实践的积累与示例诊断平台的实测数据做了直接对接，给出的增量建议（声明式降级承载、Data-Flow Trace 证据链校验、探索期经验固化机制、新颖性判定 P0 修复方案）均可作为下一阶段工作的具体输入。</p>
+<p>（本系列完）</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/05/06/ai-tools/Claude-Code%E8%A7%84%E8%8C%83%E9%A9%B1%E5%8A%A8%E5%BC%80%E5%8F%91/">Claude Code 规范驱动开发学习指南</a></h3>
+        <p>面向已有 Vibe Coding 经验的工程师，基于 Claude Code v2.1.x 与 Opus 4.7…</p>
+        <a class="btn primary" href="/2026/05/06/ai-tools/Claude-Code%E8%A7%84%E8%8C%83%E9%A9%B1%E5%8A%A8%E5%BC%80%E5%8F%91/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/08/12/engineering-practice/Open-GSD-05-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B8%8ESkill%E5%BC%80%E5%8F%91/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Open-GSD 源码解析（五）：核心源码阅读与 Skill 开发</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 7 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E5%9B%9B%E9%83%A8%E5%88%86-%C2%B7-%E4%BC%81%E4%B8%9A%E7%BA%A7-Skill-%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%EF%BC%8827-%E4%B8%AA%E9%A2%86%E5%9F%9F%E8%8C%83%E4%BE%8B%EF%BC%89" data-toc-target="第十四部分-·-企业级-Skill-设计模式（27-个领域范例）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第十四部分 · 企业级 Skill 设计模式（27 个领域范例）</span></a><a class="toc-level-3" href="#14-0-%E6%96%B9%E6%B3%95%E8%AE%BA%E8%AF%B4%E6%98%8E%EF%BC%9A%E4%B8%A4%E4%B8%AA%E5%AE%8C%E6%95%B4%E7%A4%BA%E8%8C%83-%E4%B8%80%E4%BB%BD%E7%B4%A7%E5%87%91%E7%9B%AE%E5%BD%95" data-toc-target="14-0-方法论说明：两个完整示范-一份紧凑目录"><span class="toc-text">14.0 方法论说明：两个完整示范 + 一份紧凑目录</span></a><a class="toc-level-3" href="#14-1-%E5%AE%8C%E6%95%B4%E7%A4%BA%E8%8C%83%E4%B8%80%EF%BC%9ACode-Review-%E2%80%94%E2%80%94%E7%9B%B4%E6%8E%A5%E5%A4%8D%E7%8E%B0-GSD-%E7%9C%9F%E5%AE%9E%E5%AE%9E%E7%8E%B0" data-toc-target="14-1-完整示范一：Code-Review-——直接复现-GSD-真实实现"><span class="toc-text">14.1 完整示范一：Code Review ——直接复现 GSD 真实实现</span></a><a class="toc-level-3" href="#14-2-%E5%AE%8C%E6%95%B4%E7%A4%BA%E8%8C%83%E4%BA%8C%EF%BC%9A%E8%AE%BE%E5%A4%87%E8%AF%8A%E6%96%AD%E9%9B%86%E7%BE%A4%E2%80%94%E2%80%94%E4%B8%8E%E6%97%A2%E6%9C%89%E8%AF%8A%E6%96%AD%E6%8A%80%E8%83%BD%E5%8C%85%E6%9E%B6%E6%9E%84%E5%AF%B9%E7%85%A7" data-toc-target="14-2-完整示范二：设备诊断集群——与既有诊断技能包架构对照"><span class="toc-text">14.2 完整示范二：设备诊断集群——与既有诊断技能包架构对照</span></a><a class="toc-level-3" href="#14-3-%E5%85%B6%E4%BD%99-25-%E4%B8%AA%E9%A2%86%E5%9F%9F%E7%9A%84%E7%B4%A7%E5%87%91%E7%9B%AE%E5%BD%95" data-toc-target="14-3-其余-25-个领域的紧凑目录"><span class="toc-text">14.3 其余 25 个领域的紧凑目录</span></a><a class="toc-level-3" href="#14-4-%E8%B7%A8%E9%A2%86%E5%9F%9F%E9%80%9A%E7%94%A8-SKILL-md-%E9%AA%A8%E6%9E%B6%EF%BC%88%E4%BE%9B%E6%9C%AA%E8%A6%86%E7%9B%96%E9%A2%86%E5%9F%9F%E8%87%AA%E8%A1%8C%E5%A5%97%E7%94%A8%EF%BC%89" data-toc-target="14-4-跨领域通用-SKILL-md-骨架（供未覆盖领域自行套用）"><span class="toc-text">14.4 跨领域通用 SKILL.md 骨架（供未覆盖领域自行套用）</span></a><a class="toc-level-3" href="#14-5-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="14-5-本部分小结与下文预告"><span class="toc-text">14.5 本部分小结与下文预告</span></a><a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E4%BA%94%E9%83%A8%E5%88%86-%C2%B7-%E8%BF%81%E7%A7%BB%E5%88%B0%E5%85%B6%E5%AE%83%E4%B8%9A%E5%8A%A1%E9%A2%86%E5%9F%9F" data-toc-target="第十五部分-·-迁移到其它业务领域"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">第十五部分 · 迁移到其它业务领域</span></a><a class="toc-level-3" href="#15-1-%E5%85%AD%E7%BB%B4%E5%88%86%E7%B1%BB%E6%A1%86%E6%9E%B6" data-toc-target="15-1-六维分类框架"><span class="toc-text">15.1 六维分类框架</span></a><a class="toc-level-3" href="#15-2-%E5%8D%81%E4%BA%8C%E4%B8%AA%E7%9B%AE%E6%A0%87%E9%A2%86%E5%9F%9F%E7%9A%84%E5%85%AD%E7%BB%B4%E5%BA%94%E7%94%A8%EF%BC%88%E7%B4%A7%E5%87%91%E5%AF%B9%E7%85%A7%EF%BC%89" data-toc-target="15-2-十二个目标领域的六维应用（紧凑对照）"><span class="toc-text">15.2 十二个目标领域的六维应用（紧凑对照）</span></a><a class="toc-level-3" href="#15-3-%E4%B8%80%E6%9D%A1%E8%B4%AF%E7%A9%BF%E5%85%A8%E9%83%A8%E5%8D%81%E4%BA%8C%E4%B8%AA%E9%A2%86%E5%9F%9F%E7%9A%84%E5%85%83%E8%A7%82%E5%AF%9F" data-toc-target="15-3-一条贯穿全部十二个领域的元观察"><span class="toc-text">15.3 一条贯穿全部十二个领域的元观察</span></a><a class="toc-level-3" href="#15-4-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="15-4-本部分小结与下文预告"><span class="toc-text">15.4 本部分小结与下文预告</span></a><a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E5%85%AD%E9%83%A8%E5%88%86-%C2%B7-%E6%9E%84%E5%BB%BA%E8%87%AA%E5%B7%B1%E7%9A%84-Skill-Framework-%E2%80%94%E2%80%94-%E4%B8%8B%E4%B8%80%E4%BB%A3-Enterprise-Skill-Runtime-%E8%AE%BE%E8%AE%A1" data-toc-target="第十六部分-·-构建自己的-Skill-Framework-——-下一代-Enterprise-Skill-Runtime-设计"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">第十六部分 · 构建自己的 Skill Framework —— 下一代 Enterprise Skill Runtime 设计</span></a><a class="toc-level-3" href="#16-0-%E8%AE%BE%E8%AE%A1%E5%89%8D%E6%8F%90%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%9B%B4%E6%8E%A5%E7%94%A8-GSD" data-toc-target="16-0-设计前提：为什么不直接用-GSD"><span class="toc-text">16.0 设计前提：为什么不直接用 GSD</span></a><a class="toc-level-3" href="#16-1-%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84" data-toc-target="16-1-总体架构"><span class="toc-text">16.1 总体架构</span></a><a class="toc-level-3" href="#16-2-%E9%80%90%E7%BB%84%E4%BB%B6%E8%AE%BE%E8%AE%A1%EF%BC%88%E5%90%AB%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B%E7%90%86%E7%94%B1%EF%BC%89" data-toc-target="16-2-逐组件设计（含技术选型理由）"><span class="toc-text">16.2 逐组件设计（含技术选型理由）</span></a><a class="toc-level-3" href="#16-3-%E6%B2%BB%E7%90%86%E7%BB%B4%E5%BA%A6%E5%AF%B9%E7%85%A7%E6%80%BB%E8%A1%A8" data-toc-target="16-3-治理维度对照总表"><span class="toc-text">16.3 治理维度对照总表</span></a><a class="toc-level-3" href="#16-4-%E4%BB%8E-GSD-%E5%88%B0-ESR-%E7%9A%84%E6%98%A0%E5%B0%84%E6%80%BB%E8%A1%A8" data-toc-target="16-4-从-GSD-到-ESR-的映射总表"><span class="toc-text">16.4 从 GSD 到 ESR 的映射总表</span></a><a class="toc-level-3" href="#16-5-%E5%AE%9E%E6%96%BD%E8%B7%AF%E7%BA%BF%E5%BB%BA%E8%AE%AE%EF%BC%88%E5%9B%9B%E4%B8%AA%E9%98%B6%E6%AE%B5%EF%BC%89" data-toc-target="16-5-实施路线建议（四个阶段）"><span class="toc-text">16.5 实施路线建议（四个阶段）</span></a><a class="toc-level-3" href="#16-6-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="16-6-本部分小结与下文预告"><span class="toc-text">16.6 本部分小结与下文预告</span></a><a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E4%B8%83%E9%83%A8%E5%88%86-%C2%B7-Vehicle-AI-Diagnosis-Skill-Platform%EF%BC%9A%E8%BD%A6%E8%BE%86%E7%BA%AF%E6%97%A5%E5%BF%97%E6%95%85%E9%9A%9C%E8%AF%8A%E6%96%AD%E5%9C%BA%E6%99%AF%E7%9A%84%E5%85%A8%E9%9D%A2%E8%AE%BE%E8%AE%A1%E4%B8%8E%E7%94%9F%E4%BA%A7%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%8D%97" data-toc-target="第十七部分-·-Vehicle-AI-Diagnosis-Skill-Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">第十七部分 · Vehicle AI Diagnosis Skill Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南</span></a><a class="toc-level-3" href="#17-1-%E5%85%88%E6%8A%8A%E9%97%AE%E9%A2%98%E5%AE%9A%E4%B9%89%E5%87%86%EF%BC%9A%E4%BB%80%E4%B9%88%E6%98%AF%E2%80%9D%E7%BA%AF%E6%97%A5%E5%BF%97%E6%95%85%E9%9A%9C%E8%AF%8A%E6%96%AD%E2%80%9D%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%AE%83%E6%98%AF%E6%9C%80%E9%9A%BE%E7%9A%84%E4%B8%80%E6%A1%A3" data-toc-target="17-1-先把问题定义准：什么是”纯日志故障诊断”，为什么它是最难的一档"><span class="toc-text">17.1 先把问题定义准：什么是”纯日志故障诊断”，为什么它是最难的一档</span></a><a class="toc-level-3" href="#17-2-%E8%83%BD%E5%8A%9B%E8%BE%B9%E7%95%8C%EF%BC%9A%E5%BF%85%E9%A1%BB%E5%85%88%E6%89%BF%E8%AE%A4%E4%B8%89%E4%BB%B6%E4%BA%8B%E7%9A%84%E5%8C%BA%E5%88%AB" data-toc-target="17-2-能力边界：必须先承认三件事的区别"><span class="toc-text">17.2 能力边界：必须先承认三件事的区别</span></a><a class="toc-level-3" href="#17-3-%E5%B9%B3%E5%8F%B0%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84%EF%BC%9A%E4%BB%8E%E8%AF%8A%E6%96%AD%E6%8A%80%E8%83%BD%E5%8C%85%E5%88%B0%E7%A4%BA%E4%BE%8B%E8%AF%8A%E6%96%AD%E5%B9%B3%E5%8F%B0" data-toc-target="17-3-平台总体架构：从诊断技能包到示例诊断平台"><span class="toc-text">17.3 平台总体架构：从诊断技能包到示例诊断平台</span></a><a class="toc-level-3" href="#17-4-%E7%BA%AF%E6%97%A5%E5%BF%97%E8%AF%8A%E6%96%AD%E6%B5%81%E6%B0%B4%E7%BA%BF%EF%BC%9A%E4%B8%83%E9%98%B6%E6%AE%B5%E5%85%A8%E6%99%AF" data-toc-target="17-4-纯日志诊断流水线：七阶段全景"><span class="toc-text">17.4 纯日志诊断流水线：七阶段全景</span></a><a class="toc-level-3" href="#17-5-%E6%8A%80%E8%83%BD%E5%B9%B3%E9%9D%A2%EF%BC%9A%E6%8A%8A%E8%AF%8A%E6%96%AD%E8%83%BD%E5%8A%9B%E5%81%9A%E6%88%90%E5%8F%AF%E6%B2%BB%E7%90%86%E7%9A%84%E6%8A%80%E8%83%BD%E8%B5%84%E4%BA%A7" data-toc-target="17-5-技能平面：把诊断能力做成可治理的技能资产"><span class="toc-text">17.5 技能平面：把诊断能力做成可治理的技能资产</span></a><a class="toc-level-3" href="#17-6-%E6%B2%BB%E7%90%86%E5%B9%B3%E9%9D%A2%EF%BC%9AReview-Approval-Publish-Security-Audit" data-toc-target="17-6-治理平面：Review-Approval-Publish-Security-Audit"><span class="toc-text">17.6 治理平面：Review / Approval / Publish / Security / Audit</span></a><a class="toc-level-3" href="#17-7-Generator-Builder-AI-Generator%EF%BC%9A%E8%AE%A9%E4%B8%93%E5%AE%B6%E7%9A%84%E8%BE%B9%E9%99%85%E4%BA%A7%E5%87%BA%E6%9C%80%E5%A4%A7%E5%8C%96" data-toc-target="17-7-Generator-Builder-AI-Generator：让专家的边际产出最大化"><span class="toc-text">17.7 Generator / Builder / AI Generator：让专家的边际产出最大化</span></a><a class="toc-level-3" href="#17-8-%E5%8F%AF%E8%A7%82%E6%B5%8B-Metrics-Cost" data-toc-target="17-8-可观测-Metrics-Cost"><span class="toc-text">17.8 可观测 / Metrics / Cost</span></a><a class="toc-level-3" href="#17-9-%E7%94%9F%E4%BA%A7%E8%90%BD%E5%9C%B0%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%8D%97%EF%BC%88%E5%8D%81%E4%BA%8C%E6%9D%A1%EF%BC%89" data-toc-target="17-9-生产落地最佳实践指南（十二条）"><span class="toc-text">17.9 生产落地最佳实践指南（十二条）</span></a><a class="toc-level-3" href="#17-10-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA%E4%B8%8E%E5%8F%8D%E6%A8%A1%E5%BC%8F%EF%BC%88%E5%85%AD%E6%9D%A1%EF%BC%89" data-toc-target="17-10-常见误区与反模式（六条）"><span class="toc-text">17.10 常见误区与反模式（六条）</span></a><a class="toc-level-3" href="#17-11-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="17-11-本部分小结与下文预告"><span class="toc-text">17.11 本部分小结与下文预告</span></a><a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E5%85%AB%E9%83%A8%E5%88%86-%C2%B7-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E8%B7%AF%E7%BA%BF%E4%B8%8E%E5%AD%A6%E4%B9%A0%E5%91%A8%E6%9C%9F%E8%A7%84%E5%88%92" data-toc-target="第十八部分-·-源码阅读路线与学习周期规划"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">第十八部分 · 源码阅读路线与学习周期规划</span></a><a class="toc-level-3" href="#18-1-%E4%B8%89%E8%BD%AE%E9%98%85%E8%AF%BB%E6%B3%95" data-toc-target="18-1-三轮阅读法"><span class="toc-text">18.1 三轮阅读法</span></a><a class="toc-level-3" href="#18-2-%E9%87%8D%E7%82%B9%E6%BA%90%E7%A0%81%E5%88%86%E7%BA%A7%E6%B8%85%E5%8D%95" data-toc-target="18-2-重点源码分级清单"><span class="toc-text">18.2 重点源码分级清单</span></a><a class="toc-level-3" href="#18-3-%E5%BB%BA%E8%AE%AE-Debug-%E9%A1%BA%E5%BA%8F%EF%BC%9A%E4%BB%8E%E5%A4%96%E5%88%B0%E5%86%85%E3%80%81%E4%BB%8E%E5%A3%B0%E6%98%8E%E5%88%B0%E6%89%A7%E8%A1%8C" data-toc-target="18-3-建议-Debug-顺序：从外到内、从声明到执行"><span class="toc-text">18.3 建议 Debug 顺序：从外到内、从声明到执行</span></a><a class="toc-level-3" href="#18-4-%E5%BB%BA%E8%AE%AE%E6%96%AD%E7%82%B9%E4%BD%8D%E7%BD%AE%EF%BC%88%E9%9D%A2%E5%90%91%E7%9C%9F%E8%A6%81%E7%94%A8-Node-%E8%B0%83%E8%AF%95%E5%99%A8%E5%8D%95%E6%AD%A5%E8%B0%83%E8%AF%95-GSD-%E6%9C%AC%E8%BA%AB%E7%9A%84%E5%9C%BA%E6%99%AF%EF%BC%89" data-toc-target="18-4-建议断点位置（面向真要用-Node-调试器单步调试-GSD-本身的场景）"><span class="toc-text">18.4 建议断点位置（面向真要用 Node 调试器单步调试 GSD 本身的场景）</span></a><a class="toc-level-3" href="#18-5-%E5%AD%A6%E4%B9%A0%E5%91%A8%E6%9C%9F%E8%A7%84%E5%88%92%EF%BC%88%E8%AE%BE%E8%AE%A1%EF%BC%8C%E4%B8%80%E4%B8%AA%E5%85%B7%E4%BD%93%E5%8F%AF%E6%89%A7%E8%A1%8C%E7%9A%84%E5%9B%9B%E5%91%A8%E8%AE%A1%E5%88%92%EF%BC%89" data-toc-target="18-5-学习周期规划（设计，一个具体可执行的四周计划）"><span class="toc-text">18.5 学习周期规划（设计，一个具体可执行的四周计划）</span></a><a class="toc-level-2" href="#%E7%AC%AC%E5%8D%81%E4%B9%9D%E9%83%A8%E5%88%86-%C2%B7-%E4%BC%81%E4%B8%9A%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93" data-toc-target="第十九部分-·-企业最佳实践总结"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">第十九部分 · 企业最佳实践总结</span></a><a class="toc-level-3" href="#19-1-%E5%AE%98%E6%96%B9%E6%8E%A8%E8%8D%90%EF%BC%88%E6%9C%89%E6%98%8E%E7%A1%AE%E6%96%87%E6%A1%A3%E4%BE%9D%E6%8D%AE%EF%BC%89" data-toc-target="19-1-官方推荐（有明确文档依据）"><span class="toc-text">19.1 官方推荐（有明确文档依据）</span></a><a class="toc-level-3" href="#19-2-%E7%A4%BE%E5%8C%BA%E6%8E%A8%E8%8D%90%EF%BC%88%E8%AF%9A%E5%AE%9E%E7%9A%84%E8%AF%81%E6%8D%AE%E5%BC%BA%E5%BA%A6%E5%A3%B0%E6%98%8E%EF%BC%89" data-toc-target="19-2-社区推荐（诚实的证据强度声明）"><span class="toc-text">19.2 社区推荐（诚实的证据强度声明）</span></a><a class="toc-level-3" href="#19-3-%E4%BC%98%E7%A7%80-Skill-%E8%8C%83%E4%BE%8B%EF%BC%88%E6%BA%90%E7%A0%81%E5%AE%9E%E8%AF%81%EF%BC%89" data-toc-target="19-3-优秀-Skill-范例（源码实证）"><span class="toc-text">19.3 优秀 Skill 范例（源码实证）</span></a><a class="toc-level-3" href="#19-4-%E4%BC%98%E7%A7%80-Prompt-%E8%8C%83%E4%BE%8B" data-toc-target="19-4-优秀-Prompt-范例"><span class="toc-text">19.4 优秀 Prompt 范例</span></a><a class="toc-level-3" href="#19-5-%E4%BC%98%E7%A7%80-Workflow-%E8%8C%83%E4%BE%8B" data-toc-target="19-5-优秀-Workflow-范例"><span class="toc-text">19.5 优秀 Workflow 范例</span></a><a class="toc-level-3" href="#19-6-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA%EF%BC%88%E6%B1%87%E6%80%BB-universal-anti-patterns-md-%E7%B2%BE%E9%80%89-%E6%9C%AC%E6%96%87%E8%BF%87%E7%A8%8B%E4%B8%AD%E8%AE%B0%E5%BD%95%E7%9A%84%E9%A2%9D%E5%A4%96%E8%AF%AF%E5%8C%BA%EF%BC%89" data-toc-target="19-6-常见误区（汇总-universal-anti-patterns-md-精选-本文过程中记录的额外误区）"><span class="toc-text">19.6 常见误区（汇总 universal-anti-patterns.md 精选 + 本文过程中记录的额外误区）</span></a><a class="toc-level-3" href="#19-7-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96" data-toc-target="19-7-性能优化"><span class="toc-text">19.7 性能优化</span></a><a class="toc-level-3" href="#19-8-Token-%E4%BC%98%E5%8C%96" data-toc-target="19-8-Token-优化"><span class="toc-text">19.8 Token 优化</span></a><a class="toc-level-3" href="#19-9-Context-%E4%BC%98%E5%8C%96" data-toc-target="19-9-Context-优化"><span class="toc-text">19.9 Context 优化</span></a><a class="toc-level-3" href="#19-10-Prompt-%E4%BC%98%E5%8C%96" data-toc-target="19-10-Prompt-优化"><span class="toc-text">19.10 Prompt 优化</span></a><a class="toc-level-3" href="#19-11-Skill-%E4%BC%98%E5%8C%96" data-toc-target="19-11-Skill-优化"><span class="toc-text">19.11 Skill 优化</span></a><a class="toc-level-2" href="#%E7%AC%AC%E4%BA%8C%E5%8D%81%E9%83%A8%E5%88%86-%C2%B7-%E6%9C%80%E7%BB%88%E6%80%BB%E7%BB%93" data-toc-target="第二十部分-·-最终总结"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">第二十部分 · 最终总结</span></a><a class="toc-level-3" href="#20-1-Open-GSD-%E6%9E%B6%E6%9E%84%E6%80%9D%E6%83%B3%EF%BC%88%E4%B8%80%E6%AE%B5%E8%AF%9D%E7%89%88%EF%BC%89" data-toc-target="20-1-Open-GSD-架构思想（一段话版）"><span class="toc-text">20.1 Open-GSD 架构思想（一段话版）</span></a><a class="toc-level-3" href="#20-2-%E5%8D%81%E5%A4%A7%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99" data-toc-target="20-2-十大设计原则"><span class="toc-text">20.2 十大设计原则</span></a><a class="toc-level-3" href="#20-3-%E5%8D%81%E5%A4%A7%E6%BA%90%E7%A0%81%E4%BA%AE%E7%82%B9" data-toc-target="20-3-十大源码亮点"><span class="toc-text">20.3 十大源码亮点</span></a><a class="toc-level-3" href="#20-4-%E5%8D%81%E5%A4%A7%E5%80%BC%E5%BE%97%E5%80%9F%E9%89%B4%EF%BC%88%E9%9D%A2%E5%90%91%E8%87%AA%E7%A0%94%E5%B9%B3%E5%8F%B0%EF%BC%89" data-toc-target="20-4-十大值得借鉴（面向自研平台）"><span class="toc-text">20.4 十大值得借鉴（面向自研平台）</span></a><a class="toc-level-3" href="#20-5-%E5%8D%81%E5%A4%A7%E5%8F%AF%E8%BF%81%E7%A7%BB%E6%80%9D%E6%83%B3%EF%BC%88%E8%B7%A8%E8%A1%8C%E4%B8%9A%EF%BC%89" data-toc-target="20-5-十大可迁移思想（跨行业）"><span class="toc-text">20.5 十大可迁移思想（跨行业）</span></a><a class="toc-level-3" href="#20-6-%E5%8D%81%E5%A4%A7%E5%8F%8D%E6%A8%A1%E5%BC%8F" data-toc-target="20-6-十大反模式"><span class="toc-text">20.6 十大反模式</span></a><a class="toc-level-3" href="#20-7-%E5%8D%81%E5%A4%A7%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%EF%BC%88%E5%8F%AF%E7%9B%B4%E6%8E%A5%E8%90%BD%E5%9C%B0%E6%89%A7%E8%A1%8C%EF%BC%89" data-toc-target="20-7-十大最佳实践（可直接落地执行）"><span class="toc-text">20.7 十大最佳实践（可直接落地执行）</span></a><a class="toc-level-3" href="#20-8-%E5%8D%81%E5%A4%A7%E4%BC%81%E4%B8%9A%E7%BA%A7%E8%90%BD%E5%9C%B0%E5%BB%BA%E8%AE%AE" data-toc-target="20-8-十大企业级落地建议"><span class="toc-text">20.8 十大企业级落地建议</span></a><a class="toc-level-3" href="#%E7%B3%BB%E5%88%97%E7%BB%93%E8%AF%AD" data-toc-target="系列结语"><span class="toc-text">系列结语</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/spec-driven-development/" style="--rail: 80%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">8 / 10</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E5%9B%9B%E9%83%A8%E5%88%86-%C2%B7-%E4%BC%81%E4%B8%9A%E7%BA%A7-Skill-%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%EF%BC%8827-%E4%B8%AA%E9%A2%86%E5%9F%9F%E8%8C%83%E4%BE%8B%EF%BC%89" data-toc-target="第十四部分-·-企业级-Skill-设计模式（27-个领域范例）" data-title="01 · 第十四部分 · 企业级 Skill 设计模式（27 个领域范例）" aria-label="第十四部分 · 企业级 Skill 设计模式（27 个领域范例）"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E4%BA%94%E9%83%A8%E5%88%86-%C2%B7-%E8%BF%81%E7%A7%BB%E5%88%B0%E5%85%B6%E5%AE%83%E4%B8%9A%E5%8A%A1%E9%A2%86%E5%9F%9F" data-toc-target="第十五部分-·-迁移到其它业务领域" data-title="02 · 第十五部分 · 迁移到其它业务领域" aria-label="第十五部分 · 迁移到其它业务领域"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E5%85%AD%E9%83%A8%E5%88%86-%C2%B7-%E6%9E%84%E5%BB%BA%E8%87%AA%E5%B7%B1%E7%9A%84-Skill-Framework-%E2%80%94%E2%80%94-%E4%B8%8B%E4%B8%80%E4%BB%A3-Enterprise-Skill-Runtime-%E8%AE%BE%E8%AE%A1" data-toc-target="第十六部分-·-构建自己的-Skill-Framework-——-下一代-Enterprise-Skill-Runtime-设计" data-title="03 · 第十六部分 · 构建自己的 Skill Framework —— 下一代 Enterprise Skill Runtime 设计" aria-label="第十六部分 · 构建自己的 Skill Framework —— 下一代 Enterprise Skill Runtime 设计"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E4%B8%83%E9%83%A8%E5%88%86-%C2%B7-Vehicle-AI-Diagnosis-Skill-Platform%EF%BC%9A%E8%BD%A6%E8%BE%86%E7%BA%AF%E6%97%A5%E5%BF%97%E6%95%85%E9%9A%9C%E8%AF%8A%E6%96%AD%E5%9C%BA%E6%99%AF%E7%9A%84%E5%85%A8%E9%9D%A2%E8%AE%BE%E8%AE%A1%E4%B8%8E%E7%94%9F%E4%BA%A7%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%8D%97" data-toc-target="第十七部分-·-Vehicle-AI-Diagnosis-Skill-Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南" data-title="04 · 第十七部分 · Vehicle AI Diagnosis Skill Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南" aria-label="第十七部分 · Vehicle AI Diagnosis Skill Platform：车辆纯日志故障诊断场景的全面设计与生产实践指南"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E5%85%AB%E9%83%A8%E5%88%86-%C2%B7-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E8%B7%AF%E7%BA%BF%E4%B8%8E%E5%AD%A6%E4%B9%A0%E5%91%A8%E6%9C%9F%E8%A7%84%E5%88%92" data-toc-target="第十八部分-·-源码阅读路线与学习周期规划" data-title="05 · 第十八部分 · 源码阅读路线与学习周期规划" aria-label="第十八部分 · 源码阅读路线与学习周期规划"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E5%8D%81%E4%B9%9D%E9%83%A8%E5%88%86-%C2%B7-%E4%BC%81%E4%B8%9A%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93" data-toc-target="第十九部分-·-企业最佳实践总结" data-title="06 · 第十九部分 · 企业最佳实践总结" aria-label="第十九部分 · 企业最佳实践总结"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E4%BA%8C%E5%8D%81%E9%83%A8%E5%88%86-%C2%B7-%E6%9C%80%E7%BB%88%E6%80%BB%E7%BB%93" data-toc-target="第二十部分-·-最终总结" data-title="07 · 第二十部分 · 最终总结" aria-label="第二十部分 · 最终总结"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/Open-GSD-06-企业实践","title":"Open-GSD 源码解析（六）：企业级设计模式、自建 Runtime 与最佳实践","url":"/2026/08/14/engineering-practice/Open-GSD-06-%E4%BC%81%E4%B8%9A%E5%AE%9E%E8%B7%B5/","path":"spec-driven-development","index":7,"total":10,"next":{"title":"Claude Code 规范驱动开发学习指南","url":"/2026/05/06/ai-tools/Claude-Code%E8%A7%84%E8%8C%83%E9%A9%B1%E5%8A%A8%E5%BC%80%E5%8F%91/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,1255 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Dify 深度研究工作流实战：DSL 全解与编排/执行分层 · 飞轮之道</title>
+<meta name="description" content="一份可导入 Dify 1.12.1 的两轮检索深度研究工作流（规划→并行检索→反思补搜→带引用成文），逐节点解读与排障；再按任务时长论证何时让 Dify 只做编排、把循环与浏览器交给外部 Runtime。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/02/10/technical-docs/Dify%E6%B7%B1%E5%BA%A6%E7%A0%94%E7%A9%B6DSL%E5%AE%9E%E6%88%98/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Dify 深度研究工作流实战：DSL 全解与编排/执行分层 · 飞轮之道">
+<meta property="og:description" content="一份可导入 Dify 1.12.1 的两轮检索深度研究工作流（规划→并行检索→反思补搜→带引用成文），逐节点解读与排障；再按任务时长论证何时让 Dify 只做编排、把循环与浏览器交给外部 Runtime。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/02/10/technical-docs/Dify%E6%B7%B1%E5%BA%A6%E7%A0%94%E7%A9%B6DSL%E5%AE%9E%E6%88%98/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/self-hosted-ai-infra/">Dify 平台</a><a class="series-chip" href="/paths/self-hosted-ai-infra/" title="查看学习路径">第 6 / 8 篇</a>
+    </div>
+    <h1>Dify 深度研究工作流实战：DSL 全解与编排/执行分层</h1>
+    <p class="article-deck">一份可导入 Dify 1.12.1 的两轮检索深度研究工作流（规划→并行检索→反思补搜→带引用成文），逐节点解读与排障…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>29 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/LangGraph/">#LangGraph</a><a class="article-meta__tag" href="/tags/Dify/">#Dify</a><a class="article-meta__tag" href="/tags/DSL/">#DSL</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>在 Dify 内做深度研究，用固定轮数的迭代比开放式循环更可控：步数、时长、变量体积都能事先算清。</li><li>检索结果先在代码节点里压成带 URL 的短摘要再交给 LLM，是控制变量体积与引用质量的关键一步。</li><li>任务超过 20 分钟、需要浏览器渲染或中途失败要续跑时，Dify 只留入口与交付，研究循环交给 LangGraph 一类的 Runtime，用 Webhook 触发器回调收结果。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="这篇解决什么"><a href="#这篇解决什么" class="headerlink" title="这篇解决什么"></a>这篇解决什么</h2><p>「深度研究」指的是：把一个开放问题拆成若干检索式，并行搜集证据，发现缺口后补搜，最后写成每个结论都能追溯到来源的报告。本文回答两个问题：</p>
+<ol>
+<li>在 Dify 1.12.1 里，用原生节点能把这件事做到什么程度——给出一份完整、可导入的 DSL，并逐节点说明为什么这样写；</li>
+<li>什么时候该停止往 Dify 里堆节点，改为「Dify 编排、外部 Runtime 执行」，两者之间用什么契约衔接。</li>
+</ol>
+<p>DSL 的 Schema 规则与校验脚本在《Dify DSL 工作流设计与校验》，部署与运行时限制调参在《Dify 1.12 私有化部署与排障实录》，这里不重复。</p>
+<h2 id="流程与设计取舍"><a href="#流程与设计取舍" class="headerlink" title="流程与设计取舍"></a>流程与设计取舍</h2><pre class="mermaid">flowchart LR
+  S["开始：研究问题"] --&gt; P["LLM：规划 3~5 个检索式"]
+  P --&gt; PP["代码：解析 JSON（失败退回原问题）"]
+  PP --&gt; I1["迭代：第一轮检索（并行 3）&lt;br/&gt;每条：SearXNG JSON → 去重截断成摘要"]
+  I1 --&gt; R["LLM：反思，给出发现、缺口、补搜式"]
+  R --&gt; RP["代码：解析补搜式（去重，最多 3 个）"]
+  RP --&gt; I2["迭代：补充检索（可能为空）"]
+  I2 --&gt; W["LLM：只用材料成文，[n] 标注来源"]
+  W --&gt; E["结束：报告 + 补搜式"]</pre>
+
+
+<p>几处关键取舍：</p>
+<table>
+<thead>
+<tr>
+<th>取舍</th>
+<th>选择</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>轮数</td>
+<td>固定两轮（首轮 + 一次补搜），不用循环节点</td>
+<td>研究质量的大头来自「第一次反思后的补搜」，第三轮以后边际收益很低；固定轮数让步数、时长、Token 可预估，排障时每轮的输入输出都能在运行记录里直接看到</td>
+</tr>
+<tr>
+<td>检索通道</td>
+<td>HTTP 请求节点直连自建 SearXNG</td>
+<td>不依赖任何搜索插件的版本与哈希，DSL 可以 <code>dependencies: []</code> 导入；SearXNG 聚合多个引擎、无需 API Key</td>
+</tr>
+<tr>
+<td>结构化输出</td>
+<td>LLM 输出 JSON 文本，由代码节点解析</td>
+<td>不要求模型支持结构化输出；解析失败有兜底，不会让整条链断掉</td>
+</tr>
+<tr>
+<td>摘要位置</td>
+<td>检索结果在迭代内部先压成摘要</td>
+<td>原始 JSON 动辄上百 KB，直接进 LLM 既费 Token 又可能撞变量体积上限；摘要里保留 URL，成文时才能引用</td>
+</tr>
+<tr>
+<td>迭代容错</td>
+<td><code>remove-abnormal-output</code></td>
+<td>单个检索式失败时丢弃该条结果，而不是整轮终止或往数组里塞 <code>null</code></td>
+</tr>
+<tr>
+<td>并行度</td>
+<td>3</td>
+<td>自建 SearXNG 背后仍是公共搜索引擎，并发过高容易被上游限流</td>
+</tr>
+</tbody></table>
+<p>按 1.12.1 的默认限制核算一次运行的预算（限制项的完整说明见部署篇）：</p>
+<table>
+<thead>
+<tr>
+<th>预算项</th>
+<th>本流程的量级</th>
+<th>默认上限</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>节点执行步数</td>
+<td>首轮 5 条 × 3 步 + 补搜 3 条 × 3 步 + 主链约 9 步，约 35 步</td>
+<td><code>WORKFLOW_MAX_EXECUTION_STEPS=500</code></td>
+</tr>
+<tr>
+<td>运行时长</td>
+<td>检索每条 2–5 秒，3 次 LLM 调用，通常 1–3 分钟</td>
+<td><code>WORKFLOW_MAX_EXECUTION_TIME=1200</code> 秒</td>
+</tr>
+<tr>
+<td>最大变量</td>
+<td>首轮输出 ≤ 5 × 4000 字符</td>
+<td><code>MAX_VARIABLE_SIZE=204800</code> 字节</td>
+</tr>
+<tr>
+<td>代码节点数组</td>
+<td>检索式 ≤ 5，补搜式 ≤ 3</td>
+<td><code>CODE_MAX_STRING_ARRAY_LENGTH=30</code></td>
+</tr>
+<tr>
+<td>单次 HTTP 响应</td>
+<td>SearXNG JSON 通常在几十 KB</td>
+<td><code>HTTP_REQUEST_NODE_MAX_TEXT_SIZE=1 MB</code></td>
+</tr>
+</tbody></table>
+<h2 id="DSL-全文（Dify-1-12-1-DSL-0-5-0）"><a href="#DSL-全文（Dify-1-12-1-DSL-0-5-0）" class="headerlink" title="DSL 全文（Dify 1.12.1 &#x2F; DSL 0.5.0）"></a>DSL 全文（Dify 1.12.1 &#x2F; DSL 0.5.0）</h2><p>保存为 <code>deep_research.yml</code>，在控制台「导入 DSL 文件」即可。这份 DSL 已用校验篇的 <code>dsl_lint.py</code> 检查通过，三个代码节点的函数也在本地用构造数据跑过（正常 JSON、重复 URL、非 JSON 响应、规划失败四种输入）。</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="559"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:3"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">version:</span> <span class="string">&quot;0.5.0&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">kind:</span> <span class="string">app</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">app:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">name:</span> <span class="string">深度研究（两轮检索）</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">mode:</span> <span class="string">workflow</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">icon:</span> <span class="string">&quot;🔎&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">icon_background:</span> <span class="string">&quot;#E0F2FE&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">description:</span> <span class="string">规划子问题</span> <span class="string">→</span> <span class="string">并行检索</span> <span class="string">→</span> <span class="string">反思补搜</span> <span class="string">→</span> <span class="string">带引用的研究报告。检索走自建</span> <span class="string">SearXNG。</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">use_icon_as_answer_icon:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">dependencies:</span> []</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">workflow:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="attr">conversation_variables:</span> []</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="attr">environment_variables:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">3b8f2c1e-6a4d-4c1b-9e57-2f0d8a6b1c11</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="attr">name:</span> <span class="string">SEARXNG_BASE</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="attr">value:</span> <span class="string">http://searxng:8080</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="attr">value_type:</span> <span class="string">string</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="attr">description:</span> <span class="string">SearXNG</span> <span class="string">地址；settings.yml</span> <span class="string">的</span> <span class="string">search.formats</span> <span class="string">需包含</span> <span class="string">json</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="attr">features:</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="attr">file_upload:</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="attr">opening_statement:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="attr">retriever_resource:</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="attr">sensitive_word_avoidance:</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">    <span class="attr">speech_to_text:</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    <span class="attr">suggested_questions:</span> []</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    <span class="attr">suggested_questions_after_answer:</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">    <span class="attr">text_to_speech:</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">  <span class="attr">graph:</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    <span class="attr">nodes:</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">      <span class="comment"># ---------- 1. 输入 ----------</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;start&quot;</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">30</span>, <span class="attr">y:</span> <span class="number">300</span>&#125;</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">90</span></span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">start</span></span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">研究问题</span></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">          <span class="attr">variables:</span></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">question</span></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">              <span class="attr">label:</span> <span class="string">研究问题</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">              <span class="attr">type:</span> <span class="string">paragraph</span></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">              <span class="attr">required:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">              <span class="attr">max_length:</span> <span class="number">2000</span></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">              <span class="attr">options:</span> []</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">      <span class="comment"># ---------- 2. 规划：拆出 3~5 个检索式 ----------</span></span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;plan&quot;</span></span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">330</span>, <span class="attr">y:</span> <span class="number">300</span>&#125;</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">90</span></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">llm</span></span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">规划子问题</span></span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">          <span class="attr">model:</span></span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">            <span class="attr">provider:</span> <span class="string">langgenius/openai/openai</span></span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">            <span class="attr">name:</span> <span class="string">gpt-4o-mini</span></span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">            <span class="attr">mode:</span> <span class="string">chat</span></span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx">            <span class="attr">completion_params:</span></span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">              <span class="attr">temperature:</span> <span class="number">0.2</span></span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">          <span class="attr">prompt_template:</span></span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">plan-system</span></span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">              <span class="attr">role:</span> <span class="string">system</span></span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">              <span class="attr">text:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx"><span class="string">                你是研究规划员。把用户的问题拆成 3 到 5 个可以直接交给搜索引擎的检索式，</span></span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx"><span class="string">                覆盖定义、现状数据、主要分歧、最新进展。只输出 JSON，不要解释：</span></span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx"><span class="string">                &#123;&quot;queries&quot;: [&quot;检索式1&quot;, &quot;检索式2&quot;]&#125;</span></span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx"><span class="string"></span>            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">plan-user</span></span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">              <span class="attr">role:</span> <span class="string">user</span></span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">              <span class="attr">text:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123;#start.question#&#125;&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">          <span class="attr">context:</span></span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">            <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">            <span class="attr">variable_selector:</span> []</span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx">          <span class="attr">vision:</span></span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx">            <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;parse_plan&quot;</span></span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="86"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">630</span>, <span class="attr">y:</span> <span class="number">300</span>&#125;</span></span>
+<span class="cb-line" data-ln="87"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="88"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">54</span></span></span>
+<span class="cb-line" data-ln="89"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="90"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">code</span></span></span>
+<span class="cb-line" data-ln="91"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">解析检索式</span></span></span>
+<span class="cb-line" data-ln="92"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="93"><span class="cb-tx">          <span class="attr">code_language:</span> <span class="string">python3</span></span></span>
+<span class="cb-line" data-ln="94"><span class="cb-tx">          <span class="attr">variables:</span></span></span>
+<span class="cb-line" data-ln="95"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">text</span></span></span>
+<span class="cb-line" data-ln="96"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;plan&quot;</span>, <span class="string">&quot;text&quot;</span>]</span></span>
+<span class="cb-line" data-ln="97"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">question</span></span></span>
+<span class="cb-line" data-ln="98"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;start&quot;</span>, <span class="string">&quot;question&quot;</span>]</span></span>
+<span class="cb-line" data-ln="99"><span class="cb-tx">          <span class="attr">code:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="100"><span class="cb-tx"><span class="string">            import json</span></span></span>
+<span class="cb-line" data-ln="101"><span class="cb-tx"><span class="string">            import re</span></span></span>
+<span class="cb-line" data-ln="102"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="103"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="104"><span class="cb-tx">            <span class="attr">def main(text:</span> <span class="string">str,</span> <span class="attr">question:</span> <span class="string">str)</span> <span class="string">-&gt;</span> <span class="attr">dict:</span></span></span>
+<span class="cb-line" data-ln="105"><span class="cb-tx">                <span class="string">queries</span> <span class="string">=</span> []</span></span>
+<span class="cb-line" data-ln="106"><span class="cb-tx">                <span class="string">m</span> <span class="string">=</span> <span class="string">re.search(r&quot;\&#123;.*\&#125;&quot;,</span> <span class="string">text</span> <span class="string">or</span> <span class="string">&quot;&quot;</span><span class="string">,</span> <span class="string">re.S)</span></span></span>
+<span class="cb-line" data-ln="107"><span class="cb-tx">                <span class="attr">if m:</span></span></span>
+<span class="cb-line" data-ln="108"><span class="cb-tx">                    <span class="attr">try:</span></span></span>
+<span class="cb-line" data-ln="109"><span class="cb-tx">                        <span class="string">queries</span> <span class="string">=</span> <span class="string">json.loads(m.group(0)).get(&quot;queries&quot;,</span> []<span class="string">)</span></span></span>
+<span class="cb-line" data-ln="110"><span class="cb-tx">                    <span class="attr">except ValueError:</span></span></span>
+<span class="cb-line" data-ln="111"><span class="cb-tx">                        <span class="string">queries</span> <span class="string">=</span> []</span></span>
+<span class="cb-line" data-ln="112"><span class="cb-tx">                <span class="string">queries</span> <span class="string">=</span> [<span class="string">q.strip()</span> <span class="string">for</span> <span class="string">q</span> <span class="string">in</span> <span class="string">queries</span> <span class="string">if</span> <span class="string">isinstance(q</span>, <span class="string">str)</span> <span class="string">and</span> <span class="string">q.strip()</span>][<span class="string">:5</span>]</span></span>
+<span class="cb-line" data-ln="113"><span class="cb-tx">                <span class="comment"># 规划失败时退化为直接检索原问题</span></span></span>
+<span class="cb-line" data-ln="114"><span class="cb-tx">                <span class="string">return</span> &#123;<span class="attr">&quot;queries&quot;:</span> <span class="string">queries</span> <span class="string">or</span> [<span class="string">question</span>[<span class="string">:100</span>]]&#125;</span></span>
+<span class="cb-line" data-ln="115"><span class="cb-tx">          <span class="attr">outputs:</span></span></span>
+<span class="cb-line" data-ln="116"><span class="cb-tx">            <span class="attr">queries:</span></span></span>
+<span class="cb-line" data-ln="117"><span class="cb-tx">              <span class="attr">type:</span> <span class="string">array[string]</span></span></span>
+<span class="cb-line" data-ln="118"><span class="cb-tx">              <span class="attr">children:</span> <span class="literal">null</span></span></span>
+<span class="cb-line" data-ln="119"><span class="cb-tx">      <span class="comment"># ---------- 3. 第一轮检索（并行迭代） ----------</span></span></span>
+<span class="cb-line" data-ln="120"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="121"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="122"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">930</span>, <span class="attr">y:</span> <span class="number">260</span>&#125;</span></span>
+<span class="cb-line" data-ln="123"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">700</span></span></span>
+<span class="cb-line" data-ln="124"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">180</span></span></span>
+<span class="cb-line" data-ln="125"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="126"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="127"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">iteration</span></span></span>
+<span class="cb-line" data-ln="128"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">第一轮检索</span></span></span>
+<span class="cb-line" data-ln="129"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="130"><span class="cb-tx">          <span class="attr">start_node_id:</span> <span class="string">s1start</span></span></span>
+<span class="cb-line" data-ln="131"><span class="cb-tx">          <span class="attr">iterator_selector:</span> [<span class="string">&quot;parse_plan&quot;</span>, <span class="string">&quot;queries&quot;</span>]</span></span>
+<span class="cb-line" data-ln="132"><span class="cb-tx">          <span class="attr">iterator_input_type:</span> <span class="string">array[string]</span></span></span>
+<span class="cb-line" data-ln="133"><span class="cb-tx">          <span class="attr">output_selector:</span> [<span class="string">&quot;s1_digest&quot;</span>, <span class="string">&quot;digest&quot;</span>]</span></span>
+<span class="cb-line" data-ln="134"><span class="cb-tx">          <span class="attr">output_type:</span> <span class="string">array[string]</span></span></span>
+<span class="cb-line" data-ln="135"><span class="cb-tx">          <span class="attr">is_parallel:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="136"><span class="cb-tx">          <span class="attr">parallel_nums:</span> <span class="number">3</span></span></span>
+<span class="cb-line" data-ln="137"><span class="cb-tx">          <span class="attr">error_handle_mode:</span> <span class="string">remove-abnormal-output</span></span></span>
+<span class="cb-line" data-ln="138"><span class="cb-tx">          <span class="attr">flatten_output:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="139"><span class="cb-tx">          <span class="attr">width:</span> <span class="number">700</span></span></span>
+<span class="cb-line" data-ln="140"><span class="cb-tx">          <span class="attr">height:</span> <span class="number">180</span></span></span>
+<span class="cb-line" data-ln="141"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s1start&quot;</span></span></span>
+<span class="cb-line" data-ln="142"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom-iteration-start</span></span></span>
+<span class="cb-line" data-ln="143"><span class="cb-tx">        <span class="attr">parentId:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="144"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">24</span>, <span class="attr">y:</span> <span class="number">68</span>&#125;</span></span>
+<span class="cb-line" data-ln="145"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">44</span></span></span>
+<span class="cb-line" data-ln="146"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">48</span></span></span>
+<span class="cb-line" data-ln="147"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="148"><span class="cb-tx">        <span class="attr">draggable:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="149"><span class="cb-tx">        <span class="attr">selectable:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="150"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="151"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">iteration-start</span></span></span>
+<span class="cb-line" data-ln="152"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="153"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="154"><span class="cb-tx">          <span class="attr">isInIteration:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="155"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s1_search&quot;</span></span></span>
+<span class="cb-line" data-ln="156"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="157"><span class="cb-tx">        <span class="attr">parentId:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="158"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">110</span>, <span class="attr">y:</span> <span class="number">68</span>&#125;</span></span>
+<span class="cb-line" data-ln="159"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="160"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">54</span></span></span>
+<span class="cb-line" data-ln="161"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="162"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="163"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">http-request</span></span></span>
+<span class="cb-line" data-ln="164"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">SearXNG</span> <span class="string">检索</span></span></span>
+<span class="cb-line" data-ln="165"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="166"><span class="cb-tx">          <span class="attr">isInIteration:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="167"><span class="cb-tx">          <span class="attr">iteration_id:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="168"><span class="cb-tx">          <span class="attr">method:</span> <span class="string">get</span></span></span>
+<span class="cb-line" data-ln="169"><span class="cb-tx">          <span class="attr">url:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123;#env.SEARXNG_BASE#&#125;&#125;</span>/search&quot;</span></span></span>
+<span class="cb-line" data-ln="170"><span class="cb-tx">          <span class="attr">authorization:</span></span></span>
+<span class="cb-line" data-ln="171"><span class="cb-tx">            <span class="attr">type:</span> <span class="literal">no</span><span class="string">-auth</span></span></span>
+<span class="cb-line" data-ln="172"><span class="cb-tx">            <span class="attr">config:</span> <span class="literal">null</span></span></span>
+<span class="cb-line" data-ln="173"><span class="cb-tx">          <span class="attr">headers:</span> <span class="string">&quot;Accept:application/json&quot;</span></span></span>
+<span class="cb-line" data-ln="174"><span class="cb-tx">          <span class="attr">params:</span> <span class="string">&quot;q:<span class="template-variable">&#123;&#123;#s1.item#&#125;&#125;</span>\nformat:json&quot;</span></span></span>
+<span class="cb-line" data-ln="175"><span class="cb-tx">          <span class="attr">body:</span></span></span>
+<span class="cb-line" data-ln="176"><span class="cb-tx">            <span class="attr">type:</span> <span class="string">none</span></span></span>
+<span class="cb-line" data-ln="177"><span class="cb-tx">            <span class="attr">data:</span> []</span></span>
+<span class="cb-line" data-ln="178"><span class="cb-tx">          <span class="attr">timeout:</span></span></span>
+<span class="cb-line" data-ln="179"><span class="cb-tx">            <span class="attr">connect:</span> <span class="number">10</span></span></span>
+<span class="cb-line" data-ln="180"><span class="cb-tx">            <span class="attr">read:</span> <span class="number">30</span></span></span>
+<span class="cb-line" data-ln="181"><span class="cb-tx">            <span class="attr">write:</span> <span class="number">10</span></span></span>
+<span class="cb-line" data-ln="182"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s1_digest&quot;</span></span></span>
+<span class="cb-line" data-ln="183"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="184"><span class="cb-tx">        <span class="attr">parentId:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="185"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">400</span>, <span class="attr">y:</span> <span class="number">68</span>&#125;</span></span>
+<span class="cb-line" data-ln="186"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="187"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">54</span></span></span>
+<span class="cb-line" data-ln="188"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="189"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="190"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">code</span></span></span>
+<span class="cb-line" data-ln="191"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">结果摘要</span></span></span>
+<span class="cb-line" data-ln="192"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="193"><span class="cb-tx">          <span class="attr">isInIteration:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="194"><span class="cb-tx">          <span class="attr">iteration_id:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="195"><span class="cb-tx">          <span class="attr">code_language:</span> <span class="string">python3</span></span></span>
+<span class="cb-line" data-ln="196"><span class="cb-tx">          <span class="attr">variables:</span></span></span>
+<span class="cb-line" data-ln="197"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">body</span></span></span>
+<span class="cb-line" data-ln="198"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;s1_search&quot;</span>, <span class="string">&quot;body&quot;</span>]</span></span>
+<span class="cb-line" data-ln="199"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">query</span></span></span>
+<span class="cb-line" data-ln="200"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;s1&quot;</span>, <span class="string">&quot;item&quot;</span>]</span></span>
+<span class="cb-line" data-ln="201"><span class="cb-tx">          <span class="attr">code:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="202"><span class="cb-tx"><span class="string">            import json</span></span></span>
+<span class="cb-line" data-ln="203"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="204"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="205"><span class="cb-tx">            <span class="attr">def main(body:</span> <span class="string">str,</span> <span class="attr">query:</span> <span class="string">str)</span> <span class="string">-&gt;</span> <span class="attr">dict:</span></span></span>
+<span class="cb-line" data-ln="206"><span class="cb-tx">                <span class="attr">try:</span></span></span>
+<span class="cb-line" data-ln="207"><span class="cb-tx">                    <span class="string">results</span> <span class="string">=</span> <span class="string">json.loads(body</span> <span class="string">or</span> <span class="string">&quot;&#123;&#125;&quot;</span><span class="string">).get(&quot;results&quot;,</span> []<span class="string">)</span></span></span>
+<span class="cb-line" data-ln="208"><span class="cb-tx">                <span class="attr">except ValueError:</span></span></span>
+<span class="cb-line" data-ln="209"><span class="cb-tx">                    <span class="string">return</span> &#123;<span class="attr">&quot;digest&quot;:</span> <span class="string">f&quot;###</span> &#123;<span class="string">query</span>&#125;<span class="string">\n（检索返回的不是</span> <span class="string">JSON，已跳过）&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="210"><span class="cb-tx">                <span class="string">lines,</span> <span class="string">seen</span> <span class="string">=</span> [<span class="string">f&quot;###</span> &#123;<span class="string">query</span>&#125;<span class="string">&quot;], set()</span></span></span>
+<span class="cb-line" data-ln="211"><span class="cb-tx"><span class="string">                for r in results:</span></span></span>
+<span class="cb-line" data-ln="212"><span class="cb-tx"><span class="string">                    url = r.get(&quot;</span><span class="string">url&quot;)</span> <span class="string">or</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="213"><span class="cb-tx">                    <span class="attr">if not url or url in seen:</span></span></span>
+<span class="cb-line" data-ln="214"><span class="cb-tx">                        <span class="string">continue</span></span></span>
+<span class="cb-line" data-ln="215"><span class="cb-tx">                    <span class="string">seen.add(url)</span></span></span>
+<span class="cb-line" data-ln="216"><span class="cb-tx">                    <span class="string">snippet</span> <span class="string">=</span> <span class="string">(r.get(&quot;content&quot;)</span> <span class="string">or</span> <span class="string">&quot;&quot;</span><span class="string">).replace(&quot;\n&quot;</span>, <span class="string">&quot; &quot;</span><span class="string">)</span>[<span class="string">:300</span>]</span></span>
+<span class="cb-line" data-ln="217"><span class="cb-tx">                    <span class="string">lines.append(f&quot;-</span> [&#123;<span class="string">(r.get(&#x27;title&#x27;)</span> <span class="string">or</span> <span class="string">&#x27;&#x27;</span><span class="string">).strip()</span>&#125;]<span class="string">(</span>&#123;<span class="string">url</span>&#125;<span class="string">)：</span>&#123;<span class="string">snippet</span>&#125;<span class="string">&quot;)</span></span></span>
+<span class="cb-line" data-ln="218"><span class="cb-tx"><span class="string">                    if len(seen) &gt;= 6:</span></span></span>
+<span class="cb-line" data-ln="219"><span class="cb-tx"><span class="string">                        break</span></span></span>
+<span class="cb-line" data-ln="220"><span class="cb-tx"><span class="string">                return &#123;&quot;</span><span class="string">digest&quot;:</span> <span class="string">&quot;\n&quot;</span><span class="string">.join(lines)</span>[<span class="string">:4000</span>]&#125;</span></span>
+<span class="cb-line" data-ln="221"><span class="cb-tx">          <span class="attr">outputs:</span></span></span>
+<span class="cb-line" data-ln="222"><span class="cb-tx">            <span class="attr">digest:</span></span></span>
+<span class="cb-line" data-ln="223"><span class="cb-tx">              <span class="attr">type:</span> <span class="string">string</span></span></span>
+<span class="cb-line" data-ln="224"><span class="cb-tx">              <span class="attr">children:</span> <span class="literal">null</span></span></span>
+<span class="cb-line" data-ln="225"><span class="cb-tx">      <span class="comment"># ---------- 4. 反思：找缺口、给补搜式 ----------</span></span></span>
+<span class="cb-line" data-ln="226"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;reflect&quot;</span></span></span>
+<span class="cb-line" data-ln="227"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="228"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">1690</span>, <span class="attr">y:</span> <span class="number">300</span>&#125;</span></span>
+<span class="cb-line" data-ln="229"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="230"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">90</span></span></span>
+<span class="cb-line" data-ln="231"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="232"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">llm</span></span></span>
+<span class="cb-line" data-ln="233"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">反思与补搜</span></span></span>
+<span class="cb-line" data-ln="234"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="235"><span class="cb-tx">          <span class="attr">model:</span></span></span>
+<span class="cb-line" data-ln="236"><span class="cb-tx">            <span class="attr">provider:</span> <span class="string">langgenius/openai/openai</span></span></span>
+<span class="cb-line" data-ln="237"><span class="cb-tx">            <span class="attr">name:</span> <span class="string">gpt-4o-mini</span></span></span>
+<span class="cb-line" data-ln="238"><span class="cb-tx">            <span class="attr">mode:</span> <span class="string">chat</span></span></span>
+<span class="cb-line" data-ln="239"><span class="cb-tx">            <span class="attr">completion_params:</span></span></span>
+<span class="cb-line" data-ln="240"><span class="cb-tx">              <span class="attr">temperature:</span> <span class="number">0.2</span></span></span>
+<span class="cb-line" data-ln="241"><span class="cb-tx">          <span class="attr">prompt_template:</span></span></span>
+<span class="cb-line" data-ln="242"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">reflect-system</span></span></span>
+<span class="cb-line" data-ln="243"><span class="cb-tx">              <span class="attr">role:</span> <span class="string">system</span></span></span>
+<span class="cb-line" data-ln="244"><span class="cb-tx">              <span class="attr">text:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="245"><span class="cb-tx"><span class="string">                你是研究审稿人。基于检索摘要回答三件事：已经确认的发现（每条后附来源 URL）、</span></span></span>
+<span class="cb-line" data-ln="246"><span class="cb-tx"><span class="string">                仍缺的证据、为补齐缺口还需要的检索式（最多 3 个，已足够则给空数组）。</span></span></span>
+<span class="cb-line" data-ln="247"><span class="cb-tx"><span class="string">                只输出 JSON：&#123;&quot;findings&quot;: &quot;…&quot;, &quot;gaps&quot;: [&quot;…&quot;], &quot;followups&quot;: [&quot;…&quot;]&#125;</span></span></span>
+<span class="cb-line" data-ln="248"><span class="cb-tx"><span class="string"></span>            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">reflect-user</span></span></span>
+<span class="cb-line" data-ln="249"><span class="cb-tx">              <span class="attr">role:</span> <span class="string">user</span></span></span>
+<span class="cb-line" data-ln="250"><span class="cb-tx">              <span class="attr">text:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="251"><span class="cb-tx"><span class="string">                问题：&#123;&#123;#start.question#&#125;&#125;</span></span></span>
+<span class="cb-line" data-ln="252"><span class="cb-tx"><span class="string">                第一轮检索摘要：</span></span></span>
+<span class="cb-line" data-ln="253"><span class="cb-tx"><span class="string">                &#123;&#123;#s1.output#&#125;&#125;</span></span></span>
+<span class="cb-line" data-ln="254"><span class="cb-tx"><span class="string"></span>          <span class="attr">context:</span></span></span>
+<span class="cb-line" data-ln="255"><span class="cb-tx">            <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="256"><span class="cb-tx">            <span class="attr">variable_selector:</span> []</span></span>
+<span class="cb-line" data-ln="257"><span class="cb-tx">          <span class="attr">vision:</span></span></span>
+<span class="cb-line" data-ln="258"><span class="cb-tx">            <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="259"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;parse_reflect&quot;</span></span></span>
+<span class="cb-line" data-ln="260"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="261"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">1990</span>, <span class="attr">y:</span> <span class="number">300</span>&#125;</span></span>
+<span class="cb-line" data-ln="262"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="263"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">54</span></span></span>
+<span class="cb-line" data-ln="264"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="265"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">code</span></span></span>
+<span class="cb-line" data-ln="266"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">解析补搜式</span></span></span>
+<span class="cb-line" data-ln="267"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="268"><span class="cb-tx">          <span class="attr">code_language:</span> <span class="string">python3</span></span></span>
+<span class="cb-line" data-ln="269"><span class="cb-tx">          <span class="attr">variables:</span></span></span>
+<span class="cb-line" data-ln="270"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">text</span></span></span>
+<span class="cb-line" data-ln="271"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;reflect&quot;</span>, <span class="string">&quot;text&quot;</span>]</span></span>
+<span class="cb-line" data-ln="272"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">asked</span></span></span>
+<span class="cb-line" data-ln="273"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;parse_plan&quot;</span>, <span class="string">&quot;queries&quot;</span>]</span></span>
+<span class="cb-line" data-ln="274"><span class="cb-tx">          <span class="attr">code:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="275"><span class="cb-tx"><span class="string">            import json</span></span></span>
+<span class="cb-line" data-ln="276"><span class="cb-tx"><span class="string">            import re</span></span></span>
+<span class="cb-line" data-ln="277"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="278"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="279"><span class="cb-tx">            <span class="attr">def main(text:</span> <span class="string">str</span>, <span class="attr">asked:</span> <span class="string">list)</span> <span class="string">-&gt;</span> <span class="attr">dict:</span></span></span>
+<span class="cb-line" data-ln="280"><span class="cb-tx">                <span class="string">data</span> <span class="string">=</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="281"><span class="cb-tx">                <span class="string">m</span> <span class="string">=</span> <span class="string">re.search(r&quot;\</span>&#123;<span class="string">.*\</span>&#125;<span class="string">&quot;, text or &quot;</span><span class="string">&quot;, re.S)</span></span></span>
+<span class="cb-line" data-ln="282"><span class="cb-tx"><span class="string">                if m:</span></span></span>
+<span class="cb-line" data-ln="283"><span class="cb-tx"><span class="string">                    try:</span></span></span>
+<span class="cb-line" data-ln="284"><span class="cb-tx"><span class="string">                        data = json.loads(m.group(0))</span></span></span>
+<span class="cb-line" data-ln="285"><span class="cb-tx"><span class="string">                    except ValueError:</span></span></span>
+<span class="cb-line" data-ln="286"><span class="cb-tx"><span class="string">                        data = &#123;&#125;</span></span></span>
+<span class="cb-line" data-ln="287"><span class="cb-tx"><span class="string">                done = &#123;q.strip() for q in (asked or []) if isinstance(q, str)&#125;</span></span></span>
+<span class="cb-line" data-ln="288"><span class="cb-tx"><span class="string">                followups = [</span></span></span>
+<span class="cb-line" data-ln="289"><span class="cb-tx"><span class="string">                    q.strip() for q in data.get(&quot;</span><span class="string">followups&quot;</span>, []<span class="string">)</span></span></span>
+<span class="cb-line" data-ln="290"><span class="cb-tx">                    <span class="string">if</span> <span class="string">isinstance(q</span>, <span class="string">str)</span> <span class="string">and</span> <span class="string">q.strip()</span> <span class="string">and</span> <span class="string">q.strip()</span> <span class="string">not</span> <span class="string">in</span> <span class="string">done</span></span></span>
+<span class="cb-line" data-ln="291"><span class="cb-tx">                ][<span class="string">:3</span>]</span></span>
+<span class="cb-line" data-ln="292"><span class="cb-tx">                <span class="string">return</span> &#123;<span class="attr">&quot;followups&quot;:</span> <span class="string">followups</span>, <span class="attr">&quot;findings&quot;:</span> <span class="string">str(data.get(&quot;findings&quot;</span>, <span class="string">&quot;&quot;</span><span class="string">))</span>[<span class="string">:6000</span>]&#125;</span></span>
+<span class="cb-line" data-ln="293"><span class="cb-tx">          <span class="attr">outputs:</span></span></span>
+<span class="cb-line" data-ln="294"><span class="cb-tx">            <span class="attr">followups:</span></span></span>
+<span class="cb-line" data-ln="295"><span class="cb-tx">              <span class="attr">type:</span> <span class="string">array[string]</span></span></span>
+<span class="cb-line" data-ln="296"><span class="cb-tx">              <span class="attr">children:</span> <span class="literal">null</span></span></span>
+<span class="cb-line" data-ln="297"><span class="cb-tx">            <span class="attr">findings:</span></span></span>
+<span class="cb-line" data-ln="298"><span class="cb-tx">              <span class="attr">type:</span> <span class="string">string</span></span></span>
+<span class="cb-line" data-ln="299"><span class="cb-tx">              <span class="attr">children:</span> <span class="literal">null</span></span></span>
+<span class="cb-line" data-ln="300"><span class="cb-tx">      <span class="comment"># ---------- 5. 第二轮检索（补搜，可能为空） ----------</span></span></span>
+<span class="cb-line" data-ln="301"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="302"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="303"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">2290</span>, <span class="attr">y:</span> <span class="number">260</span>&#125;</span></span>
+<span class="cb-line" data-ln="304"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">700</span></span></span>
+<span class="cb-line" data-ln="305"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">180</span></span></span>
+<span class="cb-line" data-ln="306"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="307"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="308"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">iteration</span></span></span>
+<span class="cb-line" data-ln="309"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">补充检索</span></span></span>
+<span class="cb-line" data-ln="310"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="311"><span class="cb-tx">          <span class="attr">start_node_id:</span> <span class="string">s2start</span></span></span>
+<span class="cb-line" data-ln="312"><span class="cb-tx">          <span class="attr">iterator_selector:</span> [<span class="string">&quot;parse_reflect&quot;</span>, <span class="string">&quot;followups&quot;</span>]</span></span>
+<span class="cb-line" data-ln="313"><span class="cb-tx">          <span class="attr">iterator_input_type:</span> <span class="string">array[string]</span></span></span>
+<span class="cb-line" data-ln="314"><span class="cb-tx">          <span class="attr">output_selector:</span> [<span class="string">&quot;s2_digest&quot;</span>, <span class="string">&quot;digest&quot;</span>]</span></span>
+<span class="cb-line" data-ln="315"><span class="cb-tx">          <span class="attr">output_type:</span> <span class="string">array[string]</span></span></span>
+<span class="cb-line" data-ln="316"><span class="cb-tx">          <span class="attr">is_parallel:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="317"><span class="cb-tx">          <span class="attr">parallel_nums:</span> <span class="number">3</span></span></span>
+<span class="cb-line" data-ln="318"><span class="cb-tx">          <span class="attr">error_handle_mode:</span> <span class="string">remove-abnormal-output</span></span></span>
+<span class="cb-line" data-ln="319"><span class="cb-tx">          <span class="attr">flatten_output:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="320"><span class="cb-tx">          <span class="attr">width:</span> <span class="number">700</span></span></span>
+<span class="cb-line" data-ln="321"><span class="cb-tx">          <span class="attr">height:</span> <span class="number">180</span></span></span>
+<span class="cb-line" data-ln="322"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s2start&quot;</span></span></span>
+<span class="cb-line" data-ln="323"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom-iteration-start</span></span></span>
+<span class="cb-line" data-ln="324"><span class="cb-tx">        <span class="attr">parentId:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="325"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">24</span>, <span class="attr">y:</span> <span class="number">68</span>&#125;</span></span>
+<span class="cb-line" data-ln="326"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">44</span></span></span>
+<span class="cb-line" data-ln="327"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">48</span></span></span>
+<span class="cb-line" data-ln="328"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="329"><span class="cb-tx">        <span class="attr">draggable:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="330"><span class="cb-tx">        <span class="attr">selectable:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="331"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="332"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">iteration-start</span></span></span>
+<span class="cb-line" data-ln="333"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="334"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="335"><span class="cb-tx">          <span class="attr">isInIteration:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="336"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s2_search&quot;</span></span></span>
+<span class="cb-line" data-ln="337"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="338"><span class="cb-tx">        <span class="attr">parentId:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="339"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">110</span>, <span class="attr">y:</span> <span class="number">68</span>&#125;</span></span>
+<span class="cb-line" data-ln="340"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="341"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">54</span></span></span>
+<span class="cb-line" data-ln="342"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="343"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="344"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">http-request</span></span></span>
+<span class="cb-line" data-ln="345"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">SearXNG</span> <span class="string">补搜</span></span></span>
+<span class="cb-line" data-ln="346"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="347"><span class="cb-tx">          <span class="attr">isInIteration:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="348"><span class="cb-tx">          <span class="attr">iteration_id:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="349"><span class="cb-tx">          <span class="attr">method:</span> <span class="string">get</span></span></span>
+<span class="cb-line" data-ln="350"><span class="cb-tx">          <span class="attr">url:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123;#env.SEARXNG_BASE#&#125;&#125;</span>/search&quot;</span></span></span>
+<span class="cb-line" data-ln="351"><span class="cb-tx">          <span class="attr">authorization:</span></span></span>
+<span class="cb-line" data-ln="352"><span class="cb-tx">            <span class="attr">type:</span> <span class="literal">no</span><span class="string">-auth</span></span></span>
+<span class="cb-line" data-ln="353"><span class="cb-tx">            <span class="attr">config:</span> <span class="literal">null</span></span></span>
+<span class="cb-line" data-ln="354"><span class="cb-tx">          <span class="attr">headers:</span> <span class="string">&quot;Accept:application/json&quot;</span></span></span>
+<span class="cb-line" data-ln="355"><span class="cb-tx">          <span class="attr">params:</span> <span class="string">&quot;q:<span class="template-variable">&#123;&#123;#s2.item#&#125;&#125;</span>\nformat:json&quot;</span></span></span>
+<span class="cb-line" data-ln="356"><span class="cb-tx">          <span class="attr">body:</span></span></span>
+<span class="cb-line" data-ln="357"><span class="cb-tx">            <span class="attr">type:</span> <span class="string">none</span></span></span>
+<span class="cb-line" data-ln="358"><span class="cb-tx">            <span class="attr">data:</span> []</span></span>
+<span class="cb-line" data-ln="359"><span class="cb-tx">          <span class="attr">timeout:</span></span></span>
+<span class="cb-line" data-ln="360"><span class="cb-tx">            <span class="attr">connect:</span> <span class="number">10</span></span></span>
+<span class="cb-line" data-ln="361"><span class="cb-tx">            <span class="attr">read:</span> <span class="number">30</span></span></span>
+<span class="cb-line" data-ln="362"><span class="cb-tx">            <span class="attr">write:</span> <span class="number">10</span></span></span>
+<span class="cb-line" data-ln="363"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;s2_digest&quot;</span></span></span>
+<span class="cb-line" data-ln="364"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="365"><span class="cb-tx">        <span class="attr">parentId:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="366"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">400</span>, <span class="attr">y:</span> <span class="number">68</span>&#125;</span></span>
+<span class="cb-line" data-ln="367"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="368"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">54</span></span></span>
+<span class="cb-line" data-ln="369"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="370"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="371"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">code</span></span></span>
+<span class="cb-line" data-ln="372"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">补搜摘要</span></span></span>
+<span class="cb-line" data-ln="373"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="374"><span class="cb-tx">          <span class="attr">isInIteration:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="375"><span class="cb-tx">          <span class="attr">iteration_id:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="376"><span class="cb-tx">          <span class="attr">code_language:</span> <span class="string">python3</span></span></span>
+<span class="cb-line" data-ln="377"><span class="cb-tx">          <span class="attr">variables:</span></span></span>
+<span class="cb-line" data-ln="378"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">body</span></span></span>
+<span class="cb-line" data-ln="379"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;s2_search&quot;</span>, <span class="string">&quot;body&quot;</span>]</span></span>
+<span class="cb-line" data-ln="380"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">query</span></span></span>
+<span class="cb-line" data-ln="381"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;s2&quot;</span>, <span class="string">&quot;item&quot;</span>]</span></span>
+<span class="cb-line" data-ln="382"><span class="cb-tx">          <span class="attr">code:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="383"><span class="cb-tx"><span class="string">            import json</span></span></span>
+<span class="cb-line" data-ln="384"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="385"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="386"><span class="cb-tx">            <span class="attr">def main(body:</span> <span class="string">str,</span> <span class="attr">query:</span> <span class="string">str)</span> <span class="string">-&gt;</span> <span class="attr">dict:</span></span></span>
+<span class="cb-line" data-ln="387"><span class="cb-tx">                <span class="attr">try:</span></span></span>
+<span class="cb-line" data-ln="388"><span class="cb-tx">                    <span class="string">results</span> <span class="string">=</span> <span class="string">json.loads(body</span> <span class="string">or</span> <span class="string">&quot;&#123;&#125;&quot;</span><span class="string">).get(&quot;results&quot;,</span> []<span class="string">)</span></span></span>
+<span class="cb-line" data-ln="389"><span class="cb-tx">                <span class="attr">except ValueError:</span></span></span>
+<span class="cb-line" data-ln="390"><span class="cb-tx">                    <span class="string">return</span> &#123;<span class="attr">&quot;digest&quot;:</span> <span class="string">f&quot;###</span> &#123;<span class="string">query</span>&#125;<span class="string">\n（检索返回的不是</span> <span class="string">JSON，已跳过）&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="391"><span class="cb-tx">                <span class="string">lines,</span> <span class="string">seen</span> <span class="string">=</span> [<span class="string">f&quot;###</span> &#123;<span class="string">query</span>&#125;<span class="string">&quot;], set()</span></span></span>
+<span class="cb-line" data-ln="392"><span class="cb-tx"><span class="string">                for r in results:</span></span></span>
+<span class="cb-line" data-ln="393"><span class="cb-tx"><span class="string">                    url = r.get(&quot;</span><span class="string">url&quot;)</span> <span class="string">or</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="394"><span class="cb-tx">                    <span class="attr">if not url or url in seen:</span></span></span>
+<span class="cb-line" data-ln="395"><span class="cb-tx">                        <span class="string">continue</span></span></span>
+<span class="cb-line" data-ln="396"><span class="cb-tx">                    <span class="string">seen.add(url)</span></span></span>
+<span class="cb-line" data-ln="397"><span class="cb-tx">                    <span class="string">snippet</span> <span class="string">=</span> <span class="string">(r.get(&quot;content&quot;)</span> <span class="string">or</span> <span class="string">&quot;&quot;</span><span class="string">).replace(&quot;\n&quot;</span>, <span class="string">&quot; &quot;</span><span class="string">)</span>[<span class="string">:300</span>]</span></span>
+<span class="cb-line" data-ln="398"><span class="cb-tx">                    <span class="string">lines.append(f&quot;-</span> [&#123;<span class="string">(r.get(&#x27;title&#x27;)</span> <span class="string">or</span> <span class="string">&#x27;&#x27;</span><span class="string">).strip()</span>&#125;]<span class="string">(</span>&#123;<span class="string">url</span>&#125;<span class="string">)：</span>&#123;<span class="string">snippet</span>&#125;<span class="string">&quot;)</span></span></span>
+<span class="cb-line" data-ln="399"><span class="cb-tx"><span class="string">                    if len(seen) &gt;= 6:</span></span></span>
+<span class="cb-line" data-ln="400"><span class="cb-tx"><span class="string">                        break</span></span></span>
+<span class="cb-line" data-ln="401"><span class="cb-tx"><span class="string">                return &#123;&quot;</span><span class="string">digest&quot;:</span> <span class="string">&quot;\n&quot;</span><span class="string">.join(lines)</span>[<span class="string">:4000</span>]&#125;</span></span>
+<span class="cb-line" data-ln="402"><span class="cb-tx">          <span class="attr">outputs:</span></span></span>
+<span class="cb-line" data-ln="403"><span class="cb-tx">            <span class="attr">digest:</span></span></span>
+<span class="cb-line" data-ln="404"><span class="cb-tx">              <span class="attr">type:</span> <span class="string">string</span></span></span>
+<span class="cb-line" data-ln="405"><span class="cb-tx">              <span class="attr">children:</span> <span class="literal">null</span></span></span>
+<span class="cb-line" data-ln="406"><span class="cb-tx">      <span class="comment"># ---------- 6. 成文 ----------</span></span></span>
+<span class="cb-line" data-ln="407"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;writer&quot;</span></span></span>
+<span class="cb-line" data-ln="408"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="409"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">3050</span>, <span class="attr">y:</span> <span class="number">300</span>&#125;</span></span>
+<span class="cb-line" data-ln="410"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="411"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">90</span></span></span>
+<span class="cb-line" data-ln="412"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="413"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">llm</span></span></span>
+<span class="cb-line" data-ln="414"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">撰写报告</span></span></span>
+<span class="cb-line" data-ln="415"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="416"><span class="cb-tx">          <span class="attr">model:</span></span></span>
+<span class="cb-line" data-ln="417"><span class="cb-tx">            <span class="attr">provider:</span> <span class="string">langgenius/openai/openai</span></span></span>
+<span class="cb-line" data-ln="418"><span class="cb-tx">            <span class="attr">name:</span> <span class="string">gpt-4o-mini</span></span></span>
+<span class="cb-line" data-ln="419"><span class="cb-tx">            <span class="attr">mode:</span> <span class="string">chat</span></span></span>
+<span class="cb-line" data-ln="420"><span class="cb-tx">            <span class="attr">completion_params:</span></span></span>
+<span class="cb-line" data-ln="421"><span class="cb-tx">              <span class="attr">temperature:</span> <span class="number">0.3</span></span></span>
+<span class="cb-line" data-ln="422"><span class="cb-tx">          <span class="attr">prompt_template:</span></span></span>
+<span class="cb-line" data-ln="423"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">writer-system</span></span></span>
+<span class="cb-line" data-ln="424"><span class="cb-tx">              <span class="attr">role:</span> <span class="string">system</span></span></span>
+<span class="cb-line" data-ln="425"><span class="cb-tx">              <span class="attr">text:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="426"><span class="cb-tx"><span class="string">                你是研究报告撰写人。只使用给定材料，不补充材料外的事实。</span></span></span>
+<span class="cb-line" data-ln="427"><span class="cb-tx"><span class="string">                结构：结论摘要（3~5 条）→ 分主题论证 → 分歧与不确定性 → 参考来源。</span></span></span>
+<span class="cb-line" data-ln="428"><span class="cb-tx"><span class="string">                正文用 [n] 标注来源，参考来源按编号列出标题与 URL；材料不足的地方直接写「证据不足」。</span></span></span>
+<span class="cb-line" data-ln="429"><span class="cb-tx"><span class="string"></span>            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">writer-user</span></span></span>
+<span class="cb-line" data-ln="430"><span class="cb-tx">              <span class="attr">role:</span> <span class="string">user</span></span></span>
+<span class="cb-line" data-ln="431"><span class="cb-tx">              <span class="attr">text:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="432"><span class="cb-tx"><span class="string">                问题：&#123;&#123;#start.question#&#125;&#125;</span></span></span>
+<span class="cb-line" data-ln="433"><span class="cb-tx"><span class="string">                审稿结论：&#123;&#123;#parse_reflect.findings#&#125;&#125;</span></span></span>
+<span class="cb-line" data-ln="434"><span class="cb-tx"><span class="string">                第一轮检索：</span></span></span>
+<span class="cb-line" data-ln="435"><span class="cb-tx"><span class="string">                &#123;&#123;#s1.output#&#125;&#125;</span></span></span>
+<span class="cb-line" data-ln="436"><span class="cb-tx"><span class="string">                补充检索：</span></span></span>
+<span class="cb-line" data-ln="437"><span class="cb-tx"><span class="string">                &#123;&#123;#s2.output#&#125;&#125;</span></span></span>
+<span class="cb-line" data-ln="438"><span class="cb-tx"><span class="string"></span>          <span class="attr">context:</span></span></span>
+<span class="cb-line" data-ln="439"><span class="cb-tx">            <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="440"><span class="cb-tx">            <span class="attr">variable_selector:</span> []</span></span>
+<span class="cb-line" data-ln="441"><span class="cb-tx">          <span class="attr">vision:</span></span></span>
+<span class="cb-line" data-ln="442"><span class="cb-tx">            <span class="attr">enabled:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="443"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;end&quot;</span></span></span>
+<span class="cb-line" data-ln="444"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="445"><span class="cb-tx">        <span class="attr">position:</span> &#123;<span class="attr">x:</span> <span class="number">3350</span>, <span class="attr">y:</span> <span class="number">300</span>&#125;</span></span>
+<span class="cb-line" data-ln="446"><span class="cb-tx">        <span class="attr">width:</span> <span class="number">244</span></span></span>
+<span class="cb-line" data-ln="447"><span class="cb-tx">        <span class="attr">height:</span> <span class="number">90</span></span></span>
+<span class="cb-line" data-ln="448"><span class="cb-tx">        <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="449"><span class="cb-tx">          <span class="attr">type:</span> <span class="string">end</span></span></span>
+<span class="cb-line" data-ln="450"><span class="cb-tx">          <span class="attr">title:</span> <span class="string">输出</span></span></span>
+<span class="cb-line" data-ln="451"><span class="cb-tx">          <span class="attr">desc:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="452"><span class="cb-tx">          <span class="attr">outputs:</span></span></span>
+<span class="cb-line" data-ln="453"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">report</span></span></span>
+<span class="cb-line" data-ln="454"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;writer&quot;</span>, <span class="string">&quot;text&quot;</span>]</span></span>
+<span class="cb-line" data-ln="455"><span class="cb-tx">              <span class="attr">value_type:</span> <span class="string">string</span></span></span>
+<span class="cb-line" data-ln="456"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">followups</span></span></span>
+<span class="cb-line" data-ln="457"><span class="cb-tx">              <span class="attr">value_selector:</span> [<span class="string">&quot;parse_reflect&quot;</span>, <span class="string">&quot;followups&quot;</span>]</span></span>
+<span class="cb-line" data-ln="458"><span class="cb-tx">              <span class="attr">value_type:</span> <span class="string">array</span>[<span class="string">string</span>]</span></span>
+<span class="cb-line" data-ln="459"><span class="cb-tx">    <span class="attr">edges:</span></span></span>
+<span class="cb-line" data-ln="460"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">start-source-plan-target</span></span></span>
+<span class="cb-line" data-ln="461"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;start&quot;</span></span></span>
+<span class="cb-line" data-ln="462"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="463"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;plan&quot;</span></span></span>
+<span class="cb-line" data-ln="464"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="465"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="466"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="467"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">start</span>, <span class="attr">targetType:</span> <span class="string">llm</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="468"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">plan-source-parse_plan-target</span></span></span>
+<span class="cb-line" data-ln="469"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;plan&quot;</span></span></span>
+<span class="cb-line" data-ln="470"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="471"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;parse_plan&quot;</span></span></span>
+<span class="cb-line" data-ln="472"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="473"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="474"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="475"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">llm</span>, <span class="attr">targetType:</span> <span class="string">code</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="476"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">parse_plan-source-s1-target</span></span></span>
+<span class="cb-line" data-ln="477"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;parse_plan&quot;</span></span></span>
+<span class="cb-line" data-ln="478"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="479"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="480"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="481"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="482"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="483"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">code</span>, <span class="attr">targetType:</span> <span class="string">iteration</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="484"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">s1start-source-s1_search-target</span></span></span>
+<span class="cb-line" data-ln="485"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;s1start&quot;</span></span></span>
+<span class="cb-line" data-ln="486"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="487"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;s1_search&quot;</span></span></span>
+<span class="cb-line" data-ln="488"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="489"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="490"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="491"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">iteration-start</span>, <span class="attr">targetType:</span> <span class="string">http-request</span>, <span class="attr">isInIteration:</span> <span class="literal">true</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>, <span class="attr">iteration_id:</span> <span class="string">&quot;s1&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="492"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">s1_search-source-s1_digest-target</span></span></span>
+<span class="cb-line" data-ln="493"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;s1_search&quot;</span></span></span>
+<span class="cb-line" data-ln="494"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="495"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;s1_digest&quot;</span></span></span>
+<span class="cb-line" data-ln="496"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="497"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="498"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="499"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">http-request</span>, <span class="attr">targetType:</span> <span class="string">code</span>, <span class="attr">isInIteration:</span> <span class="literal">true</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>, <span class="attr">iteration_id:</span> <span class="string">&quot;s1&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="500"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">s1-source-reflect-target</span></span></span>
+<span class="cb-line" data-ln="501"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;s1&quot;</span></span></span>
+<span class="cb-line" data-ln="502"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="503"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;reflect&quot;</span></span></span>
+<span class="cb-line" data-ln="504"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="505"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="506"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="507"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">iteration</span>, <span class="attr">targetType:</span> <span class="string">llm</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="508"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">reflect-source-parse_reflect-target</span></span></span>
+<span class="cb-line" data-ln="509"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;reflect&quot;</span></span></span>
+<span class="cb-line" data-ln="510"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="511"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;parse_reflect&quot;</span></span></span>
+<span class="cb-line" data-ln="512"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="513"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="514"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="515"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">llm</span>, <span class="attr">targetType:</span> <span class="string">code</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="516"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">parse_reflect-source-s2-target</span></span></span>
+<span class="cb-line" data-ln="517"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;parse_reflect&quot;</span></span></span>
+<span class="cb-line" data-ln="518"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="519"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="520"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="521"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="522"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="523"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">code</span>, <span class="attr">targetType:</span> <span class="string">iteration</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="524"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">s2start-source-s2_search-target</span></span></span>
+<span class="cb-line" data-ln="525"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;s2start&quot;</span></span></span>
+<span class="cb-line" data-ln="526"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="527"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;s2_search&quot;</span></span></span>
+<span class="cb-line" data-ln="528"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="529"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="530"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="531"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">iteration-start</span>, <span class="attr">targetType:</span> <span class="string">http-request</span>, <span class="attr">isInIteration:</span> <span class="literal">true</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>, <span class="attr">iteration_id:</span> <span class="string">&quot;s2&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="532"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">s2_search-source-s2_digest-target</span></span></span>
+<span class="cb-line" data-ln="533"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;s2_search&quot;</span></span></span>
+<span class="cb-line" data-ln="534"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="535"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;s2_digest&quot;</span></span></span>
+<span class="cb-line" data-ln="536"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="537"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="538"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="539"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">http-request</span>, <span class="attr">targetType:</span> <span class="string">code</span>, <span class="attr">isInIteration:</span> <span class="literal">true</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>, <span class="attr">iteration_id:</span> <span class="string">&quot;s2&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="540"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">s2-source-writer-target</span></span></span>
+<span class="cb-line" data-ln="541"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;s2&quot;</span></span></span>
+<span class="cb-line" data-ln="542"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="543"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;writer&quot;</span></span></span>
+<span class="cb-line" data-ln="544"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="545"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="546"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="547"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">iteration</span>, <span class="attr">targetType:</span> <span class="string">llm</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="548"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">writer-source-end-target</span></span></span>
+<span class="cb-line" data-ln="549"><span class="cb-tx">        <span class="attr">source:</span> <span class="string">&quot;writer&quot;</span></span></span>
+<span class="cb-line" data-ln="550"><span class="cb-tx">        <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="551"><span class="cb-tx">        <span class="attr">target:</span> <span class="string">&quot;end&quot;</span></span></span>
+<span class="cb-line" data-ln="552"><span class="cb-tx">        <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="553"><span class="cb-tx">        <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="554"><span class="cb-tx">        <span class="attr">zIndex:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="555"><span class="cb-tx">        <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">llm</span>, <span class="attr">targetType:</span> <span class="string">end</span>, <span class="attr">isInIteration:</span> <span class="literal">false</span>, <span class="attr">isInLoop:</span> <span class="literal">false</span>&#125;</span></span>
+<span class="cb-line" data-ln="556"><span class="cb-tx">    <span class="attr">viewport:</span></span></span>
+<span class="cb-line" data-ln="557"><span class="cb-tx">      <span class="attr">x:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="558"><span class="cb-tx">      <span class="attr">y:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="559"><span class="cb-tx">      <span class="attr">zoom:</span> <span class="number">0.6</span></span></span></code></pre></div></div></figure>
+
+<h2 id="逐节点说明"><a href="#逐节点说明" class="headerlink" title="逐节点说明"></a>逐节点说明</h2><p><strong>开始节点</strong>只收一个 <code>paragraph</code> 类型的 <code>question</code>。研究范围、时间窗口等约束直接写在问题里，比加一堆表单字段更灵活。</p>
+<p><strong>规划（plan）</strong>要求模型只输出 <code>&#123;&quot;queries&quot;: [...]&#125;</code>，并点名要覆盖「定义、现状数据、主要分歧、最新进展」四类检索式。点名维度是为了避免模型给出五个同义改写。温度 0.2，规划阶段要的是稳定而不是多样。</p>
+<p><strong>解析检索式（parse_plan）</strong>用正则取出第一个 <code>&#123;...&#125;</code> 再 <code>json.loads</code>，因为不少模型会把 JSON 包在 Markdown 代码围栏里。解析失败或结果为空时退回用原问题检索，所以运行记录里第一轮只有一条迭代，就说明规划失败了。</p>
+<p><strong>第一轮检索（s1）</strong>是并行迭代：<code>iterator_selector</code> 指向检索式数组，<code>output_selector</code> 指向迭代内摘要节点的 <code>digest</code>，迭代输出因此是一个字符串数组。迭代内用 <code>&#123;&#123;#s1.item#&#125;&#125;</code> 取当前检索式。</p>
+<p><strong>SearXNG 检索（s1_search）<strong>的 <code>params</code> 是多行字符串 <code>q:…</code> 与 <code>format:json</code>。这里有一个隐蔽的坑：HTTP 请求节点在没配置错误策略或重试时，收到 403 之类的非 2xx 响应</strong>不会失败</strong>，而是把状态码和 HTML 错误页作为正常输出往下传。SearXNG 没开 JSON 格式时就是这种情况，下游摘要节点会把它识别为「不是 JSON」。</p>
+<p><strong>结果摘要（s1_digest）</strong>按 URL 去重，每个检索式最多取 6 条，每条摘要截断到 300 字符，整段截断到 4000 字符，输出形如 <code>- [标题](URL)：摘要</code> 的 Markdown 列表。这个格式同时服务两件事：反思节点能判断证据是否充分，成文节点能直接生成编号引用。</p>
+<p><strong>反思（reflect）</strong>要求模型输出已确认的发现（附 URL）、缺口和最多 3 个补搜式；证据已足够时给空数组。这是整条链路里对质量影响最大的节点：没有它，研究就退化成「搜一次就写」。</p>
+<p><strong>解析补搜式（parse_reflect）</strong>会去掉首轮已经搜过的检索式，并同时把 <code>findings</code> 截断后交给成文节点。</p>
+<p><strong>补充检索（s2）</strong>与首轮结构相同。补搜式为空数组时，迭代直接以空数组成功结束（1.12.1 的迭代节点对空输入有专门处理），不需要额外的条件分支。</p>
+<p><strong>撰写报告（writer）</strong>的系统提示强调「只使用给定材料」「材料不足写证据不足」「正文 [n] 对应参考来源编号」，输入是审稿结论加两轮摘要。<strong>结束节点</strong>输出报告正文与补搜式，后者便于事后判断反思是否在起作用。</p>
+<h2 id="导入与跑通步骤"><a href="#导入与跑通步骤" class="headerlink" title="导入与跑通步骤"></a>导入与跑通步骤</h2><ol>
+<li><p><strong>准备 SearXNG</strong>：在 <code>settings.yml</code> 的 <code>search.formats</code> 中加入 <code>json</code>（默认只有 <code>html</code>，未开启时 JSON 请求返回 403）；若启用了 <code>server.limiter</code>，放行 Dify 的出口地址。让 SearXNG 容器加入 Dify 的默认网络，服务名为 <code>searxng</code>。</p>
+</li>
+<li><p><strong>按 HTTP 请求节点的真实路径测试</strong>：HTTP 请求节点经 ssrf_proxy 发出，所以要从代理这条路径验证，而不是在宿主机上 curl：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">docker compose <span class="built_in">exec</span> api python3 -c <span class="string">&quot;import urllib.request as u; o = u.build_opener(u.ProxyHandler(&#123;&#x27;http&#x27;: &#x27;http://ssrf_proxy:3128&#x27;&#125;)); print(o.open(&#x27;http://searxng:8080/search?q=dify&amp;format=json&#x27;, timeout=15).read()[:200])&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>能打印出 JSON 开头即通。报 403 且响应来自 squid，说明代理拒绝了到内网地址的请求，按部署篇调整 ssrf_proxy。</p>
+</li>
+<li><p><strong>安装模型插件</strong>：DSL 里写的是 <code>langgenius/openai/openai</code> 的 <code>gpt-4o-mini</code>，没装 OpenAI 插件时三个 LLM 节点会提示模型不可用，逐个换成你已有的模型即可。</p>
+</li>
+<li><p><strong>导入并设置环境变量</strong>：导入后在「环境变量」里确认 <code>SEARXNG_BASE</code>。</p>
+</li>
+<li><p><strong>试跑</strong>：用一个有明确时间范围的问题试跑，在运行记录里依次检查：第一轮迭代的条数是否等于检索式数量、每条摘要是否含 URL、反思输出的 <code>followups</code> 是否合理。</p>
+</li>
+<li><p><strong>发布与调用</strong>：发布后可在网页端使用，也可以用应用 API Key 调 <code>POST /v1/workflows/run</code>，研究类任务建议 <code>response_mode</code> 用 <code>streaming</code>，避免阻塞模式下客户端先超时。</p>
+</li>
+</ol>
+<h2 id="排障：从现象到根因"><a href="#排障：从现象到根因" class="headerlink" title="排障：从现象到根因"></a>排障：从现象到根因</h2><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>根因</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>所有摘要都是「检索返回的不是 JSON」</td>
+<td>SearXNG 未开启 JSON 格式（403），或被 limiter 拦截（429）</td>
+<td>修改 <code>search.formats</code> &#x2F; limiter 配置，按第 2 步复测</td>
+</tr>
+<tr>
+<td>第一轮迭代输出为空数组</td>
+<td>每条检索都失败，<code>remove-abnormal-output</code> 把它们全部丢弃</td>
+<td>在运行记录里展开单条迭代看 HTTP 节点报错，多为 ssrf_proxy 到 SearXNG 不通或连接超时</td>
+</tr>
+<tr>
+<td>第一轮只有一条迭代，检索式就是原问题</td>
+<td>规划节点没按 JSON 输出，走了兜底</td>
+<td>换指令遵循更好的模型，或在提示词末尾给一个完整示例</td>
+</tr>
+<tr>
+<td>报告里出现材料中没有的数字或来源</td>
+<td>模型越过材料补充事实</td>
+<td>降低成文温度；在系统提示中要求每个数字后必须带 [n]；增加每条检索的结果数，减少「无米之炊」</td>
+</tr>
+<tr>
+<td><code>followups</code> 总是空的</td>
+<td>反思节点过早判断「证据足够」</td>
+<td>在反思提示里要求至少指出一个缺口，除非每个子问题都有两个以上独立来源</td>
+</tr>
+<tr>
+<td>运行在网页端中途断开、后台其实跑完了</td>
+<td>前端等待超时早于工作流完成</td>
+<td>用流式调用；网页端等待时长由 <code>TEXT_GENERATION_TIMEOUT_MS</code> 控制</td>
+</tr>
+<tr>
+<td>节点报 <code>Output digest is missing.</code></td>
+<td>改代码时某个分支提前 <code>return</code>，漏掉了 <code>digest</code></td>
+<td>让每个返回分支都带上全部声明的键</td>
+</tr>
+</tbody></table>
+<h2 id="边界：什么时候不该再往-Dify-里塞"><a href="#边界：什么时候不该再往-Dify-里塞" class="headerlink" title="边界：什么时候不该再往 Dify 里塞"></a>边界：什么时候不该再往 Dify 里塞</h2><p>常见的说法是「Dify 工作流是 DAG，做不了循环，所以做不了深度研究」。这个判断不准确：1.12.1 有循环节点和迭代节点，上面的流程也完全在 Dify 内运行。真正的边界在下面这几条硬指标上：</p>
+<table>
+<thead>
+<tr>
+<th>需求</th>
+<th>Dify 1.12.1 内的上限或现状</th>
+<th>超出后的表现</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>研究轮数</td>
+<td>循环节点最多 <code>LOOP_NODE_MAX_COUNT=100</code> 轮，整次运行 500 步</td>
+<td>开放式「搜到够为止」难以保证在上限内收敛</td>
+</tr>
+<tr>
+<td>单次运行时长</td>
+<td><code>WORKFLOW_MAX_EXECUTION_TIME=1200</code> 秒</td>
+<td>小时级研究无法在一次运行里完成</td>
+</tr>
+<tr>
+<td>状态与续跑</td>
+<td>状态只活在单次运行里，没有跨运行的任务树与检查点</td>
+<td>第 40 分钟失败只能从头再跑</td>
+</tr>
+<tr>
+<td>网页获取</td>
+<td>HTTP 请求节点只拿原始响应，1 MB 上限，不执行 JavaScript，不保持登录态</td>
+<td>动态渲染页、需要登录的站点拿不到正文</td>
+</tr>
+<tr>
+<td>代码执行</td>
+<td>沙箱单次执行默认 15 秒，网络经 ssrf_proxy</td>
+<td>不适合跑浏览器或长时间抓取</td>
+</tr>
+<tr>
+<td>中间结果体积</td>
+<td>单个变量约 200 KB</td>
+<td>大量原文与证据无法在变量里流转</td>
+</tr>
+</tbody></table>
+<p>只要命中其中任意一条，就该换成分层结构：<strong>Dify 只做编排与交付，研究循环交给外部 Runtime</strong>。</p>
+<h2 id="分层架构：Dify-编排，Runtime-执行"><a href="#分层架构：Dify-编排，Runtime-执行" class="headerlink" title="分层架构：Dify 编排，Runtime 执行"></a>分层架构：Dify 编排，Runtime 执行</h2><pre class="mermaid">flowchart TB
+  subgraph L1["编排与交付层：Dify"]
+    A1["应用入口与 API"] --- A2["提示词、模型与凭据管理"]
+    A2 --- A3["知识库、运行日志、标注"]
+  end
+  subgraph L2["执行层：研究 Runtime（如 LangGraph）"]
+    B1["状态图：规划 → 执行 → 反思"] --- B2["任务树与检查点"]
+  end
+  subgraph L3["工具层"]
+    C1["SearXNG 检索"]
+    C2["浏览器服务：Browser Use + Playwright"]
+    C3["正文抽取：Crawl4AI"]
+  end
+  subgraph L4["状态层"]
+    D1[("Postgres：检查点、证据、报告")]
+    D2[("Redis：进度")]
+    D3[("对象存储：原始网页、报告文件")]
+  end
+  A1 --&gt;|"提交任务 / 查询 / 回调"| B1
+  B1 --&gt; C1
+  B1 --&gt; C2
+  B1 --&gt; C3
+  B2 --&gt; D1
+  B1 --&gt; D2
+  C2 --&gt; D3</pre>
+
+
+<p>各层的职责边界：</p>
+<ul>
+<li><strong>Dify</strong> 负责产品面：统一入口、模型与凭据、提示词版本、运行日志，以及把最终报告写入知识库或推送出去。它不持有研究过程中的任何状态。</li>
+<li><strong>Runtime</strong> 持有研究状态：用状态图表达「规划 → 执行 → 反思 → 判断是否继续」，每个节点执行后写检查点，失败从最近检查点恢复。LangGraph 的 Postgres 检查点（<code>langgraph-checkpoint-postgres</code>）可以直接承担这件事。</li>
+<li><strong>浏览器服务</strong>独立部署：Chromium 内存占用高、崩溃概率不低，放进 Dify 沙箱既跑不动也拖垮宿主；用异步 Playwright 并按域名限制并发。</li>
+<li><strong>证据</strong>以「URL + 内容哈希 + 抽取段落」入库，原始网页进对象存储，报告里的每个引用都指向证据 ID，而不是只存一段 LLM 生成的摘要。</li>
+</ul>
+<h3 id="衔接契约：按任务时长选模式"><a href="#衔接契约：按任务时长选模式" class="headerlink" title="衔接契约：按任务时长选模式"></a>衔接契约：按任务时长选模式</h3><p>Dify 没有「等待 N 秒」的节点，轮询只能靠服务端阻塞，所以衔接方式由任务时长决定：</p>
+<table>
+<thead>
+<tr>
+<th>任务时长</th>
+<th>模式</th>
+<th>Dify 侧做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>10 分钟以内</td>
+<td>同步长请求</td>
+<td>一个 HTTP 请求节点调 Runtime 的同步接口，读超时不超过 <code>HTTP_REQUEST_MAX_READ_TIMEOUT</code>（600 秒）</td>
+</tr>
+<tr>
+<td>10–20 分钟</td>
+<td>提交 + 长轮询</td>
+<td>HTTP 节点提交任务拿到 <code>task_id</code>；循环节点里放一个 HTTP 节点调「阻塞等待」接口（服务端最多挂起 300 秒），完成即退出循环。总时长受 1200 秒上限约束</td>
+</tr>
+<tr>
+<td>20 分钟以上</td>
+<td>异步回调</td>
+<td>工作流 A 提交任务，把工作流 B 的 Webhook 触发器地址作为回调；Runtime 完成后 POST 结果，工作流 B 负责入库或推送。用户侧进度直接读 Runtime 的状态接口</td>
+</tr>
+</tbody></table>
+<p>Runtime 对外只需要四个接口：</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>请求</th>
+<th>响应</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>POST /research/tasks</code></td>
+<td><code>question</code>、<code>max_rounds</code>、<code>callback_url</code>（可选）</td>
+<td><code>task_id</code></td>
+</tr>
+<tr>
+<td><code>GET /research/tasks/&#123;task_id&#125;</code></td>
+<td>—</td>
+<td><code>status</code>（queued &#x2F; running &#x2F; succeeded &#x2F; failed）、<code>progress</code>、<code>report_url</code></td>
+</tr>
+<tr>
+<td><code>GET /research/tasks/&#123;task_id&#125;/wait?timeout=300</code></td>
+<td>—</td>
+<td>完成立即返回，否则到时返回当前状态</td>
+</tr>
+<tr>
+<td>回调 <code>POST &#123;callback_url&#125;</code></td>
+<td><code>task_id</code>、<code>status</code>、<code>report_url</code>、<code>sources</code></td>
+<td>2xx</td>
+</tr>
+</tbody></table>
+<p>回调与轮询的响应里只放报告的对象存储链接和来源清单，不放报告全文：Dify 单个变量约 200 KB，Webhook 请求体默认上限 10 MB（<code>WEBHOOK_REQUEST_BODY_MAX_SIZE</code>），长报告放进变量迟早撞墙。</p>
+<h3 id="Runtime-里必须做对的四件事"><a href="#Runtime-里必须做对的四件事" class="headerlink" title="Runtime 里必须做对的四件事"></a>Runtime 里必须做对的四件事</h3><ol>
+<li><strong>任务树而不是任务列表</strong>：子问题之间有依赖（先确定口径，才能比较数据），用树或 DAG 记录父子关系与状态，反思节点可以针对某个子树补搜，而不是整体重来。</li>
+<li><strong>显式的停止条件</strong>：最大轮数、Token 预算、「连续一轮没有新来源」三者任一满足即停止。只靠模型自己判断「够了」，要么一轮就停，要么停不下来。</li>
+<li><strong>反思独立成节点</strong>：反思的输入是「问题 + 当前证据」，输出是缺口与下一步检索式，与执行节点分开，才能单独评估和替换提示词。</li>
+<li><strong>浏览器按需启用</strong>：先走检索 API 与静态抓取，只有正文为空或明显是动态渲染的页面才交给浏览器服务，否则成本和耗时都会失控。</li>
+</ol>
+<p>可以直接参考的开源实现：<code>langchain-ai/open_deep_research</code>（基于 LangGraph 的深度研究参考实现）、<code>langchain-ai/langgraph</code>（状态图与检查点）、<code>browser-use/browser-use</code>（让 LLM 驱动浏览器）、<code>unclecode/crawl4ai</code>（面向 LLM 的网页抓取与正文抽取）、<code>searxng/searxng</code>（自建元搜索）。在 4C6G 的机器上，浏览器服务建议放到另一台机器，或把并发限制在 1–2。</p>
+<h2 id="硬约束清单"><a href="#硬约束清单" class="headerlink" title="硬约束清单"></a>硬约束清单</h2><ul>
+<li><input disabled="" type="checkbox"> 研究轮数固定且可预估；步数、时长、最大变量先按预算表核算再上线</li>
+<li><input disabled="" type="checkbox"> 检索结果在迭代内压成带 URL 的摘要，原始响应不进 LLM、不进下游变量</li>
+<li><input disabled="" type="checkbox"> SearXNG 开启 JSON 格式，并从 ssrf_proxy 路径验证可达</li>
+<li><input disabled="" type="checkbox"> 迭代用 <code>remove-abnormal-output</code>，代码节点对非 JSON 输入有兜底</li>
+<li><input disabled="" type="checkbox"> 成文提示要求只用给定材料、每个数字带引用、证据不足直说</li>
+<li><input disabled="" type="checkbox"> 任务超过 20 分钟、需要浏览器渲染或需要续跑时，改为外部 Runtime + Webhook 回调</li>
+<li><input disabled="" type="checkbox"> 回调与轮询只传报告链接与来源清单，不传全文</li>
+</ul>
+<h2 id="2026-09-补记：1-13-之后对这套方案的影响"><a href="#2026-09-补记：1-13-之后对这套方案的影响" class="headerlink" title="2026-09 补记：1.13 之后对这套方案的影响"></a>2026-09 补记：1.13 之后对这套方案的影响</h2><ul>
+<li><strong>人工审核节点（1.13）</strong>：Human Input 节点可以让工作流暂停等待人工输入。放在「规划」之后，由人确认或修改检索式再继续，是对本文流程最直接的增强；1.12 上要做到这一点只能借助外部系统。</li>
+<li><strong>Dify Agent 与沙箱（1.16 Beta、1.17）</strong>：1.16 引入带 Linux 沙箱与 Skills 的 Dify Agent，1.17 增加 E2B 沙箱、工作区级 Skill 管理与统一 Tracing。执行层的一部分能力开始进入 Dify 内部，但本文「边界」一节的判断依据（时长、状态持久化、续跑）需要在新版本上逐项复核，本文未在 1.17 上复测。</li>
+<li><strong>DSL 版本</strong>：1.17.1 对应 DSL 0.7.0，跨版本导入的判定规则见校验篇补记。把本文的 0.5.0 DSL 迁到新版本时，导入后在画布里保存一次再导出，以导出稿作为新版本的正式稿。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/04/08/technical-docs/MacBook%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2/">MacBook 本地大模型部署指南：统一内存、推理框架与模型选型</a></h3>
+        <p>在 Apple Silicon MacBook 上部署本地大模型的操作指南：统一内存与带宽原理、GPU 内存上限调整、MLX/Ollama/…</p>
+        <a class="btn primary" href="/2026/04/08/technical-docs/MacBook%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/02/09/technical-docs/Dify-DSL%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%A0%A1%E9%AA%8C/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Dify DSL 工作流设计与校验：Schema 硬约束与导入预检</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E8%BF%99%E7%AF%87%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88" data-toc-target="这篇解决什么"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">这篇解决什么</span></a><a class="toc-level-2" href="#%E6%B5%81%E7%A8%8B%E4%B8%8E%E8%AE%BE%E8%AE%A1%E5%8F%96%E8%88%8D" data-toc-target="流程与设计取舍"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">流程与设计取舍</span></a><a class="toc-level-2" href="#DSL-%E5%85%A8%E6%96%87%EF%BC%88Dify-1-12-1-DSL-0-5-0%EF%BC%89" data-toc-target="DSL-全文（Dify-1-12-1-DSL-0-5-0）"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">DSL 全文（Dify 1.12.1 / DSL 0.5.0）</span></a><a class="toc-level-2" href="#%E9%80%90%E8%8A%82%E7%82%B9%E8%AF%B4%E6%98%8E" data-toc-target="逐节点说明"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">逐节点说明</span></a><a class="toc-level-2" href="#%E5%AF%BC%E5%85%A5%E4%B8%8E%E8%B7%91%E9%80%9A%E6%AD%A5%E9%AA%A4" data-toc-target="导入与跑通步骤"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">导入与跑通步骤</span></a><a class="toc-level-2" href="#%E6%8E%92%E9%9A%9C%EF%BC%9A%E4%BB%8E%E7%8E%B0%E8%B1%A1%E5%88%B0%E6%A0%B9%E5%9B%A0" data-toc-target="排障：从现象到根因"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">排障：从现象到根因</span></a><a class="toc-level-2" href="#%E8%BE%B9%E7%95%8C%EF%BC%9A%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%B8%8D%E8%AF%A5%E5%86%8D%E5%BE%80-Dify-%E9%87%8C%E5%A1%9E" data-toc-target="边界：什么时候不该再往-Dify-里塞"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">边界：什么时候不该再往 Dify 里塞</span></a><a class="toc-level-2" href="#%E5%88%86%E5%B1%82%E6%9E%B6%E6%9E%84%EF%BC%9ADify-%E7%BC%96%E6%8E%92%EF%BC%8CRuntime-%E6%89%A7%E8%A1%8C" data-toc-target="分层架构：Dify-编排，Runtime-执行"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">分层架构：Dify 编排，Runtime 执行</span></a><a class="toc-level-3" href="#%E8%A1%94%E6%8E%A5%E5%A5%91%E7%BA%A6%EF%BC%9A%E6%8C%89%E4%BB%BB%E5%8A%A1%E6%97%B6%E9%95%BF%E9%80%89%E6%A8%A1%E5%BC%8F" data-toc-target="衔接契约：按任务时长选模式"><span class="toc-text">衔接契约：按任务时长选模式</span></a><a class="toc-level-3" href="#Runtime-%E9%87%8C%E5%BF%85%E9%A1%BB%E5%81%9A%E5%AF%B9%E7%9A%84%E5%9B%9B%E4%BB%B6%E4%BA%8B" data-toc-target="Runtime-里必须做对的四件事"><span class="toc-text">Runtime 里必须做对的四件事</span></a><a class="toc-level-2" href="#%E7%A1%AC%E7%BA%A6%E6%9D%9F%E6%B8%85%E5%8D%95" data-toc-target="硬约束清单"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">硬约束清单</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A1-13-%E4%B9%8B%E5%90%8E%E5%AF%B9%E8%BF%99%E5%A5%97%E6%96%B9%E6%A1%88%E7%9A%84%E5%BD%B1%E5%93%8D" data-toc-target="2026-09-补记：1-13-之后对这套方案的影响"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">2026-09 补记：1.13 之后对这套方案的影响</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/self-hosted-ai-infra/" style="--rail: 75%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E8%BF%99%E7%AF%87%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88" data-toc-target="这篇解决什么" data-title="01 · 这篇解决什么" aria-label="这篇解决什么"></a><a class="toc-strip__dot" href="#%E6%B5%81%E7%A8%8B%E4%B8%8E%E8%AE%BE%E8%AE%A1%E5%8F%96%E8%88%8D" data-toc-target="流程与设计取舍" data-title="02 · 流程与设计取舍" aria-label="流程与设计取舍"></a><a class="toc-strip__dot" href="#DSL-%E5%85%A8%E6%96%87%EF%BC%88Dify-1-12-1-DSL-0-5-0%EF%BC%89" data-toc-target="DSL-全文（Dify-1-12-1-DSL-0-5-0）" data-title="03 · DSL 全文（Dify 1.12.1 / DSL 0.5.0）" aria-label="DSL 全文（Dify 1.12.1 / DSL 0.5.0）"></a><a class="toc-strip__dot" href="#%E9%80%90%E8%8A%82%E7%82%B9%E8%AF%B4%E6%98%8E" data-toc-target="逐节点说明" data-title="04 · 逐节点说明" aria-label="逐节点说明"></a><a class="toc-strip__dot" href="#%E5%AF%BC%E5%85%A5%E4%B8%8E%E8%B7%91%E9%80%9A%E6%AD%A5%E9%AA%A4" data-toc-target="导入与跑通步骤" data-title="05 · 导入与跑通步骤" aria-label="导入与跑通步骤"></a><a class="toc-strip__dot" href="#%E6%8E%92%E9%9A%9C%EF%BC%9A%E4%BB%8E%E7%8E%B0%E8%B1%A1%E5%88%B0%E6%A0%B9%E5%9B%A0" data-toc-target="排障：从现象到根因" data-title="06 · 排障：从现象到根因" aria-label="排障：从现象到根因"></a><a class="toc-strip__dot" href="#%E8%BE%B9%E7%95%8C%EF%BC%9A%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%B8%8D%E8%AF%A5%E5%86%8D%E5%BE%80-Dify-%E9%87%8C%E5%A1%9E" data-toc-target="边界：什么时候不该再往-Dify-里塞" data-title="07 · 边界：什么时候不该再往 Dify 里塞" aria-label="边界：什么时候不该再往 Dify 里塞"></a><a class="toc-strip__dot" href="#%E5%88%86%E5%B1%82%E6%9E%B6%E6%9E%84%EF%BC%9ADify-%E7%BC%96%E6%8E%92%EF%BC%8CRuntime-%E6%89%A7%E8%A1%8C" data-toc-target="分层架构：Dify-编排，Runtime-执行" data-title="08 · 分层架构：Dify 编排，Runtime 执行" aria-label="分层架构：Dify 编排，Runtime 执行"></a><a class="toc-strip__dot" href="#%E7%A1%AC%E7%BA%A6%E6%9D%9F%E6%B8%85%E5%8D%95" data-toc-target="硬约束清单" data-title="09 · 硬约束清单" aria-label="硬约束清单"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A1-13-%E4%B9%8B%E5%90%8E%E5%AF%B9%E8%BF%99%E5%A5%97%E6%96%B9%E6%A1%88%E7%9A%84%E5%BD%B1%E5%93%8D" data-toc-target="2026-09-补记：1-13-之后对这套方案的影响" data-title="10 · 2026-09 补记：1.13 之后对这套方案的影响" aria-label="2026-09 补记：1.13 之后对这套方案的影响"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/Dify深度研究DSL实战","title":"Dify 深度研究工作流实战：DSL 全解与编排/执行分层","url":"/2026/02/10/technical-docs/Dify%E6%B7%B1%E5%BA%A6%E7%A0%94%E7%A9%B6DSL%E5%AE%9E%E6%88%98/","path":"self-hosted-ai-infra","index":5,"total":8,"next":{"title":"MacBook 本地大模型部署指南：统一内存、推理框架与模型选型","url":"/2026/04/08/technical-docs/MacBook%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

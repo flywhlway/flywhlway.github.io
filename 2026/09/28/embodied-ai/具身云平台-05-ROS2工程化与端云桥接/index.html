@@ -1,0 +1,793 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 5 章 ROS 2 工程化与端云桥接 · 飞轮之道</title>
+<meta name="description" content="从“会写节点”到“能把一台机器人的软件组织好、并可靠地接到云上”。后半章设计的云桥（cloudbridge）是端侧与云平台的接缝，也是平台架构师在端侧最该亲手掌控的组件。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-05-ROS2%E5%B7%A5%E7%A8%8B%E5%8C%96%E4%B8%8E%E7%AB%AF%E4%BA%91%E6%A1%A5%E6%8E%A5/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 5 章 ROS 2 工程化与端云桥接 · 飞轮之道">
+<meta property="og:description" content="从“会写节点”到“能把一台机器人的软件组织好、并可靠地接到云上”。后半章设计的云桥（cloudbridge）是端侧与云平台的接缝，也是平台架构师在端侧最该亲手掌控的组件。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-05-ROS2%E5%B7%A5%E7%A8%8B%E5%8C%96%E4%B8%8E%E7%AB%AF%E4%BA%91%E6%A1%A5%E6%8E%A5/">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Suitable_Technologies_Beam_telepresence_robot.jpg/1280px-Suitable_Technologies_Beam_telepresence_robot.jpg">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">机器人与端侧</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 6 / 28 篇</a>
+    </div>
+    <h1>第 5 章 ROS 2 工程化与端云桥接</h1>
+    <p class="article-deck">从“会写节点”到“能把一台机器人的软件组织好、并可靠地接到云上”。后半章设计的云桥（cloudbridge）是端侧与云平台的接缝，也是平台架构师在端侧最该亲手掌控的组件。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>12 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/ROS-2/">#ROS 2</a><a class="article-meta__tag" href="/tags/MQTT/">#MQTT</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E8%BE%B9%E5%8D%8F%E5%90%8C/">#云边协同</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>通用任务动作：类型 + JSON 参数，用弱类型换扩展性。</li><li>端云同一命名树：云桥只做确定性前缀翻译。</li><li>队列缝合两个事件循环：网络线程只入队，执行器线程消费。</li><li>协议映射纯函数：不依赖 rclpy，CI 中做契约测试。</li><li>分级离线缓存：有界、分级、可观测。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：从“会写节点”到“能把一台机器人的软件组织好、并可靠地接到云上”。后半章设计的<strong>云桥（cloud_bridge）</strong>是端侧与云平台的接缝，也是平台架构师在端侧最该亲手掌控的组件。<br><strong>对应代码</strong>：<code>code/p06-ros2-edge-kit</code>｜<strong>建议学时</strong>：8 小时</p>
+</blockquote>
+<h2 id="5-1-工作空间与包"><a href="#5-1-工作空间与包" class="headerlink" title="5.1 工作空间与包"></a>5.1 工作空间与包</h2><h3 id="5-1-1-工作空间结构"><a href="#5-1-1-工作空间结构" class="headerlink" title="5.1.1 工作空间结构"></a>5.1.1 工作空间结构</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">ros2_ws/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── src/</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">│   ├── ecl_interfaces/     # 接口包：消息与动作定义（必须 ament_cmake）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">│   └── ecl_edge/           # 业务包：Python 节点（ament_python）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">├── build/  install/  log/  # colcon 生成</span></span></code></pre></div></div></figure>
+
+<p>构建与加载：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cd</span> ros2_ws</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">rosdep install --from-paths src --ignore-src -y   <span class="comment"># 按 package.xml 安装系统依赖</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">colcon build --symlink-install                     <span class="comment"># Python 改代码免重建</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">source</span> install/setup.bash                          <span class="comment"># 覆盖层（overlay）生效</span></span></span></code></pre></div></div></figure>
+
+<h3 id="5-1-2-与-Maven-的对照"><a href="#5-1-2-与-Maven-的对照" class="headerlink" title="5.1.2 与 Maven 的对照"></a>5.1.2 与 Maven 的对照</h3><table>
+<thead>
+<tr>
+<th>ROS 2</th>
+<th>Java 世界</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>package.xml</td>
+<td>pom.xml</td>
+<td>坐标与依赖</td>
+</tr>
+<tr>
+<td>colcon</td>
+<td>mvn &#x2F; gradle</td>
+<td>构建编排</td>
+</tr>
+<tr>
+<td>rosdep</td>
+<td>依赖解析 + apt</td>
+<td>系统依赖安装器</td>
+</tr>
+<tr>
+<td>underlay &#x2F; overlay</td>
+<td>远程仓库 &#x2F; 本地 SNAPSHOT</td>
+<td>上层遮蔽下层同名包</td>
+</tr>
+</tbody></table>
+<h3 id="5-1-3-接口包：端云契约的端侧定义"><a href="#5-1-3-接口包：端云契约的端侧定义" class="headerlink" title="5.1.3 接口包：端云契约的端侧定义"></a>5.1.3 接口包：端云契约的端侧定义</h3><p>p06 的接口包定义了两样东西，它们与云端 ECL v1 协议一一对应：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># ecl_interfaces/msg/RobotState.msg —— 聚合后的机器人状态（云桥上云的数据源）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">std_msgs/Header header</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">string robot_id</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">float64 x</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">float64 y</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">float64 theta</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">float32 battery</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">float32 cpu</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">float32 gpu_temp</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">float32 joint_temp_max</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">uint16 error_code</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">string mode</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">string task_id</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">string model_ver</span></span></code></pre></div></div></figure>
+
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># ecl_interfaces/action/RobotTask.action —— 通用平台任务</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">string task_id</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">string type</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">string params_json</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">float32 lease_s</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">string trace_id</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">bool success</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">string detail</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">string stage</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">float32 progress</span></span></code></pre></div></div></figure>
+
+<p>设计决策：<strong>平台类任务用一个通用动作</strong>（类型 + JSON 参数），新增任务类型时云端与接口包都不需要改；导航、抓取这类高价值本体任务将来可以另建强类型动作。这是用弱类型换扩展性的典型取舍，与车联网“通用远控指令 + 参数”的设计一致。</p>
+<h2 id="5-2-Launch：一条命令拉起整台机器人"><a href="#5-2-Launch：一条命令拉起整台机器人" class="headerlink" title="5.2 Launch：一条命令拉起整台机器人"></a>5.2 Launch：一条命令拉起整台机器人</h2><h3 id="5-2-1-带参数与命名空间的启动文件"><a href="#5-2-1-带参数与命名空间的启动文件" class="headerlink" title="5.2.1 带参数与命名空间的启动文件"></a>5.2.1 带参数与命名空间的启动文件</h3><figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="29"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># ecl_edge/launch/edge.launch.py（节选）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">from</span> launch <span class="keyword">import</span> LaunchDescription</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">from</span> launch.actions <span class="keyword">import</span> DeclareLaunchArgument, OpaqueFunction</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">from</span> launch.substitutions <span class="keyword">import</span> LaunchConfiguration</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">from</span> launch_ros.actions <span class="keyword">import</span> Node</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">from</span> ecl_edge.protocol_mapping <span class="keyword">import</span> ros_namespace</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">_nodes</span>(<span class="params">context</span>):</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    rid = LaunchConfiguration(<span class="string">&quot;robot_id&quot;</span>).perform(context)</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    ns = ros_namespace(rid)                          <span class="comment"># ros-007 → ros_007：ROS 名称不允许连字符</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    common = &#123;<span class="string">&quot;robot_id&quot;</span>: rid&#125;                       <span class="comment"># 云端身份仍用原始 ID</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    bridge = &#123;<span class="string">&quot;mqtt_host&quot;</span>: LaunchConfiguration(<span class="string">&quot;mqtt_host&quot;</span>).perform(context)&#125;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="keyword">return</span> [</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        Node(package=<span class="string">&quot;ecl_edge&quot;</span>, executable=<span class="string">&quot;sim_base&quot;</span>, namespace=ns, parameters=[common]),</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        Node(package=<span class="string">&quot;ecl_edge&quot;</span>, executable=<span class="string">&quot;state_aggregator&quot;</span>, namespace=ns,</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">             parameters=[common, &#123;<span class="string">&quot;report_hz&quot;</span>: <span class="number">1.0</span>&#125;]),</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">        Node(package=<span class="string">&quot;ecl_edge&quot;</span>, executable=<span class="string">&quot;task_executor&quot;</span>, namespace=ns, parameters=[common]),</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">        Node(package=<span class="string">&quot;ecl_edge&quot;</span>, executable=<span class="string">&quot;cloud_bridge&quot;</span>, namespace=ns, parameters=[common, bridge]),</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    ]</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">generate_launch_description</span>():</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="keyword">return</span> LaunchDescription([</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        DeclareLaunchArgument(<span class="string">&quot;robot_id&quot;</span>, default_value=<span class="string">&quot;ros-001&quot;</span>),</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        DeclareLaunchArgument(<span class="string">&quot;mqtt_host&quot;</span>, default_value=<span class="string">&quot;localhost&quot;</span>),</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        OpaqueFunction(function=_nodes),             <span class="comment"># 需要对参数做计算（ID → 命名空间）时用 OpaqueFunction</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    ])</span></span></code></pre></div></div></figure>
+
+<p>运行：<code>ros2 launch ecl_edge edge.launch.py robot_id:=ros-007 mqtt_host:=mosquitto</code>。</p>
+<p><strong>ROS 2 名称规则比设备 ID 严格</strong>：节点名、话题名、命名空间只允许字母、数字和下划线，且不能以数字开头。把 <code>ros-007</code> 直接当命名空间，launch 会当场报 <code>Invalid namespace</code> 并退出——p06 第一次在真实 ROS 2 容器里运行时就停在这一步，而静态检查与契约测试都没有发现它。对策是把“设备 ID → 端侧命名空间”做成一个确定性的纯函数（<code>ros_namespace()</code>，连字符换成下划线），放进协议映射层单测，云端身份仍用原始 ID。</p>
+<h3 id="5-2-2-三层-launch-治理"><a href="#5-2-2-三层-launch-治理" class="headerlink" title="5.2.2 三层 launch 治理"></a>5.2.2 三层 launch 治理</h3><p>生产中把 launch 与参数分三层：<strong>组件层</strong>（各子系统自带）、<strong>机型层</strong>（拼装组件 + 机型参数）、<strong>站点层</strong>（只用参数文件覆盖站点差异）。机型层与站点层由平台团队持有——它们正是配置 OTA 的分发单元，与车联网“基础镜像 &#x2F; 车型配置 &#x2F; 区域配置”三层同构。</p>
+<h2 id="5-3-命名空间与多机器人"><a href="#5-3-命名空间与多机器人" class="headerlink" title="5.3 命名空间与多机器人"></a>5.3 命名空间与多机器人</h2><h3 id="5-3-1-命名规范"><a href="#5-3-1-命名规范" class="headerlink" title="5.3.1 命名规范"></a>5.3.1 命名规范</h3><p>端侧统一使用 <code>/{robot_ns}/{子系统}/{资源}</code>，其中 <code>robot_ns = ros_namespace(robot_id)</code>，例如 <code>ros-007</code> 的端侧名是 <code>/ros_007/state</code>、<code>/ros_007/robot_task</code>。代码里只写相对名（<code>state</code>），由 launch 注入命名空间——“代码不写死环境，部署层注入”。</p>
+<h3 id="5-3-2-与云端命名树对齐"><a href="#5-3-2-与云端命名树对齐" class="headerlink" title="5.3.2 与云端命名树对齐"></a>5.3.2 与云端命名树对齐</h3><table>
+<thead>
+<tr>
+<th>端侧 ROS 名</th>
+<th>云端 ECL v1 主题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/ros_007/state</code>（RobotState）</td>
+<td><code>ecl/v1/ros-007/telemetry</code></td>
+</tr>
+<tr>
+<td><code>/ros_007/robot_task</code>（动作）</td>
+<td><code>ecl/v1/ros-007/task/cmd</code> ↓ 与 <code>task/event</code> ↑</td>
+</tr>
+<tr>
+<td>各节点参数</td>
+<td><code>ecl/v1/ros-007/shadow/delta</code> ↓ 与 <code>shadow/reported</code> ↑</td>
+</tr>
+</tbody></table>
+<p><strong>端云同一棵命名树</strong>，云桥只做确定性的前缀翻译（外加连字符 → 下划线这一条固定规则），排障时从云端主题能直接定位到端侧节点。</p>
+<h2 id="5-4-tf2：坐标树实操"><a href="#5-4-tf2：坐标树实操" class="headerlink" title="5.4 tf2：坐标树实操"></a>5.4 tf2：坐标树实操</h2><h3 id="5-4-1-标准帧链"><a href="#5-4-1-标准帧链" class="headerlink" title="5.4.1 标准帧链"></a>5.4.1 标准帧链</h3><p><code>map → odom → base_link → 各传感器/各连杆</code>。三段的维护者不同：<code>map→odom</code> 由定位模块维护（修正漂移，允许小跳变）；<code>odom→base_link</code> 由里程计维护（高频、连续、绝不跳变）；<code>base_link</code> 以下是安装关系（多为静态标定）。</p>
+<h3 id="5-4-2-按数据时刻查询"><a href="#5-4-2-按数据时刻查询" class="headerlink" title="5.4.2 按数据时刻查询"></a>5.4.2 按数据时刻查询</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">from</span> tf2_ros <span class="keyword">import</span> Buffer, TransformListener</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> rclpy.time</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="variable language_">self</span>.tf_buf = Buffer()</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="variable language_">self</span>.tf_listener = TransformListener(<span class="variable language_">self</span>.tf_buf, <span class="variable language_">self</span>)</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">on_detection</span>(<span class="params">self, msg</span>):</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="comment"># 用检测结果的采集时刻查变换，而不是“最新”——机器人在这 80ms 里已经动了</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    tf = <span class="variable language_">self</span>.tf_buf.lookup_transform(<span class="string">&quot;map&quot;</span>, msg.header.frame_id, msg.header.stamp,</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                                      timeout=rclpy.duration.Duration(seconds=<span class="number">0.1</span>))</span></span></code></pre></div></div></figure>
+
+<h3 id="5-4-3-平台含义"><a href="#5-4-3-平台含义" class="headerlink" title="5.4.3 平台含义"></a>5.4.3 平台含义</h3><p>TF 树的结构来自 URDF（机器人描述文件），安装关系来自标定。<strong>URDF 版本与标定参数都应作为制品管理</strong>：远程诊断时云端需要知道“这台机器人当前是哪个结构版本、哪次标定”；仿真孪生（第 14 章）也依赖同一份 URDF。</p>
+<h2 id="5-5-时间：ROS-时间与仿真时间"><a href="#5-5-时间：ROS-时间与仿真时间" class="headerlink" title="5.5 时间：ROS 时间与仿真时间"></a>5.5 时间：ROS 时间与仿真时间</h2><h3 id="5-5-1-三种时钟"><a href="#5-5-1-三种时钟" class="headerlink" title="5.5.1 三种时钟"></a>5.5.1 三种时钟</h3><table>
+<thead>
+<tr>
+<th>时钟</th>
+<th>含义</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ROS Time</td>
+<td>默认等于系统时间；<code>use_sim_time=true</code> 时跟随 <code>/clock</code> 话题</td>
+<td>一切业务时间戳</td>
+</tr>
+<tr>
+<td>System Time</td>
+<td>墙钟</td>
+<td>对外日志</td>
+</tr>
+<tr>
+<td>Steady Time</td>
+<td>单调递增</td>
+<td>测耗时、超时</td>
+</tr>
+</tbody></table>
+<h3 id="5-5-2-回放与仿真的前提"><a href="#5-5-2-回放与仿真的前提" class="headerlink" title="5.5.2 回放与仿真的前提"></a>5.5.2 回放与仿真的前提</h3><p>业务代码一律使用 <code>node.get_clock().now()</code>，不直接调用 <code>time.time()</code>。否则 bag 回放与仿真时，时间线会分裂——定时器、超时、TF 查询全部错乱。p01 的“可注入时钟”（<code>ManualClock</code>）在云端实现了同一思想。</p>
+<h2 id="5-6-bag-与-MCAP：机器人的黑匣子"><a href="#5-6-bag-与-MCAP：机器人的黑匣子" class="headerlink" title="5.6 bag 与 MCAP：机器人的黑匣子"></a>5.6 bag 与 MCAP：机器人的黑匣子</h2><h3 id="5-6-1-录制与回放"><a href="#5-6-1-录制与回放" class="headerlink" title="5.6.1 录制与回放"></a>5.6.1 录制与回放</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">ros2 bag record /ros_007/state /tf /tf_static /camera/image_raw \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --storage mcap --compression-mode file --compression-format zstd --max-bag-duration 300</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">ros2 bag info run_0</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">ros2 bag play run_0 --clock --rate 2.0         <span class="comment"># 回放时发布 /clock，配合 use_sim_time</span></span></span></code></pre></div></div></figure>
+
+<p>MCAP 是自描述、带索引、支持压缩的开放格式，Foxglove 等工具可直接可视化。</p>
+<h3 id="5-6-2-触发式录制"><a href="#5-6-2-触发式录制" class="headerlink" title="5.6.2 触发式录制"></a>5.6.2 触发式录制</h3><p>全量常录在带宽与存储上不可行。生产形态是：<strong>环形内存缓冲常开 → 触发条件（错误码、人工介入、低置信度）→ 落盘前后 N 秒 → 边缘裁剪脱敏 → 回传</strong>。rosbag2 的 snapshot 模式提供了环形缓冲原语。这条链路就是车联网“故障前后 N 秒信号抓取”的机器人版，第 12 章与 p03 工程在云端承接它。</p>
+<h2 id="5-7-组合与零拷贝"><a href="#5-7-组合与零拷贝" class="headerlink" title="5.7 组合与零拷贝"></a>5.7 组合与零拷贝</h2><h3 id="5-7-1-何时组合进同一进程"><a href="#5-7-1-何时组合进同一进程" class="headerlink" title="5.7.1 何时组合进同一进程"></a>5.7.1 何时组合进同一进程</h3><table>
+<thead>
+<tr>
+<th>判据</th>
+<th>组合（同进程）</th>
+<th>独立进程</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>高频大消息链路（相机→感知）</td>
+<td>✅ 进程内零拷贝收益巨大</td>
+<td>序列化开销沉重</td>
+</tr>
+<tr>
+<td>需要故障隔离（云桥、OTA Agent、录制器）</td>
+<td>❌ 一崩全崩</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>需要独立升级&#x2F;重启</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+</tbody></table>
+<p>组合是 rclcpp（C++）特性。实用分工：<strong>性能敏感链路 C++ 组合，平台类节点 Python 独立进程</strong>——云桥崩溃不能连累感知，感知崩溃也不能切断数据回传。</p>
+<h2 id="5-8-云桥设计：机器人的-TBox"><a href="#5-8-云桥设计：机器人的-TBox" class="headerlink" title="5.8 云桥设计：机器人的 TBox"></a>5.8 云桥设计：机器人的 TBox</h2><h3 id="5-8-1-五项职责"><a href="#5-8-1-五项职责" class="headerlink" title="5.8.1 五项职责"></a>5.8.1 五项职责</h3><ol>
+<li><strong>上行聚合与降采样</strong>：订阅机内状态（可能 20–50Hz），按影子中的 <code>report_hz</code> 上云（默认 1Hz）；</li>
+<li><strong>下行翻译</strong>：MQTT 任务 → ROS 2 动作目标；影子 delta → 节点参数；</li>
+<li><strong>身份与会话</strong>：持有设备凭据，设置遗嘱消息，断线自动重连并恢复订阅；</li>
+<li><strong>离线缓存</strong>：断网期间缓存事件与任务结果，恢复后按优先级补传；</li>
+<li><strong>协议守门</strong>：只接受白名单任务类型与可写参数，拒绝一切未知下行。</li>
+</ol>
+<h3 id="5-8-2-架构与线程模型"><a href="#5-8-2-架构与线程模型" class="headerlink" title="5.8.2 架构与线程模型"></a>5.8.2 架构与线程模型</h3><pre class="mermaid">flowchart LR
+  subgraph ROS["ROS 2 执行器线程"]
+    SUB["订阅 /state"] --&gt; DS["降采样"]
+    DRAIN["定时器：消费下行队列"] --&gt; AC["动作客户端 → task_executor"]
+    DRAIN --&gt; PS["参数服务 → state_aggregator"]
+  end
+  subgraph NET["paho 网络线程"]
+    RX["on_message"] --&gt; Q["线程安全队列"]
+    TX["publish"]
+  end
+  DS --&gt; MAP["protocol_mapping 纯函数"] --&gt; TX
+  AC -- "feedback/result" --&gt; MAP
+  Q --&gt; DRAIN</pre>
+
+
+<p><strong>关键纪律：paho 回调线程绝不直接调用任何 ROS 对象</strong>，只把消息放进队列；由 ROS 执行器里的定时器消费队列。两个事件循环之间用队列缝合，这是桥接类组件最重要的一条工程纪律——违反它的代码在测试环境往往能跑，在现场会偶发崩溃且极难复现。</p>
+<h3 id="5-8-3-任务下行时序"><a href="#5-8-3-任务下行时序" class="headerlink" title="5.8.3 任务下行时序"></a>5.8.3 任务下行时序</h3><pre class="mermaid">---
+title: "云端任务经云桥落到 ROS 2 动作（p01 ↔ p06）"
+---
+sequenceDiagram
+  participant Cloud as RoboFleet Core&lt;br/&gt;(p01)
+  participant MQ as MQTT Broker
+  participant BN as cloud_bridge&lt;br/&gt;(paho 线程)
+  participant BR as cloud_bridge&lt;br/&gt;(ROS 执行器)
+  participant EX as task_executor
+  Cloud-&gt;&gt;MQ: ecl/v1/ros-007/task/cmd &#123;task_id,type,lease_s&#125;
+  MQ-&gt;&gt;BN: 下行消息
+  BN-&gt;&gt;BN: 白名单校验 → 入队
+  BR-&gt;&gt;BR: 定时器取队列
+  BR-&gt;&gt;EX: send_goal(RobotTask)
+  EX--&gt;&gt;BR: ACCEPTED / REJECTED
+  BR-&gt;&gt;MQ: task/event &#123;state=ACCEPTED&#125;
+  loop 阶段推进
+  EX-&gt;&gt;BR: feedback(stage, progress)
+  BR-&gt;&gt;MQ: task/event &#123;state=RUNNING&#125;（续租）
+  end
+  EX--&gt;&gt;BR: result(success)
+  BR-&gt;&gt;MQ: task/event &#123;state=SUCCEEDED&#125;
+  MQ-&gt;&gt;Cloud: 更新任务状态</pre>
+
+
+<h3 id="5-8-4-协议映射做成纯函数"><a href="#5-8-4-协议映射做成纯函数" class="headerlink" title="5.8.4 协议映射做成纯函数"></a>5.8.4 协议映射做成纯函数</h3><p>p06 把所有“ROS 消息 ↔ ECL JSON”的转换放在一个<strong>不依赖 rclpy 的模块</strong>里，这样它可以在任何 CI 环境中做单元测试，也可以和云端协议做契约测试：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="16"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># ecl_edge/protocol_mapping.py（节选）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">state_to_telemetry</span>(<span class="params">s: <span class="built_in">dict</span>, seq: <span class="built_in">int</span></span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;RobotState（已转成 dict）→ ECL v1 telemetry 载荷&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;rid&quot;</span>: s[<span class="string">&quot;robot_id&quot;</span>], <span class="string">&quot;ts&quot;</span>: s[<span class="string">&quot;stamp&quot;</span>], <span class="string">&quot;seq&quot;</span>: seq,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">            <span class="string">&quot;pose&quot;</span>: &#123;<span class="string">&quot;x&quot;</span>: <span class="built_in">round</span>(s[<span class="string">&quot;x&quot;</span>], <span class="number">3</span>), <span class="string">&quot;y&quot;</span>: <span class="built_in">round</span>(s[<span class="string">&quot;y&quot;</span>], <span class="number">3</span>), <span class="string">&quot;theta&quot;</span>: <span class="built_in">round</span>(s[<span class="string">&quot;theta&quot;</span>], <span class="number">3</span>)&#125;,</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">            <span class="string">&quot;battery&quot;</span>: <span class="built_in">round</span>(s[<span class="string">&quot;battery&quot;</span>], <span class="number">4</span>), <span class="string">&quot;cpu&quot;</span>: s[<span class="string">&quot;cpu&quot;</span>], <span class="string">&quot;gpu_temp&quot;</span>: s[<span class="string">&quot;gpu_temp&quot;</span>],</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">            <span class="string">&quot;joint_temp_max&quot;</span>: s[<span class="string">&quot;joint_temp_max&quot;</span>], <span class="string">&quot;error_code&quot;</span>: s[<span class="string">&quot;error_code&quot;</span>],</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">            <span class="string">&quot;mode&quot;</span>: s[<span class="string">&quot;mode&quot;</span>], <span class="string">&quot;task_id&quot;</span>: s[<span class="string">&quot;task_id&quot;</span>] <span class="keyword">or</span> <span class="literal">None</span>, <span class="string">&quot;model_ver&quot;</span>: s[<span class="string">&quot;model_ver&quot;</span>]&#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">task_cmd_to_goal</span>(<span class="params">p: <span class="built_in">dict</span>, allowed_types: <span class="built_in">set</span>[<span class="built_in">str</span>]</span>) -&gt; <span class="built_in">dict</span> | <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;ECL task/cmd → RobotTask 目标字段；未知类型返回 None（由云桥回报 REJECTED）&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="keyword">if</span> p.get(<span class="string">&quot;type&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> allowed_types <span class="keyword">or</span> <span class="keyword">not</span> p.get(<span class="string">&quot;task_id&quot;</span>):</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="keyword">return</span> <span class="literal">None</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;task_id&quot;</span>: p[<span class="string">&quot;task_id&quot;</span>], <span class="string">&quot;type&quot;</span>: p[<span class="string">&quot;type&quot;</span>], <span class="string">&quot;params_json&quot;</span>: json.dumps(p.get(<span class="string">&quot;params&quot;</span>, &#123;&#125;)),</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">            <span class="string">&quot;lease_s&quot;</span>: <span class="built_in">float</span>(p.get(<span class="string">&quot;lease_s&quot;</span>, <span class="number">30.0</span>)), <span class="string">&quot;trace_id&quot;</span>: p.get(<span class="string">&quot;trace_id&quot;</span>, <span class="string">&quot;&quot;</span>)&#125;</span></span></code></pre></div></div></figure>
+
+<p>p06 的契约测试会拿 p01 的 <code>protocol.py</code> 做对照：主题名一致、任务类型一致、影子可写字段一致——<strong>端云协议漂移在 CI 里就被拦下</strong>。</p>
+<h2 id="5-9-离线缓存与断网自治"><a href="#5-9-离线缓存与断网自治" class="headerlink" title="5.9 离线缓存与断网自治"></a>5.9 离线缓存与断网自治</h2><h3 id="5-9-1-有界、分级、可观测"><a href="#5-9-1-有界、分级、可观测" class="headerlink" title="5.9.1 有界、分级、可观测"></a>5.9.1 有界、分级、可观测</h3><p>断网时不是所有数据都值得缓存。三级策略：</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>内容</th>
+<th>断网行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P0</td>
+<td>任务结果、安全事件、故障事件</td>
+<td>持久化队列，恢复后必补</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>影子 reported</td>
+<td>只保留最新一份</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>周期遥测</td>
+<td>断网期间降为低频摘要或直接丢弃</td>
+</tr>
+</tbody></table>
+<p>队列必须有上限（按条数和字节），满了先丢低优先级；队列水位本身作为遥测上报——<strong>缓存不可观测，就等于没有缓存</strong>。</p>
+<h3 id="5-9-2-恢复顺序"><a href="#5-9-2-恢复顺序" class="headerlink" title="5.9.2 恢复顺序"></a>5.9.2 恢复顺序</h3><p>恢复连接后：先发 status 上线 → 补 P0 事件（带原始时间戳）→ 刷新 reported → 恢复周期遥测。云端处理迟到事件时以事件时间而非接收时间落库，p01 对“已终态任务的迟到事件”一律忽略，保证状态机单向。</p>
+<h2 id="5-10-桥接方案选型"><a href="#5-10-桥接方案选型" class="headerlink" title="5.10 桥接方案选型"></a>5.10 桥接方案选型</h2><h3 id="5-10-1-五种方案对比"><a href="#5-10-1-五种方案对比" class="headerlink" title="5.10.1 五种方案对比"></a>5.10.1 五种方案对比</h3><table>
+<thead>
+<tr>
+<th>方案</th>
+<th>形态</th>
+<th>优点</th>
+<th>局限</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>自研 MQTT 云桥（本书）</td>
+<td>ROS 节点 + paho</td>
+<td>协议可控、可做聚合与守门</td>
+<td>需要自己维护</td>
+<td><strong>生产端云主通道</strong></td>
+</tr>
+<tr>
+<td>rosbridge（WebSocket JSON）</td>
+<td>通用网关</td>
+<td>上手快、前端友好</td>
+<td>暴露整个图、性能一般</td>
+<td>调试、Web 可视化</td>
+</tr>
+<tr>
+<td>Foxglove Bridge</td>
+<td>WebSocket</td>
+<td>可视化体验最好</td>
+<td>面向调试不面向业务</td>
+<td>远程可视化诊断</td>
+</tr>
+<tr>
+<td>zenoh-bridge-ros2dds &#x2F; rmw_zenoh</td>
+<td>Zenoh 路由</td>
+<td>跨网段透明扩展 ROS 图</td>
+<td>云端生态较弱</td>
+<td>机器人↔边缘、多机协同</td>
+</tr>
+<tr>
+<td>DDS Router</td>
+<td>DDS 路由</td>
+<td>原生 DDS 语义</td>
+<td>配置复杂</td>
+<td>跨网段 DDS 互联</td>
+</tr>
+</tbody></table>
+<p>结论：<strong>生产主通道用自研 MQTT 云桥（业务语义清晰、可守门），调试通道按需开 Foxglove Bridge 并严格限时鉴权</strong>。</p>
+<h2 id="5-11-案例推演：Wi-Fi-漫游引发重连风暴"><a href="#5-11-案例推演：Wi-Fi-漫游引发重连风暴" class="headerlink" title="5.11 案例推演：Wi-Fi 漫游引发重连风暴"></a>5.11 案例推演：Wi-Fi 漫游引发重连风暴</h2><h3 id="5-11-1-现象"><a href="#5-11-1-现象" class="headerlink" title="5.11.1 现象"></a>5.11.1 现象</h3><p>仓库里几十台机器人在两个 AP 之间来回漫游，每次漫游都触发云桥断线重连；broker 端看到连接数周期性尖峰，偶发“同一 ClientID 互踢”，云端在线状态频繁抖动，任务被误回收。</p>
+<h3 id="5-11-2-根因"><a href="#5-11-2-根因" class="headerlink" title="5.11.2 根因"></a>5.11.2 根因</h3><ol>
+<li>云桥 keepalive 过短，漫游的几百毫秒中断就被判定断线；</li>
+<li>重连无退避与抖动，几十台机器人在同一时刻重连；</li>
+<li>云端把一次短暂离线立即视为 OFFLINE 并影响派单。</li>
+</ol>
+<h3 id="5-11-3-平台动作"><a href="#5-11-3-平台动作" class="headerlink" title="5.11.3 平台动作"></a>5.11.3 平台动作</h3><p>端侧：keepalive 适当放宽、指数退避加随机抖动、重连后先恢复订阅再补传。云端：在线判定加入<strong>短暂离线宽限</strong>（例如 5 秒内恢复不产生离线事件），任务租约长于常见漫游中断时间。网络侧：与 IT 协同优化漫游阈值。这和车辆进出隧道的弱网治理是同一门功课。</p>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车联网</th>
+<th>ROS 2 工程化</th>
+<th>迁移方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>TBox 协议转换</td>
+<td>cloud_bridge</td>
+<td>直用：职责几乎一致</td>
+</tr>
+<tr>
+<td>三层配置（基础&#x2F;车型&#x2F;区域）</td>
+<td>三层 launch 与参数</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>故障前后 N 秒抓取</td>
+<td>触发式 bag 录制</td>
+<td>改造：数据更重</td>
+</tr>
+<tr>
+<td>车身标定参数</td>
+<td>URDF + 标定制品</td>
+<td>改造</td>
+</tr>
+<tr>
+<td>弱网补传</td>
+<td>分级离线缓存</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>协议文档 + 联调</td>
+<td>纯函数映射 + 契约测试</td>
+<td>改造：前移到 CI</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>跨线程调用 ROS 对象</strong>：在 paho 回调里直接 send_goal，压测下偶发段错误。对策：队列缝合，执行器线程消费。</li>
+<li><strong>云桥和感知组合在同一进程</strong>：感知崩溃导致数据回传中断，事故现场一无所获。对策：平台类节点独立进程。</li>
+<li><strong>离线缓存无上限</strong>：长时间断网后磁盘写满，机器人罢工。对策：有界队列 + 分级丢弃 + 水位上报。</li>
+<li><strong>用 time.time() 打时间戳</strong>：bag 回放时定时器与超时全部错乱。对策：统一使用节点时钟。</li>
+</ul>
+<h2 id="🛠️-动手练习"><a href="#🛠️-动手练习" class="headerlink" title="🛠️ 动手练习"></a>🛠️ 动手练习</h2><ol>
+<li>阅读 p06 的 <code>protocol_mapping.py</code> 与其测试，新增一个 <code>event</code> 映射函数（ROS 诊断消息 → ECL event），并补测试。</li>
+<li>在本地 ROS 2 容器里用 5.6.1 的命令录制 30 秒 bag，再以两倍速回放，观察 <code>/clock</code>。</li>
+<li>按 5.9.1 为云桥设计离线队列的数据结构与淘汰策略，写成一页设计说明。</li>
+</ol>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>云桥为什么要用队列连接两个事件循环？（线程安全、执行器模型、偶发崩溃难复现）</li>
+<li>端云协议如何避免漂移？（纯函数映射 + 契约测试 + 同一命名树）</li>
+<li>断网期间哪些数据必须补传？（分级：P0 事件与结果必补，遥测可降采样丢弃）</li>
+<li>rosbridge 能直接用在生产吗？（暴露面过大、业务语义缺失，仅用于调试且需鉴权限时）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>通用任务动作</strong>：类型 + JSON 参数，用弱类型换扩展性。</li>
+<li><strong>端云同一命名树</strong>：云桥只做确定性前缀翻译。</li>
+<li><strong>队列缝合两个事件循环</strong>：网络线程只入队，执行器线程消费。</li>
+<li><strong>协议映射纯函数</strong>：不依赖 rclpy，CI 中做契约测试。</li>
+<li><strong>分级离线缓存</strong>：有界、分级、可观测。</li>
+<li><strong>漫游宽限</strong>：短暂离线不应触发 OFFLINE 与任务回收。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-04-ROS2%E6%A0%B8%E5%BF%83%E9%80%9F%E9%80%9A/">第 4 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-06-%E7%AB%AF%E4%BE%A7AI%E4%B8%8EJetson-Thor/">第 6 章 端侧 AI 与 Jetson Thor</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-06-%E7%AB%AF%E4%BE%A7AI%E4%B8%8EJetson-Thor/">第 6 章 端侧 AI：Jetson Thor 时代的推理部署与资源纪律</a></h3>
+        <p>VLA 与感知模型最终跑在机器人的主控上。</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-06-%E7%AB%AF%E4%BE%A7AI%E4%B8%8EJetson-Thor/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-04-ROS2%E6%A0%B8%E5%BF%83%E9%80%9F%E9%80%9A/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 4 章 ROS 2 核心速通：平台架构师的工作级掌握</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 16 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#5-1-%E5%B7%A5%E4%BD%9C%E7%A9%BA%E9%97%B4%E4%B8%8E%E5%8C%85" data-toc-target="5-1-工作空间与包"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">5.1 工作空间与包</span></a><a class="toc-level-3" href="#5-1-1-%E5%B7%A5%E4%BD%9C%E7%A9%BA%E9%97%B4%E7%BB%93%E6%9E%84" data-toc-target="5-1-1-工作空间结构"><span class="toc-text">5.1.1 工作空间结构</span></a><a class="toc-level-3" href="#5-1-2-%E4%B8%8E-Maven-%E7%9A%84%E5%AF%B9%E7%85%A7" data-toc-target="5-1-2-与-Maven-的对照"><span class="toc-text">5.1.2 与 Maven 的对照</span></a><a class="toc-level-3" href="#5-1-3-%E6%8E%A5%E5%8F%A3%E5%8C%85%EF%BC%9A%E7%AB%AF%E4%BA%91%E5%A5%91%E7%BA%A6%E7%9A%84%E7%AB%AF%E4%BE%A7%E5%AE%9A%E4%B9%89" data-toc-target="5-1-3-接口包：端云契约的端侧定义"><span class="toc-text">5.1.3 接口包：端云契约的端侧定义</span></a><a class="toc-level-2" href="#5-2-Launch%EF%BC%9A%E4%B8%80%E6%9D%A1%E5%91%BD%E4%BB%A4%E6%8B%89%E8%B5%B7%E6%95%B4%E5%8F%B0%E6%9C%BA%E5%99%A8%E4%BA%BA" data-toc-target="5-2-Launch：一条命令拉起整台机器人"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">5.2 Launch：一条命令拉起整台机器人</span></a><a class="toc-level-3" href="#5-2-1-%E5%B8%A6%E5%8F%82%E6%95%B0%E4%B8%8E%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E7%9A%84%E5%90%AF%E5%8A%A8%E6%96%87%E4%BB%B6" data-toc-target="5-2-1-带参数与命名空间的启动文件"><span class="toc-text">5.2.1 带参数与命名空间的启动文件</span></a><a class="toc-level-3" href="#5-2-2-%E4%B8%89%E5%B1%82-launch-%E6%B2%BB%E7%90%86" data-toc-target="5-2-2-三层-launch-治理"><span class="toc-text">5.2.2 三层 launch 治理</span></a><a class="toc-level-2" href="#5-3-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E4%B8%8E%E5%A4%9A%E6%9C%BA%E5%99%A8%E4%BA%BA" data-toc-target="5-3-命名空间与多机器人"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">5.3 命名空间与多机器人</span></a><a class="toc-level-3" href="#5-3-1-%E5%91%BD%E5%90%8D%E8%A7%84%E8%8C%83" data-toc-target="5-3-1-命名规范"><span class="toc-text">5.3.1 命名规范</span></a><a class="toc-level-3" href="#5-3-2-%E4%B8%8E%E4%BA%91%E7%AB%AF%E5%91%BD%E5%90%8D%E6%A0%91%E5%AF%B9%E9%BD%90" data-toc-target="5-3-2-与云端命名树对齐"><span class="toc-text">5.3.2 与云端命名树对齐</span></a><a class="toc-level-2" href="#5-4-tf2%EF%BC%9A%E5%9D%90%E6%A0%87%E6%A0%91%E5%AE%9E%E6%93%8D" data-toc-target="5-4-tf2：坐标树实操"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">5.4 tf2：坐标树实操</span></a><a class="toc-level-3" href="#5-4-1-%E6%A0%87%E5%87%86%E5%B8%A7%E9%93%BE" data-toc-target="5-4-1-标准帧链"><span class="toc-text">5.4.1 标准帧链</span></a><a class="toc-level-3" href="#5-4-2-%E6%8C%89%E6%95%B0%E6%8D%AE%E6%97%B6%E5%88%BB%E6%9F%A5%E8%AF%A2" data-toc-target="5-4-2-按数据时刻查询"><span class="toc-text">5.4.2 按数据时刻查询</span></a><a class="toc-level-3" href="#5-4-3-%E5%B9%B3%E5%8F%B0%E5%90%AB%E4%B9%89" data-toc-target="5-4-3-平台含义"><span class="toc-text">5.4.3 平台含义</span></a><a class="toc-level-2" href="#5-5-%E6%97%B6%E9%97%B4%EF%BC%9AROS-%E6%97%B6%E9%97%B4%E4%B8%8E%E4%BB%BF%E7%9C%9F%E6%97%B6%E9%97%B4" data-toc-target="5-5-时间：ROS-时间与仿真时间"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">5.5 时间：ROS 时间与仿真时间</span></a><a class="toc-level-3" href="#5-5-1-%E4%B8%89%E7%A7%8D%E6%97%B6%E9%92%9F" data-toc-target="5-5-1-三种时钟"><span class="toc-text">5.5.1 三种时钟</span></a><a class="toc-level-3" href="#5-5-2-%E5%9B%9E%E6%94%BE%E4%B8%8E%E4%BB%BF%E7%9C%9F%E7%9A%84%E5%89%8D%E6%8F%90" data-toc-target="5-5-2-回放与仿真的前提"><span class="toc-text">5.5.2 回放与仿真的前提</span></a><a class="toc-level-2" href="#5-6-bag-%E4%B8%8E-MCAP%EF%BC%9A%E6%9C%BA%E5%99%A8%E4%BA%BA%E7%9A%84%E9%BB%91%E5%8C%A3%E5%AD%90" data-toc-target="5-6-bag-与-MCAP：机器人的黑匣子"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">5.6 bag 与 MCAP：机器人的黑匣子</span></a><a class="toc-level-3" href="#5-6-1-%E5%BD%95%E5%88%B6%E4%B8%8E%E5%9B%9E%E6%94%BE" data-toc-target="5-6-1-录制与回放"><span class="toc-text">5.6.1 录制与回放</span></a><a class="toc-level-3" href="#5-6-2-%E8%A7%A6%E5%8F%91%E5%BC%8F%E5%BD%95%E5%88%B6" data-toc-target="5-6-2-触发式录制"><span class="toc-text">5.6.2 触发式录制</span></a><a class="toc-level-2" href="#5-7-%E7%BB%84%E5%90%88%E4%B8%8E%E9%9B%B6%E6%8B%B7%E8%B4%9D" data-toc-target="5-7-组合与零拷贝"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">5.7 组合与零拷贝</span></a><a class="toc-level-3" href="#5-7-1-%E4%BD%95%E6%97%B6%E7%BB%84%E5%90%88%E8%BF%9B%E5%90%8C%E4%B8%80%E8%BF%9B%E7%A8%8B" data-toc-target="5-7-1-何时组合进同一进程"><span class="toc-text">5.7.1 何时组合进同一进程</span></a><a class="toc-level-2" href="#5-8-%E4%BA%91%E6%A1%A5%E8%AE%BE%E8%AE%A1%EF%BC%9A%E6%9C%BA%E5%99%A8%E4%BA%BA%E7%9A%84-TBox" data-toc-target="5-8-云桥设计：机器人的-TBox"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">5.8 云桥设计：机器人的 TBox</span></a><a class="toc-level-3" href="#5-8-1-%E4%BA%94%E9%A1%B9%E8%81%8C%E8%B4%A3" data-toc-target="5-8-1-五项职责"><span class="toc-text">5.8.1 五项职责</span></a><a class="toc-level-3" href="#5-8-2-%E6%9E%B6%E6%9E%84%E4%B8%8E%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B" data-toc-target="5-8-2-架构与线程模型"><span class="toc-text">5.8.2 架构与线程模型</span></a><a class="toc-level-3" href="#5-8-3-%E4%BB%BB%E5%8A%A1%E4%B8%8B%E8%A1%8C%E6%97%B6%E5%BA%8F" data-toc-target="5-8-3-任务下行时序"><span class="toc-text">5.8.3 任务下行时序</span></a><a class="toc-level-3" href="#5-8-4-%E5%8D%8F%E8%AE%AE%E6%98%A0%E5%B0%84%E5%81%9A%E6%88%90%E7%BA%AF%E5%87%BD%E6%95%B0" data-toc-target="5-8-4-协议映射做成纯函数"><span class="toc-text">5.8.4 协议映射做成纯函数</span></a><a class="toc-level-2" href="#5-9-%E7%A6%BB%E7%BA%BF%E7%BC%93%E5%AD%98%E4%B8%8E%E6%96%AD%E7%BD%91%E8%87%AA%E6%B2%BB" data-toc-target="5-9-离线缓存与断网自治"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">5.9 离线缓存与断网自治</span></a><a class="toc-level-3" href="#5-9-1-%E6%9C%89%E7%95%8C%E3%80%81%E5%88%86%E7%BA%A7%E3%80%81%E5%8F%AF%E8%A7%82%E6%B5%8B" data-toc-target="5-9-1-有界、分级、可观测"><span class="toc-text">5.9.1 有界、分级、可观测</span></a><a class="toc-level-3" href="#5-9-2-%E6%81%A2%E5%A4%8D%E9%A1%BA%E5%BA%8F" data-toc-target="5-9-2-恢复顺序"><span class="toc-text">5.9.2 恢复顺序</span></a><a class="toc-level-2" href="#5-10-%E6%A1%A5%E6%8E%A5%E6%96%B9%E6%A1%88%E9%80%89%E5%9E%8B" data-toc-target="5-10-桥接方案选型"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">5.10 桥接方案选型</span></a><a class="toc-level-3" href="#5-10-1-%E4%BA%94%E7%A7%8D%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94" data-toc-target="5-10-1-五种方案对比"><span class="toc-text">5.10.1 五种方案对比</span></a><a class="toc-level-2" href="#5-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9AWi-Fi-%E6%BC%AB%E6%B8%B8%E5%BC%95%E5%8F%91%E9%87%8D%E8%BF%9E%E9%A3%8E%E6%9A%B4" data-toc-target="5-11-案例推演：Wi-Fi-漫游引发重连风暴"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">5.11 案例推演：Wi-Fi 漫游引发重连风暴</span></a><a class="toc-level-3" href="#5-11-1-%E7%8E%B0%E8%B1%A1" data-toc-target="5-11-1-现象"><span class="toc-text">5.11.1 现象</span></a><a class="toc-level-3" href="#5-11-2-%E6%A0%B9%E5%9B%A0" data-toc-target="5-11-2-根因"><span class="toc-text">5.11.2 根因</span></a><a class="toc-level-3" href="#5-11-3-%E5%B9%B3%E5%8F%B0%E5%8A%A8%E4%BD%9C" data-toc-target="5-11-3-平台动作"><span class="toc-text">5.11.3 平台动作</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">🛠️ 动手练习</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 21%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#5-1-%E5%B7%A5%E4%BD%9C%E7%A9%BA%E9%97%B4%E4%B8%8E%E5%8C%85" data-toc-target="5-1-工作空间与包" data-title="01 · 5.1 工作空间与包" aria-label="5.1 工作空间与包"></a><a class="toc-strip__dot" href="#5-2-Launch%EF%BC%9A%E4%B8%80%E6%9D%A1%E5%91%BD%E4%BB%A4%E6%8B%89%E8%B5%B7%E6%95%B4%E5%8F%B0%E6%9C%BA%E5%99%A8%E4%BA%BA" data-toc-target="5-2-Launch：一条命令拉起整台机器人" data-title="02 · 5.2 Launch：一条命令拉起整台机器人" aria-label="5.2 Launch：一条命令拉起整台机器人"></a><a class="toc-strip__dot" href="#5-3-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E4%B8%8E%E5%A4%9A%E6%9C%BA%E5%99%A8%E4%BA%BA" data-toc-target="5-3-命名空间与多机器人" data-title="03 · 5.3 命名空间与多机器人" aria-label="5.3 命名空间与多机器人"></a><a class="toc-strip__dot" href="#5-4-tf2%EF%BC%9A%E5%9D%90%E6%A0%87%E6%A0%91%E5%AE%9E%E6%93%8D" data-toc-target="5-4-tf2：坐标树实操" data-title="04 · 5.4 tf2：坐标树实操" aria-label="5.4 tf2：坐标树实操"></a><a class="toc-strip__dot" href="#5-5-%E6%97%B6%E9%97%B4%EF%BC%9AROS-%E6%97%B6%E9%97%B4%E4%B8%8E%E4%BB%BF%E7%9C%9F%E6%97%B6%E9%97%B4" data-toc-target="5-5-时间：ROS-时间与仿真时间" data-title="05 · 5.5 时间：ROS 时间与仿真时间" aria-label="5.5 时间：ROS 时间与仿真时间"></a><a class="toc-strip__dot" href="#5-6-bag-%E4%B8%8E-MCAP%EF%BC%9A%E6%9C%BA%E5%99%A8%E4%BA%BA%E7%9A%84%E9%BB%91%E5%8C%A3%E5%AD%90" data-toc-target="5-6-bag-与-MCAP：机器人的黑匣子" data-title="06 · 5.6 bag 与 MCAP：机器人的黑匣子" aria-label="5.6 bag 与 MCAP：机器人的黑匣子"></a><a class="toc-strip__dot" href="#5-7-%E7%BB%84%E5%90%88%E4%B8%8E%E9%9B%B6%E6%8B%B7%E8%B4%9D" data-toc-target="5-7-组合与零拷贝" data-title="07 · 5.7 组合与零拷贝" aria-label="5.7 组合与零拷贝"></a><a class="toc-strip__dot" href="#5-8-%E4%BA%91%E6%A1%A5%E8%AE%BE%E8%AE%A1%EF%BC%9A%E6%9C%BA%E5%99%A8%E4%BA%BA%E7%9A%84-TBox" data-toc-target="5-8-云桥设计：机器人的-TBox" data-title="08 · 5.8 云桥设计：机器人的 TBox" aria-label="5.8 云桥设计：机器人的 TBox"></a><a class="toc-strip__dot" href="#5-9-%E7%A6%BB%E7%BA%BF%E7%BC%93%E5%AD%98%E4%B8%8E%E6%96%AD%E7%BD%91%E8%87%AA%E6%B2%BB" data-toc-target="5-9-离线缓存与断网自治" data-title="09 · 5.9 离线缓存与断网自治" aria-label="5.9 离线缓存与断网自治"></a><a class="toc-strip__dot" href="#5-10-%E6%A1%A5%E6%8E%A5%E6%96%B9%E6%A1%88%E9%80%89%E5%9E%8B" data-toc-target="5-10-桥接方案选型" data-title="10 · 5.10 桥接方案选型" aria-label="5.10 桥接方案选型"></a><a class="toc-strip__dot" href="#5-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9AWi-Fi-%E6%BC%AB%E6%B8%B8%E5%BC%95%E5%8F%91%E9%87%8D%E8%BF%9E%E9%A3%8E%E6%9A%B4" data-toc-target="5-11-案例推演：Wi-Fi-漫游引发重连风暴" data-title="11 · 5.11 案例推演：Wi-Fi 漫游引发重连风暴" aria-label="5.11 案例推演：Wi-Fi 漫游引发重连风暴"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="12 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="13 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习" data-title="14 · 🛠️ 动手练习" aria-label="🛠️ 动手练习"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="15 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="16 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-05-ROS2工程化与端云桥接","title":"第 5 章 ROS 2 工程化与端云桥接","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-05-ROS2%E5%B7%A5%E7%A8%8B%E5%8C%96%E4%B8%8E%E7%AB%AF%E4%BA%91%E6%A1%A5%E6%8E%A5/","path":"embodied-cloud-book","index":5,"total":28,"next":{"title":"第 6 章 端侧 AI：Jetson Thor 时代的推理部署与资源纪律","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-06-%E7%AB%AF%E4%BE%A7AI%E4%B8%8EJetson-Thor/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

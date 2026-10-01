@@ -1,0 +1,683 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>macOS Python 环境管理：pyenv 与 uv 的分工与迁移 · 飞轮之道</title>
+<meta name="description" content="为什么不拿系统或 Homebrew 的 Python 开发；pyenv + venv、pyenv + uv、纯 uv 怎么选；zsh 配置的正确写法、让 uv 与 pyenv 不抢解释器，以及锁文件、多版本测试和老项目迁移。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2024/11/12/engineering-practice/macOS-Python%E7%8E%AF%E5%A2%83%E7%AE%A1%E7%90%86/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="macOS Python 环境管理：pyenv 与 uv 的分工与迁移 · 飞轮之道">
+<meta property="og:description" content="为什么不拿系统或 Homebrew 的 Python 开发；pyenv + venv、pyenv + uv、纯 uv 怎么选；zsh 配置的正确写法、让 uv 与 pyenv 不抢解释器，以及锁文件、多版本测试和老项目迁移。">
+<meta property="og:url" content="https://flywhlway.github.io/2024/11/12/engineering-practice/macOS-Python%E7%8E%AF%E5%A2%83%E7%AE%A1%E7%90%86/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / <a href="/paths/ai-coding-toolchain/">通用方法</a><a class="series-chip" href="/paths/ai-coding-toolchain/" title="查看学习路径">第 6 / 7 篇</a>
+    </div>
+    <h1>macOS Python 环境管理：pyenv 与 uv 的分工与迁移</h1>
+    <p class="article-deck">为什么不拿系统或 Homebrew 的 Python 开发；pyenv + venv、pyenv + uv、纯 uv 怎么选…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E5%B7%A5%E7%A8%8B%E6%95%88%E7%8E%87/">#工程效率</a><a class="article-meta__tag" href="/tags/Python/">#Python</a><a class="article-meta__tag" href="/tags/uv/">#uv</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>系统 Python 留给系统，Homebrew Python 留给 Homebrew 的其他软件，开发用自己能控制版本的解释器。</li><li>新机器、新项目直接用纯 uv；需要全局 python 命令或自定义编译时才保留 pyenv，且只让它管解释器。</li><li>pyenv 与 uv 同时装了同一个版本时，uv 默认优先用自己下载的；想统一用 pyenv 编译的，设 python-preference = &#34;only-system&#34;。</li><li>CI 用 uv sync --locked，锁文件过期会直接报错，而不是悄悄重新解析。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="为什么不直接用系统-Python-或-Homebrew-Python"><a href="#为什么不直接用系统-Python-或-Homebrew-Python" class="headerlink" title="为什么不直接用系统 Python 或 Homebrew Python"></a>为什么不直接用系统 Python 或 Homebrew Python</h2><p>macOS 上开箱就有两个 Python，都不适合拿来做开发。</p>
+<table>
+<thead>
+<tr>
+<th>来源</th>
+<th>路径</th>
+<th>问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>系统（Xcode Command Line Tools）</td>
+<td><code>/usr/bin/python3</code></td>
+<td>版本由 Apple 决定，长期停在 3.9.6；它服务于系统和 Xcode 工具，往里装包会影响这些工具</td>
+</tr>
+<tr>
+<td>Homebrew</td>
+<td><code>/opt/homebrew/bin/python3</code></td>
+<td>它首先是其他 formula 的依赖，<code>brew upgrade</code> 可能把 <code>python3</code> 换到新的次版本，旧版本被清理后基于它建的虚拟环境就失效了；并且带 PEP 668 标记，直接 <code>pip install</code> 会被拒绝</td>
+</tr>
+</tbody></table>
+<p>后一条实测如下：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>/opt/homebrew/bin/python3 -m pip install requests</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">error: externally-managed-environment</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">× This environment is externally managed</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">╰─&gt; To install Python packages system-wide, try brew install</span></span></code></pre></div></div></figure>
+
+<p>这个报错是有意为之：它在提醒你别往包管理器的 Python 里装东西。正确做法不是加 <code>--break-system-packages</code>，而是换一个自己能控制版本的解释器，再给每个项目建独立的虚拟环境。</p>
+<p>所以要解决的问题有两层：<strong>解释器从哪来、怎么切换</strong>；<strong>项目依赖怎么隔离、怎么锁定</strong>。pyenv 只管第一层，uv 两层都能管。</p>
+<h2 id="三种方案怎么选"><a href="#三种方案怎么选" class="headerlink" title="三种方案怎么选"></a>三种方案怎么选</h2><p>本文写作时点的版本：pyenv 2.4.17，uv 0.5.1（2024-11-08 发布），Python 3.13 已于 10 月 7 日发布。文中 uv 命令均用 0.5.1 实测，依赖解析加了 <code>--exclude-newer 2024-11-12</code> 以还原当时的结果。</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>pyenv + venv&#x2F;pip</th>
+<th>pyenv + uv</th>
+<th>纯 uv</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>解释器来源</td>
+<td>本机源码编译，需要编译依赖，每个版本几分钟</td>
+<td>同左，或由 uv 下载</td>
+<td>uv 下载预编译包（python-build-standalone），解压即用</td>
+</tr>
+<tr>
+<td>终端里的 <code>python</code></td>
+<td>pyenv shims 按目录切换</td>
+<td>同左</td>
+<td>无全局 <code>python</code>；项目内用 <code>uv run python</code></td>
+</tr>
+<tr>
+<td>虚拟环境</td>
+<td>手动 <code>python -m venv</code>，或 pyenv-virtualenv</td>
+<td>uv 自动在项目下建 <code>.venv</code></td>
+<td>同左</td>
+</tr>
+<tr>
+<td>依赖锁定</td>
+<td>需另装 pip-tools 等</td>
+<td><code>uv.lock</code>，跨平台</td>
+<td>同左</td>
+</tr>
+<tr>
+<td>全局命令行工具</td>
+<td>pipx</td>
+<td><code>uv tool</code></td>
+<td><code>uv tool</code></td>
+</tr>
+<tr>
+<td>适合</td>
+<td>暂不引入新工具的老项目</td>
+<td>已习惯 pyenv、需要全局 <code>python</code>、需要自定义编译参数</td>
+<td>新机器、新项目、CI</td>
+</tr>
+</tbody></table>
+<p>决策顺序：</p>
+<ol>
+<li>新机器或新项目，没有历史包袱：<strong>纯 uv</strong>。</li>
+<li>需要在任意目录敲 <code>python</code> 就得到指定版本（比如很多脚本写死了 <code>#!/usr/bin/env python</code>），或需要带特殊编译参数的解释器：<strong>pyenv + uv</strong>，pyenv 只管解释器，项目全部交给 uv。</li>
+<li>团队 CI、文档都还围着 pip 和 requirements.txt 转，暂时动不了：<strong>pyenv + venv&#x2F;pip</strong>，并按后文的迁移步骤逐个项目切换。</li>
+</ol>
+<p>不再推荐 pyenv-virtualenv：它的 <code>virtualenv-init</code> 会在每次出现提示符时执行一次钩子，命名环境和项目目录的对应关系也只存在于本机；uv 在项目内建 <code>.venv</code>，环境和代码天然绑定。</p>
+<h2 id="安装与-shell-配置"><a href="#安装与-shell-配置" class="headerlink" title="安装与 shell 配置"></a>安装与 shell 配置</h2><h3 id="Homebrew-与编译依赖"><a href="#Homebrew-与编译依赖" class="headerlink" title="Homebrew 与编译依赖"></a>Homebrew 与编译依赖</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">xcode-select --install          <span class="comment"># 命令行工具，编译 Python 需要</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">/bin/bash -c <span class="string">&quot;<span class="subst">$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">uname</span> -m &amp;&amp; brew --prefix       <span class="comment"># Apple Silicon 上应输出 arm64 与 /opt/homebrew</span></span></span></code></pre></div></div></figure>
+
+<p>最后一行别跳过。Apple Silicon 机器上如果终端跑在 Rosetta 下，或者还留着 <code>/usr/local</code> 下的 Intel 版 Homebrew，pyenv 编译时就会链接到 x86_64 的库，出现”building for macOS-arm64 but attempting to link with file built for macOS-x86_64”一类的错误。</p>
+<p>只用纯 uv 可以跳过下面的编译依赖。要用 pyenv 编译解释器，先装齐这些库，否则编译能成功，但 <code>ssl</code>、<code>lzma</code>、<code>readline</code> 等模块会缺失：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">brew install openssl readline sqlite3 xz zlib</span></span></code></pre></div></div></figure>
+
+<h3 id="安装-uv-与-pyenv"><a href="#安装-uv-与-pyenv" class="headerlink" title="安装 uv 与 pyenv"></a>安装 uv 与 pyenv</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">brew install uv                 <span class="comment"># 或官方脚本：curl -LsSf https://astral.sh/uv/install.sh | sh</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">brew install pyenv              <span class="comment"># 仅 pyenv + uv 方案需要</span></span></span></code></pre></div></div></figure>
+
+<p>用官方脚本安装时注意：uv 0.5.0 起，安装脚本把 uv 放到 <code>~/.local/bin</code>，不再是 <code>~/.cargo/bin</code>。网上较早的教程让你把 <code>~/.cargo/bin</code> 加进 PATH，对新装的 uv 已经不适用。</p>
+<h3 id="zsh-配置"><a href="#zsh-配置" class="headerlink" title="zsh 配置"></a>zsh 配置</h3><p><code>~/.zprofile</code>（登录 shell 执行一次）：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">eval</span> <span class="string">&quot;<span class="subst">$(/opt/homebrew/bin/brew shellenv)</span>&quot;</span></span></span></code></pre></div></div></figure>
+
+<p><code>~/.zshrc</code>：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># uv tool 安装的命令行工具</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">export</span> PATH=<span class="string">&quot;<span class="variable">$HOME</span>/.local/bin:<span class="variable">$PATH</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># pyenv（纯 uv 方案删掉这三行）；放在 PATH 修改的最后，保证 shims 排在最前</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="built_in">export</span> PYENV_ROOT=<span class="string">&quot;<span class="variable">$HOME</span>/.pyenv&quot;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">[[ -d <span class="variable">$PYENV_ROOT</span>/bin ]] &amp;&amp; <span class="built_in">export</span> PATH=<span class="string">&quot;<span class="variable">$PYENV_ROOT</span>/bin:<span class="variable">$PATH</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="built_in">eval</span> <span class="string">&quot;<span class="subst">$(pyenv init -)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="comment"># 补全：compinit 必须在 uv 补全之前加载</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="built_in">autoload</span> -Uz compinit &amp;&amp; compinit</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="built_in">eval</span> <span class="string">&quot;<span class="subst">$(uv generate-shell-completion zsh)</span>&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>第二段的条件判断是最容易抄错的地方。<code>[[ -d $PYENV_ROOT/bin ]]</code> 的双方括号如果在复制过程中丢了，变成 <code> -d $PYENV_ROOT/bin  &amp;&amp; export ...</code>，zsh 会把 <code>-d</code> 当成命令：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">zsh:1: <span class="built_in">command</span> not found: -d</span></span></code></pre></div></div></figure>
+
+<p>这一行只对用 git clone 安装 pyenv 的人有意义（<code>~/.pyenv/bin</code> 存在）；Homebrew 安装的 pyenv 在 <code>/opt/homebrew/bin</code>，条件为假，整行跳过，不影响使用。另外，<code>compdef</code> 报 <code>command not found</code> 说明 <code>compinit</code> 没有在补全脚本之前加载。</p>
+<p>用 <code>env -i</code> 起一个干净的登录 shell 检查结果，不受当前会话残留的环境变量干扰：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="7" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span><span class="built_in">env</span> -i HOME=<span class="string">&quot;<span class="variable">$HOME</span>&quot;</span> TERM=xterm /bin/zsh -l -i -c <span class="string">&#x27;echo $PATH | tr &quot;:&quot; &quot;\n&quot; | head -3; which -a python3&#x27;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">/Users/you/.pyenv/shims</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">/Users/you/.local/bin</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">/opt/homebrew/bin</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">/Users/you/.pyenv/shims/python3</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">/opt/homebrew/bin/python3</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">/usr/bin/python3</span></span></code></pre></div></div></figure>
+
+<p>期望顺序是 pyenv shims 在最前，其次是 <code>~/.local/bin</code>，然后才是 Homebrew 和系统路径。</p>
+<h3 id="让-uv-和-pyenv-不抢解释器"><a href="#让-uv-和-pyenv-不抢解释器" class="headerlink" title="让 uv 和 pyenv 不抢解释器"></a>让 uv 和 pyenv 不抢解释器</h3><p>两者同时存在时，uv 找解释器有自己的优先级。实测：pyenv 和 uv 都装了 3.12，在项目外执行：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5" data-cmds="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>uv python find 3.12</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">~/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="4"><span class="cb-tx"><span class="cb-prompt">$ </span>UV_PYTHON_PREFERENCE=only-system uv python find 3.12</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">~/.pyenv/versions/3.12.13/bin/python</span></span></code></pre></div></div></figure>
+
+<p>uv 的默认偏好是 <code>managed</code>：自己下载的解释器优先。pyenv 编译的解释器在 uv 看来属于”系统”解释器。另外，找不到满足要求的版本时，uv 默认会自动下载一个。</p>
+<p>如果选择 pyenv + uv 并希望解释器只有 pyenv 这一个来源，在 <code>~/.config/uv/uv.toml</code> 写：</p>
+<figure class="highlight toml cb" data-lang="toml" data-label="TOML" data-ext="toml" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">python-preference</span> = <span class="string">&quot;only-system&quot;</span>   <span class="comment"># 只用 PATH 上和 pyenv 装的解释器</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">python-downloads</span> = <span class="string">&quot;manual&quot;</span>         <span class="comment"># 缺版本时报错，而不是静默下载</span></span></span></code></pre></div></div></figure>
+
+<p>效果：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>uv venv --python 3.9.20</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  × No interpreter found <span class="keyword">for</span> Python 3.9.20 <span class="keyword">in</span> search path</span></span></code></pre></div></div></figure>
+
+<p>这时去 <code>pyenv install 3.9.20</code> 补上即可。反过来，如果选纯 uv，就不要装 pyenv，免得同一个版本有两份。</p>
+<h2 id="项目工作流"><a href="#项目工作流" class="headerlink" title="项目工作流"></a>项目工作流</h2><h3 id="新建项目"><a href="#新建项目" class="headerlink" title="新建项目"></a>新建项目</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">uv python install 3.12          <span class="comment"># 纯 uv：下载解释器；pyenv 方案用 pyenv install 3.12.7</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">uv init demo --python 3.12</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">cd</span> demo</span></span></code></pre></div></div></figure>
+
+<p>uv 0.5.1 生成的文件：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">.git/  .gitignore  .python-version  README.md  hello.py  pyproject.toml</span></span></code></pre></div></div></figure>
+
+<p><code>.python-version</code> 里写的是 <code>3.12</code>。pyenv 和 uv 都读这个文件，也都支持只写到次版本，由工具解析成已安装的最新补丁版本，两边不会冲突。uv 0.5.0 起还会向上级目录查找 <code>.python-version</code>，行为和 pyenv 一致。</p>
+<p>添加依赖：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">uv add httpx</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">uv add --dev pytest ruff</span></span></code></pre></div></div></figure>
+
+<p><code>pyproject.toml</code> 的结果：</p>
+<figure class="highlight toml cb" data-lang="toml" data-label="TOML" data-ext="toml" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">dependencies</span> = [</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="string">&quot;httpx&gt;=0.27.2&quot;</span>,</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">]</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="section">[dependency-groups]</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">dev</span> = [</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="string">&quot;pytest&gt;=8.3.3&quot;</span>,</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="string">&quot;ruff&gt;=0.7.3&quot;</span>,</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">]</span></span></code></pre></div></div></figure>
+
+<p>开发依赖写进 PEP 735 的 <code>[dependency-groups]</code> 表（uv 0.4.27 起），不会随包一起发布。<code>uv add</code> 自动补上以当前解析版本为下限的约束，并更新 <code>uv.lock</code>、同步 <code>.venv</code>。之后运行任何东西都走 <code>uv run</code>，它会先确认环境与锁文件一致，不需要手动 <code>source .venv/bin/activate</code>：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">uv run pytest -q</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">uv run python -c <span class="string">&#x27;import sys; print(sys.executable)&#x27;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># /path/to/demo/.venv/bin/python3</span></span></span></code></pre></div></div></figure>
+
+<h3 id="锁文件与-CI"><a href="#锁文件与-CI" class="headerlink" title="锁文件与 CI"></a>锁文件与 CI</h3><p><code>uv.lock</code> 要提交进仓库。它是跨平台的通用锁文件，macOS 上生成的锁在 Linux CI 上同样适用。CI 里用 <code>--locked</code>：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2" data-cmds="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>uv <span class="built_in">sync</span> --locked</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided. To update the lockfile, run `uv lock`.</span></span></code></pre></div></div></figure>
+
+<p>实测场景是有人改了 <code>pyproject.toml</code> 却没重新锁定。<code>--locked</code> 让这种情况直接失败；<code>--frozen</code> 则完全不检查、按锁文件原样安装，适合 Docker 分层构建里只拷了锁文件的那一步。</p>
+<p>仍有下游需要 requirements.txt（比如某些部署平台），从锁文件导出，而不是另外维护一份：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">uv <span class="built_in">export</span> --format requirements-txt --no-hashes --no-dev &gt; requirements.txt</span></span></code></pre></div></div></figure>
+
+<h3 id="多版本测试"><a href="#多版本测试" class="headerlink" title="多版本测试"></a>多版本测试</h3><p>库项目需要在多个 Python 版本上跑测试。先把 <code>requires-python</code> 放宽到要支持的最低版本（例如 <code>&gt;=3.10</code>），然后：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">for</span> v <span class="keyword">in</span> 3.10 3.11 3.12 3.13; <span class="keyword">do</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="built_in">echo</span> <span class="string">&quot;== <span class="variable">$v</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  uv run --isolated --python <span class="string">&quot;<span class="variable">$v</span>&quot;</span> pytest -q</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">done</span></span></span></code></pre></div></div></figure>
+
+<p><code>--isolated</code> 让每个版本在临时环境里安装依赖，不会反复重建项目的 <code>.venv</code>。实测四个版本均通过。解释器缺失时，纯 uv 方案会自动下载；设置了 <code>python-downloads = &quot;manual&quot;</code> 的则会报错提示。</p>
+<h3 id="单文件脚本"><a href="#单文件脚本" class="headerlink" title="单文件脚本"></a>单文件脚本</h3><p>一次性的运维脚本不值得建项目，用 PEP 723 把依赖写在脚本头部：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="13" data-cmds="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line is-cmd" data-ln="1"><span class="cb-tx"><span class="cb-prompt">$ </span>uv add --script fetch.py httpx</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">Updated `fetch.py`</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="4"><span class="cb-tx"><span class="cb-prompt">$ </span><span class="built_in">head</span> -6 fetch.py</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># /// script</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># requires-python = &quot;&gt;=3.11&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># dependencies = [</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="comment">#     &quot;httpx&quot;,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="comment"># ]</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="comment"># ///</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line is-cmd" data-ln="12"><span class="cb-tx"><span class="cb-prompt">$ </span>uv run fetch.py</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">0.27.2</span></span></code></pre></div></div></figure>
+
+<p>uv 为脚本建临时环境并缓存，第二次运行几乎没有开销。</p>
+<h3 id="老项目迁移"><a href="#老项目迁移" class="headerlink" title="老项目迁移"></a>老项目迁移</h3><p>从 pyenv-virtualenv + requirements.txt 迁到 uv，按项目逐个进行：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cd</span> legacy-project</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">echo</span> <span class="string">&quot;3.12&quot;</span> &gt; .python-version</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">uv init --no-readme                       <span class="comment"># 已有目录中初始化，只生成 pyproject.toml 和示例文件</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">rm</span> hello.py                               <span class="comment"># 示例入口用不上</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">uv add -r requirements.txt</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">uv add --dev -r requirements-dev.txt</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">uv run pytest                             <span class="comment"># 通过后提交 pyproject.toml 与 uv.lock</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">pyenv virtualenv-delete -f legacy-env     <span class="comment"># 旧的命名环境</span></span></span></code></pre></div></div></figure>
+
+<p>实测 <code>uv add -r</code> 会保留原有的精确版本（如 <code>fastapi==0.115.4</code>），没有写版本的包则补上下限。requirements 文件确认没有其他地方引用后再删。所有项目迁完后，<code>brew uninstall pyenv-virtualenv</code> 并从 <code>~/.zshrc</code> 删掉 <code>virtualenv-init</code> 那一行。</p>
+<h2 id="常见问题"><a href="#常见问题" class="headerlink" title="常见问题"></a>常见问题</h2><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>python --version</code> 不是预期版本</td>
+<td>PATH 顺序错了，或当前目录的 <code>.python-version</code> 覆盖了全局设置</td>
+<td><code>which -a python</code>；<code>pyenv version</code> 会显示版本来自哪个文件</td>
+</tr>
+<tr>
+<td><code>pyenv install</code> 成功但 <code>import ssl</code> 失败</td>
+<td>编译时缺依赖库，Python 会跳过对应模块而不报错</td>
+<td>装齐编译依赖后重装；装完执行 <code>python -c &#39;import ssl, sqlite3, lzma, bz2, readline, ctypes&#39;</code> 验证</td>
+</tr>
+<tr>
+<td>Apple Silicon 编译报架构不匹配</td>
+<td>终端在 Rosetta 下运行，或链接到了 <code>/usr/local</code> 的 Intel 库</td>
+<td><code>uname -m</code> 应为 <code>arm64</code>；清理 Intel 版 Homebrew</td>
+</tr>
+<tr>
+<td>VS Code &#x2F; Cursor 不识别虚拟环境</td>
+<td>解释器选择器没选到项目的 <code>.venv</code></td>
+<td>打开项目根目录，选 <code>.venv/bin/python</code>；或在 <code>.vscode/settings.json</code> 设 <code>&quot;python.defaultInterpreterPath&quot;: &quot;${workspaceFolder}/.venv/bin/python&quot;</code></td>
+</tr>
+<tr>
+<td>PyCharm 找不到依赖</td>
+<td>用的是全局解释器</td>
+<td>添加解释器时选”已有环境”，指向 <code>.venv/bin/python</code></td>
+</tr>
+<tr>
+<td><code>pip install --user</code> 装的命令行工具相互冲突</td>
+<td>所有工具共用一个 site-packages</td>
+<td>改用 <code>uv tool install ruff</code>，每个工具独立环境；临时用一次则 <code>uvx ruff check</code></td>
+</tr>
+<tr>
+<td><code>uv tool install</code> 后命令找不到</td>
+<td><code>~/.local/bin</code> 不在 PATH</td>
+<td>按提示执行 <code>uv tool update-shell</code>，或检查 <code>.zshrc</code> 中那一行</td>
+</tr>
+<tr>
+<td>升级 Homebrew 后某些虚拟环境报 <code>No such file or directory</code></td>
+<td>该环境基于 Homebrew Python 创建，旧版本已被清理</td>
+<td>用 uv 或 pyenv 的解释器重建：<code>uv venv --python 3.12</code> 后 <code>uv sync</code></td>
+</tr>
+</tbody></table>
+<p>全局工具的日常操作：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">uv tool install ruff</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">uv tool list</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">uv tool upgrade --all</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">uv tool <span class="built_in">dir</span> --bin               <span class="comment"># 可执行文件所在目录，默认 ~/.local/bin</span></span></span></code></pre></div></div></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>两层问题分开处理。解释器层：纯 uv 最省事，需要全局 <code>python</code> 命令或自定义编译时保留 pyenv，并用 <code>python-preference</code> 明确解释器来源，别让两边各装一份还互相覆盖。项目层：统一交给 uv，<code>pyproject.toml</code> 加 <code>uv.lock</code> 入库，本地 <code>uv run</code>，CI <code>uv sync --locked</code>。系统 Python 和 Homebrew Python 都不碰。</p>
+<h2 id="2026-09-补记：uv-的后续变化与-pyenv-是否还需要"><a href="#2026-09-补记：uv-的后续变化与-pyenv-是否还需要" class="headerlink" title="2026-09 补记：uv 的后续变化与 pyenv 是否还需要"></a>2026-09 补记：uv 的后续变化与 pyenv 是否还需要</h2><p>本文写于 uv 0.5.1 时期。此后与本文相关的变化（据 uv 官方变更日志）：</p>
+<table>
+<thead>
+<tr>
+<th>版本与日期</th>
+<th>变化</th>
+<th>对本文的影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0.6.0（2025-02-14）</td>
+<td><code>uv init</code> 生成的示例文件由 <code>hello.py</code> 改为 <code>main.py</code></td>
+<td>迁移步骤里要删的文件名随之变化</td>
+</tr>
+<tr>
+<td>0.8.0（2025-07-17）</td>
+<td><code>uv python install</code> 默认把带版本号的可执行文件（如 <code>python3.13</code>）装进 <code>~/.local/bin</code>；不带版本号的 <code>python</code>、<code>python3</code> 仍需实验性的 <code>--default</code> 选项</td>
+<td>纯 uv 方案在终端里也能直接敲 <code>python3.13</code> 了；若 <code>~/.local/bin</code> 排在 pyenv shims 前面，会遮蔽 pyenv 的同名命令，本文的 PATH 顺序正好避免了这一点</td>
+</tr>
+<tr>
+<td>0.9.0（2025-10-07）</td>
+<td>默认 Python 版本由 3.13 改为 3.14；同日 Python 3.14 正式发布</td>
+<td>未固定版本、机器上又没有任何解释器时，会装 3.14。项目里有 <code>.python-version</code> 的不受影响</td>
+</tr>
+<tr>
+<td>0.10.0（2026-02-05）</td>
+<td><code>uv python upgrade</code>、<code>uv python install --upgrade</code> 转为稳定；安装新补丁版本后，虚拟环境会透明升级到该补丁版本（不跨次版本）；<code>uv venv</code> 覆盖已有环境需要显式加 <code>--clear</code></td>
+<td>常见问题表里”重建环境”的命令要加 <code>--clear</code></td>
+</tr>
+<tr>
+<td>0.12.0（2026-07-28）</td>
+<td><code>uv init</code> 默认生成带构建系统的打包布局（代码在 <code>src/&lt;项目名&gt;</code>，带 <code>[project.scripts]</code> 入口）；要旧的非打包布局用 <code>uv init --no-package</code></td>
+<td>新建项目的文件清单与本文不同；应用型项目想保持扁平结构时加 <code>--no-package</code></td>
+</tr>
+</tbody></table>
+<p>关于”还需不需要 pyenv”：到 2026 年 9 月，解释器的安装、按次版本放进 PATH、补丁版本升级，uv 都已经是稳定功能。pyenv 剩下的理由只有三个：需要不带版本号的全局 <code>python</code> 命令且不想用实验性的 <code>--default</code>；需要自定义编译参数的解释器；有依赖 pyenv shims 的现存脚本或工具。都不涉及的话，新机器可以只装 uv。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/03/10/engineering-practice/Obsidian-Agent-Skills%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">让 AI Agent 操作 Obsidian：obsidian-skills 与 Obsidian CLI 实践</a></h3>
+        <p>obsidian-skills 教 Agent 写 Obsidian 格式…</p>
+        <a class="btn primary" href="/2026/03/10/engineering-practice/Obsidian-Agent-Skills%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2024/06/18/engineering-practice/Linux%E4%B8%8EmacOS%E6%90%9C%E7%B4%A2%E5%B7%A5%E5%85%B7/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Linux 与 macOS 搜索工具指南</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 7 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%9B%B4%E6%8E%A5%E7%94%A8%E7%B3%BB%E7%BB%9F-Python-%E6%88%96-Homebrew-Python" data-toc-target="为什么不直接用系统-Python-或-Homebrew-Python"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">为什么不直接用系统 Python 或 Homebrew Python</span></a><a class="toc-level-2" href="#%E4%B8%89%E7%A7%8D%E6%96%B9%E6%A1%88%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="三种方案怎么选"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">三种方案怎么选</span></a><a class="toc-level-2" href="#%E5%AE%89%E8%A3%85%E4%B8%8E-shell-%E9%85%8D%E7%BD%AE" data-toc-target="安装与-shell-配置"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">安装与 shell 配置</span></a><a class="toc-level-3" href="#Homebrew-%E4%B8%8E%E7%BC%96%E8%AF%91%E4%BE%9D%E8%B5%96" data-toc-target="Homebrew-与编译依赖"><span class="toc-text">Homebrew 与编译依赖</span></a><a class="toc-level-3" href="#%E5%AE%89%E8%A3%85-uv-%E4%B8%8E-pyenv" data-toc-target="安装-uv-与-pyenv"><span class="toc-text">安装 uv 与 pyenv</span></a><a class="toc-level-3" href="#zsh-%E9%85%8D%E7%BD%AE" data-toc-target="zsh-配置"><span class="toc-text">zsh 配置</span></a><a class="toc-level-3" href="#%E8%AE%A9-uv-%E5%92%8C-pyenv-%E4%B8%8D%E6%8A%A2%E8%A7%A3%E9%87%8A%E5%99%A8" data-toc-target="让-uv-和-pyenv-不抢解释器"><span class="toc-text">让 uv 和 pyenv 不抢解释器</span></a><a class="toc-level-2" href="#%E9%A1%B9%E7%9B%AE%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="项目工作流"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">项目工作流</span></a><a class="toc-level-3" href="#%E6%96%B0%E5%BB%BA%E9%A1%B9%E7%9B%AE" data-toc-target="新建项目"><span class="toc-text">新建项目</span></a><a class="toc-level-3" href="#%E9%94%81%E6%96%87%E4%BB%B6%E4%B8%8E-CI" data-toc-target="锁文件与-CI"><span class="toc-text">锁文件与 CI</span></a><a class="toc-level-3" href="#%E5%A4%9A%E7%89%88%E6%9C%AC%E6%B5%8B%E8%AF%95" data-toc-target="多版本测试"><span class="toc-text">多版本测试</span></a><a class="toc-level-3" href="#%E5%8D%95%E6%96%87%E4%BB%B6%E8%84%9A%E6%9C%AC" data-toc-target="单文件脚本"><span class="toc-text">单文件脚本</span></a><a class="toc-level-3" href="#%E8%80%81%E9%A1%B9%E7%9B%AE%E8%BF%81%E7%A7%BB" data-toc-target="老项目迁移"><span class="toc-text">老项目迁移</span></a><a class="toc-level-2" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98" data-toc-target="常见问题"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">常见问题</span></a><a class="toc-level-2" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">总结</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9Auv-%E7%9A%84%E5%90%8E%E7%BB%AD%E5%8F%98%E5%8C%96%E4%B8%8E-pyenv-%E6%98%AF%E5%90%A6%E8%BF%98%E9%9C%80%E8%A6%81" data-toc-target="2026-09-补记：uv-的后续变化与-pyenv-是否还需要"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">2026-09 补记：uv 的后续变化与 pyenv 是否还需要</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/ai-coding-toolchain/" style="--rail: 86%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 7</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%9B%B4%E6%8E%A5%E7%94%A8%E7%B3%BB%E7%BB%9F-Python-%E6%88%96-Homebrew-Python" data-toc-target="为什么不直接用系统-Python-或-Homebrew-Python" data-title="01 · 为什么不直接用系统 Python 或 Homebrew Python" aria-label="为什么不直接用系统 Python 或 Homebrew Python"></a><a class="toc-strip__dot" href="#%E4%B8%89%E7%A7%8D%E6%96%B9%E6%A1%88%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="三种方案怎么选" data-title="02 · 三种方案怎么选" aria-label="三种方案怎么选"></a><a class="toc-strip__dot" href="#%E5%AE%89%E8%A3%85%E4%B8%8E-shell-%E9%85%8D%E7%BD%AE" data-toc-target="安装与-shell-配置" data-title="03 · 安装与 shell 配置" aria-label="安装与 shell 配置"></a><a class="toc-strip__dot" href="#%E9%A1%B9%E7%9B%AE%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="项目工作流" data-title="04 · 项目工作流" aria-label="项目工作流"></a><a class="toc-strip__dot" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98" data-toc-target="常见问题" data-title="05 · 常见问题" aria-label="常见问题"></a><a class="toc-strip__dot" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结" data-title="06 · 总结" aria-label="总结"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9Auv-%E7%9A%84%E5%90%8E%E7%BB%AD%E5%8F%98%E5%8C%96%E4%B8%8E-pyenv-%E6%98%AF%E5%90%A6%E8%BF%98%E9%9C%80%E8%A6%81" data-toc-target="2026-09-补记：uv-的后续变化与-pyenv-是否还需要" data-title="07 · 2026-09 补记：uv 的后续变化与 pyenv 是否还需要" aria-label="2026-09 补记：uv 的后续变化与 pyenv 是否还需要"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/macOS-Python环境管理","title":"macOS Python 环境管理：pyenv 与 uv 的分工与迁移","url":"/2024/11/12/engineering-practice/macOS-Python%E7%8E%AF%E5%A2%83%E7%AE%A1%E7%90%86/","path":"ai-coding-toolchain","index":5,"total":7,"next":{"title":"让 AI Agent 操作 Obsidian：obsidian-skills 与 Obsidian CLI 实践","url":"/2026/03/10/engineering-practice/Obsidian-Agent-Skills%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

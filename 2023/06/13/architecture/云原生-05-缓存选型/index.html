@@ -1,0 +1,679 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>高并发缓存选型：Redis 集群、KeyDB 与 Dragonfly 的取舍 · 飞轮之道</title>
+<meta name="description" content="从线程模型、兼容性、压测口径与迁移回滚四个角度，论证车联网缓存层在 Redis 7.0 集群、KeyDB 6.3 与 Dragonfly 1.x 之间的取舍，并在 2026 年回看 KeyDB 停更与 Redis 许可证变化后的选择。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2023/06/13/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E7%BC%93%E5%AD%98%E9%80%89%E5%9E%8B/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="高并发缓存选型：Redis 集群、KeyDB 与 Dragonfly 的取舍 · 飞轮之道">
+<meta property="og:description" content="从线程模型、兼容性、压测口径与迁移回滚四个角度，论证车联网缓存层在 Redis 7.0 集群、KeyDB 6.3 与 Dragonfly 1.x 之间的取舍，并在 2026 年回看 KeyDB 停更与 Redis 许可证变化后的选择。">
+<meta property="og:url" content="https://flywhlway.github.io/2023/06/13/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E7%BC%93%E5%AD%98%E9%80%89%E5%9E%8B/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">数据与中间件</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 6 / 9 篇</a>
+    </div>
+    <h1>高并发缓存选型：Redis 集群、KeyDB 与 Dragonfly 的取舍</h1>
+    <p class="article-deck">从线程模型、兼容性、压测口径与迁移回滚四个角度，论证车联网缓存层在 Redis 7.0 集群、KeyDB 6.3 与 Dragonfly 1.x 之间的取舍…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>13 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a><a class="article-meta__tag" href="/tags/%E8%BD%A6%E8%81%94%E7%BD%91/">#车联网</a><a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E9%80%89%E5%9E%8B/">#架构选型</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Redis 6 起已有 I/O 多线程，KeyDB 的数据集仍由全局锁串行化，两者解决的是同一类 I/O 瓶颈，收益必须在同核数条件下实测。</li><li>KeyDB 6.3 的功能基线停在 Redis 6.2，读不了 Redis 7.0 的 RDB，谈不上无缝迁移；Dragonfly 在 2023 年中只对齐到约 Redis 5.0 API。</li><li>2023 年的结论是主力保持 Redis 7.0 集群，按数据性质拆集群并先做近端缓存；KeyDB 不作主力，Dragonfly 只做限定场景试点。</li><li>2026 年回看：KeyDB 已停止维护，Redis 许可证两度调整，自建场景的默认选择转向 Valkey。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="背景：缓存层在车联网平台里承担什么"><a href="#背景：缓存层在车联网平台里承担什么" class="headerlink" title="背景：缓存层在车联网平台里承担什么"></a>背景：缓存层在车联网平台里承担什么</h2><p>车辆接入规模上来以后，缓存层不再只是「数据库前面挡一层」，而是承载了几类性质完全不同的数据。选型之前先把它们分开，因为它们对一致性、持久化和淘汰策略的要求互相冲突：</p>
+<table>
+<thead>
+<tr>
+<th>负载</th>
+<th>访问特征</th>
+<th>键设计</th>
+<th>丢失的后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>车辆在线会话与连接路由</td>
+<td>上下线时写，下行指令时读；每车一条</td>
+<td><code>sess:{VIN}</code></td>
+<td>下行指令找不到车辆所在接入节点，必须持久化且不可淘汰</td>
+</tr>
+<tr>
+<td>车辆最新状态快照</td>
+<td>实时计算作业（本系列 04 篇）按车覆盖写，App 与运营后台读</td>
+<td><code>state:{VIN}</code>（Hash）</td>
+<td>可从时序库重建，允许短暂缺失</td>
+</tr>
+<tr>
+<td>远控与升级任务的短期状态</td>
+<td>指令幂等键、任务进度计数，TTL 从分钟到天</td>
+<td><code>cmd:{VIN}:{reqId}</code></td>
+<td>幂等失效可能导致指令重复执行</td>
+</tr>
+<tr>
+<td>配置与字典</td>
+<td>读多写少，少数键极热</td>
+<td><code>cfg:{model}:{ver}</code></td>
+<td>可回源，但热点键会打满单分片</td>
+</tr>
+</tbody></table>
+<p>2023 年上半年的现象是：高峰时段少数分片 CPU 打满、p99 延迟明显抬升。团队内出现了一个提议：换成多线程的 KeyDB，「QPS 翻倍、延迟降六成、完全兼容、无缝迁移」。本文的任务是把这个提议拆开验证——哪些成立，哪些没有依据，以及真正该怎么做。</p>
+<p>先说结论性的判断方法：<strong>缓存选型比较的对象，永远是「同等 CPU 核数与内存下的完整部署」，而不是「一个 Redis 进程对一个多线程进程」。</strong></p>
+<h2 id="先把「单线程」说清楚：三种线程模型"><a href="#先把「单线程」说清楚：三种线程模型" class="headerlink" title="先把「单线程」说清楚：三种线程模型"></a>先把「单线程」说清楚：三种线程模型</h2><p>「Redis 是单线程」这句话从 Redis 6.0（2020 年）起就只说对了一半。三种实现的真实差异如下：</p>
+<pre class="mermaid">flowchart TB
+  subgraph R["Redis 6/7：I/O 线程 + 单一执行线程"]
+    RC["客户端连接"] --&gt; RIO["I/O 线程组&lt;br/&gt;socket 读写与协议解析"]
+    RIO --&gt; RM["主线程&lt;br/&gt;串行执行全部命令"]
+    RM --&gt; RIO
+  end
+  subgraph K["KeyDB 6.3：多事件循环 + 全局锁"]
+    KC["客户端连接"] --&gt; KT["工作线程 1..n&lt;br/&gt;各自完成收包、解析、回写"]
+    KT --&gt;|"获取全局自旋锁"| KD["共享数据集&lt;br/&gt;同一时刻只有一个线程修改"]
+  end
+  subgraph D["Dragonfly 1.x：无共享分片"]
+    DC["客户端连接"] --&gt; DT["连接所属线程&lt;br/&gt;充当协调者"]
+    DT --&gt;|"消息投递"| DS1["线程 A 独占分片 A"]
+    DT --&gt;|"消息投递"| DS2["线程 B 独占分片 B"]
+  end</pre>
+
+
+<h3 id="Redis：I-O-可并行，命令执行串行"><a href="#Redis：I-O-可并行，命令执行串行" class="headerlink" title="Redis：I&#x2F;O 可并行，命令执行串行"></a>Redis：I&#x2F;O 可并行，命令执行串行</h3><p>Redis 6.0 引入 <code>io-threads</code>：主线程把就绪连接分发给 I&#x2F;O 线程做 socket 读写，开启 <code>io-threads-do-reads</code> 后协议解析也交给 I&#x2F;O 线程；<strong>命令本身仍由主线程串行执行</strong>。因此：</p>
+<ul>
+<li>瓶颈在网络系统调用（连接数多、value 大、无 pipeline）时，I&#x2F;O 线程有效；</li>
+<li>瓶颈在命令执行（长 Lua 脚本、大集合的 O(N) 命令、大 key 删除）时，I&#x2F;O 线程无效；</li>
+<li>官方 <code>redis.conf</code> 的建议是 4 核机器用 2～3 个 I&#x2F;O 线程、8 核用 6 个，超过 8 个收益有限。</li>
+</ul>
+<p>Redis 利用多核的正路是 Redis Cluster：16384 个哈希槽分布到多个分片，一台机器上可以跑多个分片进程。代价是客户端必须支持集群协议，跨槽的多键命令要靠 hash tag（<code>{VIN}</code>）把同一辆车的键放进同一个槽。</p>
+<h3 id="KeyDB：并行的是-I-O，不是数据集访问"><a href="#KeyDB：并行的是-I-O，不是数据集访问" class="headerlink" title="KeyDB：并行的是 I&#x2F;O，不是数据集访问"></a>KeyDB：并行的是 I&#x2F;O，不是数据集访问</h3><p>KeyDB 从 Redis 分叉，每个工作线程（<code>server-threads</code>）运行一个完整的事件循环，独立处理自己那部分连接的收包、解析和回写；对数据集的访问依赖一把全局自旋锁。6.3.0 的发布说明写得很直白：这一版是「逐步摆脱全局锁」的阶段性成果，新增的 async commands 只覆盖 GET 和 MGET，默认关闭，开启后还要接受跨客户端写入可见性的放宽；另一项改进是利用自旋等待的 CPU 时间做 rehash。</p>
+<p>这意味着原稿画的「多线程 + 数据锁并行执行 DB 操作」并不准确：写路径仍是串行化的，KeyDB 的收益主要来自把 I&#x2F;O 与解析并行化——和 Redis 6 的 I&#x2F;O 线程解决的是<strong>同一类瓶颈</strong>，只是实现方式不同（KeyDB 由线程独立处理连接全流程，省掉了主线程分发与等待）。推论有两条：</p>
+<ol>
+<li>对比「未开 I&#x2F;O 线程的单个 Redis」，KeyDB 的提升会很显著，但这个对照组本身不公平；</li>
+<li>对比「开了 I&#x2F;O 线程的 Redis」或「同核数的 Redis Cluster」，差距多大没有先验答案，线程数越多，锁竞争越可能吃掉收益。</li>
+</ol>
+<p>「QPS 是 Redis 的两倍、延迟降低 60%」这类数字，脱离了对照组配置、数据形态和延迟分位就没有意义，不能作为决策依据。</p>
+<h3 id="Dragonfly：真正并行执行命令，但功能面尚窄"><a href="#Dragonfly：真正并行执行命令，但功能面尚窄" class="headerlink" title="Dragonfly：真正并行执行命令，但功能面尚窄"></a>Dragonfly：真正并行执行命令，但功能面尚窄</h3><p>Dragonfly 采用无共享（shared-nothing）架构：键空间按线程切分，每个线程独占一个分片，单键命令投递给所属线程执行；多键原子操作基于 VLL 论文实现的事务框架协调，不依赖互斥锁。三者之中，只有它真正做到了命令执行的多核并行。</p>
+<p>截至 2023 年 6 月（v1.3.0，5 月 18 日发布）它的边界同样清楚：</p>
+<ul>
+<li>v1.0.0 在 2023 年 3 月 20 日发布，主从复制是这个版本才加入的；</li>
+<li>项目 README 自述实现了约 185 个 Redis 命令，大致对齐 Redis 5.0 API；</li>
+<li><code>cluster_mode</code> 只支持 <code>emulated</code>，即对客户端伪装成只有一个分片的集群，本身不能横向分片；</li>
+<li>许可证为 BSL 1.1，附加使用授权禁止以它对外提供内存数据存储服务，企业内部自用不受影响，但要过法务。</li>
+</ul>
+<p>性能方面，厂商 README 给出在单台 c6gn.16xlarge 上相对 Redis 25 倍吞吐的结果，对照组是单个 Redis 进程；Redis 官方在 2022 年用同一机型上的多分片 Redis 集群做了反驳测试。双方的分歧恰好说明了本文的比较原则：对照组必须是同核数的 Redis 集群。</p>
+<h2 id="兼容性清单"><a href="#兼容性清单" class="headerlink" title="兼容性清单"></a>兼容性清单</h2><p>「完全兼容 Redis API」需要逐项核对。下表以现网 Redis 7.0 为基线：</p>
+<table>
+<thead>
+<tr>
+<th>检查项</th>
+<th>Redis 7.0（现网）</th>
+<th>KeyDB 6.3</th>
+<th>Dragonfly 1.3</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>功能基线</td>
+<td>7.0</td>
+<td>对齐 Redis 6.2（6.2.0 发布说明标注与 6.2.3 功能对齐）</td>
+<td>约 Redis 5.0 API</td>
+</tr>
+<tr>
+<td>Redis Functions、分片 Pub&#x2F;Sub、ACL v2 选择器</td>
+<td>支持</td>
+<td>不支持（均为 7.0 新增）</td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>RDB 格式</td>
+<td>v10（引入 listpack 编码）</td>
+<td>v9，<strong>无法加载 7.0 生成的 RDB</strong></td>
+<td>可挂为 Redis 主库的从节点，具体版本组合需实测</td>
+</tr>
+<tr>
+<td>集群协议（<code>CLUSTER SLOTS</code>、MOVED 重定向）</td>
+<td>支持</td>
+<td>支持</td>
+<td>仅 emulated 单分片</td>
+</tr>
+<tr>
+<td>Lua 脚本</td>
+<td>支持</td>
+<td>支持</td>
+<td>支持，但脚本应只访问 <code>KEYS</code> 中声明的键，访问未声明键需显式放开</td>
+</tr>
+<tr>
+<td>客户端侧缓存（<code>CLIENT TRACKING</code>）</td>
+<td>支持</td>
+<td>支持（6.x 已有）</td>
+<td>需逐项验证</td>
+</tr>
+<tr>
+<td>运维生态（exporter、Operator、备份工具）</td>
+<td>成熟</td>
+<td>基本沿用 Redis 工具</td>
+<td>自带 HTTP 指标端点，Operator 较新</td>
+</tr>
+</tbody></table>
+<p>RDB 这一行决定了迁移路径：现网是 Redis 7.0，KeyDB 6.3 不能直接挂成它的从库完成全量同步，只能用基于命令重放的同步工具（如 RedisShake）或业务双写。「无缝迁移」在这里不成立。</p>
+<p>应用侧还要用静态扫描加流量采样确认实际使用的命令集合：Redis 的 <code>INFO commandstats</code> 可以列出现网每个命令的调用次数，拿它和目标实现的命令支持表逐条比对，比阅读兼容性声明可靠得多。</p>
+<h2 id="容量口径与压测方法"><a href="#容量口径与压测方法" class="headerlink" title="容量口径与压测方法"></a>容量口径与压测方法</h2><h3 id="容量假设"><a href="#容量假设" class="headerlink" title="容量假设"></a>容量假设</h3><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>取值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>车辆保有</td>
+<td>200 万</td>
+<td>三年规划口径</td>
+</tr>
+<tr>
+<td>峰值同时在线</td>
+<td>80 万</td>
+<td>早晚通勤时段</td>
+</tr>
+<tr>
+<td>状态快照写入周期</td>
+<td>10 秒</td>
+<td>原始信号走消息链路（本系列 06 篇）与时序链路（本系列 07 篇），缓存只存最新快照</td>
+</tr>
+<tr>
+<td>状态快照大小</td>
+<td>约 1.5 KB，Hash 约 60 个字段</td>
+<td>保持在 listpack 编码阈值内</td>
+</tr>
+<tr>
+<td>会话记录</td>
+<td>约 200 B</td>
+<td>持久化、不可淘汰</td>
+</tr>
+</tbody></table>
+<p>由此推出：</p>
+<ul>
+<li>状态写入常态 80 万 ÷ 10 秒 &#x3D; 8 万次&#x2F;秒，按集中补传与批量远控取 3 倍峰值系数，约 24 万次&#x2F;秒；</li>
+<li>读取（App、运营后台、规则引擎）常态约 3 万次&#x2F;秒，峰值按 10 万次&#x2F;秒规划；</li>
+<li>内存：200 万 × 1.5 KB ≈ 3 GB 原始数据，计入编码与分配器开销按 2 倍估算约 6 GB，加上会话、任务状态与配置约 8 GB；一主一从、内存水位不超过 50%，物理内存至少 32 GB。</li>
+</ul>
+<p>单分片能力不做假设，而是压测求出「在 p99 ≤ 2 ms 约束下单分片可持续承受的吞吐」，记为 S。分片数 &#x3D; 峰值吞吐 ÷（S × 0.6），0.6 为故障转移与扩容窗口留出的余量。这组数字的意义不在绝对值，而在于把「需要多少 QPS」换算成「需要多少核、多少分片」，让三种方案在同一口径下比较。</p>
+<h3 id="压测怎么做才可比"><a href="#压测怎么做才可比" class="headerlink" title="压测怎么做才可比"></a>压测怎么做才可比</h3><ol>
+<li><strong>同核数对照</strong>：8 vCPU 机器上，Redis 侧部署 4～6 个集群分片（或单分片开 I&#x2F;O 线程两组都测），KeyDB 设 <code>server-threads</code> 为 4～6，Dragonfly 设 <code>proactor_threads</code> 为 8；压测机与被测机分开，网络带宽不成为瓶颈。</li>
+<li><strong>真实数据形态</strong>：value 大小按线上分布取区间，键空间取 200 万，访问分布用高斯而非均匀，以模拟热点车辆与热点配置。</li>
+<li><strong>真实连接数</strong>：线上是数百个服务实例、每实例数十个连接，压测的连接总数要对齐。连接数对 I&#x2F;O 线程和 KeyDB 的收益影响很大，少量连接加深 pipeline 的测法会严重高估。</li>
+<li><strong>持久化与副本打开</strong>：AOF 每秒刷盘、带一个从节点，与生产一致；关掉持久化测出的数字不能用于容量规划。</li>
+<li><strong>梯度加压看分位</strong>：逐级提高请求速率，记录每一级的 p50、p99、p99.9，找出 p99 越过 2 ms 的拐点；只报最大吞吐没有意义。</li>
+<li><strong>故障注入</strong>：压测中执行 BGSAVE、主从切换、删除一个 100 MB 的大 key，观察尾延迟与恢复时间。</li>
+</ol>
+<p>基准命令示例（SET&#x2F;GET 混合，读写比 1:3 对应写多读少的状态快照场景）：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">memtier_benchmark -s 10.0.0.21 -p 6379 --cluster-mode \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --threads=8 --clients=50 --pipeline=1 \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  --ratio=1:3 --data-size-range=200-2000 \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --key-prefix=<span class="string">&quot;state:&quot;</span> --key-minimum=1 --key-maximum=2000000 \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  --key-pattern=G:G --distinct-client-seed --test-time=600</span></span></code></pre></div></div></figure>
+
+<p>Hash 类负载用自定义命令或回放脱敏后的线上流量补测，结果与 SET&#x2F;GET 分开记录。</p>
+<h2 id="选型决策"><a href="#选型决策" class="headerlink" title="选型决策"></a>选型决策</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>Redis 7.0 Cluster</th>
+<th>KeyDB 6.3</th>
+<th>Dragonfly 1.3</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>命令执行并行度</td>
+<td>单分片串行，靠多分片并行</td>
+<td>数据集由全局锁串行化</td>
+<td>按线程分片并行</td>
+</tr>
+<tr>
+<td>扩展方式</td>
+<td>横向加分片</td>
+<td>纵向加线程，收益随锁竞争递减</td>
+<td>纵向为主，2023 年不能横向分片</td>
+</tr>
+<tr>
+<td>功能基线</td>
+<td>7.0</td>
+<td>6.2</td>
+<td>约 5.0</td>
+</tr>
+<tr>
+<td>迁移成本</td>
+<td>无</td>
+<td>需命令级同步，7.0 特性需回退</td>
+<td>需逐命令核对，数据需收拢到单个 emulated 实例</td>
+</tr>
+<tr>
+<td>维护方与节奏</td>
+<td>Redis 官方与社区，发布稳定</td>
+<td>单一公司维护，6.3.1 到 6.3.3 间隔近一年</td>
+<td>创业公司主导，迭代快</td>
+</tr>
+<tr>
+<td>许可证</td>
+<td>BSD-3-Clause（核心）</td>
+<td>BSD-3-Clause</td>
+<td>BSL 1.1</td>
+</tr>
+</tbody></table>
+<p>2023 年 6 月的决策：</p>
+<ul>
+<li><strong>主力保持 Redis 7.0 Cluster</strong>，按数据性质拆成两个集群：会话与任务状态集群（<code>noeviction</code>、AOF 开启），状态快照与配置缓存集群（<code>allkeys-lru</code>、只开 RDB）。拆分后淘汰策略与持久化策略不再互相妥协。</li>
+<li><strong>先治热点，再谈换引擎</strong>：热点配置改为进程内近端缓存（Caffeine 一类）配合 <code>CLIENT TRACKING</code> 失效通知，这一步通常能削掉读流量中最尖的那部分，效果远大于更换服务端。</li>
+<li><strong>I&#x2F;O 瓶颈的分片开启 I&#x2F;O 线程</strong>，以压测拐点决定线程数。</li>
+<li><strong>KeyDB 不作为主力</strong>：它能解决的问题 Redis I&#x2F;O 线程加分片也能解决，却要付出功能回退到 6.2、迁移不可直连、维护节奏放缓三项代价。</li>
+<li><strong>Dragonfly 列入观察</strong>：仅在「单机大内存、读多写少、不依赖集群协议」的缓存上试点，前提是命令清单比对全部通过。</li>
+</ul>
+<h2 id="关键配置"><a href="#关键配置" class="headerlink" title="关键配置"></a>关键配置</h2><p>Redis 7.0 状态缓存分片（8 vCPU、单机两分片，每分片示例）：</p>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 状态快照与配置缓存集群：可淘汰、可重建</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">cluster-enabled yes</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">cluster-node-timeout 5000</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">cluster-require-full-coverage no</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">maxmemory 12gb</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">maxmemory-policy allkeys-lru</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">io-threads 3</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">io-threads-do-reads yes</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">appendonly no</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">save 900 1</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">lazyfree-lazy-eviction yes</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">lazyfree-lazy-expire yes</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">lazyfree-lazy-user-del yes</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">hash-max-listpack-entries 128</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">hash-max-listpack-value 64</span></span></code></pre></div></div></figure>
+
+<p>会话集群的差异项：</p>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># 会话与任务状态集群：不可淘汰、需持久化</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">maxmemory-policy noeviction</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">appendonly yes</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">appendfsync everysec</span></span></code></pre></div></div></figure>
+
+<p><code>noeviction</code> 下写满内存会直接报错，所以会话集群必须配内存水位告警（<code>used_memory / maxmemory</code> 超过 70% 告警、超过 85% 扩容）。</p>
+<p>Dragonfly 试点实例：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">dragonfly --port=6379 --proactor_threads=8 \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --maxmemory=48gb --cache_mode=<span class="literal">true</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  --cluster_mode=emulated --<span class="built_in">dir</span>=/data</span></span></code></pre></div></div></figure>
+
+<h2 id="迁移与回滚步骤"><a href="#迁移与回滚步骤" class="headerlink" title="迁移与回滚步骤"></a>迁移与回滚步骤</h2><p>即使是 Redis 同版本之间的拆集群、扩分片，也按同一套步骤执行：</p>
+<ol>
+<li><strong>命令清单比对</strong>：导出 <code>INFO commandstats</code>，与目标端支持列表逐条核对，不支持的命令先在应用侧改掉。</li>
+<li><strong>影子流量</strong>：用同步工具把现网数据持续同步到目标集群，读流量按 1% 旁路到目标端做结果比对，不返回给调用方。</li>
+<li><strong>可重建数据先切</strong>：状态快照与配置缓存可从时序库和配置中心回源，先切这一类；按服务逐个切换连接配置，每步观察 24 小时。</li>
+<li><strong>不可重建数据后切</strong>：会话与幂等键采用双写，新集群为主、旧集群为辅，读取以新集群为准；双写窗口覆盖最长 TTL。</li>
+<li><strong>回滚</strong>：连接配置保留旧集群地址，一个开关切回；回滚期间不需要反向同步可重建数据，会话数据依赖双写窗口内旧集群仍是完整的。</li>
+<li><strong>下线旧集群</strong>：双写窗口结束且连续一周无回滚后，停止双写并下线。</li>
+</ol>
+<h2 id="反例与风险"><a href="#反例与风险" class="headerlink" title="反例与风险"></a>反例与风险</h2><ul>
+<li><strong>只换引擎不治热点</strong>：热点键在任何实现上都会落在同一个线程或分片上，Dragonfly 也不例外。</li>
+<li><strong>缓存当主存</strong>：会话数据若只在缓存里，需要明确 AOF 策略、副本数和故障切换时的丢失窗口；<code>appendfsync everysec</code> 意味着最多丢一秒写入。</li>
+<li><strong>KeyDB 多主复制</strong>：<code>active-replica</code> 与 <code>multi-master</code> 的冲突解决依赖时间戳，网络分区时存在写覆盖风险，不适合幂等键这类数据。</li>
+<li><strong>大 key</strong>：一个 Hash 存全车队状态会让单次 <code>HGETALL</code> 阻塞主线程，也让集群无法均衡；键必须以车为粒度。</li>
+<li><strong>压测对照组不公平</strong>：拿单个未调优 Redis 进程做对照得出的倍数，只能证明对照组没用满机器。</li>
+</ul>
+<h2 id="2026-回看：KeyDB-停更、许可证变局与今天的选择"><a href="#2026-回看：KeyDB-停更、许可证变局与今天的选择" class="headerlink" title="2026 回看：KeyDB 停更、许可证变局与今天的选择"></a>2026 回看：KeyDB 停更、许可证变局与今天的选择</h2><h3 id="经受住时间的判断"><a href="#经受住时间的判断" class="headerlink" title="经受住时间的判断"></a>经受住时间的判断</h3><p><strong>没有把 KeyDB 作为主力是对的。</strong> KeyDB 最后一个版本是 2023 年 10 月 30 日的 v6.3.4，代码提交停在 2024 年 3 月下旬，此后事实上停止维护，功能基线永远停在 Redis 6.2。当年若全面迁移，今天就要再迁一次。好在迁出方向是「新版本读旧格式」，从 KeyDB 迁往 Valkey 或新版 Redis 比当年迁入容易。</p>
+<p><strong>「按数据性质拆集群、先治热点」这条与引擎无关，至今适用。</strong></p>
+<h3 id="需要修正的地方"><a href="#需要修正的地方" class="headerlink" title="需要修正的地方"></a>需要修正的地方</h3><p><strong>许可证不再是「默认安全」的一项。</strong> 2023 年表格里把 Redis 核心许可证写成 BSD-3-Clause 并视为无风险，这个前提在一年后被打破：2024 年 3 月 20 日起，Redis 7.4 及后续版本改为 RSALv2 与 SSPLv1 双许可；2025 年 5 月 1 日发布的 Redis 8 又增加了 AGPLv3 选项，并把 JSON、Time Series、查询引擎并入核心、新增 Vector Sets，截至 2026 年 9 月最新为 8.10。选型表今天必须把许可证作为一等维度，而且要评估「许可证在未来被改变」的可能。</p>
+<p><strong>「多线程」不再是分叉项目的专利。</strong> Redis 被分叉后诞生的 Valkey（2024 年 3 月由 Linux 基金会托管，BSD-3-Clause）在 8.0（2024-09-15）重写了 I&#x2F;O 多线程，8.1（2025-03-31）换用新的哈希表降低每键内存开销，9.0（2025-10-21）带来原子槽迁移、Hash 字段级过期与集群模式下的多数据库，9.1 于 2026-05-19 发布。当年 KeyDB 试图用分叉解决的问题，主线实现已经吸收。</p>
+<p><strong>Dragonfly 的功能面补齐了。</strong> 它持续高频发布，2026 年 9 月 16 日发布 v2.0.0，已能加载 Valkey 9 的 RDB，集群迁移与分层存储也在持续完善；许可证仍是 BSL 1.1。2023 年「约 Redis 5.0 API、不能横向分片」的判断只适用于当时。</p>
+<h3 id="今天会怎么做"><a href="#今天会怎么做" class="headerlink" title="今天会怎么做"></a>今天会怎么做</h3><ul>
+<li><strong>自建默认 Valkey 9.x 集群</strong>：许可证稳定、与 Redis 7.2 及之前的协议和数据格式兼容、多线程 I&#x2F;O 已在主线；托管场景优先选云厂商的 Valkey 兼容服务。</li>
+<li><strong>需要 Redis 8 新能力</strong>（向量检索、内置 JSON&#x2F;时序）时再评估 Redis 8，并由法务确认 AGPLv3 或 RSALv2 的适用边界。</li>
+<li><strong>Dragonfly 用于单机纵向扩展有明确收益的场景</strong>，前提仍是命令清单比对与 BSL 条款审查。</li>
+<li><strong>压测方法与迁移步骤不变</strong>：同核数对照、真实连接数、梯度加压看分位、双写覆盖最长 TTL。这部分是 2023 年这篇里最耐用的内容。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2023/06/27/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-%E6%B6%88%E6%81%AF%E9%80%89%E5%9E%8B/">车联网消息中间件选型：Kafka 与 Pulsar</a></h3>
+        <p>按上行信号流与下行指令两类负载，逐项对比 Kafka 3.5 与 Pulsar 3.0 的存算分离、多租户、跨地域复制、订阅模式与 KRaf…</p>
+        <a class="btn primary" href="/2023/06/27/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-%E6%B6%88%E6%81%AF%E9%80%89%E5%9E%8B/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2023/05/23/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-04-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：车辆信号实时计算平台：Flink 与动态规则引擎</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 9 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E8%83%8C%E6%99%AF%EF%BC%9A%E7%BC%93%E5%AD%98%E5%B1%82%E5%9C%A8%E8%BD%A6%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E9%87%8C%E6%89%BF%E6%8B%85%E4%BB%80%E4%B9%88" data-toc-target="背景：缓存层在车联网平台里承担什么"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">背景：缓存层在车联网平台里承担什么</span></a><a class="toc-level-2" href="#%E5%85%88%E6%8A%8A%E3%80%8C%E5%8D%95%E7%BA%BF%E7%A8%8B%E3%80%8D%E8%AF%B4%E6%B8%85%E6%A5%9A%EF%BC%9A%E4%B8%89%E7%A7%8D%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B" data-toc-target="先把「单线程」说清楚：三种线程模型"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">先把「单线程」说清楚：三种线程模型</span></a><a class="toc-level-3" href="#Redis%EF%BC%9AI-O-%E5%8F%AF%E5%B9%B6%E8%A1%8C%EF%BC%8C%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C%E4%B8%B2%E8%A1%8C" data-toc-target="Redis：I-O-可并行，命令执行串行"><span class="toc-text">Redis：I/O 可并行，命令执行串行</span></a><a class="toc-level-3" href="#KeyDB%EF%BC%9A%E5%B9%B6%E8%A1%8C%E7%9A%84%E6%98%AF-I-O%EF%BC%8C%E4%B8%8D%E6%98%AF%E6%95%B0%E6%8D%AE%E9%9B%86%E8%AE%BF%E9%97%AE" data-toc-target="KeyDB：并行的是-I-O，不是数据集访问"><span class="toc-text">KeyDB：并行的是 I/O，不是数据集访问</span></a><a class="toc-level-3" href="#Dragonfly%EF%BC%9A%E7%9C%9F%E6%AD%A3%E5%B9%B6%E8%A1%8C%E6%89%A7%E8%A1%8C%E5%91%BD%E4%BB%A4%EF%BC%8C%E4%BD%86%E5%8A%9F%E8%83%BD%E9%9D%A2%E5%B0%9A%E7%AA%84" data-toc-target="Dragonfly：真正并行执行命令，但功能面尚窄"><span class="toc-text">Dragonfly：真正并行执行命令，但功能面尚窄</span></a><a class="toc-level-2" href="#%E5%85%BC%E5%AE%B9%E6%80%A7%E6%B8%85%E5%8D%95" data-toc-target="兼容性清单"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">兼容性清单</span></a><a class="toc-level-2" href="#%E5%AE%B9%E9%87%8F%E5%8F%A3%E5%BE%84%E4%B8%8E%E5%8E%8B%E6%B5%8B%E6%96%B9%E6%B3%95" data-toc-target="容量口径与压测方法"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">容量口径与压测方法</span></a><a class="toc-level-3" href="#%E5%AE%B9%E9%87%8F%E5%81%87%E8%AE%BE" data-toc-target="容量假设"><span class="toc-text">容量假设</span></a><a class="toc-level-3" href="#%E5%8E%8B%E6%B5%8B%E6%80%8E%E4%B9%88%E5%81%9A%E6%89%8D%E5%8F%AF%E6%AF%94" data-toc-target="压测怎么做才可比"><span class="toc-text">压测怎么做才可比</span></a><a class="toc-level-2" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96" data-toc-target="选型决策"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">选型决策</span></a><a class="toc-level-2" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE" data-toc-target="关键配置"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">关键配置</span></a><a class="toc-level-2" href="#%E8%BF%81%E7%A7%BB%E4%B8%8E%E5%9B%9E%E6%BB%9A%E6%AD%A5%E9%AA%A4" data-toc-target="迁移与回滚步骤"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">迁移与回滚步骤</span></a><a class="toc-level-2" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">反例与风险</span></a><a class="toc-level-2" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9AKeyDB-%E5%81%9C%E6%9B%B4%E3%80%81%E8%AE%B8%E5%8F%AF%E8%AF%81%E5%8F%98%E5%B1%80%E4%B8%8E%E4%BB%8A%E5%A4%A9%E7%9A%84%E9%80%89%E6%8B%A9" data-toc-target="2026-回看：KeyDB-停更、许可证变局与今天的选择"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">2026 回看：KeyDB 停更、许可证变局与今天的选择</span></a><a class="toc-level-3" href="#%E7%BB%8F%E5%8F%97%E4%BD%8F%E6%97%B6%E9%97%B4%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="经受住时间的判断"><span class="toc-text">经受住时间的判断</span></a><a class="toc-level-3" href="#%E9%9C%80%E8%A6%81%E4%BF%AE%E6%AD%A3%E7%9A%84%E5%9C%B0%E6%96%B9" data-toc-target="需要修正的地方"><span class="toc-text">需要修正的地方</span></a><a class="toc-level-3" href="#%E4%BB%8A%E5%A4%A9%E4%BC%9A%E6%80%8E%E4%B9%88%E5%81%9A" data-toc-target="今天会怎么做"><span class="toc-text">今天会怎么做</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 67%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 9</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E8%83%8C%E6%99%AF%EF%BC%9A%E7%BC%93%E5%AD%98%E5%B1%82%E5%9C%A8%E8%BD%A6%E8%81%94%E7%BD%91%E5%B9%B3%E5%8F%B0%E9%87%8C%E6%89%BF%E6%8B%85%E4%BB%80%E4%B9%88" data-toc-target="背景：缓存层在车联网平台里承担什么" data-title="01 · 背景：缓存层在车联网平台里承担什么" aria-label="背景：缓存层在车联网平台里承担什么"></a><a class="toc-strip__dot" href="#%E5%85%88%E6%8A%8A%E3%80%8C%E5%8D%95%E7%BA%BF%E7%A8%8B%E3%80%8D%E8%AF%B4%E6%B8%85%E6%A5%9A%EF%BC%9A%E4%B8%89%E7%A7%8D%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B" data-toc-target="先把「单线程」说清楚：三种线程模型" data-title="02 · 先把「单线程」说清楚：三种线程模型" aria-label="先把「单线程」说清楚：三种线程模型"></a><a class="toc-strip__dot" href="#%E5%85%BC%E5%AE%B9%E6%80%A7%E6%B8%85%E5%8D%95" data-toc-target="兼容性清单" data-title="03 · 兼容性清单" aria-label="兼容性清单"></a><a class="toc-strip__dot" href="#%E5%AE%B9%E9%87%8F%E5%8F%A3%E5%BE%84%E4%B8%8E%E5%8E%8B%E6%B5%8B%E6%96%B9%E6%B3%95" data-toc-target="容量口径与压测方法" data-title="04 · 容量口径与压测方法" aria-label="容量口径与压测方法"></a><a class="toc-strip__dot" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96" data-toc-target="选型决策" data-title="05 · 选型决策" aria-label="选型决策"></a><a class="toc-strip__dot" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE" data-toc-target="关键配置" data-title="06 · 关键配置" aria-label="关键配置"></a><a class="toc-strip__dot" href="#%E8%BF%81%E7%A7%BB%E4%B8%8E%E5%9B%9E%E6%BB%9A%E6%AD%A5%E9%AA%A4" data-toc-target="迁移与回滚步骤" data-title="07 · 迁移与回滚步骤" aria-label="迁移与回滚步骤"></a><a class="toc-strip__dot" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险" data-title="08 · 反例与风险" aria-label="反例与风险"></a><a class="toc-strip__dot" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9AKeyDB-%E5%81%9C%E6%9B%B4%E3%80%81%E8%AE%B8%E5%8F%AF%E8%AF%81%E5%8F%98%E5%B1%80%E4%B8%8E%E4%BB%8A%E5%A4%A9%E7%9A%84%E9%80%89%E6%8B%A9" data-toc-target="2026-回看：KeyDB-停更、许可证变局与今天的选择" data-title="09 · 2026 回看：KeyDB 停更、许可证变局与今天的选择" aria-label="2026 回看：KeyDB 停更、许可证变局与今天的选择"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-05-缓存选型","title":"高并发缓存选型：Redis 集群、KeyDB 与 Dragonfly 的取舍","url":"/2023/06/13/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E7%BC%93%E5%AD%98%E9%80%89%E5%9E%8B/","path":"cloud-native-platform","index":5,"total":9,"next":{"title":"车联网消息中间件选型：Kafka 与 Pulsar","url":"/2023/06/27/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-%E6%B6%88%E6%81%AF%E9%80%89%E5%9E%8B/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

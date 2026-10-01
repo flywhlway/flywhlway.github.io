@@ -1,0 +1,1016 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Claude Code 多智能体编排：从子代理到 Agent Teams · 飞轮之道</title>
+<meta name="description" content="按 Claude Code 2.1.5x 的真实能力梳理多智能体编排：子代理字段与隔离语义、Agent Teams 研究预览、worktree 并行，以及三种编排模式的配置、失败模式和成本控制。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/02/24/ai-tools/Claude-Code-05-%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93%E7%BC%96%E6%8E%92/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Claude Code 多智能体编排：从子代理到 Agent Teams · 飞轮之道">
+<meta property="og:description" content="按 Claude Code 2.1.5x 的真实能力梳理多智能体编排：子代理字段与隔离语义、Agent Teams 研究预览、worktree 并行，以及三种编排模式的配置、失败模式和成本控制。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/02/24/ai-tools/Claude-Code-05-%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93%E7%BC%96%E6%8E%92/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/AI%E5%B7%A5%E5%85%B7%E9%93%BE/">AI 工具链</a> / <a href="/paths/claude-code-workflow/">编排与工作流</a><a class="series-chip" href="/paths/claude-code-workflow/" title="查看学习路径">第 5 / 8 篇</a>
+    </div>
+    <h1>Claude Code 多智能体编排：从子代理到 Agent Teams</h1>
+    <p class="article-deck">按 Claude Code 2.1.5x 的真实能力梳理多智能体编排：子代理字段与隔离语义、Agent Teams 研究预览、worktree 并行…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>20 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/AI%E5%B7%A5%E5%85%B7/">#AI工具</a><a class="article-meta__tag" href="/tags/%E5%BC%80%E5%8F%91%E6%95%88%E7%8E%87/">#开发效率</a><a class="article-meta__tag" href="/tags/Claude-Code/">#Claude Code</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>多智能体首先是上下文管理手段：把高噪声的搜索、测试输出关进子代理，主会话只收结论。</li><li>子代理是向调用者汇报的工人；Agent Teams 的队友是能互发消息、共享任务列表的完整会话，token 用量随人数近似线性增长。</li><li>并行写代码的前提是文件边界清楚：用 isolation: worktree 或 --worktree 隔离工作区，用文件归属避免互相覆盖。</li><li>每种编排模式都要连同失败模式一起设计：委派消息写足上下文、规定汇报格式、用 hook 把「完成」绑定到可验证的检查。</li><li>顺序依赖强、改动小、需要频繁来回的任务，单会话更快也更便宜。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="多智能体解决什么，又带来什么"><a href="#多智能体解决什么，又带来什么" class="headerlink" title="多智能体解决什么，又带来什么"></a>多智能体解决什么，又带来什么</h2><p>Claude Code 的单个会话本身就是完整的 agent 循环：读文件、跑命令、改代码、再验证。多智能体并不会让模型更聪明，它解决的是单会话的三个结构性瓶颈：</p>
+<ul>
+<li><strong>上下文污染</strong>：一次全仓搜索、一轮完整测试、一段日志排查，输出动辄几万 token。它们留在主会话里，会挤占后续推理空间，还会在自动压缩时把早期的关键约束一起压掉。子代理在独立上下文里消化这些噪声，只把结论交回。</li>
+<li><strong>串行等待</strong>：「鉴权模块怎么管 session」「迁移脚本怎么跑」「前端怎么拿 token」三个互不依赖的问题，单会话只能一个接一个查。</li>
+<li><strong>角色混杂</strong>：同一个会话既写代码又评审自己的代码，天然带着实现者的预设。一个只读、只看 diff、提示词不同的评审者，才算得上第二视角。</li>
+</ul>
+<p>代价同样是结构性的，而且经常被低估：</p>
+<table>
+<thead>
+<tr>
+<th>代价</th>
+<th>具体表现</th>
+<th>缓解手段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>token 成本</td>
+<td>每个子代理从零开始读文件、建立上下文；Agent Teams 的每个队友都是完整的 Claude Code 实例，用量随人数近似线性增长</td>
+<td>搜索类代理用小模型；控制并发数；任务结束及时关闭队友</td>
+</tr>
+<tr>
+<td>协调开销</td>
+<td>子代理看不到主对话历史，只能拿到主会话写的委派消息；消息写得薄，它就重复探索甚至误解目标</td>
+<td>委派时写明路径、约束、验收标准和汇报格式</td>
+</tr>
+<tr>
+<td>结果合并</td>
+<td>摘要有损；并行改动撞上同一个文件；两份调查结论互相矛盾时需要裁决</td>
+<td>按文件划分归属；用 worktree 隔离；要求结构化汇报</td>
+</tr>
+<tr>
+<td>启动延迟</td>
+<td>子代理需要时间收集上下文，小任务委派出去反而更慢</td>
+<td>一句话能说清的改动不委派</td>
+</tr>
+</tbody></table>
+<p>选形态之前，先对照场景：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>推荐形态</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>小改动、单文件修复</td>
+<td>单会话</td>
+<td>委派开销大于收益</td>
+</tr>
+<tr>
+<td>大范围只读搜索、跑测试只看失败项</td>
+<td>子代理</td>
+<td>输出噪声大，只需要结论</td>
+</tr>
+<tr>
+<td>三个以上互不依赖的调查</td>
+<td>并行子代理</td>
+<td>结果汇总即可，不需要互相讨论</td>
+</tr>
+<tr>
+<td>调查者需要互相质疑、交叉验证</td>
+<td>Agent Teams</td>
+<td>队友之间能直接发消息</td>
+</tr>
+<tr>
+<td>前端、后端、测试各自独立的新功能</td>
+<td>Agent Teams 或多个 worktree 会话</td>
+<td>各自持有文件，长时间并行</td>
+</tr>
+<tr>
+<td>两种实现方案都想试</td>
+<td>两个 <code>--worktree</code> 会话</td>
+<td>完全隔离，最后比较 diff</td>
+</tr>
+</tbody></table>
+<h2 id="子代理：定义、调用与隔离语义"><a href="#子代理：定义、调用与隔离语义" class="headerlink" title="子代理：定义、调用与隔离语义"></a>子代理：定义、调用与隔离语义</h2><h3 id="定义文件与作用域"><a href="#定义文件与作用域" class="headerlink" title="定义文件与作用域"></a>定义文件与作用域</h3><p>子代理是一个带 YAML frontmatter 的 Markdown 文件：frontmatter 是配置，正文是它的系统提示词。1.0.60（2025-07-24）起可以用 <code>/agents</code> 交互式创建，也可以直接写文件。存放位置决定作用域，同名时高优先级覆盖低优先级：</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>作用域</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--agents</code> 命令行 JSON</td>
+<td>当前会话</td>
+<td>2.0.0 引入，适合脚本里临时注入</td>
+</tr>
+<tr>
+<td><code>.claude/agents/</code></td>
+<td>当前项目</td>
+<td>提交进仓库，团队共享</td>
+</tr>
+<tr>
+<td><code>~/.claude/agents/</code></td>
+<td>本机所有项目</td>
+<td>个人通用角色</td>
+</tr>
+<tr>
+<td>插件的 <code>agents/</code> 目录</td>
+<td>启用该插件的地方</td>
+<td>优先级最低</td>
+</tr>
+</tbody></table>
+<p>一个最小可用的评审代理：</p>
+<figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">name: code-reviewer</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">description: 代码评审专家。完成一组代码修改后主动使用，检查正确性、安全与可维护性。</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">tools: Read, Grep, Glob, Bash</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="section">model: sonnet</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="section">---</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">你是这个仓库的代码评审者。</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="bullet">1.</span> 运行 <span class="code">`git diff HEAD`</span> 查看本次改动，只评审改动涉及的代码。</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="bullet">2.</span> 按「必须修复 / 建议修复 / 可选优化」三级列出问题，每条附文件路径与行号。</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="bullet">3.</span> 不修改任何文件；需要验证时只运行只读命令或测试。</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="bullet">4.</span> 没有发现问题时明确写「未发现阻断问题」，不要凑数。</span></span></code></pre></div></div></figure>
+
+<p>注意第 3 条只是提示词层面的约束：只要 <code>tools</code> 里有 <code>Bash</code>，它仍然可以用 shell 写文件。真正的只读要在工具层面做，要么去掉 <code>Bash</code>，要么像后文模式三那样加一个拦截写操作的 hook。</p>
+<h3 id="frontmatter-字段（截至-2-1-53）"><a href="#frontmatter-字段（截至-2-1-53）" class="headerlink" title="frontmatter 字段（截至 2.1.53）"></a>frontmatter 字段（截至 2.1.53）</h3><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>必填</th>
+<th>作用</th>
+<th>引入版本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code></td>
+<td>是</td>
+<td>唯一标识，小写字母加连字符</td>
+<td>1.0.60</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>是</td>
+<td>什么时候该委派给它。Claude 据此自动选择代理，写上「主动使用」一类措辞能提高自动委派的概率</td>
+<td>1.0.60</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>否</td>
+<td>允许使用的工具，逗号分隔；省略则继承主会话可用的全部工具，包括 MCP 工具</td>
+<td>1.0.60</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>否</td>
+<td><code>sonnet</code>、<code>opus</code>、<code>haiku</code> 或 <code>inherit</code>；省略时继承主会话模型</td>
+<td>1.0.64</td>
+</tr>
+<tr>
+<td><code>disallowedTools</code></td>
+<td>否</td>
+<td>从继承或指定的工具列表里剔除的工具</td>
+<td>2.0.30</td>
+</tr>
+<tr>
+<td><code>permissionMode</code></td>
+<td>否</td>
+<td>子代理自己的权限模式，常用 <code>default</code>、<code>acceptEdits</code>、<code>plan</code>、<code>bypassPermissions</code></td>
+<td>2.0.43</td>
+</tr>
+<tr>
+<td><code>skills</code></td>
+<td>否</td>
+<td>启动时预加载的 Skills，注入的是完整内容而非描述</td>
+<td>2.0.43</td>
+</tr>
+<tr>
+<td><code>hooks</code></td>
+<td>否</td>
+<td>只在该子代理运行期间生效的钩子；其中 <code>Stop</code> 会在运行时转成 <code>SubagentStop</code></td>
+<td>2.1.0</td>
+</tr>
+<tr>
+<td><code>memory</code></td>
+<td>否</td>
+<td>跨会话持久记忆的作用域：<code>user</code>、<code>project</code> 或 <code>local</code></td>
+<td>2.1.33</td>
+</tr>
+<tr>
+<td><code>background</code></td>
+<td>否</td>
+<td>设为 <code>true</code> 时总是作为后台任务运行</td>
+<td>2.1.49</td>
+</tr>
+<tr>
+<td><code>isolation</code></td>
+<td>否</td>
+<td>设为 <code>worktree</code> 时在临时 git worktree 里工作</td>
+<td>2.1.50</td>
+</tr>
+<tr>
+<td><code>color</code></td>
+<td>否</td>
+<td>界面中的显示颜色，<code>/agents</code> 创建时会写入</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<p><code>tools</code> 与 <code>disallowedTools</code> 的取舍：白名单适合角色边界清楚的代理，比如「只能读」；黑名单适合「除了写文件什么都能做」，好处是 MCP 工具会自动继承，不用逐个列出。</p>
+<h3 id="内置子代理"><a href="#内置子代理" class="headerlink" title="内置子代理"></a>内置子代理</h3><ul>
+<li><code>general-purpose</code>：全部工具，承担需要既探索又修改的多步任务。</li>
+<li><code>Explore</code>：2.0.17（2025-10-15）引入，由 Haiku 驱动的只读搜索代理，存在的意义就是替主会话省上下文。</li>
+<li><code>Plan</code>：2.0.28 引入，在 plan 模式下替主会话调研代码库，让主会话保持只读，同时不被探索输出淹没。</li>
+<li>另有若干辅助代理，例如 <code>/statusline</code> 背后的 <code>statusline-setup</code>。</li>
+</ul>
+<p>2.1.0 起可以在 <code>permissions.deny</code> 里用 <code>Task(代理名)</code> 禁用某个代理，例如希望所有探索都走自己的只读代理时：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;permissions&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;deny&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;Task(Explore)&quot;</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<h3 id="调用方式"><a href="#调用方式" class="headerlink" title="调用方式"></a>调用方式</h3><table>
+<thead>
+<tr>
+<th>方式</th>
+<th>写法</th>
+<th>确定性</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>自动委派</td>
+<td>什么都不写，Claude 根据 <code>description</code> 判断</td>
+<td>最低，取决于描述写得是否贴切</td>
+</tr>
+<tr>
+<td>自然语言点名</td>
+<td>「用 code-reviewer 子代理看一下最近的改动」</td>
+<td>通常会委派，但仍由 Claude 决定</td>
+</tr>
+<tr>
+<td>@-mention</td>
+<td>输入 <code>@</code> 从补全里选择，或直接写 <code>@agent-code-reviewer</code>（1.0.62）</td>
+<td>指定代理必然执行</td>
+</tr>
+<tr>
+<td>整个会话扮演代理</td>
+<td><code>claude --agent code-reviewer</code>（2.0.59），或在 settings 里设置 <code>&quot;agent&quot;</code></td>
+<td>主线程直接使用该代理的提示词、工具和模型</td>
+</tr>
+<tr>
+<td>由 Skill 触发</td>
+<td>Skill frontmatter 写 <code>context: fork</code> 与 <code>agent: Explore</code>（2.1.0）</td>
+<td>Skill 被调用时在指定子代理里执行</td>
+</tr>
+<tr>
+<td>脚本注入</td>
+<td><code>--agents</code> 传 JSON</td>
+<td>仅当前进程有效，适合 CI</td>
+</tr>
+</tbody></table>
+<p><code>--agents</code> 的 JSON 与文件定义一一对应，正文换成 <code>prompt</code> 字段：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">claude -p <span class="string">&quot;评审当前分支相对 main 的改动，只输出必须修复的问题&quot;</span> \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --agents <span class="string">&#x27;&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="string">    &quot;reviewer&quot;: &#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="string">      &quot;description&quot;: &quot;只读评审者，评审改动时使用&quot;,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="string">      &quot;prompt&quot;: &quot;你是评审者，只报告问题，不修改文件。&quot;,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="string">      &quot;tools&quot;: [&quot;Read&quot;, &quot;Grep&quot;, &quot;Glob&quot;, &quot;Bash&quot;],</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="string">      &quot;model&quot;: &quot;sonnet&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="string">    &#125;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="string">  &#125;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p>前台与后台：前台子代理会阻塞主会话，权限确认直接弹给你；后台子代理与你并行工作。运行中按 Ctrl+B 可以把当前任务转到后台（2.1.0 起 bash 命令和代理统一用这个快捷键），<code>background: true</code> 则让代理始终后台运行。后台运行时你不在旁边盯着，最好事先在 <code>permissions.allow</code> 里放行它确实需要的命令，否则它会卡在权限上或者直接被拒。</p>
+<p>2.0.28 起 Claude 可以恢复之前的子代理继续工作，恢复后保留该子代理完整的历史。「继续刚才那个评审，这次看授权逻辑」比重新委派一个新评审便宜得多，因为不用重读同一批文件。</p>
+<h3 id="隔离语义：子代理能看到什么"><a href="#隔离语义：子代理能看到什么" class="headerlink" title="隔离语义：子代理能看到什么"></a>隔离语义：子代理能看到什么</h3><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>子代理是否可见</th>
+<th>实践含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>主对话历史</td>
+<td>否，只收到主会话写的委派消息</td>
+<td>委派消息必须自带背景和验收标准</td>
+</tr>
+<tr>
+<td>主会话已读过的文件</td>
+<td>否</td>
+<td>子代理会重读，这部分 token 是重复支出</td>
+</tr>
+<tr>
+<td>Claude Code 默认系统提示词</td>
+<td>否，只有定义文件正文加上工作目录等基本环境信息</td>
+<td>正文要写清工作方法和输出格式</td>
+</tr>
+<tr>
+<td>项目 CLAUDE.md</td>
+<td>是</td>
+<td>项目级规则不必在正文重复</td>
+</tr>
+<tr>
+<td>工具</td>
+<td>由 <code>tools</code> 与 <code>disallowedTools</code> 决定</td>
+<td>只读角色要从工具层面去掉写能力</td>
+</tr>
+<tr>
+<td>权限</td>
+<td>继承主会话的权限设置，可用 <code>permissionMode</code> 调整</td>
+<td>后台运行前先放行所需命令</td>
+</tr>
+<tr>
+<td>再派生子代理</td>
+<td>否，子代理不能嵌套</td>
+<td>多层拆分只能由主会话完成</td>
+</tr>
+<tr>
+<td>回到主会话的内容</td>
+<td>只有最终那条消息</td>
+<td>在正文里规定汇报格式和长度</td>
+</tr>
+</tbody></table>
+<p>最后一行决定了子代理能省多少上下文：一个子代理读了 40 个文件、跑了 10 次测试，主会话只多出它最后那段汇报。汇报格式如果不加约束，这个收益会被一份几千字的「详细报告」抵消掉。</p>
+<h2 id="Agent-Teams：研究预览"><a href="#Agent-Teams：研究预览" class="headerlink" title="Agent Teams：研究预览"></a>Agent Teams：研究预览</h2><p>Agent Teams 在 2026-02-05 随 Opus 4.6 一起发布（2.1.32），是研究预览，默认关闭，需要在 settings.json 或 shell 环境里开启：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;env&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<h3 id="组成与协作方式"><a href="#组成与协作方式" class="headerlink" title="组成与协作方式"></a>组成与协作方式</h3><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>角色</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>负责人（team lead）</td>
+<td>你正在对话的主会话，负责建团队、拆任务、分派和汇总</td>
+</tr>
+<tr>
+<td>队友（teammates）</td>
+<td>独立的 Claude Code 实例，各自拥有上下文窗口</td>
+</tr>
+<tr>
+<td>共享任务列表（task list）</td>
+<td>任务分待处理、进行中、已完成三态，可设依赖；队友既可被指派，也可自己认领</td>
+</tr>
+<tr>
+<td>邮箱（mailbox）</td>
+<td>代理之间的消息通道，消息自动投递，不需要轮询</td>
+</tr>
+</tbody></table>
+<pre class="mermaid">flowchart LR
+    U[你] --&gt; L[负责人会话]
+    U -. 直接对话 .-&gt; T1
+    L --&gt;|创建任务| TL[(共享任务列表)]
+    TL --&gt;|认领| T1[队友 A]
+    TL --&gt;|认领| T2[队友 B]
+    TL --&gt;|认领| T3[队友 C]
+    T1 &lt;--&gt;|消息| T2
+    T2 &lt;--&gt;|消息| T3
+    T1 --&gt;|完成通知| L
+    T3 --&gt;|完成通知| L</pre>
+
+
+<p>它和子代理的根本区别在通信拓扑。子代理只向调用者汇报，彼此之间不说话；队友之间可以直接发消息，你也可以绕过负责人单独给某个队友下指令。队友启动时会加载 CLAUDE.md、MCP 服务器和 Skills 等项目上下文，但不继承负责人的对话历史，负责人创建它时写的那段提示就是它全部的任务背景。</p>
+<p>团队状态存在本地：团队配置在 <code>~/.claude/teams/{team-name}/config.json</code>，任务列表在 <code>~/.claude/tasks/{team-name}/</code>。</p>
+<h3 id="启动与操作"><a href="#启动与操作" class="headerlink" title="启动与操作"></a>启动与操作</h3><p>用自然语言让负责人组队即可，人数、分工、模型都可以指定：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">创建一个 agent team 评审 PR #142：一名队友只看安全，一名只看性能，一名核对测试覆盖。</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">每名队友都用 Sonnet。各自给出带严重级别的问题清单，先互相挑战对方的结论，再把结果汇总给我。</span></span></code></pre></div></div></figure>
+
+<p>几个操作要点：</p>
+<ul>
+<li><strong>显示模式</strong>：in-process 模式下所有队友都在当前终端里，按 Shift+Down 轮换选中队友（2.1.47 起只用这一个键并循环切换），选中后直接输入就是给它发消息。分屏模式给每个队友一个独立 pane，需要 tmux 或 iTerm2，可在 settings 里用 <code>teammateMode</code>（<code>&quot;in-process&quot;</code>、<code>&quot;tmux&quot;</code>、<code>&quot;auto&quot;</code>）选择。</li>
+<li><strong>先计划后动手</strong>：对高风险改动，可以要求队友先在只读的计划模式下出方案，交负责人审批后再实施。</li>
+<li><strong>复用子代理定义</strong>：「用 security-reviewer 这个 agent 类型创建一名队友」，角色定义一次，子代理和队友两用。</li>
+<li><strong>质量门禁</strong>：2.1.33 新增两个 hook 事件。<code>TeammateIdle</code> 在队友即将空闲时触发，以退出码 2 结束可以把反馈发回去让它继续干；<code>TaskCompleted</code> 在任务被标记完成时触发，退出码 2 会阻止完成并反馈原因。</li>
+<li><strong>催它别抢活</strong>：负责人有时不等队友就自己动手实现。看到这种情况，直接告诉它「等队友完成各自任务再继续」。</li>
+</ul>
+<h3 id="研究预览的已知限制"><a href="#研究预览的已知限制" class="headerlink" title="研究预览的已知限制"></a>研究预览的已知限制</h3><p>以下是 2 月下旬版本的限制，决定了它目前适合什么、不适合什么：</p>
+<ul>
+<li><code>/resume</code> 和 <code>/rewind</code> 不会恢复 in-process 队友。恢复会话后负责人可能给已经不存在的队友发消息，需要让它重新创建。</li>
+<li>任务状态可能滞后：队友忘记把任务标成完成，依赖它的任务就一直卡着，需要人工核实后更新状态。</li>
+<li>关闭慢：队友要先做完手头的请求或工具调用才退出。</li>
+<li>一个会话只有一个团队；队友不能再组建自己的团队；负责人身份不能转让。</li>
+<li>队友启动时统一继承负责人的权限模式，不能在创建时逐个设置。</li>
+<li>分屏模式不支持 VS Code 集成终端、Windows Terminal 和 Ghostty。</li>
+</ul>
+<h3 id="适用边界"><a href="#适用边界" class="headerlink" title="适用边界"></a>适用边界</h3><p>适合 Agent Teams 的任务有一个共同点：参与者需要交换中间结论，而不只是交付最终结果。典型场景是研究与评审（多个视角并行，互相质疑）、竞争假设式调试（每人验证一个假设，证据不足的一方被其他人反驳），以及跨层但文件边界清楚的新功能。</p>
+<p>不适合的情况：步骤之间顺序依赖强、多人需要改同一个文件、只需要结果不需要讨论。最后一种用并行子代理就够了，便宜得多。</p>
+<h2 id="并行开发与-git-worktree"><a href="#并行开发与-git-worktree" class="headerlink" title="并行开发与 git worktree"></a>并行开发与 git worktree</h2><p>子代理和队友默认共享同一个工作目录。并行读没有问题，并行写就会互相覆盖文件，测试结果也会互相干扰。隔离有三条路：</p>
+<ol>
+<li><strong>手动多会话</strong>：<code>claude --worktree feature-auth</code>（2.1.49，简写 <code>-w</code>）会在 <code>.claude/worktrees/feature-auth/</code> 下创建工作树和名为 <code>worktree-feature-auth</code> 的分支，并在其中启动会话；另开一个终端换个名字，就是第二个隔离会话。记得把 <code>.claude/worktrees/</code> 加进 <code>.gitignore</code>。</li>
+<li><strong>子代理声明式隔离</strong>：在定义文件里写 <code>isolation: worktree</code>，子代理在临时 worktree 中工作，没有产生改动时自动清理。</li>
+<li><strong>原生 git</strong>：<code>git worktree add ../app-feature-a -b feature-a</code>，进入目录后启动 <code>claude</code>。不依赖任何新版本特性，所有版本都能用。</li>
+</ol>
+<p>worktree 解决的只是文件层面的冲突，下面这些摩擦仍然存在：</p>
+<ul>
+<li><strong>新 worktree 是干净检出</strong>：没有 <code>node_modules</code>，也没有被 gitignore 掉的 <code>.env</code>，每个 worktree 都要重新安装依赖、准备本地配置。</li>
+<li><strong>端口、数据库、缓存目录是共享的</strong>：两个会话同时起开发服务器会抢端口，同时跑集成测试会互相污染测试库。给每个 worktree 约定端口偏移和独立的测试库名。</li>
+<li><strong>合并仍然靠人</strong>：worktree 把冲突推迟到合并时，并没有消除冲突。拆任务时按模块划清文件归属，比事后解决冲突省力。</li>
+<li><strong>非 git 版本控制</strong>：2.1.50 新增的 <code>WorktreeCreate</code> 与 <code>WorktreeRemove</code> hook 可以替换默认的 git 逻辑，接入其他版本控制系统。</li>
+</ul>
+<p>Agent Teams 的队友目前共享负责人的工作目录，所以在团队场景里，文件归属必须在拆任务时就写进每个队友的提示里。</p>
+<h2 id="三种编排模式"><a href="#三种编排模式" class="headerlink" title="三种编排模式"></a>三种编排模式</h2><h3 id="模式一：编排者与工作者"><a href="#模式一：编排者与工作者" class="headerlink" title="模式一：编排者与工作者"></a>模式一：编排者与工作者</h3><p>适用于能按模块切分的中等规模改造。以「把 <code>src/handlers/</code> 下的模块从回调风格迁移到 async&#x2F;await」为例，定义一个工作者 <code>.claude/agents/migrator.md</code>：</p>
+<figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">name: migrator</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">description: 迁移单个模块的代码风格。由主会话按模块逐个委派，每次只处理一个模块。</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">tools: Read, Edit, Write, Grep, Glob, Bash</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">model: sonnet</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="section">isolation: worktree</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="section">---</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">你负责迁移委派消息里指定的一个模块，只修改该模块目录下的文件。</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="bullet">1.</span> 按委派消息引用的迁移规则文件改写代码。</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="bullet">2.</span> 改完后运行委派消息给出的测试命令，失败就修，最多尝试三轮。</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="bullet">3.</span> 在当前 worktree 分支提交，提交信息以 <span class="code">`refactor(&lt;模块名&gt;):`</span> 开头。</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">最终回复只包含：分支名、改动文件列表、测试命令及其最后 20 行输出、未能处理的点。</span></span></code></pre></div></div></figure>
+
+<p>主会话的指令：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">列出 src/handlers/ 下的模块。每个模块委派一个 migrator 子代理并行处理，</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">委派消息写明：模块路径、迁移规则见 docs/async-migration.md、测试命令 `pnpm test -- &lt;模块路径&gt;`。</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">全部返回后逐个核对测试输出，把失败的模块和原因列给我，不要自己动手修。</span></span></code></pre></div></div></figure>
+
+<p>失败模式与对策：</p>
+<table>
+<thead>
+<tr>
+<th>失败模式</th>
+<th>表现</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>委派消息太薄</td>
+<td>各工作者对规则理解不一，风格前后不一致</td>
+<td>规则写进一个文件，委派时只引用路径</td>
+</tr>
+<tr>
+<td>共享代码被多人改</td>
+<td>每个 worktree 都顺手改了 <code>src/utils/</code>，合并时冲突</td>
+<td>共享代码先由主会话单独改完并提交，再分派</td>
+</tr>
+<tr>
+<td>「完成」没有证据</td>
+<td>汇报说测试通过，实际没跑</td>
+<td>汇报格式强制附测试输出原文</td>
+</tr>
+<tr>
+<td>主会话越界</td>
+<td>等不及返回就自己开始改</td>
+<td>在指令里明确「只核对，不动手」</td>
+</tr>
+</tbody></table>
+<h3 id="模式二：并行探索后汇总"><a href="#模式二：并行探索后汇总" class="headerlink" title="模式二：并行探索后汇总"></a>模式二：并行探索后汇总</h3><p>适用于定位疑难问题、技术调研和陌生代码库摸底。定义一个只读调查员 <code>.claude/agents/investigator.md</code>：</p>
+<figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">name: investigator</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">description: 只读调查员。针对一个具体假设或一个子系统收集证据，不做任何修改。</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">disallowedTools: Write, Edit</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="section">model: haiku</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="section">---</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">你只负责委派消息里指定的那一个假设或子系统，范围之外的线索只记一行，不展开。</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">汇报不超过 30 行，格式固定：</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="bullet">-</span> 结论：支持 / 否定 / 无法判断</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="bullet">-</span> 证据：最多 5 条，每条是「文件路径:行号」或「命令 + 关键输出」</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="bullet">-</span> 建议的下一步：1 条</span></span></code></pre></div></div></figure>
+
+<p>这里用 <code>disallowedTools</code> 而不是 <code>tools</code> 白名单，是为了让调查员自动继承日志查询、数据库只读等 MCP 工具。主会话的指令：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">支付回调偶发重复入账。并行派 3 个 investigator：</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">A 查幂等键的生成与校验；B 查消息队列的重试与确认机制；C 查数据库事务隔离级别和唯一约束。</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">全部返回后再下结论：哪个假设证据最强，三份结论之间有没有矛盾。</span></span></code></pre></div></div></figure>
+
+<p>如果三个假设需要互相反驳，比如 A 的证据恰好能否定 C，就换成 Agent Teams，在组队提示里写明「每名队友除了验证自己的假设，还要尝试推翻其他人的假设」。</p>
+<table>
+<thead>
+<tr>
+<th>失败模式</th>
+<th>表现</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>汇总时上下文爆炸</td>
+<td>每份报告几千字，主会话被撑满</td>
+<td>在代理正文里限定行数和格式</td>
+</tr>
+<tr>
+<td>调查范围重叠</td>
+<td>两个调查员查了同一段代码</td>
+<td>按假设或子系统切分，写明各自不负责的部分</td>
+</tr>
+<tr>
+<td>锚定第一个结论</td>
+<td>最早返回的结论被当成答案</td>
+<td>要求全部返回后再裁决</td>
+</tr>
+<tr>
+<td>小模型推理不足</td>
+<td>Haiku 在跨文件因果推理上给出错误结论</td>
+<td>Haiku 只做纯搜索；需要推理的调查改用 <code>sonnet</code> 或 <code>inherit</code></td>
+</tr>
+</tbody></table>
+<h3 id="模式三：生成与评审流水线"><a href="#模式三：生成与评审流水线" class="headerlink" title="模式三：生成与评审流水线"></a>模式三：生成与评审流水线</h3><p>适用于鉴权、计费、数据迁移脚本这类对质量要求高的改动。主会话负责实现，评审交给一个在工具层面只读的子代理。在前文 <code>code-reviewer</code> 的基础上加一个只在它运行期间生效的 hook，拦截 Bash 里的写操作：</p>
+<figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">name: code-reviewer</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">description: 只读代码评审者。每完成一组改动后主动使用。</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">tools: Read, Grep, Glob, Bash</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">model: opus</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">hooks:</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  PreToolUse:</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="bullet">    -</span> matcher: &quot;Bash&quot;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="code">      hooks:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="code">        - type: command</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="code">          command: &quot;./.claude/hooks/readonly-bash.sh&quot;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="code">---</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="code"></span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">只看 <span class="code">`git diff HEAD`</span> 与相关测试；不接受实现者对改动的解释，只依据需求和代码判断。</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">按「必须修复 / 建议修复 / 可选优化」三级输出，并运行与改动相关的测试。</span></span></code></pre></div></div></figure>
+
+<p>拦截脚本从标准输入读取 hook 的 JSON，命中写操作就以退出码 2 拒绝，stderr 的内容会反馈给子代理：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">#!/usr/bin/env bash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 评审代理专用：拒绝会修改仓库或文件系统的 Bash 命令</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">cmd=$(jq -r <span class="string">&#x27;.tool_input.command // &quot;&quot;&#x27;</span>)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># 允许 2&gt;&amp;1 这类描述符重定向，拒绝写文件的 &gt; 与 &gt;&gt;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">if</span> <span class="built_in">echo</span> <span class="string">&quot;<span class="variable">$cmd</span>&quot;</span> | grep -Eq <span class="string">&#x27;(^|[;&amp;|[:space:]])(rm|mv|cp|sed -i|tee)[[:space:]]|(^|[^0-9&amp;])&gt;|git[[:space:]]+(commit|push|reset|checkout|rebase|merge)&#x27;</span>; <span class="keyword">then</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="built_in">echo</span> <span class="string">&quot;评审代理是只读的，已拒绝命令：<span class="variable">$cmd</span>&quot;</span> &gt;&amp;2</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="built_in">exit</span> 2</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="built_in">exit</span> 0</span></span></code></pre></div></div></figure>
+
+<p>在 Agent Teams 里，同样的门禁可以放在 <code>TaskCompleted</code> 上：任务想标记完成，必须先过测试。</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;hooks&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;TaskCompleted&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">&quot;hooks&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">          <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">            <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;command&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">            <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;\&quot;$CLAUDE_PROJECT_DIR\&quot;/.claude/hooks/require-tests.sh&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">          <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">#!/usr/bin/env bash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 任务标记完成前必须通过测试；失败时以退出码 2 阻止完成，并把失败摘要反馈给队友</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">log</span>=$(<span class="built_in">mktemp</span>)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">if</span> ! npm <span class="built_in">test</span> --silent &gt;<span class="string">&quot;<span class="variable">$log</span>&quot;</span> 2&gt;&amp;1; <span class="keyword">then</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="built_in">echo</span> <span class="string">&quot;测试未通过，任务不能标记为完成。失败摘要：&quot;</span> &gt;&amp;2</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="built_in">tail</span> -n 30 <span class="string">&quot;<span class="variable">$log</span>&quot;</span> &gt;&amp;2</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="built_in">exit</span> 2</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="built_in">exit</span> 0</span></span></code></pre></div></div></figure>
+
+<table>
+<thead>
+<tr>
+<th>失败模式</th>
+<th>表现</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>同源盲点</td>
+<td>评审者读了实现者的解释，复述同样的假设</td>
+<td>评审只看 diff 与需求；评审用不同的模型</td>
+</tr>
+<tr>
+<td>评审噪声</td>
+<td>大量风格意见淹没真正的阻断问题</td>
+<td>三级分类，只要求修复第一级</td>
+</tr>
+<tr>
+<td>无限往返</td>
+<td>修一轮、评一轮，迟迟不收敛</td>
+<td>在主会话指令里限定最多两轮复审</td>
+</tr>
+<tr>
+<td>门禁过慢</td>
+<td>每个任务完成都跑全量测试，排队严重</td>
+<td>门禁脚本只跑受影响目录的测试</td>
+</tr>
+</tbody></table>
+<h2 id="什么时候不要用多智能体"><a href="#什么时候不要用多智能体" class="headerlink" title="什么时候不要用多智能体"></a>什么时候不要用多智能体</h2><ul>
+<li><strong>改一个函数签名并更新 5 处调用</strong>：主会话搜一次就能改完，拆给子代理反而要把上下文讲两遍。</li>
+<li><strong>强顺序依赖的链条</strong>：改 schema、生成迁移、改 ORM 模型、改接口，每一步都依赖上一步的产物，并行只会带来等待和返工。</li>
+<li><strong>需要频繁来回的工作</strong>：前端样式迭代要你看效果、提意见、再改，子代理的隔离反而切断了反馈回路。</li>
+<li><strong>多人同改一个热点文件</strong>：路由表、依赖注入容器、全局配置，并行修改造成的覆盖和冲突，比省下的时间多。</li>
+<li><strong>瓶颈在人的评审</strong>：你一天只能认真审两个 PR，开五个并行工作者只会堆出一摞待审 diff。</li>
+<li><strong>陌生代码库上直接并行实现</strong>：先用一个探索子代理摸清结构，再决定要不要拆、怎么拆。</li>
+</ul>
+<h2 id="成本与可观测"><a href="#成本与可观测" class="headerlink" title="成本与可观测"></a>成本与可观测</h2><h3 id="成本控制"><a href="#成本控制" class="headerlink" title="成本控制"></a>成本控制</h3><ul>
+<li><strong>模型分层</strong>：纯搜索、列清单交给 <code>haiku</code>，需要推理的评审用 <code>sonnet</code> 或 <code>opus</code>；Agent Teams 可以在组队提示里直接要求队友使用 Sonnet。</li>
+<li><strong>收紧汇报</strong>：子代理的最终消息全部进入主会话上下文。并行 5 个、每个汇报 2000 字，主会话就多了 1 万字，汇报长度是最容易控制的成本项。</li>
+<li><strong>及时收尾</strong>：团队任务结束后让负责人逐个关闭队友（如「让 researcher 队友关闭」），不要让空闲的实例挂着。</li>
+<li><strong>看数据而不是凭感觉</strong>：2.1.30 起 Task 工具的结果会附带 token 数、工具调用次数和耗时，最贵的子代理一眼可见；2.1.0 起后台代理的 token 也计入 spinner 显示的计数。会话层面用 <code>/cost</code>（API 计费用户的本会话花费）、<code>/usage</code>（订阅计划额度）、<code>/context</code>（上下文占用构成）和 <code>/stats</code>（历史统计）。</li>
+</ul>
+<h3 id="可观测"><a href="#可观测" class="headerlink" title="可观测"></a>可观测</h3><p>子代理的生命周期可以用 hook 记到本地文件里，事后按代理类型统计次数和耗时。<code>SubagentStart</code> 的输入包含 <code>agent_id</code> 与 <code>agent_type</code>，<code>SubagentStop</code> 的输入包含 <code>agent_id</code> 与 <code>agent_transcript_path</code>：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="24"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;hooks&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;SubagentStart&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">&quot;hooks&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">          <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">            <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;command&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">            <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;jq -c &#x27;&#123;t: (now|todate), e: .hook_event_name, id: .agent_id, type: .agent_type&#125;&#x27; &gt;&gt; ~/.claude/agent-events.jsonl&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">          <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">&quot;SubagentStop&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        <span class="attr">&quot;hooks&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">          <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">            <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;command&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">            <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;jq -c &#x27;&#123;t: (now|todate), e: .hook_event_name, id: .agent_id, transcript: .agent_transcript_path&#125;&#x27; &gt;&gt; ~/.claude/agent-events.jsonl&quot;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">          <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">        <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>子代理的转录与主会话分开存放，主会话压缩不会影响它。排查「子代理为什么得出这个结论」时，顺着 <code>agent_transcript_path</code> 看它自己的完整推理，而不是只看主会话里那段摘要。团队层面需要看板时，用 <code>CLAUDE_CODE_ENABLE_TELEMETRY=1</code> 配合 OpenTelemetry 导出器，把用量汇总到已有的监控系统。</p>
+<h2 id="2026-09-补记：半年后的变化"><a href="#2026-09-补记：半年后的变化" class="headerlink" title="2026-09 补记：半年后的变化"></a>2026-09 补记：半年后的变化</h2><ul>
+<li><strong>Agent view</strong>：2.1.139（2026-05-11）以研究预览形式加入，<code>claude agents</code> 在一个屏幕里列出所有后台会话，按运行中、等待你输入、已完成分组，也可以直接派发新会话。正文里「多开几个 worktree 会话」的手工编排，现在可以在这里统一派发和查看。</li>
+<li><strong>Dynamic workflows</strong>：2.1.154（2026-05-28）引入，Claude 为任务编写一段 JavaScript 编排脚本，由后台运行时调度数十到上百个子代理，用 <code>/workflows</code> 查看。2.1.160（06-01）起触发关键词从 <code>workflow</code> 改为 <code>ultracode</code>，用自己的话提出要求仍然可以启动。它适合比本文模式一、二规模更大、需要能重复运行的编排。</li>
+<li><strong>子代理可以嵌套了</strong>：2.1.172（06-10）起子代理默认可以再派生子代理。当前文档的默认上限是三层，可用 <code>CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH</code> 调整，设为 <code>1</code> 即关闭嵌套。正文「子代理不能嵌套」只适用于 2 月的版本。</li>
+<li><strong>Explore 不再固定用 Haiku</strong>：2.1.198（07-01）起 Explore 继承主会话模型，在 Claude API 上最高用到 Opus。想保留低成本探索，可以在项目或用户级定义一个同名的 <code>Explore</code> 子代理并写上 <code>model: haiku</code>，它会覆盖内置版本。</li>
+<li><strong>权限继承</strong>：2.1.212（07-16）起 Task 工具的 <code>mode</code> 参数被废弃并忽略，子代理默认继承父会话的权限模式。需要不同的模式，就写进定义文件的 <code>permissionMode</code>；按当前文档，<code>bypassPermissions</code> 只有在主会话本身处于该模式时才对子代理生效。</li>
+<li><strong>Todo 与任务工具</strong>：2.1.233（08-14）起，<code>TodoWrite</code> 以及 <code>TaskCreate</code>、<code>TaskGet</code>、<code>TaskUpdate</code>、<code>TaskList</code> 在新一代模型上默认不再提供，设置 <code>CLAUDE_CODE_ENABLE_TODO_TOOLS=1</code> 可以恢复；2.1.268（09-10）进一步收窄为只在 Opus 4.0–4.7、Sonnet 4.0–4.6 等旧系列上默认提供。对 Agent Teams 的直接影响是：没有这组工具的代理用不了共享任务列表，只能靠消息协调。依赖任务列表管理依赖关系的团队流程，要么开启该变量，要么把任务顺序写进负责人的提示里。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/03/17/ai-tools/Claude-Code-06-%E6%9C%AC%E5%9C%B0%E5%B7%A5%E4%BD%9C%E6%B5%81/">Claude Code 本地高效工作流：探索、计划、编码、验证</a></h3>
+        <p>以 Claude Code 2.1.7x 为准…</p>
+        <a class="btn primary" href="/2026/03/17/ai-tools/Claude-Code-06-%E6%9C%AC%E5%9C%B0%E5%B7%A5%E4%BD%9C%E6%B5%81/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/11/04/ai-tools/Claude-Code-04-Skills%E4%B8%8E%E6%8F%92%E4%BB%B6/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Claude Code Skills 与插件：从技能编写到团队分发</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%EF%BC%8C%E5%8F%88%E5%B8%A6%E6%9D%A5%E4%BB%80%E4%B9%88" data-toc-target="多智能体解决什么，又带来什么"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">多智能体解决什么，又带来什么</span></a><a class="toc-level-2" href="#%E5%AD%90%E4%BB%A3%E7%90%86%EF%BC%9A%E5%AE%9A%E4%B9%89%E3%80%81%E8%B0%83%E7%94%A8%E4%B8%8E%E9%9A%94%E7%A6%BB%E8%AF%AD%E4%B9%89" data-toc-target="子代理：定义、调用与隔离语义"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">子代理：定义、调用与隔离语义</span></a><a class="toc-level-3" href="#%E5%AE%9A%E4%B9%89%E6%96%87%E4%BB%B6%E4%B8%8E%E4%BD%9C%E7%94%A8%E5%9F%9F" data-toc-target="定义文件与作用域"><span class="toc-text">定义文件与作用域</span></a><a class="toc-level-3" href="#frontmatter-%E5%AD%97%E6%AE%B5%EF%BC%88%E6%88%AA%E8%87%B3-2-1-53%EF%BC%89" data-toc-target="frontmatter-字段（截至-2-1-53）"><span class="toc-text">frontmatter 字段（截至 2.1.53）</span></a><a class="toc-level-3" href="#%E5%86%85%E7%BD%AE%E5%AD%90%E4%BB%A3%E7%90%86" data-toc-target="内置子代理"><span class="toc-text">内置子代理</span></a><a class="toc-level-3" href="#%E8%B0%83%E7%94%A8%E6%96%B9%E5%BC%8F" data-toc-target="调用方式"><span class="toc-text">调用方式</span></a><a class="toc-level-3" href="#%E9%9A%94%E7%A6%BB%E8%AF%AD%E4%B9%89%EF%BC%9A%E5%AD%90%E4%BB%A3%E7%90%86%E8%83%BD%E7%9C%8B%E5%88%B0%E4%BB%80%E4%B9%88" data-toc-target="隔离语义：子代理能看到什么"><span class="toc-text">隔离语义：子代理能看到什么</span></a><a class="toc-level-2" href="#Agent-Teams%EF%BC%9A%E7%A0%94%E7%A9%B6%E9%A2%84%E8%A7%88" data-toc-target="Agent-Teams：研究预览"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">Agent Teams：研究预览</span></a><a class="toc-level-3" href="#%E7%BB%84%E6%88%90%E4%B8%8E%E5%8D%8F%E4%BD%9C%E6%96%B9%E5%BC%8F" data-toc-target="组成与协作方式"><span class="toc-text">组成与协作方式</span></a><a class="toc-level-3" href="#%E5%90%AF%E5%8A%A8%E4%B8%8E%E6%93%8D%E4%BD%9C" data-toc-target="启动与操作"><span class="toc-text">启动与操作</span></a><a class="toc-level-3" href="#%E7%A0%94%E7%A9%B6%E9%A2%84%E8%A7%88%E7%9A%84%E5%B7%B2%E7%9F%A5%E9%99%90%E5%88%B6" data-toc-target="研究预览的已知限制"><span class="toc-text">研究预览的已知限制</span></a><a class="toc-level-3" href="#%E9%80%82%E7%94%A8%E8%BE%B9%E7%95%8C" data-toc-target="适用边界"><span class="toc-text">适用边界</span></a><a class="toc-level-2" href="#%E5%B9%B6%E8%A1%8C%E5%BC%80%E5%8F%91%E4%B8%8E-git-worktree" data-toc-target="并行开发与-git-worktree"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">并行开发与 git worktree</span></a><a class="toc-level-2" href="#%E4%B8%89%E7%A7%8D%E7%BC%96%E6%8E%92%E6%A8%A1%E5%BC%8F" data-toc-target="三种编排模式"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">三种编排模式</span></a><a class="toc-level-3" href="#%E6%A8%A1%E5%BC%8F%E4%B8%80%EF%BC%9A%E7%BC%96%E6%8E%92%E8%80%85%E4%B8%8E%E5%B7%A5%E4%BD%9C%E8%80%85" data-toc-target="模式一：编排者与工作者"><span class="toc-text">模式一：编排者与工作者</span></a><a class="toc-level-3" href="#%E6%A8%A1%E5%BC%8F%E4%BA%8C%EF%BC%9A%E5%B9%B6%E8%A1%8C%E6%8E%A2%E7%B4%A2%E5%90%8E%E6%B1%87%E6%80%BB" data-toc-target="模式二：并行探索后汇总"><span class="toc-text">模式二：并行探索后汇总</span></a><a class="toc-level-3" href="#%E6%A8%A1%E5%BC%8F%E4%B8%89%EF%BC%9A%E7%94%9F%E6%88%90%E4%B8%8E%E8%AF%84%E5%AE%A1%E6%B5%81%E6%B0%B4%E7%BA%BF" data-toc-target="模式三：生成与评审流水线"><span class="toc-text">模式三：生成与评审流水线</span></a><a class="toc-level-2" href="#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%B8%8D%E8%A6%81%E7%94%A8%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93" data-toc-target="什么时候不要用多智能体"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">什么时候不要用多智能体</span></a><a class="toc-level-2" href="#%E6%88%90%E6%9C%AC%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B" data-toc-target="成本与可观测"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">成本与可观测</span></a><a class="toc-level-3" href="#%E6%88%90%E6%9C%AC%E6%8E%A7%E5%88%B6" data-toc-target="成本控制"><span class="toc-text">成本控制</span></a><a class="toc-level-3" href="#%E5%8F%AF%E8%A7%82%E6%B5%8B" data-toc-target="可观测"><span class="toc-text">可观测</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E5%8D%8A%E5%B9%B4%E5%90%8E%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：半年后的变化"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">2026-09 补记：半年后的变化</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/claude-code-workflow/" style="--rail: 63%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%EF%BC%8C%E5%8F%88%E5%B8%A6%E6%9D%A5%E4%BB%80%E4%B9%88" data-toc-target="多智能体解决什么，又带来什么" data-title="01 · 多智能体解决什么，又带来什么" aria-label="多智能体解决什么，又带来什么"></a><a class="toc-strip__dot" href="#%E5%AD%90%E4%BB%A3%E7%90%86%EF%BC%9A%E5%AE%9A%E4%B9%89%E3%80%81%E8%B0%83%E7%94%A8%E4%B8%8E%E9%9A%94%E7%A6%BB%E8%AF%AD%E4%B9%89" data-toc-target="子代理：定义、调用与隔离语义" data-title="02 · 子代理：定义、调用与隔离语义" aria-label="子代理：定义、调用与隔离语义"></a><a class="toc-strip__dot" href="#Agent-Teams%EF%BC%9A%E7%A0%94%E7%A9%B6%E9%A2%84%E8%A7%88" data-toc-target="Agent-Teams：研究预览" data-title="03 · Agent Teams：研究预览" aria-label="Agent Teams：研究预览"></a><a class="toc-strip__dot" href="#%E5%B9%B6%E8%A1%8C%E5%BC%80%E5%8F%91%E4%B8%8E-git-worktree" data-toc-target="并行开发与-git-worktree" data-title="04 · 并行开发与 git worktree" aria-label="并行开发与 git worktree"></a><a class="toc-strip__dot" href="#%E4%B8%89%E7%A7%8D%E7%BC%96%E6%8E%92%E6%A8%A1%E5%BC%8F" data-toc-target="三种编排模式" data-title="05 · 三种编排模式" aria-label="三种编排模式"></a><a class="toc-strip__dot" href="#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%B8%8D%E8%A6%81%E7%94%A8%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93" data-toc-target="什么时候不要用多智能体" data-title="06 · 什么时候不要用多智能体" aria-label="什么时候不要用多智能体"></a><a class="toc-strip__dot" href="#%E6%88%90%E6%9C%AC%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B" data-toc-target="成本与可观测" data-title="07 · 成本与可观测" aria-label="成本与可观测"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E5%8D%8A%E5%B9%B4%E5%90%8E%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：半年后的变化" data-title="08 · 2026-09 补记：半年后的变化" aria-label="2026-09 补记：半年后的变化"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"ai-tools/Claude-Code-05-多智能体编排","title":"Claude Code 多智能体编排：从子代理到 Agent Teams","url":"/2026/02/24/ai-tools/Claude-Code-05-%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93%E7%BC%96%E6%8E%92/","path":"claude-code-workflow","index":4,"total":8,"next":{"title":"Claude Code 本地高效工作流：探索、计划、编码、验证","url":"/2026/03/17/ai-tools/Claude-Code-06-%E6%9C%AC%E5%9C%B0%E5%B7%A5%E4%BD%9C%E6%B5%81/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

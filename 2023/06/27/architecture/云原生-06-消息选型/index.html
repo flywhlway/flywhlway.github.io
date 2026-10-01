@@ -1,0 +1,652 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>车联网消息中间件选型：Kafka 与 Pulsar · 飞轮之道</title>
+<meta name="description" content="按上行信号流与下行指令两类负载，逐项对比 Kafka 3.5 与 Pulsar 3.0 的存算分离、多租户、跨地域复制、订阅模式与 KRaft 现状，给出分场景选型、压测口径与迁移步骤，并在 2026 年回看两者的演进。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2023/06/27/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-%E6%B6%88%E6%81%AF%E9%80%89%E5%9E%8B/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="车联网消息中间件选型：Kafka 与 Pulsar · 飞轮之道">
+<meta property="og:description" content="按上行信号流与下行指令两类负载，逐项对比 Kafka 3.5 与 Pulsar 3.0 的存算分离、多租户、跨地域复制、订阅模式与 KRaft 现状，给出分场景选型、压测口径与迁移步骤，并在 2026 年回看两者的演进。">
+<meta property="og:url" content="https://flywhlway.github.io/2023/06/27/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-%E6%B6%88%E6%81%AF%E9%80%89%E5%9E%8B/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">数据与中间件</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 7 / 9 篇</a>
+    </div>
+    <h1>车联网消息中间件选型：Kafka 与 Pulsar</h1>
+    <p class="article-deck">按上行信号流与下行指令两类负载，逐项对比 Kafka 3.5 与 Pulsar 3.0 的存算分离、多租户、跨地域复制、订阅模式与 KRaft 现状…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a><a class="article-meta__tag" href="/tags/%E8%BD%A6%E8%81%94%E7%BD%91/">#车联网</a><a class="article-meta__tag" href="/tags/Kafka/">#Kafka</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Kafka 3.3 起 KRaft 已可用于新建生产集群，3.5 已把 ZooKeeper 标记为弃用，「Kafka 强依赖 ZooKeeper」不再成立；Pulsar 反而仍需要 ZooKeeper 或 etcd。</li><li>Pulsar 的真实优势在逐条确认、Key_Shared、延迟投递与死信这类队列语义，以及分层存储和内置跨地域复制，而不是泛泛的「延迟更低」。</li><li>2023 年的决策：上行信号主干用 Kafka，下行指令域试点 Pulsar，满足运维条件后再扩大。</li><li>2026 年回看：Kafka 4.0 去掉 ZooKeeper、分层存储与共享组相继可生产，Pulsar 当年的差异化被大幅收窄。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="两类负载，两种需求"><a href="#两类负载，两种需求" class="headerlink" title="两类负载，两种需求"></a>两类负载，两种需求</h2><p>车联网平台的消息流量可以清楚地分成两类，它们对消息系统的要求几乎相反：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>上行信号流</th>
+<th>下行指令与任务通知</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>典型内容</td>
+<td>周期上报的信号包、事件、日志</td>
+<td>远控指令、升级任务下发、配置推送</td>
+</tr>
+<tr>
+<td>流量</td>
+<td>大，持续，带明显早晚高峰</td>
+<td>小，突发，与用户操作相关</td>
+</tr>
+<tr>
+<td>顺序</td>
+<td>按车有序</td>
+<td>按车有序</td>
+</tr>
+<tr>
+<td>消费方式</td>
+<td>多个消费组各自全量读取（实时计算、入湖、告警）</td>
+<td>一组消费者分摊，逐条处理</td>
+</tr>
+<tr>
+<td>失败处理</td>
+<td>整批重放</td>
+<td>单条重试、延迟重试、超过次数进死信</td>
+</tr>
+<tr>
+<td>保留</td>
+<td>数天，需要回放</td>
+<td>小时级</td>
+</tr>
+</tbody></table>
+<p>上行信号由接入网关汇入消息系统，下游是实时计算（本系列 04 篇）与数据平台（本系列 07 篇）；下行指令经统一网关（本系列 03 篇）进入指令服务，再通过消息系统分发到车辆所在的接入节点。原有方案用 Kafka 承载全部流量。规划阶段有人提出整体迁往 Pulsar，理由是「存算分离、原生多租户、跨地域复制、延迟更低、Kafka 强依赖 ZooKeeper」。本文逐条核对这些理由，再按两类负载分别给出结论。</p>
+<h2 id="架构差异：先对齐-2023-年的事实"><a href="#架构差异：先对齐-2023-年的事实" class="headerlink" title="架构差异：先对齐 2023 年的事实"></a>架构差异：先对齐 2023 年的事实</h2><pre class="mermaid">flowchart LR
+  subgraph KF["Kafka 3.5（KRaft 模式）"]
+    KP["生产者"] --&gt; KB["Broker&lt;br/&gt;分区日志存于本地磁盘"]
+    KC["Controller 仲裁&lt;br/&gt;Raft 管理元数据"] -.-&gt; KB
+    KB --&gt; KS["消费组&lt;br/&gt;按分区拉取，提交位点"]
+  end
+  subgraph PS["Pulsar 3.0"]
+    PP["生产者"] --&gt; PB["Broker&lt;br/&gt;无状态，负责路由与分发"]
+    PB --&gt; BK["BookKeeper Bookie&lt;br/&gt;分段 ledger，多副本"]
+    PB -.-&gt; MS["元数据存储&lt;br/&gt;ZooKeeper 或 etcd"]
+    BK -.-&gt; MS
+    BK --&gt;|"卸载"| OS["对象存储&lt;br/&gt;分层存储"]
+    PB --&gt; PSub["订阅&lt;br/&gt;逐条确认"]
+  end</pre>
+
+
+<h3 id="KRaft-现状"><a href="#KRaft-现状" class="headerlink" title="KRaft 现状"></a>KRaft 现状</h3><p>「Kafka 强依赖 ZooKeeper」在 2023 年中已不成立：</p>
+<ul>
+<li>Kafka 3.3（2022 年 10 月，3.3.1）起，KRaft 模式被宣告可用于新建生产集群（KIP-833）；</li>
+<li>2023 年 6 月 15 日发布的 3.5 把 ZooKeeper 模式标记为弃用，计划在 4.0 移除；3.5 同时补上了 KRaft 下 broker 间 SCRAM 认证的配置机制（KIP-900）；</li>
+<li>仍有缺口：3.5 文档列出 KRaft 尚不支持 JBOD 多数据目录、委托令牌等；存量 ZooKeeper 集群迁往 KRaft 在 3.5 仍是早期访问特性，官方明确只适合非生产环境。</li>
+</ul>
+<p>反过来，Pulsar 3.0（2023 年 5 月发布，首个 LTS 版本）的元数据仍需要独立的存储服务：默认 ZooKeeper，也支持 etcd，BookKeeper 同样依赖它。所以「Pulsar 去掉了 ZooKeeper」同样不准确。就依赖组件数量而言，新建的 KRaft 集群反而更少。</p>
+<h3 id="存算分离的真实收益"><a href="#存算分离的真实收益" class="headerlink" title="存算分离的真实收益"></a>存算分离的真实收益</h3><p>Pulsar 的 broker 不持有数据，数据以 ledger 分段写入 BookKeeper，每个 ledger 按 E&#x2F;Qw&#x2F;Qa（ensemble、写副本数、确认副本数）分布到若干 bookie。它带来三点可以落地的好处：</p>
+<ol>
+<li><strong>扩容不搬数据</strong>：新增 bookie 后，新的 ledger 自然落到新节点；新增 broker 只需重新分配 topic bundle。</li>
+<li><strong>读写隔离</strong>：bookie 的 journal 与 ledger 使用不同磁盘，追赶读（回放积压）不直接冲击尾部写入。</li>
+<li><strong>分层存储</strong>：老分段可卸载到 S3 兼容的对象存储，broker 透明读取。</li>
+</ol>
+<p>原稿「Kafka 扩容需全量复制分区数据」需要修正：Kafka 扩容时只复制被迁移的分区，可以用 <code>kafka-reassign-partitions.sh</code> 加带宽限流、或借助 Cruise Control 自动均衡。问题在于迁移量与耗时随分区大小线性增长，保留期越长越痛。Kafka 的分层存储（KIP-405）在 2023 年中尚未发布。</p>
+<p>Pulsar 的代价同样真实：组件从一种变成三种（broker、bookie、元数据存储），BookKeeper 的 journal 刷盘、entry log 垃圾回收、ledger 副本修复都需要专门的运维知识；bundle 重新分配时生产者会短暂重连。</p>
+<h3 id="多租户"><a href="#多租户" class="headerlink" title="多租户"></a>多租户</h3><p>原稿写 Kafka「不支持多租户」过于绝对。Kafka 有前缀匹配的 ACL（2.0 起）和按用户、client-id 的配额，能够做到「按团队隔离命名与限流」；它缺少的是<strong>层级化的策略管理</strong>。Pulsar 的「租户 → 命名空间 → topic」三级结构，允许在命名空间上统一设置保留、副本数、积压配额、跨地域复制与卸载阈值，多团队共用一个集群时管理成本明显更低。</p>
+<h3 id="跨地域复制"><a href="#跨地域复制" class="headerlink" title="跨地域复制"></a>跨地域复制</h3><p>Kafka 依靠 MirrorMaker 2（2.4 起）在集群之间复制，包含位点转换，本质上是一个独立运行的 Connect 作业；Pulsar 的跨地域复制内置于 broker，按命名空间配置，支持复制订阅位点。多区域部署或灾备时，Pulsar 的运维面更小；只做单向汇聚时两者差距不大。</p>
+<h3 id="订阅模式"><a href="#订阅模式" class="headerlink" title="订阅模式"></a>订阅模式</h3><p>原稿的订阅模式表漏掉了 Key_Shared，而它恰恰是车联网最有用的一种：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>语义</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Exclusive</td>
+<td>一个订阅只允许一个消费者</td>
+<td>严格全局有序的小流量</td>
+</tr>
+<tr>
+<td>Failover</td>
+<td>多个消费者，一个活跃、其余热备</td>
+<td>有序且需高可用</td>
+</tr>
+<tr>
+<td>Shared</td>
+<td>消息轮询分给多个消费者，逐条确认</td>
+<td>无序的任务队列</td>
+</tr>
+<tr>
+<td>Key_Shared</td>
+<td>同一 key 的消息始终投给同一消费者</td>
+<td>按车有序、消费者数量可超过分区数</td>
+</tr>
+</tbody></table>
+<p>Key_Shared 以 VIN 为 key 时，同一辆车的指令保持有序，消费者数量又能按负载弹性伸缩，不受分区数限制。配合逐条确认、否定确认后的延迟重投和死信 topic，下行指令需要的重试语义都由消息系统原生提供。2023 年的 Kafka 只有「消费组 + 位点提交」一种消费模型，没有逐条确认与延迟投递，同样的逻辑需要在应用侧用重试 topic 和状态机自行实现。</p>
+<p>Key_Shared 的已知问题是：新消费者加入时，为了保证顺序，部分 key 的投递会被暂时阻塞，出现积压抖动，试点时要专门验证。</p>
+<h3 id="延迟与持久性"><a href="#延迟与持久性" class="headerlink" title="延迟与持久性"></a>延迟与持久性</h3><p>「Pulsar 延迟更低」没有一般性结论。两者的持久化假设不同：Kafka 默认不按消息刷盘，依靠多副本与页缓存保证可靠；BookKeeper 默认在确认前对 journal 执行 fsync。因此同样的硬件上，Pulsar 的尾延迟取决于 journal 盘的 fsync 延迟，Kafka 的尾延迟取决于页缓存与副本同步。双方厂商都发布过对自己有利的基准，必须在自己的硬件与持久化配置下测。</p>
+<h2 id="容量口径与压测方法"><a href="#容量口径与压测方法" class="headerlink" title="容量口径与压测方法"></a>容量口径与压测方法</h2><h3 id="容量假设"><a href="#容量假设" class="headerlink" title="容量假设"></a>容量假设</h3><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>取值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>峰值同时在线车辆</td>
+<td>80 万</td>
+</tr>
+<tr>
+<td>上报周期</td>
+<td>10 秒一个信号包，压缩后约 2 KB</td>
+</tr>
+<tr>
+<td>常态写入</td>
+<td>8 万条&#x2F;秒，约 160 MB&#x2F;s</td>
+</tr>
+<tr>
+<td>峰值系数</td>
+<td>3 倍（补传与高峰叠加），约 480 MB&#x2F;s</td>
+</tr>
+<tr>
+<td>消费组</td>
+<td>4 个全量消费（实时计算、入湖、告警、数据服务）</td>
+</tr>
+<tr>
+<td>保留</td>
+<td>3 天，副本数 3</td>
+</tr>
+</tbody></table>
+<p>推算：每天约 13.8 TB 原始数据，3 天保留、3 副本约 124 TB 本地磁盘。这个量级正是 2023 年倾向分层存储的原因：Pulsar 可以只在 bookie 上保留 1 天、其余卸载到对象存储；Kafka 在当时只能全部放本地盘。</p>
+<p>下行指令侧的量要小得多：峰值约 5000 条&#x2F;秒，但要求 p99 端到端 ≤ 200 ms（不含车端网络），且需要逐条重试。</p>
+<h3 id="压测方法"><a href="#压测方法" class="headerlink" title="压测方法"></a>压测方法</h3><p>压测统一使用 OpenMessaging Benchmark，同一套负载描述驱动两种系统：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">name:</span> <span class="string">telemetry-peak</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">topics:</span> <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">partitionsPerTopic:</span> <span class="number">96</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">keyDistributor:</span> <span class="string">&quot;RANDOM_NANO&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">messageSize:</span> <span class="number">2048</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">producersPerTopic:</span> <span class="number">16</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">producerRate:</span> <span class="number">240000</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">subscriptionsPerTopic:</span> <span class="number">4</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">consumerPerSubscription:</span> <span class="number">16</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">consumerBacklogSizeGB:</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">testDurationMinutes:</span> <span class="number">30</span></span></span></code></pre></div></div></figure>
+
+<p>判定口径：</p>
+<ol>
+<li><strong>持久化配置对齐</strong>：Kafka <code>acks=all</code>、<code>min.insync.replicas=2</code>；Pulsar E&#x2F;Qw&#x2F;Qa &#x3D; 3&#x2F;3&#x2F;2，journal 独立 SSD。</li>
+<li><strong>看分位不看均值</strong>：记录发布延迟与端到端延迟的 p50、p99、p99.9。</li>
+<li><strong>追赶读专项</strong>：把 <code>consumerBacklogSizeGB</code> 设为数百 GB，让一个消费组从积压开始追赶，同时观察实时写入的 p99 是否被拖累——这是存算分离的核心卖点，必须实测验证。</li>
+<li><strong>故障注入</strong>：压测中停掉一个 broker、一个 bookie，记录恢复时间与消息是否丢失、重复。</li>
+<li><strong>扩容演练</strong>：在负载下扩一个节点，记录 Kafka 分区迁移耗时与 Pulsar bundle 重新分配期间的错误率。</li>
+</ol>
+<h2 id="选型决策"><a href="#选型决策" class="headerlink" title="选型决策"></a>选型决策</h2><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>2023 年选择</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>上行信号主干</td>
+<td>Kafka 3.5，新建集群用 KRaft</td>
+<td>流处理与入湖生态最成熟，团队已有运维经验；分区数按车辆规模一次规划到位</td>
+</tr>
+<tr>
+<td>存量 ZooKeeper 集群</td>
+<td>保持现状，等待迁移工具可生产</td>
+<td>3.5 的迁移仍为早期访问</td>
+</tr>
+<tr>
+<td>下行指令与任务通知</td>
+<td>Pulsar 3.0 试点</td>
+<td>Key_Shared、逐条确认、延迟重投、死信原生可用</td>
+</tr>
+<tr>
+<td>长保留回放</td>
+<td>Pulsar 分层存储；Kafka 侧缩短保留，冷数据由入湖链路承担</td>
+<td>Kafka 分层存储尚未发布</td>
+</tr>
+<tr>
+<td>多区域部署</td>
+<td>视部署形态而定：多活选 Pulsar 内置复制，单向汇聚用 MirrorMaker 2</td>
+<td>运维面与语义需求</td>
+</tr>
+</tbody></table>
+<p>不整体迁往 Pulsar，原因有三：上行主干的核心诉求（吞吐、生态、稳定）Kafka 已满足；Pulsar 的组件与调优面需要专门团队；整体迁移的收益主要来自分层存储，而这一点可以通过缩短 Kafka 保留期、让入湖链路承担历史回放来替代。</p>
+<p>Pulsar 试点扩大的前提条件：团队具备 BookKeeper 故障处理能力（ledger 修复、磁盘满处置有演练记录）；压测中追赶读隔离与故障恢复达标；监控覆盖 bookie 的 journal 延迟与 ledger 磁盘使用率。</p>
+<h2 id="关键配置"><a href="#关键配置" class="headerlink" title="关键配置"></a>关键配置</h2><p>Kafka broker（KRaft，3.5）：</p>
+<figure class="highlight properties cb" data-lang="properties" data-label="Properties" data-ext="txt" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">process.roles</span>=<span class="string">broker</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">node.id</span>=<span class="string">11</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">controller.quorum.voters</span>=<span class="string">1@ctrl-1:9093,2@ctrl-2:9093,3@ctrl-3:9093</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">controller.listener.names</span>=<span class="string">CONTROLLER</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">listeners</span>=<span class="string">SASL_SSL://:9092</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">listener.security.protocol.map</span>=<span class="string">CONTROLLER:SSL,SASL_SSL:SASL_SSL</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">default.replication.factor</span>=<span class="string">3</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">min.insync.replicas</span>=<span class="string">2</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">unclean.leader.election.enable</span>=<span class="string">false</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">num.partitions</span>=<span class="string">96</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">log.retention.hours</span>=<span class="string">72</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="attr">log.segment.bytes</span>=<span class="string">1073741824</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="attr">compression.type</span>=<span class="string">producer</span></span></span></code></pre></div></div></figure>
+
+<p>KRaft 在 3.5 不支持 JBOD，数据盘用单一逻辑卷；controller 独立部署三节点，不与 broker 混部。</p>
+<p>上行生产者：</p>
+<figure class="highlight properties cb" data-lang="properties" data-label="Properties" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">acks</span>=<span class="string">all</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">enable.idempotence</span>=<span class="string">true</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">compression.type</span>=<span class="string">zstd</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">linger.ms</span>=<span class="string">20</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">batch.size</span>=<span class="string">262144</span></span></span></code></pre></div></div></figure>
+
+<p>消息 key 统一用 VIN，保证同一辆车落在同一分区。</p>
+<p>Pulsar 指令域的命名空间策略：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">pulsar-admin tenants create vehicle --allowed-clusters region-a</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">pulsar-admin namespaces create vehicle/command</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">pulsar-admin namespaces set-persistence vehicle/command \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --bookkeeper-ensemble 3 --bookkeeper-write-quorum 3 \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  --bookkeeper-ack-quorum 2 --ml-mark-delete-max-rate 0</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">pulsar-admin namespaces set-retention vehicle/command --size 50G --<span class="keyword">time</span> 1d</span></span></code></pre></div></div></figure>
+
+<p>下行分发消费者：</p>
+<figure class="highlight java cb" data-lang="java" data-label="Java" data-ext="java" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="type">Consumer</span>&lt;<span class="type">byte</span>[]&gt; <span class="variable">consumer</span> <span class="operator">=</span> client.newConsumer()</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    .topic(<span class="string">&quot;persistent://vehicle/command/downlink&quot;</span>)</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    .subscriptionName(<span class="string">&quot;dispatcher&quot;</span>)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    .subscriptionType(SubscriptionType.Key_Shared)</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    .negativeAckRedeliveryDelay(<span class="number">10</span>, TimeUnit.SECONDS)</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    .deadLetterPolicy(DeadLetterPolicy.builder()</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        .maxRedeliverCount(<span class="number">5</span>)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        .deadLetterTopic(<span class="string">&quot;persistent://vehicle/command/downlink-dlq&quot;</span>)</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        .build())</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    .subscribe();</span></span></code></pre></div></div></figure>
+
+<h2 id="迁移步骤"><a href="#迁移步骤" class="headerlink" title="迁移步骤"></a>迁移步骤</h2><p>指令域从 Kafka 迁往 Pulsar：</p>
+<ol>
+<li><strong>双写</strong>：指令服务同时写 Kafka 原 topic 与 Pulsar topic，消息带全局请求 ID。</li>
+<li><strong>影子消费</strong>：Pulsar 侧消费者只做校验，不下发车辆，比对两边的到达顺序、延迟与重复率。</li>
+<li><strong>按车型灰度</strong>：以车型或 VIN 哈希段为单位切换真实下发，车端通过请求 ID 幂等去重。</li>
+<li><strong>回滚</strong>：下发开关按灰度单元回切到 Kafka 路径；双写期间两边数据完整，回切无需补数。</li>
+<li><strong>下线</strong>：全量切换稳定两周后停止 Kafka 侧写入，保留 topic 至最长任务周期结束。</li>
+</ol>
+<h2 id="反例与风险"><a href="#反例与风险" class="headerlink" title="反例与风险"></a>反例与风险</h2><ul>
+<li><strong>按「新技术」而非负载选型</strong>：把上行主干整体迁到 Pulsar，换来的是更多组件和更少的生态，收益却可以用更低成本获得。</li>
+<li><strong>分区数不足</strong>：Kafka 分区数只能增不能减，且增加后 key 的映射会变化，破坏按车有序；应一次规划到位。</li>
+<li><strong>Key_Shared 的顺序代价</strong>：消费者扩缩时出现投递阻塞，需要在压测里验证，而不是上线后发现。</li>
+<li><strong>BookKeeper 磁盘规划失误</strong>：journal 与 ledger 同盘会抵消读写隔离的收益。</li>
+<li><strong>协议适配层当主路径</strong>：让 Kafka 客户端通过协议处理器接入 Pulsar 可以降低迁移成本，但兼容性要逐项验证，不能作为主干方案的前提。</li>
+</ul>
+<h2 id="2026-回看：Kafka-补齐短板，差异化收窄"><a href="#2026-回看：Kafka-补齐短板，差异化收窄" class="headerlink" title="2026 回看：Kafka 补齐短板，差异化收窄"></a>2026 回看：Kafka 补齐短板，差异化收窄</h2><h3 id="经受住时间的判断"><a href="#经受住时间的判断" class="headerlink" title="经受住时间的判断"></a>经受住时间的判断</h3><p><strong>上行主干选 Kafka、新集群直接用 KRaft 是对的。</strong> 3.6（2023-10-10）宣告 ZooKeeper 迁移可生产，3.9（2024-11-06）作为最后一个带 ZooKeeper 的版本承担「桥梁」角色，4.0（2025-03-18）彻底移除 ZooKeeper，不再支持 ZooKeeper 模式，也不再支持从 ZooKeeper 直接迁移。2023 年新建即 KRaft 的集群省掉了一次迁移。</p>
+<h3 id="需要修正的地方"><a href="#需要修正的地方" class="headerlink" title="需要修正的地方"></a>需要修正的地方</h3><p><strong>Pulsar 的差异化大部分被追平。</strong> 当年支撑「指令域用 Pulsar」的理由，多数已被 Kafka 吸收：</p>
+<ul>
+<li><strong>分层存储</strong>：3.6 以早期访问引入，3.9 宣告可生产；</li>
+<li><strong>队列语义</strong>：4.0 以早期访问引入共享组（KIP-932），4.1 进入预览，4.2（2026-02-17）宣告可生产，提供逐条确认与协作消费。4.0 同时让新一代消费者再均衡协议（KIP-848）正式可用，消除了「全停再分配」的抖动。</li>
+</ul>
+<p>没有被追平的一项是顺序：共享组不保证分区内的消费顺序，「按 key 有序 + 逐条确认 + 消费者数不受分区限制」的组合仍是 Key_Shared 独有。按车有序的远控指令，这一点依然是 Pulsar 的实质优势。</p>
+<p><strong>「无盘 Kafka」成为新方向。</strong> 云上多可用区部署时，副本复制与跨区消费产生的流量费可能成为主要成本项。WarpStream（2024 年 9 月被 Confluent 收购）、AutoMQ 等 Kafka 协议兼容实现以对象存储作为主存储；社区的 KIP-1150「无盘 topic」在 2026 年 3 月表决通过，但实现层的 KIP 仍在讨论，截至 2026 年 9 月尚未进入正式版本。这类方案用百毫秒级延迟换成本，适合信号入湖、日志这类链路，不适合下行指令。</p>
+<p><strong>Pulsar 仍在稳步演进。</strong> 4.0 LTS（2024 年 10 月）重写了 Key_Shared 的投递逻辑（PIP-379），解决了新消费者加入时的阻塞问题，并统一了限流实现；3.3 起元数据存储可选 Oxia；此后 4.1（2025-09-08）、4.2（2026-03-31）相继发布。LTS 之间支持逐级滚动升级（2.10 → 3.0 → 4.0）。</p>
+<h3 id="今天会怎么做"><a href="#今天会怎么做" class="headerlink" title="今天会怎么做"></a>今天会怎么做</h3><ul>
+<li><strong>主干 Kafka 4.x</strong>：KRaft、分层存储开启；无序的任务通知、推送类队列用共享组承载。</li>
+<li><strong>按车有序的指令</strong>：规模不大时用普通消费组加应用侧状态机，省掉第二套系统；指令量大、重试逻辑复杂且已有 Pulsar 运维能力时，保留 Pulsar Key_Shared。</li>
+<li><strong>云上成本敏感的高吞吐链路</strong>评估无盘方案，按「延迟容忍度」而不是「新旧」划分使用范围。</li>
+<li><strong>Pulsar 保留给真正需要它的地方</strong>：大量租户共享集群、多区域双活复制，或者已经在 Pulsar 上积累了运维能力的团队。</li>
+<li><strong>不变的部分</strong>：按负载拆分需求、统一压测口径、双写加灰度的迁移方式。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2023/07/18/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/">车联网数据平台：离线、实时与时序三条链路</a></h3>
+        <p>按访问模式把车辆信号拆成离线、实时、时序三条链路…</p>
+        <a class="btn primary" href="/2023/07/18/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2023/06/13/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E7%BC%93%E5%AD%98%E9%80%89%E5%9E%8B/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：高并发缓存选型：Redis 集群、KeyDB 与 Dragonfly 的取舍</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E4%B8%A4%E7%B1%BB%E8%B4%9F%E8%BD%BD%EF%BC%8C%E4%B8%A4%E7%A7%8D%E9%9C%80%E6%B1%82" data-toc-target="两类负载，两种需求"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">两类负载，两种需求</span></a><a class="toc-level-2" href="#%E6%9E%B6%E6%9E%84%E5%B7%AE%E5%BC%82%EF%BC%9A%E5%85%88%E5%AF%B9%E9%BD%90-2023-%E5%B9%B4%E7%9A%84%E4%BA%8B%E5%AE%9E" data-toc-target="架构差异：先对齐-2023-年的事实"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">架构差异：先对齐 2023 年的事实</span></a><a class="toc-level-3" href="#KRaft-%E7%8E%B0%E7%8A%B6" data-toc-target="KRaft-现状"><span class="toc-text">KRaft 现状</span></a><a class="toc-level-3" href="#%E5%AD%98%E7%AE%97%E5%88%86%E7%A6%BB%E7%9A%84%E7%9C%9F%E5%AE%9E%E6%94%B6%E7%9B%8A" data-toc-target="存算分离的真实收益"><span class="toc-text">存算分离的真实收益</span></a><a class="toc-level-3" href="#%E5%A4%9A%E7%A7%9F%E6%88%B7" data-toc-target="多租户"><span class="toc-text">多租户</span></a><a class="toc-level-3" href="#%E8%B7%A8%E5%9C%B0%E5%9F%9F%E5%A4%8D%E5%88%B6" data-toc-target="跨地域复制"><span class="toc-text">跨地域复制</span></a><a class="toc-level-3" href="#%E8%AE%A2%E9%98%85%E6%A8%A1%E5%BC%8F" data-toc-target="订阅模式"><span class="toc-text">订阅模式</span></a><a class="toc-level-3" href="#%E5%BB%B6%E8%BF%9F%E4%B8%8E%E6%8C%81%E4%B9%85%E6%80%A7" data-toc-target="延迟与持久性"><span class="toc-text">延迟与持久性</span></a><a class="toc-level-2" href="#%E5%AE%B9%E9%87%8F%E5%8F%A3%E5%BE%84%E4%B8%8E%E5%8E%8B%E6%B5%8B%E6%96%B9%E6%B3%95" data-toc-target="容量口径与压测方法"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">容量口径与压测方法</span></a><a class="toc-level-3" href="#%E5%AE%B9%E9%87%8F%E5%81%87%E8%AE%BE" data-toc-target="容量假设"><span class="toc-text">容量假设</span></a><a class="toc-level-3" href="#%E5%8E%8B%E6%B5%8B%E6%96%B9%E6%B3%95" data-toc-target="压测方法"><span class="toc-text">压测方法</span></a><a class="toc-level-2" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96" data-toc-target="选型决策"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">选型决策</span></a><a class="toc-level-2" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE" data-toc-target="关键配置"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">关键配置</span></a><a class="toc-level-2" href="#%E8%BF%81%E7%A7%BB%E6%AD%A5%E9%AA%A4" data-toc-target="迁移步骤"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">迁移步骤</span></a><a class="toc-level-2" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">反例与风险</span></a><a class="toc-level-2" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9AKafka-%E8%A1%A5%E9%BD%90%E7%9F%AD%E6%9D%BF%EF%BC%8C%E5%B7%AE%E5%BC%82%E5%8C%96%E6%94%B6%E7%AA%84" data-toc-target="2026-回看：Kafka-补齐短板，差异化收窄"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">2026 回看：Kafka 补齐短板，差异化收窄</span></a><a class="toc-level-3" href="#%E7%BB%8F%E5%8F%97%E4%BD%8F%E6%97%B6%E9%97%B4%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="经受住时间的判断"><span class="toc-text">经受住时间的判断</span></a><a class="toc-level-3" href="#%E9%9C%80%E8%A6%81%E4%BF%AE%E6%AD%A3%E7%9A%84%E5%9C%B0%E6%96%B9" data-toc-target="需要修正的地方"><span class="toc-text">需要修正的地方</span></a><a class="toc-level-3" href="#%E4%BB%8A%E5%A4%A9%E4%BC%9A%E6%80%8E%E4%B9%88%E5%81%9A" data-toc-target="今天会怎么做"><span class="toc-text">今天会怎么做</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 78%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">7 / 9</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E4%B8%A4%E7%B1%BB%E8%B4%9F%E8%BD%BD%EF%BC%8C%E4%B8%A4%E7%A7%8D%E9%9C%80%E6%B1%82" data-toc-target="两类负载，两种需求" data-title="01 · 两类负载，两种需求" aria-label="两类负载，两种需求"></a><a class="toc-strip__dot" href="#%E6%9E%B6%E6%9E%84%E5%B7%AE%E5%BC%82%EF%BC%9A%E5%85%88%E5%AF%B9%E9%BD%90-2023-%E5%B9%B4%E7%9A%84%E4%BA%8B%E5%AE%9E" data-toc-target="架构差异：先对齐-2023-年的事实" data-title="02 · 架构差异：先对齐 2023 年的事实" aria-label="架构差异：先对齐 2023 年的事实"></a><a class="toc-strip__dot" href="#%E5%AE%B9%E9%87%8F%E5%8F%A3%E5%BE%84%E4%B8%8E%E5%8E%8B%E6%B5%8B%E6%96%B9%E6%B3%95" data-toc-target="容量口径与压测方法" data-title="03 · 容量口径与压测方法" aria-label="容量口径与压测方法"></a><a class="toc-strip__dot" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96" data-toc-target="选型决策" data-title="04 · 选型决策" aria-label="选型决策"></a><a class="toc-strip__dot" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE" data-toc-target="关键配置" data-title="05 · 关键配置" aria-label="关键配置"></a><a class="toc-strip__dot" href="#%E8%BF%81%E7%A7%BB%E6%AD%A5%E9%AA%A4" data-toc-target="迁移步骤" data-title="06 · 迁移步骤" aria-label="迁移步骤"></a><a class="toc-strip__dot" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险" data-title="07 · 反例与风险" aria-label="反例与风险"></a><a class="toc-strip__dot" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9AKafka-%E8%A1%A5%E9%BD%90%E7%9F%AD%E6%9D%BF%EF%BC%8C%E5%B7%AE%E5%BC%82%E5%8C%96%E6%94%B6%E7%AA%84" data-toc-target="2026-回看：Kafka-补齐短板，差异化收窄" data-title="08 · 2026 回看：Kafka 补齐短板，差异化收窄" aria-label="2026 回看：Kafka 补齐短板，差异化收窄"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-06-消息选型","title":"车联网消息中间件选型：Kafka 与 Pulsar","url":"/2023/06/27/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-%E6%B6%88%E6%81%AF%E9%80%89%E5%9E%8B/","path":"cloud-native-platform","index":6,"total":9,"next":{"title":"车联网数据平台：离线、实时与时序三条链路","url":"/2023/07/18/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

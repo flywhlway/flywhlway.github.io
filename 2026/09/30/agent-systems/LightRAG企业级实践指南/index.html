@@ -1,0 +1,1677 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>LightRAG 企业级实践指南 v2：从入门到车辆远程智能诊断平台 · 飞轮之道</title>
+<meta name="description" content="基于 LightRAG 1.5.7，按原理、部署、领域知识工程、Agent 集成、评测与生产化的顺序，用车辆远程智能诊断 POC 串起 LangGraph/DeepAgents 双引擎、证据编号与引用落地校验、mem0 车辆记忆、Langfuse v4 观测和 Temporal 人工审批。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/30/agent-systems/LightRAG%E4%BC%81%E4%B8%9A%E7%BA%A7%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%8D%97/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="LightRAG 企业级实践指南 v2：从入门到车辆远程智能诊断平台 · 飞轮之道">
+<meta property="og:description" content="基于 LightRAG 1.5.7，按原理、部署、领域知识工程、Agent 集成、评测与生产化的顺序，用车辆远程智能诊断 POC 串起 LangGraph/DeepAgents 双引擎、证据编号与引用落地校验、mem0 车辆记忆、Langfuse v4 观测和 Temporal 人工审批。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/30/agent-systems/LightRAG%E4%BC%81%E4%B8%9A%E7%BA%A7%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%8D%97/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/langgraph-agent-engineering/">知识与记忆</a><a class="series-chip" href="/paths/langgraph-agent-engineering/" title="查看学习路径">第 5 / 17 篇</a>
+    </div>
+    <h1>LightRAG 企业级实践指南 v2：从入门到车辆远程智能诊断平台</h1>
+    <p class="article-deck">基于 LightRAG 1.5.7，按原理、部署、领域知识工程、Agent 集成、评测与生产化的顺序…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>44 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/LangGraph/">#LangGraph</a><a class="article-meta__tag" href="/tags/%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD/">#远程诊断</a><a class="article-meta__tag" href="/tags/Temporal/">#Temporal</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Graph RAG 在企业里的失败多源于语料没按图谱友好方式准备、RAG 被当黑盒接入业务、POC 脚本承载不了可靠性与审批，而不是检索不准。</li><li>Agent 取证改用 /query/data 结构化证据并逐条编号，再用三道确定性 grounding 闸门拦截伪造引用与伪造 TSB。</li><li>领域实体类型画像与中文句读切分决定图谱质量，知识工程是 Graph RAG 成败的一半。</li><li>诊断结论进入远程处置前，由 Temporal 工作流承载 Signal 审批、进度查询与超时升级。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>版本基线（2026-09-29 逐项核验）</strong>：LightRAG 1.5.7 · LangGraph 1.2.12 · DeepAgents 0.7.19 · mem0 2.2.1 · Langfuse v4（SDK 4.15.6）· Temporal Server 1.32.0 &#x2F; Python SDK 1.33.0 · FastAPI 0.141 · DeepSeek <code>deepseek-flash</code>（V4.1 Flash）</p>
+<p><strong>配套工程</strong>：<code>lightrag-vehicle-diag-poc/</code>（本文所有命令、配置、代码均可在工程中直接运行，22 个离线测试全部通过）</p>
+</blockquote>
+<hr>
+<h2 id="前言：这份指南解决什么问题"><a href="#前言：这份指南解决什么问题" class="headerlink" title="前言：这份指南解决什么问题"></a>前言：这份指南解决什么问题</h2><p>Graph RAG 在企业里最常见的失败模式并不是“检索不准”，而是三件更隐蔽的事：语料没有按图谱友好的方式准备，导致实体碎片化；RAG 被当成问答黑盒直接接进业务，结论无法溯源、幻觉无法拦截；POC 阶段的同步脚本无法承载真实业务所需的可靠性与人工审批。</p>
+<p>本指南以“车辆远程智能诊断”这个多跳推理需求极强的场景为主线，按 <strong>原理 → 部署 → 知识工程 → Agent 集成 → 评测 → 生产化</strong> 的顺序，把 LightRAG 从单机试用推进到可以向业务方演示、可以按清单推向生产的状态。全文重实操、轻理论，每一章都对应工程中的具体文件。</p>
+<h3 id="v2-更新摘要（相对-2026-07-的-v1）"><a href="#v2-更新摘要（相对-2026-07-的-v1）" class="headerlink" title="v2 更新摘要（相对 2026-07 的 v1）"></a>v2 更新摘要（相对 2026-07 的 v1）</h3><table>
+<thead>
+<tr>
+<th>变化点</th>
+<th>v1</th>
+<th>v2</th>
+<th>影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LLM 模型名</td>
+<td><code>deepseek-chat</code></td>
+<td><code>deepseek-flash</code>（可选 <code>deepseek-v4-pro</code>）</td>
+<td><strong>v1 已无法运行</strong>：<code>deepseek-chat</code> 于 2026-07-24 下线</td>
+</tr>
+<tr>
+<td>LightRAG</td>
+<td>1.5.4 &#x2F; <code>latest</code> 镜像</td>
+<td>1.5.7 &#x2F; 固定 <code>v1.5.7</code> 镜像</td>
+<td>可复现部署</td>
+</tr>
+<tr>
+<td>Agent 取证接口</td>
+<td><code>/query</code> + <code>only_need_context</code></td>
+<td><code>/query/data</code> 结构化证据</td>
+<td>证据可编号、可校验、可溯源</td>
+</tr>
+<tr>
+<td>文档管理</td>
+<td><code>GET /documents</code>、<code>DELETE /documents</code></td>
+<td><code>/documents/paginated</code>、<code>/documents/delete_document</code></td>
+<td>1.5.7 已移除旧列表接口；裸 <code>DELETE /documents</code> 是<strong>清空全库</strong></td>
+</tr>
+<tr>
+<td>灌注</td>
+<td>同名重复提交静默成功</td>
+<td>服务端返回 409，脚本幂等跳过</td>
+<td>可安全重复执行</td>
+</tr>
+<tr>
+<td>实体抽取</td>
+<td>通用实体类型</td>
+<td><code>ENTITY_TYPE_PROMPT_FILE</code> 车辆诊断领域画像</td>
+<td>图谱质量显著提升</td>
+</tr>
+<tr>
+<td>切分</td>
+<td>固定 token</td>
+<td><code>recursive_character</code>（中文句读分隔）</td>
+<td>语义边界更完整</td>
+</tr>
+<tr>
+<td>存储拓扑</td>
+<td>仅专用存储</td>
+<td>full（专用）&#x2F; lite（PostgreSQL 一体化，<code>PGTableGraphStorage</code>）</td>
+<td>笔记本与托管 PG 均可落地</td>
+</tr>
+<tr>
+<td>诊断引擎</td>
+<td>LangGraph</td>
+<td>LangGraph &#x2F; DeepAgents 双引擎可切换</td>
+<td>共享检索、Schema 与校验</td>
+</tr>
+<tr>
+<td>可信机制</td>
+<td>无</td>
+<td>证据编号 + 引用落地校验（grounding）</td>
+<td>拦截伪造引用与伪造 TSB</td>
+</tr>
+<tr>
+<td>Temporal</td>
+<td><code>auto-setup</code> 镜像</td>
+<td><code>server</code> + <code>admin-tools</code>（官方新模式）</td>
+<td><code>auto-setup</code> 已弃用</td>
+</tr>
+<tr>
+<td>人在回路</td>
+<td>无</td>
+<td>Signal 审批 &#x2F; Query 进度 &#x2F; 超时升级</td>
+<td>远程处置可控</td>
+</tr>
+<tr>
+<td>Langfuse</td>
+<td>v3</td>
+<td>v4（服务端 + SDK），密钥自动预置</td>
+<td>零手工配置，支持反馈打分</td>
+</tr>
+<tr>
+<td>质量保障</td>
+<td>编译检查</td>
+<td>22 个离线测试 + 检索评测 + 端到端评测</td>
+<td>可回归</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="第-1-章-LightRAG-原理速通"><a href="#第-1-章-LightRAG-原理速通" class="headerlink" title="第 1 章　LightRAG 原理速通"></a>第 1 章　LightRAG 原理速通</h2><h3 id="1-1-定位：为什么诊断场景需要-Graph-RAG"><a href="#1-1-定位：为什么诊断场景需要-Graph-RAG" class="headerlink" title="1.1 定位：为什么诊断场景需要 Graph RAG"></a>1.1 定位：为什么诊断场景需要 Graph RAG</h3><p>传统向量 RAG 把文档切成片段、按语义相似度召回。它擅长回答“U0146 是什么意思”这类单点问题，但回答不了“BootLoader 为 BL-2.0.8 的车升级 CGW-3.3.0 失败并报 U0146，根因是什么、有没有通告”。这个问题的答案分散在三篇文档里：DTC 手册说明 U0146 可由 CGW 回滚引起，OTA 手册的兼容矩阵说明 BL-2.0.x 刷 CGW-3.3.0 必然校验失败，TSB 通告给出该批次车辆的两段式升级方案。三段文字彼此的向量相似度并不高，纯向量检索很难同时召回。</p>
+<p>LightRAG 在索引阶段用 LLM 把文本抽取为“实体 + 关系”写入知识图谱，查询时同时走图谱（沿关系边多跳扩展）和向量（语义召回原文），再把两路结果合并为上下文。U0146、CGW、BL-2.0.8、CGW-3.3.0、TSB-2026-013 在图谱里通过关系边相连，多跳检索就能把整条因果链一起取回。与微软 GraphRAG 相比，LightRAG 不依赖离线社区聚类，支持增量插入与按文档删除后自动重建受影响子图，工程上更适合知识持续更新的企业场景。</p>
+<h3 id="1-2-索引管线"><a href="#1-2-索引管线" class="headerlink" title="1.2 索引管线"></a>1.2 索引管线</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">文档 ─► 解析（native / MinerU / Docling）─► 切分（F/R/P/V 策略）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">     ─► LLM 实体与关系抽取（可注入领域实体类型画像）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">     ─► 实体/关系合并去重与描述摘要（map-reduce）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">     ─► 写入四类存储：KV（原文/缓存）· 向量（实体/关系/Chunk 三个索引）· 图谱 · 文档状态</span></span></code></pre></div></div></figure>
+
+<p>几个直接影响效果与成本的事实：</p>
+<ul>
+<li><strong>抽取成本集中在 LLM</strong>：每个 Chunk 至少一次抽取调用，外加实体合并时的摘要调用。开启 <code>ENABLE_LLM_CACHE</code> 后，重复灌注同一内容几乎零成本。</li>
+<li><strong>实体名就是图谱主键</strong>：“CGW”“中央网关”“Gateway”若混用，会被抽成三个节点，多跳链路就此断开。这是企业图谱质量差的首要原因，第 4 章专门处理。</li>
+<li><strong>文档状态可追踪</strong>：PENDING → PARSING → (ANALYZING) → PROCESSING → PROCESSED &#x2F; FAILED，失败文档可通过 <code>/documents/reprocess_failed</code> 重试。</li>
+</ul>
+<h3 id="1-3-六种查询模式"><a href="#1-3-六种查询模式" class="headerlink" title="1.3 六种查询模式"></a>1.3 六种查询模式</h3><table>
+<thead>
+<tr>
+<th>模式</th>
+<th>检索路径</th>
+<th>适用问题</th>
+<th>诊断场景用法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>naive</code></td>
+<td>仅向量召回 Chunk</td>
+<td>单点事实</td>
+<td>对照组，量化图谱增益</td>
+</tr>
+<tr>
+<td><code>local</code></td>
+<td>低层关键词 → 实体 → 邻接关系</td>
+<td>某个实体的定义与属性</td>
+<td>查询故障码含义、部件职责</td>
+</tr>
+<tr>
+<td><code>global</code></td>
+<td>高层关键词 → 关系 → 相关实体</td>
+<td>跨文档的规律、主题总结</td>
+<td>某类故障的通用排查思路</td>
+</tr>
+<tr>
+<td><code>hybrid</code></td>
+<td>local + global</td>
+<td>需要兼顾细节与主题</td>
+<td>较少单独使用</td>
+</tr>
+<tr>
+<td><code>mix</code></td>
+<td>图谱（local+global）+ 向量 Chunk</td>
+<td>因果链、多跳推理</td>
+<td><strong>根因分析、TSB 匹配（默认）</strong></td>
+</tr>
+<tr>
+<td><code>bypass</code></td>
+<td>不检索，直接调用 LLM</td>
+<td>闲聊或调试</td>
+<td>不用于诊断</td>
+</tr>
+</tbody></table>
+<p>调参经验：<code>top_k</code> 控制图谱侧实体&#x2F;关系条数，<code>chunk_top_k</code> 控制向量侧 Chunk 条数，<code>max_total_tokens</code> 是上下文总预算。开启 Reranker 后可以适当调大召回、依靠重排提纯；未开启时宁少勿多，避免噪声稀释关键证据。</p>
+<h3 id="1-4-存储选型矩阵（1-5-7）"><a href="#1-4-存储选型矩阵（1-5-7）" class="headerlink" title="1.4 存储选型矩阵（1.5.7）"></a>1.4 存储选型矩阵（1.5.7）</h3><table>
+<thead>
+<tr>
+<th>存储类型</th>
+<th>开发测试</th>
+<th>生产推荐</th>
+<th>PostgreSQL 一体化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>KV（原文、LLM 缓存、Chunk）</td>
+<td>JsonKVStorage</td>
+<td>RedisKVStorage &#x2F; MongoKVStorage</td>
+<td>PGKVStorage</td>
+</tr>
+<tr>
+<td>向量（实体&#x2F;关系&#x2F;Chunk）</td>
+<td>NanoVectorDBStorage</td>
+<td>MilvusVectorDBStorage &#x2F; QdrantVectorDBStorage</td>
+<td>PGVectorStorage（HNSW）</td>
+</tr>
+<tr>
+<td>图谱</td>
+<td>NetworkXStorage</td>
+<td>Neo4JStorage &#x2F; MemgraphStorage</td>
+<td><strong>PGTableGraphStorage（1.5.6 新增，无需 AGE）</strong></td>
+</tr>
+<tr>
+<td>文档状态</td>
+<td>JsonDocStatusStorage</td>
+<td>PGDocStatusStorage &#x2F; MongoDocStatusStorage</td>
+<td>PGDocStatusStorage</td>
+</tr>
+</tbody></table>
+<p><code>PGTableGraphStorage</code> 是 1.5.6 起的重要变化：图谱直接建在 PostgreSQL 普通表上，不再依赖 Apache AGE 扩展，官方 <code>pgvector/pgvector</code> 镜像或 RDS、PolarDB 这类托管 PostgreSQL 即可承载全部四类存储。官方说明它将取代基于 AGE 的 <code>PGGraphStorage</code> 成为 PostgreSQL 上的首选图存储，并提供了从 AGE 迁移到表存储的离线工具。</p>
+<p>选型建议：团队已有 PostgreSQL 运维能力、数据量在百万实体以内、希望最少组件时选一体化；需要复杂图分析（Cypher、GDS 算法）或向量规模很大时选专用存储。本工程两种都提供，一个参数切换。</p>
+<h3 id="1-5-Workspace-多租户"><a href="#1-5-Workspace-多租户" class="headerlink" title="1.5 Workspace 多租户"></a>1.5 Workspace 多租户</h3><p><code>WORKSPACE</code> 在同一套存储上按命名空间隔离数据（只允许字母、数字和下划线）。典型用法是按业务域划分知识库：<code>vehicle_diag</code>（诊断）、<code>rd_kb</code>（研发）、<code>after_sales</code>（售后）。一个 LightRAG Server 实例对应一个 workspace；多知识库可以部署多个实例共享底层存储，由网关按路径路由（配合 <code>LIGHTRAG_API_PREFIX</code>）。</p>
+<h3 id="1-6-1-5-x-系列值得关注的新能力"><a href="#1-6-1-5-x-系列值得关注的新能力" class="headerlink" title="1.6 1.5.x 系列值得关注的新能力"></a>1.6 1.5.x 系列值得关注的新能力</h3><ul>
+<li><strong><code>/query/data</code></strong>：只检索不生成，返回结构化的实体、关系、Chunk 与引用列表，是把 LightRAG 当作 Agent 检索内核的标准接口（第 5 章核心）。</li>
+<li><strong>领域实体类型画像</strong>：<code>ENTITY_TYPE_PROMPT_FILE</code> 以 YAML 注入实体类型定义与抽取示例（第 4 章）。</li>
+<li><strong>多策略切分</strong>：固定 token（F）、递归字符（R，默认含中文句读）、段落语义（P）、语义向量（V），以及 Word 文档智能标题识别（1.5.5）。</li>
+<li><strong>角色化 LLM</strong>：EXTRACT &#x2F; KEYWORD &#x2F; QUERY &#x2F; VLM 四个角色可分别指定模型、并发与超时。</li>
+<li><strong>生产加固</strong>：请求体上限、登录防爆破、写入准入控制（积压超限返回 429）、可关闭 API 文档页。</li>
+<li><strong>双入口 WebUI（1.5.7）</strong>：<code>/webui</code> 管理端与 <code>/workspace</code> 终端用户问答端，支持品牌定制与全局 <code>USER_PROMPT_PREFIX</code>。</li>
+<li><strong>知识治理 API</strong>：实体&#x2F;关系的创建、编辑、删除与合并，按文档删除后自动重建受影响子图。</li>
+</ul>
+<hr>
+<h2 id="第-2-章-Python-SDK-五分钟上手"><a href="#第-2-章-Python-SDK-五分钟上手" class="headerlink" title="第 2 章　Python SDK 五分钟上手"></a>第 2 章　Python SDK 五分钟上手</h2><p>SDK 适合嵌入式使用与离线批处理；服务化部署请直接看第 3 章。以下代码对照 1.5.7 源码核验。</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">uv venv &amp;&amp; <span class="built_in">source</span> .venv/bin/activate</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">uv pip install <span class="string">&quot;lightrag-hku==1.5.7&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">ollama pull bge-m3</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">export</span> DEEPSEEK_API_KEY=sk-...</span></span></code></pre></div></div></figure>
+
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="47"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># quickstart.py</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> asyncio</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> os</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">from</span> functools <span class="keyword">import</span> partial</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="keyword">from</span> lightrag <span class="keyword">import</span> LightRAG, QueryParam</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">from</span> lightrag.llm.ollama <span class="keyword">import</span> ollama_embed</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="keyword">from</span> lightrag.llm.openai <span class="keyword">import</span> openai_complete_if_cache</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">from</span> lightrag.utils <span class="keyword">import</span> EmbeddingFunc</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">llm_func</span>(<span class="params">prompt, system_prompt=<span class="literal">None</span>, history_messages=<span class="literal">None</span>, **kwargs</span>):</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="keyword">return</span> <span class="keyword">await</span> openai_complete_if_cache(</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="string">&quot;deepseek-flash&quot;</span>, prompt,</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        system_prompt=system_prompt, history_messages=history_messages <span class="keyword">or</span> [],</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        base_url=<span class="string">&quot;https://api.deepseek.com&quot;</span>, api_key=os.environ[<span class="string">&quot;DEEPSEEK_API_KEY&quot;</span>], **kwargs)</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    rag = LightRAG(</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">        working_dir=<span class="string">&quot;./rag_storage&quot;</span>,</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        workspace=<span class="string">&quot;quickstart&quot;</span>,</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">        llm_model_func=llm_func,</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        embedding_func=EmbeddingFunc(</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">            embedding_dim=<span class="number">1024</span>, max_token_size=<span class="number">8192</span>, model_name=<span class="string">&quot;bge-m3&quot;</span>,</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">            <span class="comment"># ollama_embed 已被装饰为 EmbeddingFunc，必须用 .func 取原函数，避免双重包装</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">            func=partial(ollama_embed.func, embed_model=<span class="string">&quot;bge-m3&quot;</span>, host=<span class="string">&quot;http://localhost:11434&quot;</span>),</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        ),</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        addon_params=&#123;<span class="string">&quot;language&quot;</span>: <span class="string">&quot;Chinese&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    )</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">    <span class="keyword">await</span> rag.initialize_storages()        <span class="comment"># 1.5.x 内部已自动初始化 pipeline status，无需再单独调用</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">    <span class="keyword">for</span> name <span class="keyword">in</span> [<span class="string">&quot;01-dtc-manual.md&quot;</span>, <span class="string">&quot;02-ota-troubleshooting.md&quot;</span>, <span class="string">&quot;03-tsb-bulletins.md&quot;</span>]:</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">        text = <span class="built_in">open</span>(<span class="string">f&quot;data/knowledge/<span class="subst">&#123;name&#125;</span>&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>).read()</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">        <span class="keyword">await</span> rag.ainsert(text, file_paths=name)</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    q = <span class="string">&quot;BL-2.0.8 的车升级 CGW-3.3.0 失败并报 U0146，根因和处置方案是什么？&quot;</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">    <span class="keyword">for</span> mode <span class="keyword">in</span> (<span class="string">&quot;naive&quot;</span>, <span class="string">&quot;mix&quot;</span>):</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">        <span class="built_in">print</span>(<span class="string">f&quot;\n==== <span class="subst">&#123;mode&#125;</span> ====\n&quot;</span>, <span class="keyword">await</span> rag.aquery(q, param=QueryParam(mode=mode)))</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">    data = <span class="keyword">await</span> rag.aquery_data(q, param=QueryParam(mode=<span class="string">&quot;mix&quot;</span>, top_k=<span class="number">20</span>))</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">    d = data[<span class="string">&quot;data&quot;</span>]</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">    <span class="built_in">print</span>(<span class="string">f&quot;\n实体 <span class="subst">&#123;<span class="built_in">len</span>(d[<span class="string">&#x27;entities&#x27;</span>])&#125;</span> / 关系 <span class="subst">&#123;<span class="built_in">len</span>(d[<span class="string">&#x27;relationships&#x27;</span>])&#125;</span> / Chunk <span class="subst">&#123;<span class="built_in">len</span>(d[<span class="string">&#x27;chunks&#x27;</span>])&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">    <span class="keyword">await</span> rag.finalize_storages()</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">asyncio.run(main())</span></span></code></pre></div></div></figure>
+
+<p>三个容易踩的点：</p>
+<ol>
+<li><strong>SDK 的 <code>ainsert</code> 永远使用固定 token 切分</strong>。需要递归字符、段落语义等策略时，请走 Server 的 <code>/documents/text</code>（<code>chunking</code> 字段）或上传接口。</li>
+<li><strong><code>EmbeddingFunc</code> 双重包装</strong>：直接 <code>partial(ollama_embed, ...)</code> 会让内层包装的参数覆盖外层配置，官方注释明确要求使用 <code>.func</code>。</li>
+<li><strong>维度一旦写入不可变</strong>：<code>embedding_dim</code> 决定向量表结构，换模型必须清库重建。</li>
+</ol>
+<hr>
+<h2 id="第-3-章-Docker-Compose-自托管部署（双档位）"><a href="#第-3-章-Docker-Compose-自托管部署（双档位）" class="headerlink" title="第 3 章　Docker Compose 自托管部署（双档位）"></a>第 3 章　Docker Compose 自托管部署（双档位）</h2><h3 id="3-1-部署形态决策"><a href="#3-1-部署形态决策" class="headerlink" title="3.1 部署形态决策"></a>3.1 部署形态决策</h3><table>
+<thead>
+<tr>
+<th>形态</th>
+<th>组件</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>单容器 + 本地文件存储</td>
+<td>LightRAG（Json&#x2F;Nano&#x2F;NetworkX）</td>
+<td>个人试用，一行 <code>docker run</code></td>
+</tr>
+<tr>
+<td><strong>lite：PostgreSQL 一体化</strong></td>
+<td>PG17 + pgvector，四类存储全在 PG</td>
+<td>笔记本演示、资源受限、托管 PG 落地</td>
+</tr>
+<tr>
+<td><strong>full：专用存储</strong></td>
+<td>Redis + Milvus 2.6 + Neo4j 5.26 + PG</td>
+<td>生产拓扑、大规模、需要图分析</td>
+</tr>
+</tbody></table>
+<p>最小试用（验证 LLM 与 Embedding 连通性足够）：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">docker run -d --name lightrag -p 9621:9621 \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --add-host host.docker.internal:host-gateway \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -e LLM_BINDING=openai -e LLM_MODEL=deepseek-flash \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  -e LLM_BINDING_HOST=https://api.deepseek.com -e LLM_BINDING_API_KEY=<span class="variable">$DEEPSEEK_API_KEY</span> \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  -e EMBEDDING_BINDING=ollama -e EMBEDDING_MODEL=bge-m3 -e EMBEDDING_DIM=1024 \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  -e EMBEDDING_BINDING_HOST=http://host.docker.internal:11434 \</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  -e SUMMARY_LANGUAGE=Chinese -e LIGHTRAG_API_KEY=demo-key \</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  ghcr.io/hkuds/lightrag:v1.5.7</span></span></code></pre></div></div></figure>
+
+<h3 id="3-2-工程的分层-Compose-设计"><a href="#3-2-工程的分层-Compose-设计" class="headerlink" title="3.2 工程的分层 Compose 设计"></a>3.2 工程的分层 Compose 设计</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">docker-compose.yml          公共层：postgres、temporal-schema/temporal/temporal-namespace/temporal-ui、</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">                            lightrag（仅公共配置）、diag-agent、diag-worker</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">docker-compose.full.yml     叠加：redis、neo4j、milvus-etcd/milvus-minio/milvus；</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">                            lightrag 追加 storage-full.env 与存储依赖；diag-agent 记忆后端=milvus</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">docker-compose.lite.yml     叠加：lightrag 追加 storage-lite.env；diag-agent 记忆后端=pgvector</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">docker-compose.langfuse.yml 独立项目 vd-langfuse（可选）</span></span></code></pre></div></div></figure>
+
+<p><code>make up PROFILE=full|lite</code> 等价于 <code>docker compose -f docker-compose.yml -f docker-compose.&lt;profile&gt;.yml up -d</code>。之所以用叠加文件而不是 Compose profiles：LightRAG 需要按档位<strong>同时切换环境变量和依赖关系</strong>，而 profiles 只能控制服务启停，叠加文件则能确定性地合并 <code>env_file</code> 与 <code>depends_on</code>。两个档位都已用 Docker Compose v5 执行 <code>config -q</code> 校验通过。</p>
+<p>几个关键设计：</p>
+<ul>
+<li><strong>镜像固定版本</strong>：<code>ghcr.io/hkuds/lightrag:v1.5.7</code>，官方发布流水线以 git tag 作为镜像 tag，并对官方镜像做了 Cosign 签名，可用 <code>cosign verify</code> 校验供应链。</li>
+<li><strong>敏感信息单点注入</strong>：<code>deploy/lightrag/lightrag.env</code> 不含任何密钥，可入库；DeepSeek Key、LightRAG API Key、WebUI 账号、JWT Secret 均由 Compose 从根 <code>.env</code> 注入。整个工程只有根 <code>.env</code> 一个文件需要填写。</li>
+<li><strong>PostgreSQL 选 pg17</strong>：LightRAG 要求 PG14+，而 pg18 官方镜像的数据目录挂载路径发生了变化，沿用旧写法会导致数据写到匿名卷里。</li>
+<li><strong>Milvus 固定 v2.6.11</strong>：Milvus 3.0 已 GA，但 LightRAG 官方 setup 模板仍锁定 2.6.11，本工程与官方验证版本保持一致，升级前需自行回归。</li>
+<li><strong>Redis 必须 <code>noeviction</code> + AOF</strong>：LightRAG 把原文、Chunk 与 LLM 缓存放在 KV，一旦被淘汰就是静默的数据丢失。</li>
+<li><strong>健康检查驱动启动顺序</strong>：LightRAG 等待全部存储 healthy 才启动，业务服务等待 LightRAG 与 Temporal healthy。</li>
+</ul>
+<h3 id="3-3-Temporal-的新部署方式"><a href="#3-3-Temporal-的新部署方式" class="headerlink" title="3.3 Temporal 的新部署方式"></a>3.3 Temporal 的新部署方式</h3><p><code>temporalio/auto-setup</code> 镜像已被官方标记弃用，原 <code>temporalio/docker-compose</code> 仓库也在 2026-01 归档，官方示例迁移到 <code>samples-server/compose</code>。新模式拆成三步：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">temporal-schema:</span>      <span class="comment"># 一次性任务：admin-tools 用 temporal-sql-tool 建库并升级 schema</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">image:</span> <span class="string">temporalio/admin-tools:1.32.0</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">command:</span> <span class="string">/scripts/setup-postgres.sh</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">temporal:</span>             <span class="comment"># 纯 server，等待 schema 任务成功完成</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">image:</span> <span class="string">temporalio/server:1.32.0</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">depends_on:</span> &#123; <span class="attr">temporal-schema:</span> &#123; <span class="attr">condition:</span> <span class="string">service_completed_successfully</span> &#125; &#125;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">temporal-namespace:</span>   <span class="comment"># 一次性任务：等待集群健康后创建 namespace</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">image:</span> <span class="string">temporalio/admin-tools:1.32.0</span></span></span></code></pre></div></div></figure>
+
+<p>工程里的 <code>setup-postgres.sh</code> 在官方脚本基础上做了幂等处理（重复启动不失败），<code>create-namespace.sh</code> 修正了上游脚本中 <code>MAX_ATTEMPTS</code> 变量的拼写错误。server 与 admin-tools 版本必须一致，因为 schema 迁移脚本随 admin-tools 发布。</p>
+<h3 id="3-4-LightRAG-配置精讲（deploy-lightrag-lightrag-env）"><a href="#3-4-LightRAG-配置精讲（deploy-lightrag-lightrag-env）" class="headerlink" title="3.4 LightRAG 配置精讲（deploy/lightrag/lightrag.env）"></a>3.4 LightRAG 配置精讲（<code>deploy/lightrag/lightrag.env</code>）</h3><p>所有变量均已对照官方 v1.5.7 <code>env.example</code> 与 <code>config.py</code> 逐项核验。</p>
+<p><strong>服务与入口</strong></p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">WEBUI_TITLE</span>=<span class="string">&#x27;车辆诊断知识内核&#x27;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">LIGHTRAG_DEFAULT_UI</span>=webui        <span class="comment"># 根路径默认进入管理端；设为 workspace 则默认进入终端用户问答端</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">ENABLE_API_DOCS</span>=<span class="literal">true</span>             <span class="comment"># 生产建议 false，隐藏 /docs /redoc /openapi.json</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">WORKSPACE</span>=vehicle_diag</span></span></code></pre></div></div></figure>
+
+<p><strong>鉴权与加固</strong>（最容易被忽略的一组）</p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">WHITELIST_PATHS</span>=/health          <span class="comment"># 默认白名单包含 /api/*（Ollama 兼容接口），必须收紧</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">LOGIN_MAX_FAILED_ATTEMPTS</span>=<span class="number">5</span>      <span class="comment"># 同一 IP + 用户名在窗口内失败 5 次即 429</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">LOGIN_LOCKOUT_WINDOW_SECONDS</span>=<span class="number">300</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">MAX_REQUEST_BODY_BYTES</span>=<span class="number">10485760</span>  <span class="comment"># 请求体上限</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">MAX_PENDING_DOCUMENTS</span>=<span class="number">200</span>        <span class="comment"># 写入准入：积压文档超限返回 429（0 表示关闭）</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">MAX_TEXTS_PER_REQUEST</span>=<span class="number">50</span>         <span class="comment"># 单次批量文本条数上限（超限 413）</span></span></span></code></pre></div></div></figure>
+
+<p>需要注意两点：登录计数器是进程内存级的，gunicorn 多 worker 时有效阈值会乘以 worker 数，严格限流应放在网关或 WAF；<code>/health</code> 对未认证调用只返回存活信息，完整配置仅对携带有效 <code>X-API-Key</code> 或 JWT 的调用方返回。</p>
+<p><strong>LLM 与 Embedding</strong></p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">LLM_BINDING</span>=openai               <span class="comment"># DeepSeek 走 OpenAI 兼容协议；LLM_MODEL/HOST/KEY 由 compose 注入</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">OPENAI_LLM_TEMPERATURE</span>=<span class="number">0.1</span>       <span class="comment"># 抽取任务要稳定，温度宜低</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">MAX_ASYNC_LLM</span>=<span class="number">4</span>                  <span class="comment"># 并发 LLM 请求数，按供应商限流调整</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">EMBEDDING_BINDING</span>=ollama</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">EMBEDDING_BINDING_HOST</span>=http://host.docker.internal:<span class="number">11434</span></span></span></code></pre></div></div></figure>
+
+<p>角色化模型是降本增效的关键手段：抽取（EXTRACT）调用量最大，适合用便宜快速的模型；最终回答（QUERY）可以用更强的模型；关键词提取（KEYWORD）要求低延迟。未设置的角色回落到全局 LLM。</p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># KEYWORD_LLM_MODEL=deepseek-flash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># QUERY_LLM_MODEL=deepseek-v4-pro</span></span></span></code></pre></div></div></figure>
+
+<p><strong>文档处理</strong></p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">SUMMARY_LANGUAGE</span>=Chinese               <span class="comment"># 抽取出的实体描述、摘要使用中文</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">ENTITY_EXTRACTION_USE_JSON</span>=<span class="literal">true</span>        <span class="comment"># JSON 结构化抽取，延迟略高但可靠性更好</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">ENTITY_TYPE_PROMPT_FILE</span>=vehicle_diag.yml</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">CHUNK_SIZE</span>=<span class="number">1000</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">CHUNK_OVERLAP_SIZE</span>=<span class="number">100</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">MAX_PARALLEL_INSERT</span>=<span class="number">2</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">ENABLE_LLM_CACHE</span>=<span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">ENABLE_LLM_CACHE_FOR_EXTRACT</span>=<span class="literal">true</span></span></span></code></pre></div></div></figure>
+
+<p><strong>查询默认值</strong></p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">TOP_K</span>=<span class="number">40</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">CHUNK_TOP_K</span>=<span class="number">15</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">MAX_ENTITY_TOKENS</span>=<span class="number">6000</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">MAX_RELATION_TOKENS</span>=<span class="number">8000</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">MAX_TOTAL_TOKENS</span>=<span class="number">30000</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">KG_CHUNK_PICK_METHOD</span>=VECTOR            <span class="comment"># VECTOR 更接近 naive 的相关性；WEIGHT 更偏图谱关联</span></span></span></code></pre></div></div></figure>
+
+<p><strong>存储绑定</strong>：full 档位见 <code>storage-full.env</code>（Redis &#x2F; Milvus &#x2F; Neo4j &#x2F; PG），lite 档位见 <code>storage-lite.env</code>：</p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">LIGHTRAG_KV_STORAGE</span>=PGKVStorage</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">LIGHTRAG_VECTOR_STORAGE</span>=PGVectorStorage</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">LIGHTRAG_GRAPH_STORAGE</span>=PGTableGraphStorage</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">LIGHTRAG_DOC_STATUS_STORAGE</span>=PGDocStatusStorage</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">POSTGRES_VECTOR_INDEX_TYPE</span>=HNSW        <span class="comment"># 2000 维以上的大向量改用 HNSW_HALFVEC</span></span></span></code></pre></div></div></figure>
+
+<p><strong>Reranker（可选，强烈建议生产开启）</strong>：用 vLLM 或 Xinference 部署 <code>bge-reranker-v2-m3</code>，按 Cohere 兼容协议接入：</p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">RERANK_BINDING</span>=cohere</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">RERANK_MODEL</span>=BAAI/bge-reranker-v2-m3</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">RERANK_BINDING_HOST</span>=http://host.docker.internal:<span class="number">8000</span>/rerank</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">RERANK_BY_DEFAULT</span>=<span class="literal">True</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">MIN_RERANK_SCORE</span>=<span class="number">0.3</span></span></span></code></pre></div></div></figure>
+
+<h3 id="3-5-启动与验证"><a href="#3-5-启动与验证" class="headerlink" title="3.5 启动与验证"></a>3.5 启动与验证</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cp</span> .env.example .<span class="built_in">env</span> &amp;&amp; vim .<span class="built_in">env</span>        <span class="comment"># 填 DEEPSEEK_API_KEY</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">make up                                 <span class="comment"># 或 make up PROFILE=lite</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">make ps</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">make smoke</span></span></code></pre></div></div></figure>
+
+<p><code>make smoke</code> 逐项检查 Ollama 模型、LightRAG、diag-agent、Temporal 与 Langfuse。full 档位首次启动 Milvus 需要 1～2 分钟完成初始化，LightRAG 会等待其健康检查通过后再启动。</p>
+<h3 id="3-6-REST-API-实操"><a href="#3-6-REST-API-实操" class="headerlink" title="3.6 REST API 实操"></a>3.6 REST API 实操</h3><p>所有调用携带请求头 <code>X-API-Key: vd-poc-api-key</code>。</p>
+<p><strong>插入文本（指定中文友好的切分策略）</strong></p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s -X POST http://localhost:9621/documents/text \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span> -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;text&quot;: &quot;...&quot;, &quot;file_source&quot;: &quot;01-dtc-manual.md&quot;,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="string">       &quot;chunking&quot;: &#123;&quot;strategy&quot;: &quot;recursive_character&quot;,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="string">                    &quot;params&quot;: &#123;&quot;chunk_token_size&quot;: 800, &quot;chunk_overlap_token_size&quot;: 80&#125;&#125;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># → &#123;&quot;status&quot;:&quot;success&quot;,&quot;message&quot;:&quot;...&quot;,&quot;track_id&quot;:&quot;insert_...&quot;&#125;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># 同名 file_source 再次提交 → HTTP 409</span></span></span></code></pre></div></div></figure>
+
+<p><code>chunking.strategy</code> 可选 <code>fixed_token</code>、<code>recursive_character</code>、<code>semantic_vector</code>、<code>paragraph_semantic</code>、<code>custom</code>，参数模型为严格校验（未知字段或类型错误直接返回 422）。</p>
+<p><strong>追踪处理进度</strong></p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s http://localhost:9621/documents/track_status/&lt;track_id&gt; -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">curl -s http://localhost:9621/documents/pipeline_status        -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">curl -s http://localhost:9621/documents/status_counts          -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>问答（带引用）</strong></p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s -X POST http://localhost:9621/query -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;query&quot;: &quot;U0146 与 P1E00 同时出现如何处置？&quot;, &quot;mode&quot;: &quot;mix&quot;,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="string">       &quot;include_references&quot;: true, &quot;response_type&quot;: &quot;Bullet Points&quot;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># → &#123;&quot;response&quot;: &quot;...&quot;, &quot;references&quot;: [&#123;&quot;reference_id&quot;:&quot;1&quot;,&quot;file_path&quot;:&quot;03-tsb-bulletins.md&quot;&#125;], &quot;response_time&quot;: 6.2&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>结构化检索（Agent 集成的标准接口）</strong></p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s -X POST http://localhost:9621/query/data -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;query&quot;: &quot;BL-2.0.8 CGW-3.3.0 回滚 根因&quot;, &quot;mode&quot;: &quot;mix&quot;, &quot;top_k&quot;: 20, &quot;chunk_top_k&quot;: 8&#125;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="string">&quot;success&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">&quot;entities&quot;</span><span class="punctuation">:</span>      <span class="punctuation">[</span><span class="punctuation">&#123;</span><span class="attr">&quot;entity_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;BL-2.0.8&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;entity_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;SoftwareVersion&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;file_path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;reference_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">&quot;relationships&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">&#123;</span><span class="attr">&quot;src_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;BL-2.0.8&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;tgt_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;CGW-3.3.0&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;keywords&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;weight&quot;</span><span class="punctuation">:</span> <span class="number">1.0</span><span class="punctuation">&#125;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">&quot;chunks&quot;</span><span class="punctuation">:</span>        <span class="punctuation">[</span><span class="punctuation">&#123;</span><span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;file_path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;chunk_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;chunk-...&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;reference_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">&quot;references&quot;</span><span class="punctuation">:</span>    <span class="punctuation">[</span><span class="punctuation">&#123;</span><span class="attr">&quot;reference_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;file_path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;02-ota-troubleshooting.md&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">&quot;metadata&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;mode&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mix&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;keywords&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;high_level&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span>...<span class="punctuation">]</span><span class="punctuation">,</span> <span class="attr">&quot;low_level&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span>...<span class="punctuation">]</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>文档治理</strong>（注意 1.5.7 的接口变化）</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 分页列文档（GET /documents 已移除）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">curl -s -X POST http://localhost:9621/documents/paginated -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> -d <span class="string">&#x27;&#123;&quot;page&quot;:1,&quot;page_size&quot;:50,&quot;sort_field&quot;:&quot;updated_at&quot;,&quot;sort_direction&quot;:&quot;desc&quot;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># 按 ID 删除并重建受影响子图</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">curl -s -X DELETE http://localhost:9621/documents/delete_document -H <span class="string">&#x27;X-API-Key: vd-poc-api-key&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> -d <span class="string">&#x27;&#123;&quot;doc_ids&quot;:[&quot;doc-xxx&quot;],&quot;delete_file&quot;:false,&quot;delete_llm_cache&quot;:true&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># ⚠️ 裸 DELETE /documents 会清空当前 workspace 的全部文档</span></span></span></code></pre></div></div></figure>
+
+<p>工程提供了等价的零依赖命令行：<code>python3 scripts/kb_admin.py list | delete &lt;id&gt; | reset | entity &lt;名称&gt; | merge &lt;目标&gt; &lt;别名...&gt;</code>。</p>
+<h3 id="3-7-WebUI-双入口与图谱验证"><a href="#3-7-WebUI-双入口与图谱验证" class="headerlink" title="3.7 WebUI 双入口与图谱验证"></a>3.7 WebUI 双入口与图谱验证</h3><p>1.5.7 起 LightRAG 提供两个 Web 入口：<code>/webui</code> 是管理端（文档管理、知识图谱可视化、检索调试、API 文档），<code>/workspace</code> 是面向终端用户的纯问答界面，适配移动端，不暴露文档管理与图谱。把 <code>/workspace</code> 开放给售后工程师，配合 <code>UI_TEMPLATES_DIR</code> 定制欢迎页、登录说明与品牌标识，再用 <code>USER_PROMPT_PREFIX</code> 统一回答风格（例如要求“先给结论、再列步骤、标注引用”），就是一个零开发的售后知识问答入口。</p>
+<p>full 档位还可以在 Neo4j Browser（<code>http://localhost:7474</code>）里直接验证图谱：</p>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">// 查看以 U0146 为起点三跳内的因果网络</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">MATCH p = (n)-[*1..3]-(m)</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">WHERE n.entity_id = &#x27;U0146&#x27;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">RETURN p LIMIT 60;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">// 统计各实体类型数量，检查领域画像是否生效</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">MATCH (n) RETURN n.entity_type AS type, count(*) AS cnt ORDER BY cnt DESC;</span></span></code></pre></div></div></figure>
+
+<p>如果第二条查询里 <code>DTC</code>、<code>Component</code>、<code>SoftwareVersion</code>、<code>Bulletin</code> 等领域类型占主导，说明第 4 章的实体类型画像已经生效。</p>
+<hr>
+<h2 id="第-4-章-领域知识工程：Graph-RAG-成败的一半"><a href="#第-4-章-领域知识工程：Graph-RAG-成败的一半" class="headerlink" title="第 4 章　领域知识工程：Graph RAG 成败的一半"></a>第 4 章　领域知识工程：Graph RAG 成败的一半</h2><p>同样的 LightRAG、同样的模型，知识工程做得好与不好，多跳召回率可以相差一倍以上。这一章的每一条都对应工程里的具体文件。</p>
+<h3 id="4-1-语料准备三原则"><a href="#4-1-语料准备三原则" class="headerlink" title="4.1 语料准备三原则"></a>4.1 语料准备三原则</h3><p><strong>原则一：实体名规范化先于入库。</strong> 在 <code>data/knowledge/06-terminology.md</code> 中维护“规范名称 ↔ 别名”对照表，入库前把别名统一替换为规范名。版本号书写也要统一：CGW 固件写作 <code>CGW-3.3.0</code>，BootLoader 写作 <code>BL-2.1.5</code>，通告写作 <code>TSB-2026-013</code>。对照表本身也入库，让图谱获得“别名 → 规范名”的关系，用户提问时即使用别名也能命中。</p>
+<p><strong>原则二：因果关系写成显式陈述句。</strong> LLM 抽取关系依赖文本中的明确表述。“BL-2.0.x 刷写 CGW-3.3.0 必然触发校验失败并回滚”能被抽成一条带因果语义的关系边；“见兼容矩阵”则什么也抽不出来。工程中 OTA 手册的“重要结论”段、DTC 手册的“处理建议”段都是按这个原则写的。表格适合承载对照信息，但关键结论应在表格后用一句话复述。</p>
+<p><strong>原则三：为鉴别诊断准备反例。</strong> 只有正例的知识库会让模型“见到 U0146 就套 TSB-2026-013”。<code>07-field-cases.md</code> 专门收录反例工单：U0146 由诊断 CAN 线束磨损引起（无 OTA 记录、BootLoader 已满足兼容矩阵），以及 OTA 因低压电量不足失败（失败阶段是写入而非校验）。反例里明确写出“何时不适用该通告”，这是让 Agent 学会鉴别诊断的关键语料。</p>
+<h3 id="4-2-领域实体类型画像（ENTITY-TYPE-PROMPT-FILE）"><a href="#4-2-领域实体类型画像（ENTITY-TYPE-PROMPT-FILE）" class="headerlink" title="4.2 领域实体类型画像（ENTITY_TYPE_PROMPT_FILE）"></a>4.2 领域实体类型画像（<code>ENTITY_TYPE_PROMPT_FILE</code>）</h3><p>LightRAG 默认的实体类型是通用的（人物、组织、地点、事件等），对车辆诊断文本会产生大量 <code>Other</code>。1.5.x 允许用 YAML 注入领域画像，文件放在 <code>PROMPT_DIR/entity_type/</code> 下（官方镜像中 <code>PROMPT_DIR=/app/data/prompts</code>），通过 <code>ENTITY_TYPE_PROMPT_FILE=vehicle_diag.yml</code> 引用。</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="18"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">entity_types_guidance:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="string">  Classify each entity using exactly one of the following types. If no type fits, use `Other`.</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="string">  实体名称必须使用文档中的规范写法（例如 CGW、BL-2.0.8、TSB-2026-013、U0146），</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="string">  不要把&quot;中央网关/网关/Gateway&quot;拆成多个实体；同一对象只保留一个规范名称。</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">Component:</span> <span class="string">整车部件与控制器（ECU、域控制器、传感器、线束、总线网段）</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">DTC:</span> <span class="string">诊断故障码</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">SoftwareVersion:</span> <span class="string">软件/固件/BootLoader</span> <span class="string">版本号或软件基线</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">Bulletin:</span> <span class="string">技术服务通告与官方文件</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">Procedure:</span> <span class="string">诊断流程、处置方案、升级策略</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">Symptom:</span> <span class="string">用户可感知的故障现象或告警</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">Condition:</span> <span class="string">触发条件、环境与阈值</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">VehicleScope:</span> <span class="string">车型、VIN</span> <span class="string">范围、生产批次</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">Service:</span> <span class="string">云端或车端软件服务</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">Other:</span> <span class="string">以上均不适用</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="attr">entity_extraction_examples:</span> [<span class="string">...</span>]        <span class="comment"># 文本分隔符模式使用</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="attr">entity_extraction_json_examples:</span> [<span class="string">...</span>]   <span class="comment"># ENTITY_EXTRACTION_USE_JSON=true 时使用</span></span></span></code></pre></div></div></figure>
+
+<p>编写要点（均来自对 1.5.7 源码的核验）：</p>
+<ul>
+<li>当前抽取模式所需的示例段<strong>必须存在且非空</strong>，否则启动时报错。工程里两段都保留，便于切换抽取模式。</li>
+<li>文本模式示例中的 <code>{tuple_delimiter}</code>、<code>{completion_delimiter}</code> 占位符会被格式化替换；JSON 模式示例<strong>不做格式化</strong>，里面的花括号可以直接写，不需要转义。</li>
+<li>示例要用真实领域数据而不是占位符，一两个高质量示例胜过十条规则。示例中刻意演示了“版本不兼容”这类诊断领域特有的关系表述。</li>
+<li>修改画像后只对<strong>新抽取</strong>的内容生效。已入库的文档需要删除重灌，或清空后整体重建。</li>
+</ul>
+<h3 id="4-3-切分策略选择"><a href="#4-3-切分策略选择" class="headerlink" title="4.3 切分策略选择"></a>4.3 切分策略选择</h3><table>
+<thead>
+<tr>
+<th>策略</th>
+<th>原理</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fixed_token</code>（F）</td>
+<td>按 token 数硬切</td>
+<td>结构松散的日志、纯文本</td>
+</tr>
+<tr>
+<td><code>recursive_character</code>（R）</td>
+<td>按分隔符层级递归切分，默认含中文句读</td>
+<td><strong>中文手册、通告（本工程默认）</strong></td>
+</tr>
+<tr>
+<td><code>paragraph_semantic</code>（P）</td>
+<td>段落感知 + 语义合并</td>
+<td>章节结构清晰的长文档</td>
+</tr>
+<tr>
+<td><code>semantic_vector</code>（V）</td>
+<td>相邻句向量距离断点</td>
+<td>主题跳跃频繁的材料</td>
+</tr>
+</tbody></table>
+<p>工程使用 <code>recursive_character</code>，<code>chunk_token_size=800</code>、<code>chunk_overlap_token_size=80</code>。诊断手册按“一个故障码&#x2F;一条通告一个小节”组织，800 token 基本能让一个小节完整落在一个 Chunk 内，避免“故障描述”和“处理建议”被切到两个 Chunk。Word 文档可以利用 1.5.5 起的标题识别能力走段落语义策略。</p>
+<h3 id="4-4-幂等灌注（scripts-ingest-knowledge-py）"><a href="#4-4-幂等灌注（scripts-ingest-knowledge-py）" class="headerlink" title="4.4 幂等灌注（scripts/ingest_knowledge.py）"></a>4.4 幂等灌注（<code>scripts/ingest_knowledge.py</code>）</h3><p>脚本只依赖 Python 标准库，宿主机无需安装任何包。核心逻辑：</p>
+<ol>
+<li>以文件名作为 <code>file_source</code> 提交，同名文档已存在时服务端返回 <strong>409</strong>，脚本视为“已入库”并跳过，因此可以放心重复执行，也可以放进 CI；</li>
+<li>遇到写入准入限流（<strong>429</strong>）自动退避重试；</li>
+<li>按 <code>track_id</code> 轮询 <code>/documents/track_status/{id}</code>，直到全部 <code>processed</code> 或 <code>failed</code>，期间打印 <code>pipeline_status</code> 的最新进度；</li>
+<li>最后输出 <code>/documents/status_counts</code> 统计，存在失败文档时以非零码退出。</li>
+</ol>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">$ make ingest</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">LightRAG 1.5.7 | workspace=vehicle_diag | graph=vehicle_diag | vector=vehicle_diag</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">📚 待灌注 7 个文件</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  ✅ 01-dtc-manual.md status=success track_id=insert_20260929_...</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  ...</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  ⏳ 待完成 7 批 | Extracting entities from chunk 3/9</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">📊 文档状态统计: &#123;&#x27;processed&#x27;: 7&#125;</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">🎉 知识库构建完成</span></span></code></pre></div></div></figure>
+
+<p>内容更新的标准流程是“删除旧文档 → 提交新版本”：<code>kb_admin.py list</code> 找到文档 ID，<code>kb_admin.py delete &lt;id&gt;</code> 删除（LightRAG 会自动重建受该文档影响的实体与关系），再执行 <code>make ingest</code>。</p>
+<h3 id="4-5-图谱治理：实体合并"><a href="#4-5-图谱治理：实体合并" class="headerlink" title="4.5 图谱治理：实体合并"></a>4.5 图谱治理：实体合并</h3><p>即使做了规范化，LLM 仍可能偶尔抽出“中央网关 CGW”这样的变体节点。治理手段是实体合并：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">python3 scripts/kb_admin.py entity <span class="string">&quot;中央网关&quot;</span>          <span class="comment"># 检查是否存在重复实体</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">python3 scripts/kb_admin.py merge CGW <span class="string">&quot;中央网关&quot;</span> <span class="string">&quot;网关&quot;</span>  <span class="comment"># 把别名实体的关系全部迁移到 CGW 并删除别名节点</span></span></span></code></pre></div></div></figure>
+
+<p>对应 API 为 <code>POST /graph/entities/merge</code>（<code>entities_to_change</code> + <code>entity_to_change_into</code>）。建议把“规范名 ↔ 别名”对照表同时作为定期合并任务的输入，形成闭环。</p>
+<h3 id="4-6-知识生命周期：通告替代、失效与版本化"><a href="#4-6-知识生命周期：通告替代、失效与版本化" class="headerlink" title="4.6 知识生命周期：通告替代、失效与版本化"></a>4.6 知识生命周期：通告替代、失效与版本化</h3><p>诊断知识不是一次性资产。TSB 会被新版通告替代，兼容矩阵会随新固件扩展，旧结论如果仍留在图谱里，Agent 就可能引用一份已经作废的处置方案。生产环境需要把知识生命周期管理当作一等公民：</p>
+<ul>
+<li><strong>文档即版本单元</strong>：<code>file_source</code> 带上版本号或发布日期（如 <code>TSB-2026-013_v2.md</code>），发布新版时先删除旧版文档（LightRAG 会重建受影响的实体与关系），再灌注新版，避免新旧结论并存于同一个实体描述中。</li>
+<li><strong>在正文中显式写出替代关系</strong>：新版通告首段写明“本通告替代 TSB-2026-013 第 1 版”，图谱会抽取出“替代”关系；分析 Prompt 可以追加一条规则：存在替代关系时只采信最新版本。</li>
+<li><strong>失效通告不要只打标记</strong>：LightRAG 检索不会理解“已作废”标签的业务含义，作废文档应直接删除；如需留档，放在独立的归档 workspace 中。</li>
+<li><strong>与发布系统联动</strong>：TSB 发布系统在通告“发布 &#x2F; 修订 &#x2F; 作废”时触发灌注流水线，执行“删除旧版 → 灌注新版 → 运行检索评测”，评测不通过则告警并回滚到上一版文档集。</li>
+<li><strong>定期全量重建</strong>：增量删除与合并长期运行后，实体描述会因多次摘要合并产生语义漂移，建议每季度在预发环境全量重建一次并与线上评测结果对比。</li>
+</ul>
+<hr>
+<h2 id="第-5-章-企业级-POC：车辆远程智能诊断平台"><a href="#第-5-章-企业级-POC：车辆远程智能诊断平台" class="headerlink" title="第 5 章　企业级 POC：车辆远程智能诊断平台"></a>第 5 章　企业级 POC：车辆远程智能诊断平台</h2><h3 id="5-1-业务场景"><a href="#5-1-业务场景" class="headerlink" title="5.1 业务场景"></a>5.1 业务场景</h3><p>一辆 BootLoader 为 BL-2.0.8 的 Zeekr 7X 夜间 OTA 升级 CGW 至 3.3.0 失败并回滚，次日仪表出现网关通信告警，诊断记录 U0146 与 P1E00。人工诊断需要依次查阅 DTC 手册、OTA 兼容矩阵、TSB 通告，并核对 VIN 范围与 BootLoader 版本，熟练工程师也要 20～30 分钟。平台的目标是：秒级给出根因与处置方案，每一步推理可溯源，远程可执行的处置经工程师审批后自动下发。</p>
+<p>知识链路是一条典型的三跳推理：</p>
+<figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">U0146 + P1E00 ──(DTC 手册)──► 怀疑 CGW 升级回滚</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">BL-2.0.8 + CGW-3.3.0 ──(OTA 兼容矩阵)──► 签名格式不兼容，校验必然失败</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">VIN 范围 + BL-2.0.8 ──(TSB-2026-013)──► 两段式升级：先 BL-2.1.5 再 CGW-3.3.0，可远程执行</span></span></code></pre></div></div></figure>
+
+<h3 id="5-2-总体架构"><a href="#5-2-总体架构" class="headerlink" title="5.2 总体架构"></a>5.2 总体架构</h3><figure class="highlight plaintext cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">                      ┌──────────────── diag-agent（FastAPI :8080）────────────────┐</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">遥测 / 工单 ─────────► │ /diagnose  /diagnose/stream  /diagnose/async  /feedback      │</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                      │                                                              │</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">                      │  DiagnosisService ── DIAG_ENGINE ──┬─ LangGraph 显式状态机   │</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">                      │                                    └─ DeepAgents 深度 Agent  │</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">                      │        共享：LightRAGClient · EvidenceStore · Schema · verify │</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">                      └──────┬─────────────────┬──────────────────┬─────────────────┘</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">                             │ /query/data     │ mem0              │ Langfuse v4</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">                       LightRAG 1.5.7     Milvus/pgvector       trace · score</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                             │</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">            full: Redis · Milvus · Neo4j · PG      lite: PostgreSQL 一体化</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">diag-worker（Temporal Worker）：normalize → run_agent_diagnosis → persist_report</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">                                 → [Signal decide / 超时 ESCALATED] → dispatch_remote_actions</span></span></code></pre></div></div></figure>
+
+<p>设计原则只有一句话：<strong>找证据交给 LightRAG，下结论交给 Agent，把关交给确定性代码，拍板交给人。</strong></p>
+<h3 id="5-3-证据模型：从“参考文档”到“证据编号”"><a href="#5-3-证据模型：从“参考文档”到“证据编号”" class="headerlink" title="5.3 证据模型：从“参考文档”到“证据编号”"></a>5.3 证据模型：从“参考文档”到“证据编号”</h3><p>多数 RAG 系统的可解释性停留在“列出参考文档”，业务方无法判断哪一句结论来自哪一段知识。本工程把 <code>/query/data</code> 返回的每一个实体、关系、Chunk 统一为 <code>Evidence</code>，放入 <code>EvidenceStore</code> 并分配稳定编号：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">Evidence</span>(<span class="title class_ inherited__">BaseModel</span>):</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="built_in">id</span>: <span class="built_in">str</span>          <span class="comment"># EV-01（入库时分配，跨轮次稳定）</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    key: <span class="built_in">str</span>         <span class="comment"># 去重键：rel::BL-2.0.8::CGW-3.3.0 / ent::U0146 / chk::&lt;chunk_id&gt;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    kind: <span class="type">Literal</span>[<span class="string">&quot;entity&quot;</span>, <span class="string">&quot;relation&quot;</span>, <span class="string">&quot;chunk&quot;</span>]</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    title: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    content: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    source: <span class="built_in">str</span>      <span class="comment"># 来源文件名（file_path 缺失时通过 reference_id 反查 references）</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    query: <span class="built_in">str</span>       <span class="comment"># 由哪条检索意图召回</span></span></span></code></pre></div></div></figure>
+
+<p>几个细节：</p>
+<ul>
+<li><strong>关系优先</strong>：渲染给分析模型时按“关系 &gt; 实体 &gt; 原文”的优先级在字符预算内装填。关系边承载因果语义，是多跳推理的骨架；原文 Chunk 最长，放在最后。</li>
+<li><strong>跨轮次去重且编号稳定</strong>：LangGraph 状态中的 <code>evidence</code> 字段挂载自定义 reducer <code>merge_evidence</code>，第二轮补采的证据只追加新编号，已有编号不变，分析模型在第二轮仍能引用第一轮的证据。</li>
+<li><strong>来源反查</strong>：LightRAG 返回的实体可能只带 <code>reference_id</code> 不带 <code>file_path</code>，统一在转换时反查 <code>references</code> 列表补齐。</li>
+</ul>
+<p>分析模型看到的证据形如：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">[EV-03](关系|02-ota-troubleshooting.md) BL-2.0.8 → CGW-3.3.0: BL-2.0.x 刷写 CGW-3.3.0 必然触发校验失败并回滚（关键词: 版本不兼容）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">[EV-07](实体|03-tsb-bulletins.md) TSB-2026-013〔Bulletin〕: 针对 CGW OTA 升级回滚伴随 U0146 的技术服务通告…</span></span></code></pre></div></div></figure>
+
+<h3 id="5-4-LangGraph-引擎：显式状态机与证据补采"><a href="#5-4-LangGraph-引擎：显式状态机与证据补采" class="headerlink" title="5.4 LangGraph 引擎：显式状态机与证据补采"></a>5.4 LangGraph 引擎：显式状态机与证据补采</h3><pre class="mermaid">flowchart LR
+  A[recall_memory&lt;br/&gt;记忆召回+规则预分诊] --&gt; B[plan_queries&lt;br/&gt;LLM 检索规划]
+  B --&gt; C[retrieve&lt;br/&gt;并行 /query/data]
+  C --&gt; D[analyze&lt;br/&gt;LLM 根因分析]
+  D --&gt; E[verify&lt;br/&gt;引用落地校验]
+  E -- 证据不足且轮次未满 --&gt; C
+  E -- 通过 --&gt; F[save_memory&lt;br/&gt;写回车辆记忆]</pre>
+
+
+<p>各节点职责（<code>services/diag-agent/app/agent/graph.py</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>节点</th>
+<th>类型</th>
+<th>职责</th>
+<th>失败策略</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>recall_memory</code></td>
+<td>IO</td>
+<td>按 VIN 召回历史诊断记忆；执行规则预分诊（DTC 所属系统、OTA 回滚、低压 SOC、多网络故障码、无 OTA 记录等标记）</td>
+<td>记忆异常降级为空</td>
+</tr>
+<tr>
+<td><code>plan_queries</code></td>
+<td>LLM</td>
+<td>生成 2～4 条检索意图，每条指定 local &#x2F; global &#x2F; mix 模式</td>
+<td>输出不合法时回落到确定性规则计划</td>
+</tr>
+<tr>
+<td><code>retrieve</code></td>
+<td>IO</td>
+<td><code>asyncio.gather</code> 并行调用 <code>/query/data</code>，结果并入证据仓库</td>
+<td>单条失败记录错误，不影响其余</td>
+</tr>
+<tr>
+<td><code>analyze</code></td>
+<td>LLM</td>
+<td>基于编号证据输出结构化报告（JSON Mode + Pydantic 校验 + 一次自修复）</td>
+<td>返回置信度为 0 的降级报告</td>
+</tr>
+<tr>
+<td><code>verify</code></td>
+<td>确定性</td>
+<td>引用落地校验；决定是否补采</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>save_memory</code></td>
+<td>IO</td>
+<td>把本次结论写回 mem0</td>
+<td>异常降级</td>
+</tr>
+</tbody></table>
+<p><strong>规则预分诊</strong>是一个容易被忽视的设计：DTC 所属系统、OTA 是否回滚、低压 SOC 是否低于 30%、是否有多个 U 类码同时出现，这些判断零成本、确定、可单测。它既作为结构化线索喂给规划与分析模型，也是 LLM 规划失败时兜底计划的依据。</p>
+<p><strong>证据补采回路</strong>：当分析模型声明 <code>need_more_evidence</code>，或落地率低于阈值，且检索轮次未达 <code>MAX_EVIDENCE_ROUNDS</code>（默认 2）时，<code>verify</code> 用报告中的 <code>followup_queries</code>（或无证据支撑的结论）生成补充检索，已执行过的检索语句自动去重，然后回到 <code>retrieve</code>。</p>
+<p><strong>结构化输出的工程化</strong>（<code>agent/llm.py</code>）：DeepSeek 支持 <code>response_format={&quot;type&quot;: &quot;json_object&quot;}</code>。调用时绑定 JSON Mode，拿到文本后剥离可能的代码围栏、截取首尾花括号，用 Pydantic 校验；校验失败时把错误信息作为下一轮用户消息让模型自修复一次。这种方式不依赖特定供应商的工具调用实现，换模型时最稳。</p>
+<h3 id="5-5-引用落地校验（grounding）：三道确定性闸门"><a href="#5-5-引用落地校验（grounding）：三道确定性闸门" class="headerlink" title="5.5 引用落地校验（grounding）：三道确定性闸门"></a>5.5 引用落地校验（grounding）：三道确定性闸门</h3><p><code>agent/grounding.py</code> 中的 <code>verify()</code> 不调用任何模型，逐条检查分析报告：</p>
+<ol>
+<li><strong>伪造引用剔除</strong>：推理链每一步引用的编号必须存在于证据仓库，不存在的编号被剔除并记入 <code>invalid_ids</code>；一个有效编号都没有的结论记为“无证据支撑”。落地率 &#x3D; 有证据支撑的步骤数 &#x2F; 总步骤数。</li>
+<li><strong>TSB 核验</strong>：报告声称命中的 TSB 编号必须出现在某条证据的标题或正文中，否则置空并记录调整原因。这一条专门拦截“模型凭印象编造一个通告编号”的高危幻觉。</li>
+<li><strong>一致性修正</strong>：落地率低于 <code>MIN_GROUNDED_RATIO</code>（默认 0.6）时置信度封顶 0.5；顶层“远程可执行”与逐条动作不一致时以逐条动作为准。</li>
+</ol>
+<p>校验结果随报告一起返回，前端可以直接展示“每条结论 → 证据编号 → 源文档”的引用链：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">&quot;grounding&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;grounded_ratio&quot;</span><span class="punctuation">:</span> <span class="number">1.0</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;invalid_ids&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;unsupported_claims&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;tsb_verified&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;adjustments&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">&quot;citations&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="punctuation">&#123;</span><span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;EV-03&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;source&quot;</span><span class="punctuation">:</span> <span class="string">&quot;02-ota-troubleshooting.md&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;title&quot;</span><span class="punctuation">:</span> <span class="string">&quot;BL-2.0.8 → CGW-3.3.0&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="punctuation">&#123;</span><span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;EV-07&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;source&quot;</span><span class="punctuation">:</span> <span class="string">&quot;03-tsb-bulletins.md&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;title&quot;</span><span class="punctuation">:</span> <span class="string">&quot;TSB-2026-013〔Bulletin〕&quot;</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>这套机制的价值在于<strong>把“是否可信”的判断从模型转移到代码</strong>：模型负责推理，代码负责核对它有没有编造依据。离线测试 <code>test_grounding.py</code> 覆盖了伪造编号、伪造 TSB、远程标记不一致三类情况。</p>
+<h3 id="5-6-DeepAgents-引擎：声明式深度-Agent"><a href="#5-6-DeepAgents-引擎：声明式深度-Agent" class="headerlink" title="5.6 DeepAgents 引擎：声明式深度 Agent"></a>5.6 DeepAgents 引擎：声明式深度 Agent</h3><p>设置 <code>DIAG_ENGINE=deepagents</code> 切换到第二个引擎（<code>agent/deep_agent.py</code>）。它基于 deepagents 0.7 的 <code>create_deep_agent</code>：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">agent = create_deep_agent(</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    model=llm,</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    tools=[search_knowledge, recall_vehicle_history],   <span class="comment"># 每次请求创建闭包，共享本次的 EvidenceStore</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    system_prompt=prompts.DEEP_AGENT_SYSTEM,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    response_format=DiagnosisReport,                    <span class="comment"># 结构化输出，结果在 result[&quot;structured_response&quot;]</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    name=<span class="string">&quot;vehicle-diag-deep-agent&quot;</span>,</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">result = <span class="keyword">await</span> agent.ainvoke(&#123;<span class="string">&quot;messages&quot;</span>: [...]&#125;, config=&#123;**config, <span class="string">&quot;recursion_limit&quot;</span>: <span class="number">60</span>&#125;)</span></span></code></pre></div></div></figure>
+
+<p><code>search_knowledge</code> 工具内部调用同一个 <code>LightRAGClient.retrieve</code>，并把证据写入本次请求的 <code>EvidenceStore</code>，所以 Agent 自主决定检索多少次、用什么模式，最终报告仍然经过同一个 <code>verify()</code>。两个引擎的取舍：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>LangGraph 显式图</th>
+<th>DeepAgents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>检索次数与顺序</td>
+<td>由图结构约束，可预测</td>
+<td>由 Agent 自主规划</td>
+</tr>
+<tr>
+<td>延迟与成本</td>
+<td>稳定（2 次 LLM 调用 + 可选补采）</td>
+<td>波动较大（多轮工具调用）</td>
+</tr>
+<tr>
+<td>复杂、非典型工况</td>
+<td>依赖规划节点质量</td>
+<td>自主探索能力更强</td>
+</tr>
+<tr>
+<td>审计与合规</td>
+<td>节点级事件，易于审计</td>
+<td>需依赖 trace 还原</td>
+</tr>
+<tr>
+<td>推荐用途</td>
+<td><strong>生产主链路</strong></td>
+<td>疑难工况、专家辅助模式</td>
+</tr>
+</tbody></table>
+<p>离线测试 <code>test_deep_agent_offline.py</code> 用一个支持工具调用的伪造模型驱动真实的 deepagents 0.7.19，验证“工具检索 → 结构化输出 → 落地校验”整条链路。</p>
+<h3 id="5-7-mem0-车辆长期记忆"><a href="#5-7-mem0-车辆长期记忆" class="headerlink" title="5.7 mem0 车辆长期记忆"></a>5.7 mem0 车辆长期记忆</h3><p><code>memory/vehicle_memory.py</code> 以 <strong>VIN 作为 user_id</strong>，沉淀“这台车”的历史诊断结论。full 档位写入 Milvus（与 LightRAG 共用实例、独立 collection），lite 档位写入 diagdb 的 pgvector。关键设计：</p>
+<ul>
+<li><strong>惰性初始化 + 线程化</strong>：<code>AsyncMemory.from_config</code> 会同步建立连接与集合，放入 <code>asyncio.to_thread</code> 避免阻塞事件循环；</li>
+<li><strong>全面降级</strong>：初始化、检索、写入任何一步异常都降级为空记忆，外围能力永不阻塞诊断主链路；</li>
+<li><strong>记忆只作线索不作证据</strong>：Prompt 明确要求历史记忆不得作为证据引用，校验阶段也只认 <code>EV-xx</code> 编号。这避免了“上次诊断错了、这次继续错”的错误自我强化。</li>
+</ul>
+<p>mem0 2.2 的检索接口为 <code>search(query, filters={&quot;user_id&quot;: vin}, top_k=5)</code>，返回 <code>{&quot;results&quot;: [...]}</code>。</p>
+<h3 id="5-8-Langfuse-v4-可观测"><a href="#5-8-Langfuse-v4-可观测" class="headerlink" title="5.8 Langfuse v4 可观测"></a>5.8 Langfuse v4 可观测</h3><p><code>observability/tracing.py</code> 在未配置密钥时完全 no-op。配置后每次诊断产生一棵 trace：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">with</span> client.start_as_current_observation(name=<span class="string">&quot;vehicle-diagnosis&quot;</span>, as_type=<span class="string">&quot;agent&quot;</span>, <span class="built_in">input</span>=telemetry) <span class="keyword">as</span> root:</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="keyword">with</span> propagate_attributes(session_id=sid, user_id=vin, tags=[<span class="string">&quot;engine:langgraph&quot;</span>, <span class="string">&quot;dtc:U0146&quot;</span>],</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                              trace_name=<span class="string">&quot;vehicle-diagnosis&quot;</span>):</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">        trace_id = client.get_current_trace_id()</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="keyword">await</span> graph.ainvoke(state, config=&#123;<span class="string">&quot;callbacks&quot;</span>: [CallbackHandler(public_key=pk)], ...&#125;)</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    root.update(output=report)</span></span></code></pre></div></div></figure>
+
+<ul>
+<li>LangGraph 每个节点、每次 LLM 调用（含 token 用量与耗时）自动挂在根观测下；</li>
+<li><code>session_id</code> 可传入外部工单号，<code>user_id</code> 是 VIN，于是可以在 Langfuse 里按车、按工单聚合查看；</li>
+<li><code>POST /api/v1/diagnose/{session_id}/feedback</code> 把工程师评分通过 <code>create_score</code> 写回对应 trace，低分 trace 可以一键加入数据集，形成“人工反馈 → 评测集 → 回归”的闭环。</li>
+</ul>
+<p><code>make langfuse-up</code> 启动的 v4 自托管栈通过 <code>LANGFUSE_INIT_*</code> 变量在首次启动时自动创建组织、项目、管理员与 API Key，密钥与根 <code>.env</code> 一致，启动后重启 diag-agent 即可看到 trace，无需任何手工配置。</p>
+<h3 id="5-9-Temporal-工作流：可靠执行与人在回路"><a href="#5-9-Temporal-工作流：可靠执行与人在回路" class="headerlink" title="5.9 Temporal 工作流：可靠执行与人在回路"></a>5.9 Temporal 工作流：可靠执行与人在回路</h3><p>诊断本身是秒级到分钟级的同步调用，但“诊断 → 落库 → 审批 → 远程下发”是一个可能持续数十分钟、跨越人工环节的业务流程。<code>services/diag-workflow</code> 用 Temporal 承载：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="20"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">@workflow.defn(<span class="params">name=<span class="string">&quot;VehicleDiagnosisWorkflow&quot;</span></span>)</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">VehicleDiagnosisWorkflow</span>:</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="meta">    @workflow.run</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">self, payload</span>):</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        telemetry = <span class="keyword">await</span> execute_activity(normalize_telemetry, ...)</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        diagnosis = <span class="keyword">await</span> execute_activity(run_agent_diagnosis, ..., retry_policy=AGENT_RETRY)</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="keyword">await</span> execute_activity(persist_report, ...)            <span class="comment"># 以 workflow_id 为唯一键 upsert，重试幂等</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        <span class="keyword">if</span> <span class="keyword">not</span> (report.remote_executable <span class="keyword">and</span> report.actions):</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">            <span class="keyword">return</span> DIAGNOSED_ONLY</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">            <span class="keyword">await</span> workflow.wait_condition(<span class="keyword">lambda</span>: <span class="variable language_">self</span>._decision <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>,</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">                                          timeout=timedelta(minutes=APPROVAL_TIMEOUT_MINUTES))</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="keyword">except</span> asyncio.TimeoutError:</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">            → 状态 ESCALATED（升级人工工单）</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        审批通过 → dispatch_remote_actions → DISPATCHED；驳回 → REJECTED</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="meta">    @workflow.signal</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    <span class="keyword">def</span> <span class="title function_">decide</span>(<span class="params">self, decision</span>): ...        <span class="comment"># 只接受第一次审批</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="meta">    @workflow.query</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="keyword">def</span> <span class="title function_">progress</span>(<span class="params">self</span>): ...                <span class="comment"># 随时查询阶段、摘要与审批结果</span></span></span></code></pre></div></div></figure>
+
+<p>要点：</p>
+<ul>
+<li><strong>确定性约束</strong>：Workflow 中不做任何 IO，HTTP、数据库、远程下发全部放在 Activity；Activity 模块通过 <code>imports_passed_through</code> 导入。离线测试 <code>test_workflow.py</code> 用与 Worker 启动时相同的沙箱运行器校验工作流定义。</li>
+<li><strong>错误分类</strong>：diag-agent 返回 4xx 属于业务错误，抛出 <code>non_retryable</code> 的 <code>ApplicationError</code>；5xx 和网络错误交给重试策略。</li>
+<li><strong>幂等落库</strong>：<code>diagnosis_reports.workflow_id</code> 唯一约束 + <code>ON CONFLICT DO UPDATE</code>，Activity 重试不会产生重复记录。</li>
+<li><strong>可选自动审批</strong>：<code>AUTO_APPROVE_CONFIDENCE</code> 设为 0.95 即可让高置信度且证据完整的工单自动放行，默认大于 1 表示永不自动审批。</li>
+</ul>
+<h3 id="5-10-API-一览"><a href="#5-10-API-一览" class="headerlink" title="5.10 API 一览"></a>5.10 API 一览</h3><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/api/v1/diagnose</code></td>
+<td>同步诊断，返回报告、校验结果、被引用证据</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/diagnose/stream</code></td>
+<td>SSE：<code>start</code> → 逐节点 <code>node</code> → <code>result</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/diagnose/async</code></td>
+<td>启动 Temporal 工作流</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/diagnose/async/{id}</code></td>
+<td>查询进度（Workflow Query），完成后附结果</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/diagnose/async/{id}/decision</code></td>
+<td>审批（Workflow Signal）</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/diagnose/{session_id}/feedback</code></td>
+<td>工程师评分 → Langfuse Score</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/knowledge/search</code></td>
+<td>调试：查看某检索语句召回的结构化证据</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/knowledge/ask</code></td>
+<td>调试：LightRAG 直接问答</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/health</code>、<code>/ready</code></td>
+<td>存活与就绪（级联检查 LightRAG）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="第-6-章-端到端演示剧本（三个工况）"><a href="#第-6-章-端到端演示剧本（三个工况）" class="headerlink" title="第 6 章　端到端演示剧本（三个工况）"></a>第 6 章　端到端演示剧本（三个工况）</h2><p>建议的演示顺序是“先打动、再证明、后深入”：先用工况一展示秒级根因与引用链，再用工况三展示鉴别诊断能力，最后打开 Temporal 与 Langfuse 讲工程化。</p>
+<h3 id="6-1-预热：naive-与-mix-的对照"><a href="#6-1-预热：naive-与-mix-的对照" class="headerlink" title="6.1 预热：naive 与 mix 的对照"></a>6.1 预热：naive 与 mix 的对照</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">make demo-query</span></span></code></pre></div></div></figure>
+
+<p>同一个多跳问题，<code>naive</code> 模式通常只能召回 DTC 手册里关于 U0146 的泛泛描述；<code>mix</code> 模式能把兼容矩阵结论、TSB-2026-013 与两段式升级方案一起取回，并在引用中同时列出 OTA 手册与 TSB 汇编。随后打印的 <code>/query/data</code> 结构化证据展示了 BL-2.0.8 → CGW-3.3.0、TSB-2026-013 → BL-2.0.8 等关系边，这就是 Agent 消费的证据。</p>
+<h3 id="6-2-工况一：OTA-回滚（telemetry-ota-failure-json）"><a href="#6-2-工况一：OTA-回滚（telemetry-ota-failure-json）" class="headerlink" title="6.2 工况一：OTA 回滚（telemetry_ota_failure.json）"></a>6.2 工况一：OTA 回滚（<code>telemetry_ota_failure.json</code>）</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">make demo-sync</span></span></code></pre></div></div></figure>
+
+<p>期望输出（节选，数值因模型与检索而略有差异）：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="22"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;engine&quot;</span><span class="punctuation">:</span> <span class="string">&quot;langgraph&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;report&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">&quot;root_cause&quot;</span><span class="punctuation">:</span> <span class="string">&quot;BootLoader BL-2.0.8 不支持 CGW-3.3.0 新签名格式，Flash 校验失败触发回滚&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">&quot;fault_chain&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="punctuation">&#123;</span><span class="attr">&quot;claim&quot;</span><span class="punctuation">:</span> <span class="string">&quot;U0146 与 P1E00 同时出现，高度怀疑 CGW 升级回滚&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;evidence_ids&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;EV-02&quot;</span><span class="punctuation">,</span> <span class="string">&quot;EV-11&quot;</span><span class="punctuation">]</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="punctuation">&#123;</span><span class="attr">&quot;claim&quot;</span><span class="punctuation">:</span> <span class="string">&quot;BL-2.0.x 刷写 CGW-3.3.0 必然校验失败并回滚&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;evidence_ids&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;EV-03&quot;</span><span class="punctuation">]</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="punctuation">&#123;</span><span class="attr">&quot;claim&quot;</span><span class="punctuation">:</span> <span class="string">&quot;车辆 VIN 与 BootLoader 版本落在 TSB-2026-013 影响范围内&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;evidence_ids&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;EV-07&quot;</span><span class="punctuation">]</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="attr">&quot;secondary_faults&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;P1E00 为回滚后跨 ECU 版本不一致引发的次生故障&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="attr">&quot;matched_tsb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;TSB-2026-013&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="attr">&quot;actions&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="punctuation">&#123;</span><span class="attr">&quot;step&quot;</span><span class="punctuation">:</span> <span class="string">&quot;下发 BootLoader 升级任务 BL-2.0.8 → BL-2.1.5&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;remote_executable&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span> <span class="attr">&quot;precondition&quot;</span><span class="punctuation">:</span> <span class="string">&quot;低压 SOC ≥ 40%&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="punctuation">&#123;</span><span class="attr">&quot;step&quot;</span><span class="punctuation">:</span> <span class="string">&quot;重新下发 CGW-3.3.0 固件 OTA 任务&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;remote_executable&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="punctuation">&#123;</span><span class="attr">&quot;step&quot;</span><span class="punctuation">:</span> <span class="string">&quot;执行整车版本一致性校验，确认 U0146、P1E00 清除&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;remote_executable&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="attr">&quot;remote_executable&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    <span class="attr">&quot;confidence&quot;</span><span class="punctuation">:</span> <span class="number">0.93</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">  <span class="attr">&quot;grounding&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;grounded_ratio&quot;</span><span class="punctuation">:</span> <span class="number">1.0</span><span class="punctuation">,</span> <span class="attr">&quot;tsb_verified&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span> <span class="attr">&quot;adjustments&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">]</span><span class="punctuation">,</span> <span class="attr">&quot;citations&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;…&quot;</span><span class="punctuation">]</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">  <span class="attr">&quot;rounds&quot;</span><span class="punctuation">:</span> <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>讲解要点：三跳因果链中每一步都有证据编号与源文档；P1E00 被正确识别为次生故障；远程可执行的判断来自 TSB 原文而不是模型臆测。</p>
+<h3 id="6-3-工况二：电池热管理（telemetry-battery-json）"><a href="#6-3-工况二：电池热管理（telemetry-battery-json）" class="headerlink" title="6.3 工况二：电池热管理（telemetry_battery.json）"></a>6.3 工况二：电池热管理（<code>telemetry_battery.json</code>）</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">SAMPLE=data/samples/telemetry_battery.json make demo-sync</span></span></code></pre></div></div></figure>
+
+<p>期望结论：根因是冷却液泵驱动异常（B1C20，目标 3200rpm、实际 900rpm），P0A80 是电芯过热导致的次生故障而非真实衰减；<code>matched_tsb</code> 为 null（TSB-2026-021 针对的是低温下的采样线束氧化，适用条件不符）；处置需要回店更换冷却液泵，<code>remote_executable=false</code>。这个工况体现了“避免误判换包”的业务价值，一次误换电池包的成本是数万元。</p>
+<h3 id="6-4-工况三：鉴别诊断（telemetry-can-harness-json）"><a href="#6-4-工况三：鉴别诊断（telemetry-can-harness-json）" class="headerlink" title="6.4 工况三：鉴别诊断（telemetry_can_harness.json）"></a>6.4 工况三：鉴别诊断（<code>telemetry_can_harness.json</code>）</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">SAMPLE=data/samples/telemetry_can_harness.json make demo-sync</span></span></code></pre></div></div></figure>
+
+<p>这辆车同样报 U0146，但近期没有 OTA 记录，BootLoader 已是 BL-2.1.5，故障与颠簸路况相关。期望结论：<strong>不适用</strong> TSB-2026-013，根因指向诊断 CAN 线束物理故障，需回店检查。规则预分诊给出的 <code>NO_OTA_RECORD</code> 与 <code>MULTI_NETWORK_DTC</code> 标记，加上 <code>07-field-cases.md</code> 中的反例工单，共同让 Agent 避开“见 U0146 就套通告”的陷阱。</p>
+<h3 id="6-5-流式与异步审批"><a href="#6-5-流式与异步审批" class="headerlink" title="6.5 流式与异步审批"></a>6.5 流式与异步审批</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">make demo-stream</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># event: start   data: &#123;&quot;session_id&quot;: &quot;diag-…&quot;, &quot;engine&quot;: &quot;langgraph&quot;&#125;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># event: node    data: &#123;&quot;node&quot;: &quot;recall_memory&quot;, &quot;memories&quot;: 0, &quot;triage&quot;: &#123;...&#125;&#125;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># event: node    data: &#123;&quot;node&quot;: &quot;plan_queries&quot;, &quot;queries&quot;: [...]&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># event: node    data: &#123;&quot;node&quot;: &quot;retrieve&quot;, &quot;round&quot;: 1, &quot;new_evidence&quot;: 23&#125;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># event: node    data: &#123;&quot;node&quot;: &quot;analyze&quot;, &quot;root_cause&quot;: &quot;…&quot;, &quot;confidence&quot;: 0.93&#125;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># event: node    data: &#123;&quot;node&quot;: &quot;verify&quot;, &quot;grounded_ratio&quot;: 1.0, &quot;adjustments&quot;: [], &quot;followups&quot;: []&#125;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="comment"># event: node    data: &#123;&quot;node&quot;: &quot;save_memory&quot;&#125;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="comment"># event: result  data: &#123;...完整结果...&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">make demo-async</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="comment"># 🚀 workflow_id=diag-TSTGDEMO000000042-3f9a1c2b</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="comment">#   [1] stage=DIAGNOSING</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="comment">#   [4] stage=WAITING_APPROVAL</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">bash scripts/demo_diagnose.sh approve diag-TSTGDEMO000000042-3f9a1c2b</span></span></code></pre></div></div></figure>
+
+<p>审批后在 Temporal UI（<code>http://localhost:8233</code>）打开该工作流，可以看到完整事件历史：每个 Activity 的输入输出、重试记录、<code>decide</code> 信号的到达时间与内容。这就是面向合规审计的“谁在什么时候基于什么证据批准了什么远程操作”。在 diagdb 中也可以查到对应记录：</p>
+<figure class="highlight sql cb" data-lang="sql" data-label="SQL" data-ext="sql" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">SELECT</span> workflow_id, vin, matched_tsb, confidence, grounded, status, operator, updated_at</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">FROM</span> diagnosis_reports <span class="keyword">ORDER</span> <span class="keyword">BY</span> created_at <span class="keyword">DESC</span> LIMIT <span class="number">5</span>;</span></span></code></pre></div></div></figure>
+
+<p>再执行一次 <code>make demo-sync</code> 诊断同一辆车，<code>memories_used</code> 中会出现上一次的诊断结论，这就是 mem0 车辆记忆在起作用。</p>
+<hr>
+<h2 id="第-7-章-评测与调优"><a href="#第-7-章-评测与调优" class="headerlink" title="第 7 章　评测与调优"></a>第 7 章　评测与调优</h2><p>没有评测的 RAG 调参等于盲调。工程提供两层评测，都可以放进 CI 做回归。</p>
+<h3 id="7-1-检索层评测（make-eval）"><a href="#7-1-检索层评测（make-eval）" class="headerlink" title="7.1 检索层评测（make eval）"></a>7.1 检索层评测（<code>make eval</code>）</h3><p><code>data/eval/golden_cases.jsonl</code> 定义了 6 个黄金问题，每个问题标注期望关键词与期望来源文档。<code>scripts/eval_retrieval.py</code> 对五种模式逐一调用 <code>/query/data</code>（只检索不生成，速度快、成本低），计算：</p>
+<ul>
+<li><strong>keyword_recall</strong>：检索上下文中命中期望关键词的比例，衡量证据覆盖；</li>
+<li><strong>source_recall</strong>：期望来源文档出现在引用列表中的比例，衡量跨文档多跳能力；</li>
+<li><strong>latency</strong>：检索耗时。</li>
+</ul>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">模式       关键词召回  来源召回  平均耗时</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">naive          0.xx      0.xx     x.xs</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">local          0.xx      0.xx     x.xs</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">global         0.xx      0.xx     x.xs</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">hybrid         0.xx      0.xx     x.xs</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">mix            0.xx      0.xx     x.xs</span></span></code></pre></div></div></figure>
+
+<p>判读方法：<code>mix</code> 的来源召回应明显高于 <code>naive</code>，这是图谱多跳的直接体现；若 <code>local</code> 的关键词召回偏低，通常是实体名不规范导致低层关键词匹配不到实体；若 <code>global</code> 偏低，通常是关系描述过于简略。每条用例还会打印缺失的关键词，直接指向需要补充或改写的语料。明细写入 <code>eval_report.json</code>，便于版本间对比。</p>
+<h3 id="7-2-端到端评测（make-eval-e2e）"><a href="#7-2-端到端评测（make-eval-e2e）" class="headerlink" title="7.2 端到端评测（make eval-e2e）"></a>7.2 端到端评测（<code>make eval-e2e</code>）</h3><p><code>data/eval/e2e_cases.jsonl</code> 覆盖三个工况，逐项判定：TSB 是否命中（或正确地不命中）、根因是否包含期望关键词、远程可执行判定是否正确、证据落地率是否 ≥ 0.8。工况三（线束故障、不应命中 TSB）是最有价值的负例，它检验的是 Agent 会不会过度套用通告。</p>
+<h3 id="7-3-引入-RAGAS-与-Langfuse-数据集（可选）"><a href="#7-3-引入-RAGAS-与-Langfuse-数据集（可选）" class="headerlink" title="7.3 引入 RAGAS 与 Langfuse 数据集（可选）"></a>7.3 引入 RAGAS 与 Langfuse 数据集（可选）</h3><p>需要更细的生成质量指标时，可以用 RAGAS 计算 faithfulness（回答是否忠于上下文）与 context precision &#x2F; recall。更贴近业务的做法是依托 Langfuse：工程师对诊断结果打分后，把低分 trace 加入 Langfuse Dataset，每次调参或升级模型后在数据集上重跑并对比分数，形成持续评测。</p>
+<h3 id="7-4-调参优先级"><a href="#7-4-调参优先级" class="headerlink" title="7.4 调参优先级"></a>7.4 调参优先级</h3><p>按投入产出比从高到低：</p>
+<ol>
+<li><strong>语料与实体规范化</strong>（第 4 章）：投入最小、收益最大，任何调参都无法弥补实体碎片化；</li>
+<li><strong>领域实体类型画像</strong>：直接决定图谱中有效节点与边的比例；</li>
+<li><strong>Reranker</strong>：接入 <code>bge-reranker-v2-m3</code> 后可把 <code>chunk_top_k</code> 调大到 20～30，由重排保证精度；</li>
+<li><strong>切分参数</strong>：让“一个故障码 &#x2F; 一条通告”尽量落在一个 Chunk 内；</li>
+<li><strong>查询参数</strong>：<code>top_k</code>、<code>max_total_tokens</code>、<code>KG_CHUNK_PICK_METHOD</code>；</li>
+<li><strong>模型分层</strong>：抽取用 <code>deepseek-flash</code>，分析节点（<code>LLM_MODEL_ANALYST</code>）对疑难工况可切到 <code>deepseek-v4-pro</code>。</li>
+</ol>
+<hr>
+<h2 id="第-8-章-从-POC-到生产"><a href="#第-8-章-从-POC-到生产" class="headerlink" title="第 8 章　从 POC 到生产"></a>第 8 章　从 POC 到生产</h2><h3 id="8-1-性能与成本"><a href="#8-1-性能与成本" class="headerlink" title="8.1 性能与成本"></a>8.1 性能与成本</h3><table>
+<thead>
+<tr>
+<th>环节</th>
+<th>主要开销</th>
+<th>优化手段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>灌注</td>
+<td>每个 Chunk 一次抽取 + 合并摘要</td>
+<td>抽取角色用便宜模型；开启抽取缓存；<code>MAX_PARALLEL_INSERT</code> 与 <code>MAX_ASYNC_LLM</code> 匹配供应商限流</td>
+</tr>
+<tr>
+<td>检索</td>
+<td>关键词提取 1 次 LLM + 向量与图谱查询</td>
+<td>关键词角色用低延迟模型；Neo4j&#x2F;Milvus 索引与内存规划</td>
+</tr>
+<tr>
+<td>诊断</td>
+<td>规划 1 次 + 分析 1 次（+ 可选补采）</td>
+<td>规划节点可换更小模型；证据字符预算 <code>EVIDENCE_BUDGET_CHARS</code> 控制输入 token</td>
+</tr>
+</tbody></table>
+<p>诊断链路的典型耗时构成是“两次 LLM 调用 + 2～4 次并行检索”。对时延敏感的场景可以把高频故障码组合的检索结果做短期缓存（知识库更新时失效），也可以为 TOP 故障组合预先生成诊断模板。</p>
+<h3 id="8-2-安全加固清单"><a href="#8-2-安全加固清单" class="headerlink" title="8.2 安全加固清单"></a>8.2 安全加固清单</h3><ul>
+<li>LightRAG：<code>ENABLE_API_DOCS=false</code>、<code>WHITELIST_PATHS=/health</code>、强随机 <code>TOKEN_SECRET</code>、WebUI 账号密码使用 bcrypt 哈希（<code>{bcrypt}</code> 前缀）、设置请求体上限与写入准入；</li>
+<li>网络：LightRAG、Neo4j、Milvus、Redis、PostgreSQL 均不对公网暴露，只允许 diag-agent 所在网段访问；登录限流放在网关层；</li>
+<li>密钥：API Key、数据库口令放入 Vault 或 K8s Secret，不进镜像、不进仓库；</li>
+<li>数据：诊断报告与车辆记忆涉及 VIN，按个人信息保护要求做脱敏（日志与 trace 中可对 VIN 做掩码）与留存期限管理；</li>
+<li>供应链：用 <code>cosign verify</code> 校验官方镜像签名，镜像固定 tag 并同步到企业私有仓库；</li>
+<li>远程下发：<code>dispatch_remote_actions</code> 对接真实 OTA 平台时必须使用幂等键、回执校验与二次鉴权，审批人信息全程留痕。</li>
+</ul>
+<h3 id="8-3-Kubernetes-部署要点"><a href="#8-3-Kubernetes-部署要点" class="headerlink" title="8.3 Kubernetes 部署要点"></a>8.3 Kubernetes 部署要点</h3><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>形态</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LightRAG</td>
+<td>Deployment（无状态）</td>
+<td>存储全部外置后可水平扩展；多副本共享同一 workspace 时，写入建议收敛到单独的灌注实例</td>
+</tr>
+<tr>
+<td>diag-agent</td>
+<td>Deployment + HPA</td>
+<td>按 CPU 与并发请求数扩缩；readinessProbe 指向 <code>/ready</code></td>
+</tr>
+<tr>
+<td>diag-worker</td>
+<td>Deployment</td>
+<td>按 Temporal 任务队列积压扩缩</td>
+</tr>
+<tr>
+<td>Temporal</td>
+<td>官方 Helm Chart</td>
+<td>生产使用独立的 PostgreSQL &#x2F; Cassandra 集群</td>
+</tr>
+<tr>
+<td>Neo4j &#x2F; Milvus</td>
+<td>官方 Helm 或托管服务</td>
+<td>Milvus 分布式模式，Neo4j 企业版集群或 Aura</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>托管 RDS &#x2F; PolarDB</td>
+<td>lite 档位可直接运行在托管 PG 上</td>
+</tr>
+</tbody></table>
+<h3 id="8-4-备份与恢复"><a href="#8-4-备份与恢复" class="headerlink" title="8.4 备份与恢复"></a>8.4 备份与恢复</h3><ul>
+<li><strong>知识库</strong>：原始文档（Git 或对象存储）是唯一真源，图谱和向量都可以从原始文档重建。常规备份覆盖 PostgreSQL（<code>pg_dump</code>）、Neo4j（<code>neo4j-admin database dump</code>）、Milvus（milvus-backup）和 Redis AOF。</li>
+<li><strong>重建演练</strong>：定期在预发环境执行“清库 → 全量灌注 → 评测”，同时校验备份可用性和灌注流水线的健康度。</li>
+<li><strong>业务数据</strong>：diagdb 的诊断报告表按常规业务库备份；Temporal 历史按 namespace 保留期（本工程 72 小时）配置归档。</li>
+</ul>
+<h3 id="8-5-可观测体系"><a href="#8-5-可观测体系" class="headerlink" title="8.5 可观测体系"></a>8.5 可观测体系</h3><p>三层可观测互补：Langfuse 看 LLM 调用链路、token 成本与质量评分；Temporal UI 看业务流程执行与审批；LightRAG 的 <code>/health</code> 与 <code>/documents/pipeline_status</code> 看知识内核状态。生产中再把 diag-agent 的请求指标（QPS、P95、错误率）和 LightRAG 的健康状态接入 Prometheus &#x2F; Grafana，关键告警包括：落地率持续偏低、TSB 被置空的比例上升、灌注失败文档数、审批超时升级数。</p>
+<h3 id="8-6-与企业诊断平台集成（能力映射）"><a href="#8-6-与企业诊断平台集成（能力映射）" class="headerlink" title="8.6 与企业诊断平台集成（能力映射）"></a>8.6 与企业诊断平台集成（能力映射）</h3><table>
+<thead>
+<tr>
+<th>平台能力</th>
+<th>本 POC 对应实现</th>
+<th>生产化方向</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>诊断知识中心</td>
+<td>LightRAG workspace + 知识工程流水线</td>
+<td>对接 TSB 发布系统，通告发布即自动灌注</td>
+</tr>
+<tr>
+<td>智能诊断引擎</td>
+<td>diag-agent 双引擎 + grounding</td>
+<td>引入车端实时数据查询工具（DTC 冻结帧、信号快照）</td>
+</tr>
+<tr>
+<td>车辆健康档案</td>
+<td>mem0 车辆记忆 + diagnosis_reports</td>
+<td>与车辆主数据、维修工单系统打通</td>
+</tr>
+<tr>
+<td>远程处置编排</td>
+<td>Temporal 工作流 + 人工审批</td>
+<td>对接 OTA 平台远程任务接口，灰度与回滚策略</td>
+</tr>
+<tr>
+<td>质量运营</td>
+<td>Langfuse trace + 反馈打分 + 评测集</td>
+<td>诊断准确率看板、按故障类型的效果追踪</td>
+</tr>
+</tbody></table>
+<h3 id="8-7-多车型、多知识库扩展"><a href="#8-7-多车型、多知识库扩展" class="headerlink" title="8.7 多车型、多知识库扩展"></a>8.7 多车型、多知识库扩展</h3><p>当平台从单一车型扩展到多品牌、多车型时，有两种组织方式：</p>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>做法</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>单库 + 适用范围实体</td>
+<td>所有车型共用一个 workspace，文档中显式写出 <code>VehicleScope</code>（车型、VIN 段、生产批次），分析 Prompt 强制核对适用范围</td>
+<td>车型平台化程度高、知识大量复用</td>
+</tr>
+<tr>
+<td>多库 + 路由</td>
+<td>按平台或品牌拆分 workspace（每个对应一个 LightRAG 实例，共享底层存储），diag-agent 根据 VIN 前缀路由到对应知识库，通用知识库并行检索后合并证据</td>
+<td>车型差异大、数据权限需隔离</td>
+</tr>
+</tbody></table>
+<p>本工程的 <code>VehicleScope</code> 实体类型与 TSB 适用条件核对规则，正是为单库模式预留的。采用多库模式时，<code>LightRAGClient</code> 可以扩展为按 workspace 持有多个客户端实例，<code>EvidenceStore</code> 的去重键加上 workspace 前缀即可直接复用，校验逻辑不需要修改。</p>
+<h3 id="8-8-生产上线检查清单"><a href="#8-8-生产上线检查清单" class="headerlink" title="8.8 生产上线检查清单"></a>8.8 生产上线检查清单</h3><ul>
+<li><input disabled="" type="checkbox"> 镜像全部固定 tag 并通过签名校验，同步到私有仓库</li>
+<li><input disabled="" type="checkbox"> 根 <code>.env</code> 中所有默认口令、<code>TOKEN_SECRET</code>、Langfuse <code>CHANGEME</code> 项已替换</li>
+<li><input disabled="" type="checkbox"> <code>ENABLE_API_DOCS=false</code>，白名单仅保留 <code>/health</code></li>
+<li><input disabled="" type="checkbox"> Embedding 模型与维度定稿（上线后不可更改）</li>
+<li><input disabled="" type="checkbox"> 实体类型画像与术语对照表经领域专家评审</li>
+<li><input disabled="" type="checkbox"> 检索评测与端到端评测达到验收阈值并纳入 CI</li>
+<li><input disabled="" type="checkbox"> Reranker 已部署并验证增益</li>
+<li><input disabled="" type="checkbox"> 备份策略与全量重建演练完成</li>
+<li><input disabled="" type="checkbox"> 审批超时、落地率、灌注失败等告警已配置</li>
+<li><input disabled="" type="checkbox"> 远程下发接口具备幂等键、回执校验与审计留痕</li>
+</ul>
+<hr>
+<h2 id="第-9-章-FAQ-与踩坑记录"><a href="#第-9-章-FAQ-与踩坑记录" class="headerlink" title="第 9 章　FAQ 与踩坑记录"></a>第 9 章　FAQ 与踩坑记录</h2><p><strong>Q1：v1 工程启动后所有 LLM 调用报模型不存在？</strong><br><code>deepseek-chat</code> 与 <code>deepseek-reasoner</code> 已于 2026-07-24 下线，过渡期的 <code>deepseek-v4-flash</code> 也已于 2026-09-10 下线。当前可用的是 <code>deepseek-flash</code>（V4.1 Flash）与 <code>deepseek-v4-pro</code>，在根 <code>.env</code> 修改 <code>LLM_MODEL</code> 即可。建议在配置中心维护模型名，而不是硬编码在代码里。</p>
+<p><strong>Q2：重复执行灌注脚本报 409？</strong><br>这是 1.5.7 的预期行为：同名 <code>file_source</code> 的文档已存在。工程脚本会自动跳过。需要更新内容时，先按文档 ID 删除旧版本再提交。</p>
+<p><strong>Q3：调用 <code>GET /documents</code> 返回 404 &#x2F; 405？</strong><br>1.5.7 已移除该接口，改用 <code>POST /documents/paginated</code>。同时注意 <code>DELETE /documents</code>（不带路径）是清空当前 workspace 的全部文档，按 ID 删除要用 <code>DELETE /documents/delete_document</code>。</p>
+<p><strong>Q4：Temporal 用 <code>auto-setup</code> 镜像启动报弃用警告，或新版本找不到该镜像？</strong><br>官方已弃用 <code>auto-setup</code>，改为 <code>temporalio/server</code> + <code>temporalio/admin-tools</code> 初始化任务的模式，见 3.3 节。server 与 admin-tools 必须使用相同版本号。</p>
+<p><strong>Q5：Milvus 要不要直接上 3.0？</strong><br>可以评估，但 LightRAG 官方 setup 模板当前锁定 2.6.11，客户端依赖 <code>pymilvus</code> 的版本范围也需要一并核对。生产升级前请在预发环境完成灌注与检索回归。</p>
+<p><strong>Q6：换成 pg18 后数据“消失”了？</strong><br>pg18 官方镜像调整了数据目录结构，挂载点需要改为 <code>/var/lib/postgresql</code>。本工程统一使用 pg17 以避免这个问题；升级到 pg18 时请按官方说明调整卷挂载并做数据迁移。</p>
+<p><strong>Q7：可以中途更换 Embedding 模型吗？</strong><br>不可以。维度写入向量表结构后不可变更，即使维度相同，不同模型的向量空间也不兼容。更换模型必须清空并全量重建，这也是“原始文档是唯一真源”的原因。</p>
+<p><strong>Q8：容器内访问宿主机 Ollama 失败？</strong><br>Linux 上需要 <code>extra_hosts: host.docker.internal:host-gateway</code>（工程已配置），并确保 Ollama 监听 <code>0.0.0.0</code>（设置 <code>OLLAMA_HOST=0.0.0.0</code> 后重启）。macOS 与 Windows 的 Docker Desktop 原生支持该主机名。</p>
+<p><strong>Q9：实体抽取结果里大量 <code>Other</code> 类型？</strong><br>检查 <code>ENTITY_TYPE_PROMPT_FILE</code> 是否生效：文件是否位于 <code>PROMPT_DIR/entity_type/</code> 下，当前抽取模式所需的示例段是否存在。修改画像后需要重灌才对已有文档生效。</p>
+<p><strong>Q10：诊断报告的 <code>matched_tsb</code> 被置空了？</strong><br>这是引用落地校验的第二道闸门在起作用：模型给出的 TSB 编号没有出现在任何检索证据中。先用 <code>/api/v1/knowledge/search</code> 检查该通告能否被检索到，再检查通告文档是否已入库、编号书写是否规范。</p>
+<p><strong>Q11：登录防爆破在多 worker 部署下不准？</strong><br>计数器存在进程内存中，多个 worker 各自计数，有效阈值会被放大。严格的限流应放在 API 网关或 WAF 层。</p>
+<p><strong>Q12：未部署 Reranker 时每次查询都有告警？</strong><br><code>QueryParam.enable_rerank</code> 的默认值取自 <code>RERANK_BY_DEFAULT</code>，未设置时为 true。未部署 Reranker 时可以在 LightRAG 配置中设置 <code>RERANK_BY_DEFAULT=False</code>，或在请求中显式传入 <code>&quot;enable_rerank&quot;: false</code>。</p>
+<p><strong>Q13：mem0 初始化失败会影响诊断吗？</strong><br>不会。记忆模块在任何异常下都降级为空记忆，<code>/ready</code> 接口会显示 <code>memory: failed</code>。常见原因是 Milvus 尚未就绪或 Ollama 不可达。</p>
+<p><strong>Q14：Langfuse 看不到 trace？</strong><br>确认三点：Langfuse 已启动且可以用 <code>admin@vd.local</code> 登录；diag-agent 的 <code>/ready</code> 显示 <code>tracing: true</code>（密钥已配置）；容器内 <code>LANGFUSE_BASE_URL</code> 指向 <code>http://host.docker.internal:3000</code>。trace 为批量异步上报，通常有数秒延迟。</p>
+<hr>
+<h2 id="附录-A-LightRAG-1-5-7-API-速查"><a href="#附录-A-LightRAG-1-5-7-API-速查" class="headerlink" title="附录 A　LightRAG 1.5.7 API 速查"></a>附录 A　LightRAG 1.5.7 API 速查</h2><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/documents/text</code> &#x2F; <code>/documents/texts</code></td>
+<td>插入文本（支持 <code>chunking</code> 策略）</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/documents/upload</code></td>
+<td>上传文件</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/documents/scan</code></td>
+<td>扫描输入目录</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/documents/paginated</code></td>
+<td>分页列出文档</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/documents/track_status/{track_id}</code></td>
+<td>按批次追踪处理状态</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/documents/pipeline_status</code></td>
+<td>管线实时进度</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/documents/status_counts</code></td>
+<td>各状态文档数量</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/documents/reprocess_failed</code></td>
+<td>重试失败文档</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/documents/delete_document</code></td>
+<td>按 ID 删除并重建子图</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/documents</code></td>
+<td>⚠️ 清空全部文档</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/query</code> &#x2F; <code>/query/stream</code></td>
+<td>问答 &#x2F; 流式问答</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/query/data</code></td>
+<td>结构化检索（不生成）</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/graphs?label=&amp;max_depth=&amp;max_nodes=</code></td>
+<td>子图查询</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/graph/entity/exists?name=</code></td>
+<td>实体存在性检查</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/graph/entity/edit</code> &#x2F; <code>/graph/relation/edit</code></td>
+<td>编辑实体 &#x2F; 关系</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/graph/entities/merge</code></td>
+<td>合并实体</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/health</code></td>
+<td>健康检查（认证后返回完整配置）</td>
+</tr>
+</tbody></table>
+<h2 id="附录-B-QueryParam-常用字段"><a href="#附录-B-QueryParam-常用字段" class="headerlink" title="附录 B　QueryParam 常用字段"></a>附录 B　QueryParam 常用字段</h2><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>默认值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mode</code></td>
+<td><code>mix</code></td>
+<td>local &#x2F; global &#x2F; hybrid &#x2F; naive &#x2F; mix &#x2F; bypass</td>
+</tr>
+<tr>
+<td><code>top_k</code></td>
+<td><code>TOP_K</code></td>
+<td>图谱侧实体&#x2F;关系召回数</td>
+</tr>
+<tr>
+<td><code>chunk_top_k</code></td>
+<td><code>CHUNK_TOP_K</code></td>
+<td>向量侧 Chunk 召回数</td>
+</tr>
+<tr>
+<td><code>max_entity_tokens</code> &#x2F; <code>max_relation_tokens</code> &#x2F; <code>max_total_tokens</code></td>
+<td>环境变量</td>
+<td>上下文预算</td>
+</tr>
+<tr>
+<td><code>response_type</code></td>
+<td><code>Multiple Paragraphs</code></td>
+<td>如 <code>Bullet Points</code>、<code>Single Paragraph</code></td>
+</tr>
+<tr>
+<td><code>include_references</code></td>
+<td>false</td>
+<td>返回引用列表</td>
+</tr>
+<tr>
+<td><code>enable_rerank</code></td>
+<td><code>RERANK_BY_DEFAULT</code>（默认 true）</td>
+<td>是否重排</td>
+</tr>
+<tr>
+<td><code>hl_keywords</code> &#x2F; <code>ll_keywords</code></td>
+<td>空</td>
+<td>手工指定高&#x2F;低层关键词，跳过关键词提取</td>
+</tr>
+<tr>
+<td><code>conversation_history</code></td>
+<td>空</td>
+<td>多轮对话历史</td>
+</tr>
+<tr>
+<td><code>user_prompt</code></td>
+<td>None</td>
+<td>附加回答要求</td>
+</tr>
+<tr>
+<td><code>disable_user_prompt_prefix</code></td>
+<td>false</td>
+<td>本次请求忽略全局 <code>USER_PROMPT_PREFIX</code></td>
+</tr>
+<tr>
+<td><code>only_need_context</code> &#x2F; <code>only_need_prompt</code></td>
+<td>false</td>
+<td>仅返回上下文 &#x2F; 提示词（调试用，Agent 集成请用 <code>/query/data</code>）</td>
+</tr>
+</tbody></table>
+<h2 id="附录-C-端口一览"><a href="#附录-C-端口一览" class="headerlink" title="附录 C　端口一览"></a>附录 C　端口一览</h2><table>
+<thead>
+<tr>
+<th>端口</th>
+<th>服务</th>
+<th>档位</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>8080</td>
+<td>diag-agent（Swagger <code>/docs</code>）</td>
+<td>全部</td>
+</tr>
+<tr>
+<td>9621</td>
+<td>LightRAG（<code>/webui</code>、<code>/workspace</code>）</td>
+<td>全部</td>
+</tr>
+<tr>
+<td>5432</td>
+<td>PostgreSQL 17 + pgvector</td>
+<td>全部</td>
+</tr>
+<tr>
+<td>7233 &#x2F; 8233</td>
+<td>Temporal gRPC &#x2F; Temporal UI</td>
+<td>全部</td>
+</tr>
+<tr>
+<td>6379</td>
+<td>Redis</td>
+<td>full</td>
+</tr>
+<tr>
+<td>7474 &#x2F; 7687</td>
+<td>Neo4j Browser &#x2F; Bolt</td>
+<td>full</td>
+</tr>
+<tr>
+<td>19530 &#x2F; 9091</td>
+<td>Milvus gRPC &#x2F; 健康检查</td>
+<td>full</td>
+</tr>
+<tr>
+<td>3000 &#x2F; 9190</td>
+<td>Langfuse Web &#x2F; 媒体存储</td>
+<td>可选</td>
+</tr>
+<tr>
+<td>11434</td>
+<td>Ollama（宿主机）</td>
+<td>全部</td>
+</tr>
+</tbody></table>
+<h2 id="附录-D-v1-→-v2-迁移步骤"><a href="#附录-D-v1-→-v2-迁移步骤" class="headerlink" title="附录 D　v1 → v2 迁移步骤"></a>附录 D　v1 → v2 迁移步骤</h2><ol>
+<li><strong>备份并停止 v1</strong>：<code>make down</code>。v1 的 Embedding 仍为 bge-m3（1024 维），向量数据理论上可复用，但 v2 引入了领域实体类型画像与新的切分策略，<strong>建议全量重建</strong>以获得完整收益。</li>
+<li><strong>更新配置</strong>：以 v2 的 <code>.env.example</code> 为模板重建根 <code>.env</code>，重点修改 <code>LLM_MODEL=deepseek-flash</code>；新增 <code>STACK_PROFILE</code>、<code>DIAG_ENGINE</code>、<code>MAX_EVIDENCE_ROUNDS</code>、<code>APPROVAL_TIMEOUT_MINUTES</code>。</li>
+<li><strong>替换部署文件</strong>：使用 v2 的 <code>docker-compose*.yml</code> 与 <code>deploy/</code> 目录。Temporal 从 <code>auto-setup</code> 切换到新模式后使用新的数据库初始化流程，旧的 Temporal 数据库可以直接丢弃（POC 无需保留历史工作流）。</li>
+<li><strong>调整调用方</strong>：把 <code>GET /documents</code> 改为 <code>POST /documents/paginated</code>；把 <code>DELETE /documents</code> 的按 ID 删除用法改为 <code>DELETE /documents/delete_document</code>；Agent 取证从 <code>/query</code> + <code>only_need_context</code> 改为 <code>/query/data</code>。</li>
+<li><strong>重建知识库</strong>：<code>make clean &amp;&amp; make up &amp;&amp; make ingest</code>，然后执行 <code>make eval</code> 与 <code>make eval-e2e</code>，与 v1 结果对比。</li>
+<li><strong>接入新能力</strong>：按需启用 Langfuse（<code>make langfuse-up</code>）、DeepAgents 引擎（<code>DIAG_ENGINE=deepagents</code>）、lite 档位（<code>make up PROFILE=lite</code>）。</li>
+</ol>
+<hr>
+<blockquote>
+<p>本指南与配套工程随上游版本持续演进。升级任一组件前，请先在预发环境运行 <code>make test</code>、<code>make eval</code> 与 <code>make eval-e2e</code> 完成回归。</p>
+</blockquote>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/30/agent-systems/Mem0%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97/">Mem0 实战指南（2026 版）：从入门到自托管与工程化落地</a></h3>
+        <p>以 mem0ai 2.2.1 源码为准，讲清 v3 记忆算法的单次抽取、只增不改与三路检索融合…</p>
+        <a class="btn primary" href="/2026/09/30/agent-systems/Mem0%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/22/agent-systems/LLM-Token%E7%BC%93%E5%AD%98%E5%91%BD%E4%B8%AD%E5%8E%9F%E7%90%86%E4%B8%8EAgent%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：LLM Token 缓存命中深度解析：原理、计费经济学与 Agent 工程最佳实践</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 14 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%89%8D%E8%A8%80%EF%BC%9A%E8%BF%99%E4%BB%BD%E6%8C%87%E5%8D%97%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98" data-toc-target="前言：这份指南解决什么问题"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">前言：这份指南解决什么问题</span></a><a class="toc-level-3" href="#v2-%E6%9B%B4%E6%96%B0%E6%91%98%E8%A6%81%EF%BC%88%E7%9B%B8%E5%AF%B9-2026-07-%E7%9A%84-v1%EF%BC%89" data-toc-target="v2-更新摘要（相对-2026-07-的-v1）"><span class="toc-text">v2 更新摘要（相对 2026-07 的 v1）</span></a><a class="toc-level-2" href="#%E7%AC%AC-1-%E7%AB%A0-LightRAG-%E5%8E%9F%E7%90%86%E9%80%9F%E9%80%9A" data-toc-target="第-1-章-LightRAG-原理速通"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">第 1 章 LightRAG 原理速通</span></a><a class="toc-level-3" href="#1-1-%E5%AE%9A%E4%BD%8D%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%8A%E6%96%AD%E5%9C%BA%E6%99%AF%E9%9C%80%E8%A6%81-Graph-RAG" data-toc-target="1-1-定位：为什么诊断场景需要-Graph-RAG"><span class="toc-text">1.1 定位：为什么诊断场景需要 Graph RAG</span></a><a class="toc-level-3" href="#1-2-%E7%B4%A2%E5%BC%95%E7%AE%A1%E7%BA%BF" data-toc-target="1-2-索引管线"><span class="toc-text">1.2 索引管线</span></a><a class="toc-level-3" href="#1-3-%E5%85%AD%E7%A7%8D%E6%9F%A5%E8%AF%A2%E6%A8%A1%E5%BC%8F" data-toc-target="1-3-六种查询模式"><span class="toc-text">1.3 六种查询模式</span></a><a class="toc-level-3" href="#1-4-%E5%AD%98%E5%82%A8%E9%80%89%E5%9E%8B%E7%9F%A9%E9%98%B5%EF%BC%881-5-7%EF%BC%89" data-toc-target="1-4-存储选型矩阵（1-5-7）"><span class="toc-text">1.4 存储选型矩阵（1.5.7）</span></a><a class="toc-level-3" href="#1-5-Workspace-%E5%A4%9A%E7%A7%9F%E6%88%B7" data-toc-target="1-5-Workspace-多租户"><span class="toc-text">1.5 Workspace 多租户</span></a><a class="toc-level-3" href="#1-6-1-5-x-%E7%B3%BB%E5%88%97%E5%80%BC%E5%BE%97%E5%85%B3%E6%B3%A8%E7%9A%84%E6%96%B0%E8%83%BD%E5%8A%9B" data-toc-target="1-6-1-5-x-系列值得关注的新能力"><span class="toc-text">1.6 1.5.x 系列值得关注的新能力</span></a><a class="toc-level-2" href="#%E7%AC%AC-2-%E7%AB%A0-Python-SDK-%E4%BA%94%E5%88%86%E9%92%9F%E4%B8%8A%E6%89%8B" data-toc-target="第-2-章-Python-SDK-五分钟上手"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">第 2 章 Python SDK 五分钟上手</span></a><a class="toc-level-2" href="#%E7%AC%AC-3-%E7%AB%A0-Docker-Compose-%E8%87%AA%E6%89%98%E7%AE%A1%E9%83%A8%E7%BD%B2%EF%BC%88%E5%8F%8C%E6%A1%A3%E4%BD%8D%EF%BC%89" data-toc-target="第-3-章-Docker-Compose-自托管部署（双档位）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">第 3 章 Docker Compose 自托管部署（双档位）</span></a><a class="toc-level-3" href="#3-1-%E9%83%A8%E7%BD%B2%E5%BD%A2%E6%80%81%E5%86%B3%E7%AD%96" data-toc-target="3-1-部署形态决策"><span class="toc-text">3.1 部署形态决策</span></a><a class="toc-level-3" href="#3-2-%E5%B7%A5%E7%A8%8B%E7%9A%84%E5%88%86%E5%B1%82-Compose-%E8%AE%BE%E8%AE%A1" data-toc-target="3-2-工程的分层-Compose-设计"><span class="toc-text">3.2 工程的分层 Compose 设计</span></a><a class="toc-level-3" href="#3-3-Temporal-%E7%9A%84%E6%96%B0%E9%83%A8%E7%BD%B2%E6%96%B9%E5%BC%8F" data-toc-target="3-3-Temporal-的新部署方式"><span class="toc-text">3.3 Temporal 的新部署方式</span></a><a class="toc-level-3" href="#3-4-LightRAG-%E9%85%8D%E7%BD%AE%E7%B2%BE%E8%AE%B2%EF%BC%88deploy-lightrag-lightrag-env%EF%BC%89" data-toc-target="3-4-LightRAG-配置精讲（deploy-lightrag-lightrag-env）"><span class="toc-text">3.4 LightRAG 配置精讲（deploy/lightrag/lightrag.env）</span></a><a class="toc-level-3" href="#3-5-%E5%90%AF%E5%8A%A8%E4%B8%8E%E9%AA%8C%E8%AF%81" data-toc-target="3-5-启动与验证"><span class="toc-text">3.5 启动与验证</span></a><a class="toc-level-3" href="#3-6-REST-API-%E5%AE%9E%E6%93%8D" data-toc-target="3-6-REST-API-实操"><span class="toc-text">3.6 REST API 实操</span></a><a class="toc-level-3" href="#3-7-WebUI-%E5%8F%8C%E5%85%A5%E5%8F%A3%E4%B8%8E%E5%9B%BE%E8%B0%B1%E9%AA%8C%E8%AF%81" data-toc-target="3-7-WebUI-双入口与图谱验证"><span class="toc-text">3.7 WebUI 双入口与图谱验证</span></a><a class="toc-level-2" href="#%E7%AC%AC-4-%E7%AB%A0-%E9%A2%86%E5%9F%9F%E7%9F%A5%E8%AF%86%E5%B7%A5%E7%A8%8B%EF%BC%9AGraph-RAG-%E6%88%90%E8%B4%A5%E7%9A%84%E4%B8%80%E5%8D%8A" data-toc-target="第-4-章-领域知识工程：Graph-RAG-成败的一半"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">第 4 章领域知识工程：Graph RAG 成败的一半</span></a><a class="toc-level-3" href="#4-1-%E8%AF%AD%E6%96%99%E5%87%86%E5%A4%87%E4%B8%89%E5%8E%9F%E5%88%99" data-toc-target="4-1-语料准备三原则"><span class="toc-text">4.1 语料准备三原则</span></a><a class="toc-level-3" href="#4-2-%E9%A2%86%E5%9F%9F%E5%AE%9E%E4%BD%93%E7%B1%BB%E5%9E%8B%E7%94%BB%E5%83%8F%EF%BC%88ENTITY-TYPE-PROMPT-FILE%EF%BC%89" data-toc-target="4-2-领域实体类型画像（ENTITY-TYPE-PROMPT-FILE）"><span class="toc-text">4.2 领域实体类型画像（ENTITY_TYPE_PROMPT_FILE）</span></a><a class="toc-level-3" href="#4-3-%E5%88%87%E5%88%86%E7%AD%96%E7%95%A5%E9%80%89%E6%8B%A9" data-toc-target="4-3-切分策略选择"><span class="toc-text">4.3 切分策略选择</span></a><a class="toc-level-3" href="#4-4-%E5%B9%82%E7%AD%89%E7%81%8C%E6%B3%A8%EF%BC%88scripts-ingest-knowledge-py%EF%BC%89" data-toc-target="4-4-幂等灌注（scripts-ingest-knowledge-py）"><span class="toc-text">4.4 幂等灌注（scripts/ingest_knowledge.py）</span></a><a class="toc-level-3" href="#4-5-%E5%9B%BE%E8%B0%B1%E6%B2%BB%E7%90%86%EF%BC%9A%E5%AE%9E%E4%BD%93%E5%90%88%E5%B9%B6" data-toc-target="4-5-图谱治理：实体合并"><span class="toc-text">4.5 图谱治理：实体合并</span></a><a class="toc-level-3" href="#4-6-%E7%9F%A5%E8%AF%86%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%EF%BC%9A%E9%80%9A%E5%91%8A%E6%9B%BF%E4%BB%A3%E3%80%81%E5%A4%B1%E6%95%88%E4%B8%8E%E7%89%88%E6%9C%AC%E5%8C%96" data-toc-target="4-6-知识生命周期：通告替代、失效与版本化"><span class="toc-text">4.6 知识生命周期：通告替代、失效与版本化</span></a><a class="toc-level-2" href="#%E7%AC%AC-5-%E7%AB%A0-%E4%BC%81%E4%B8%9A%E7%BA%A7-POC%EF%BC%9A%E8%BD%A6%E8%BE%86%E8%BF%9C%E7%A8%8B%E6%99%BA%E8%83%BD%E8%AF%8A%E6%96%AD%E5%B9%B3%E5%8F%B0" data-toc-target="第-5-章-企业级-POC：车辆远程智能诊断平台"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">第 5 章企业级 POC：车辆远程智能诊断平台</span></a><a class="toc-level-3" href="#5-1-%E4%B8%9A%E5%8A%A1%E5%9C%BA%E6%99%AF" data-toc-target="5-1-业务场景"><span class="toc-text">5.1 业务场景</span></a><a class="toc-level-3" href="#5-2-%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84" data-toc-target="5-2-总体架构"><span class="toc-text">5.2 总体架构</span></a><a class="toc-level-3" href="#5-3-%E8%AF%81%E6%8D%AE%E6%A8%A1%E5%9E%8B%EF%BC%9A%E4%BB%8E%E2%80%9C%E5%8F%82%E8%80%83%E6%96%87%E6%A1%A3%E2%80%9D%E5%88%B0%E2%80%9C%E8%AF%81%E6%8D%AE%E7%BC%96%E5%8F%B7%E2%80%9D" data-toc-target="5-3-证据模型：从“参考文档”到“证据编号”"><span class="toc-text">5.3 证据模型：从“参考文档”到“证据编号”</span></a><a class="toc-level-3" href="#5-4-LangGraph-%E5%BC%95%E6%93%8E%EF%BC%9A%E6%98%BE%E5%BC%8F%E7%8A%B6%E6%80%81%E6%9C%BA%E4%B8%8E%E8%AF%81%E6%8D%AE%E8%A1%A5%E9%87%87" data-toc-target="5-4-LangGraph-引擎：显式状态机与证据补采"><span class="toc-text">5.4 LangGraph 引擎：显式状态机与证据补采</span></a><a class="toc-level-3" href="#5-5-%E5%BC%95%E7%94%A8%E8%90%BD%E5%9C%B0%E6%A0%A1%E9%AA%8C%EF%BC%88grounding%EF%BC%89%EF%BC%9A%E4%B8%89%E9%81%93%E7%A1%AE%E5%AE%9A%E6%80%A7%E9%97%B8%E9%97%A8" data-toc-target="5-5-引用落地校验（grounding）：三道确定性闸门"><span class="toc-text">5.5 引用落地校验（grounding）：三道确定性闸门</span></a><a class="toc-level-3" href="#5-6-DeepAgents-%E5%BC%95%E6%93%8E%EF%BC%9A%E5%A3%B0%E6%98%8E%E5%BC%8F%E6%B7%B1%E5%BA%A6-Agent" data-toc-target="5-6-DeepAgents-引擎：声明式深度-Agent"><span class="toc-text">5.6 DeepAgents 引擎：声明式深度 Agent</span></a><a class="toc-level-3" href="#5-7-mem0-%E8%BD%A6%E8%BE%86%E9%95%BF%E6%9C%9F%E8%AE%B0%E5%BF%86" data-toc-target="5-7-mem0-车辆长期记忆"><span class="toc-text">5.7 mem0 车辆长期记忆</span></a><a class="toc-level-3" href="#5-8-Langfuse-v4-%E5%8F%AF%E8%A7%82%E6%B5%8B" data-toc-target="5-8-Langfuse-v4-可观测"><span class="toc-text">5.8 Langfuse v4 可观测</span></a><a class="toc-level-3" href="#5-9-Temporal-%E5%B7%A5%E4%BD%9C%E6%B5%81%EF%BC%9A%E5%8F%AF%E9%9D%A0%E6%89%A7%E8%A1%8C%E4%B8%8E%E4%BA%BA%E5%9C%A8%E5%9B%9E%E8%B7%AF" data-toc-target="5-9-Temporal-工作流：可靠执行与人在回路"><span class="toc-text">5.9 Temporal 工作流：可靠执行与人在回路</span></a><a class="toc-level-3" href="#5-10-API-%E4%B8%80%E8%A7%88" data-toc-target="5-10-API-一览"><span class="toc-text">5.10 API 一览</span></a><a class="toc-level-2" href="#%E7%AC%AC-6-%E7%AB%A0-%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%BC%94%E7%A4%BA%E5%89%A7%E6%9C%AC%EF%BC%88%E4%B8%89%E4%B8%AA%E5%B7%A5%E5%86%B5%EF%BC%89" data-toc-target="第-6-章-端到端演示剧本（三个工况）"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">第 6 章端到端演示剧本（三个工况）</span></a><a class="toc-level-3" href="#6-1-%E9%A2%84%E7%83%AD%EF%BC%9Anaive-%E4%B8%8E-mix-%E7%9A%84%E5%AF%B9%E7%85%A7" data-toc-target="6-1-预热：naive-与-mix-的对照"><span class="toc-text">6.1 预热：naive 与 mix 的对照</span></a><a class="toc-level-3" href="#6-2-%E5%B7%A5%E5%86%B5%E4%B8%80%EF%BC%9AOTA-%E5%9B%9E%E6%BB%9A%EF%BC%88telemetry-ota-failure-json%EF%BC%89" data-toc-target="6-2-工况一：OTA-回滚（telemetry-ota-failure-json）"><span class="toc-text">6.2 工况一：OTA 回滚（telemetry_ota_failure.json）</span></a><a class="toc-level-3" href="#6-3-%E5%B7%A5%E5%86%B5%E4%BA%8C%EF%BC%9A%E7%94%B5%E6%B1%A0%E7%83%AD%E7%AE%A1%E7%90%86%EF%BC%88telemetry-battery-json%EF%BC%89" data-toc-target="6-3-工况二：电池热管理（telemetry-battery-json）"><span class="toc-text">6.3 工况二：电池热管理（telemetry_battery.json）</span></a><a class="toc-level-3" href="#6-4-%E5%B7%A5%E5%86%B5%E4%B8%89%EF%BC%9A%E9%89%B4%E5%88%AB%E8%AF%8A%E6%96%AD%EF%BC%88telemetry-can-harness-json%EF%BC%89" data-toc-target="6-4-工况三：鉴别诊断（telemetry-can-harness-json）"><span class="toc-text">6.4 工况三：鉴别诊断（telemetry_can_harness.json）</span></a><a class="toc-level-3" href="#6-5-%E6%B5%81%E5%BC%8F%E4%B8%8E%E5%BC%82%E6%AD%A5%E5%AE%A1%E6%89%B9" data-toc-target="6-5-流式与异步审批"><span class="toc-text">6.5 流式与异步审批</span></a><a class="toc-level-2" href="#%E7%AC%AC-7-%E7%AB%A0-%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%B0%83%E4%BC%98" data-toc-target="第-7-章-评测与调优"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">第 7 章评测与调优</span></a><a class="toc-level-3" href="#7-1-%E6%A3%80%E7%B4%A2%E5%B1%82%E8%AF%84%E6%B5%8B%EF%BC%88make-eval%EF%BC%89" data-toc-target="7-1-检索层评测（make-eval）"><span class="toc-text">7.1 检索层评测（make eval）</span></a><a class="toc-level-3" href="#7-2-%E7%AB%AF%E5%88%B0%E7%AB%AF%E8%AF%84%E6%B5%8B%EF%BC%88make-eval-e2e%EF%BC%89" data-toc-target="7-2-端到端评测（make-eval-e2e）"><span class="toc-text">7.2 端到端评测（make eval-e2e）</span></a><a class="toc-level-3" href="#7-3-%E5%BC%95%E5%85%A5-RAGAS-%E4%B8%8E-Langfuse-%E6%95%B0%E6%8D%AE%E9%9B%86%EF%BC%88%E5%8F%AF%E9%80%89%EF%BC%89" data-toc-target="7-3-引入-RAGAS-与-Langfuse-数据集（可选）"><span class="toc-text">7.3 引入 RAGAS 与 Langfuse 数据集（可选）</span></a><a class="toc-level-3" href="#7-4-%E8%B0%83%E5%8F%82%E4%BC%98%E5%85%88%E7%BA%A7" data-toc-target="7-4-调参优先级"><span class="toc-text">7.4 调参优先级</span></a><a class="toc-level-2" href="#%E7%AC%AC-8-%E7%AB%A0-%E4%BB%8E-POC-%E5%88%B0%E7%94%9F%E4%BA%A7" data-toc-target="第-8-章-从-POC-到生产"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">第 8 章从 POC 到生产</span></a><a class="toc-level-3" href="#8-1-%E6%80%A7%E8%83%BD%E4%B8%8E%E6%88%90%E6%9C%AC" data-toc-target="8-1-性能与成本"><span class="toc-text">8.1 性能与成本</span></a><a class="toc-level-3" href="#8-2-%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E6%B8%85%E5%8D%95" data-toc-target="8-2-安全加固清单"><span class="toc-text">8.2 安全加固清单</span></a><a class="toc-level-3" href="#8-3-Kubernetes-%E9%83%A8%E7%BD%B2%E8%A6%81%E7%82%B9" data-toc-target="8-3-Kubernetes-部署要点"><span class="toc-text">8.3 Kubernetes 部署要点</span></a><a class="toc-level-3" href="#8-4-%E5%A4%87%E4%BB%BD%E4%B8%8E%E6%81%A2%E5%A4%8D" data-toc-target="8-4-备份与恢复"><span class="toc-text">8.4 备份与恢复</span></a><a class="toc-level-3" href="#8-5-%E5%8F%AF%E8%A7%82%E6%B5%8B%E4%BD%93%E7%B3%BB" data-toc-target="8-5-可观测体系"><span class="toc-text">8.5 可观测体系</span></a><a class="toc-level-3" href="#8-6-%E4%B8%8E%E4%BC%81%E4%B8%9A%E8%AF%8A%E6%96%AD%E5%B9%B3%E5%8F%B0%E9%9B%86%E6%88%90%EF%BC%88%E8%83%BD%E5%8A%9B%E6%98%A0%E5%B0%84%EF%BC%89" data-toc-target="8-6-与企业诊断平台集成（能力映射）"><span class="toc-text">8.6 与企业诊断平台集成（能力映射）</span></a><a class="toc-level-3" href="#8-7-%E5%A4%9A%E8%BD%A6%E5%9E%8B%E3%80%81%E5%A4%9A%E7%9F%A5%E8%AF%86%E5%BA%93%E6%89%A9%E5%B1%95" data-toc-target="8-7-多车型、多知识库扩展"><span class="toc-text">8.7 多车型、多知识库扩展</span></a><a class="toc-level-3" href="#8-8-%E7%94%9F%E4%BA%A7%E4%B8%8A%E7%BA%BF%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95" data-toc-target="8-8-生产上线检查清单"><span class="toc-text">8.8 生产上线检查清单</span></a><a class="toc-level-2" href="#%E7%AC%AC-9-%E7%AB%A0-FAQ-%E4%B8%8E%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95" data-toc-target="第-9-章-FAQ-与踩坑记录"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">第 9 章 FAQ 与踩坑记录</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-A-LightRAG-1-5-7-API-%E9%80%9F%E6%9F%A5" data-toc-target="附录-A-LightRAG-1-5-7-API-速查"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">附录 A LightRAG 1.5.7 API 速查</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-B-QueryParam-%E5%B8%B8%E7%94%A8%E5%AD%97%E6%AE%B5" data-toc-target="附录-B-QueryParam-常用字段"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">附录 B QueryParam 常用字段</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-C-%E7%AB%AF%E5%8F%A3%E4%B8%80%E8%A7%88" data-toc-target="附录-C-端口一览"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">附录 C 端口一览</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95-D-v1-%E2%86%92-v2-%E8%BF%81%E7%A7%BB%E6%AD%A5%E9%AA%A4" data-toc-target="附录-D-v1-→-v2-迁移步骤"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">附录 D v1 → v2 迁移步骤</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/langgraph-agent-engineering/" style="--rail: 29%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 17</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%89%8D%E8%A8%80%EF%BC%9A%E8%BF%99%E4%BB%BD%E6%8C%87%E5%8D%97%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98" data-toc-target="前言：这份指南解决什么问题" data-title="01 · 前言：这份指南解决什么问题" aria-label="前言：这份指南解决什么问题"></a><a class="toc-strip__dot" href="#%E7%AC%AC-1-%E7%AB%A0-LightRAG-%E5%8E%9F%E7%90%86%E9%80%9F%E9%80%9A" data-toc-target="第-1-章-LightRAG-原理速通" data-title="02 · 第 1 章 LightRAG 原理速通" aria-label="第 1 章 LightRAG 原理速通"></a><a class="toc-strip__dot" href="#%E7%AC%AC-2-%E7%AB%A0-Python-SDK-%E4%BA%94%E5%88%86%E9%92%9F%E4%B8%8A%E6%89%8B" data-toc-target="第-2-章-Python-SDK-五分钟上手" data-title="03 · 第 2 章 Python SDK 五分钟上手" aria-label="第 2 章 Python SDK 五分钟上手"></a><a class="toc-strip__dot" href="#%E7%AC%AC-3-%E7%AB%A0-Docker-Compose-%E8%87%AA%E6%89%98%E7%AE%A1%E9%83%A8%E7%BD%B2%EF%BC%88%E5%8F%8C%E6%A1%A3%E4%BD%8D%EF%BC%89" data-toc-target="第-3-章-Docker-Compose-自托管部署（双档位）" data-title="04 · 第 3 章 Docker Compose 自托管部署（双档位）" aria-label="第 3 章 Docker Compose 自托管部署（双档位）"></a><a class="toc-strip__dot" href="#%E7%AC%AC-4-%E7%AB%A0-%E9%A2%86%E5%9F%9F%E7%9F%A5%E8%AF%86%E5%B7%A5%E7%A8%8B%EF%BC%9AGraph-RAG-%E6%88%90%E8%B4%A5%E7%9A%84%E4%B8%80%E5%8D%8A" data-toc-target="第-4-章-领域知识工程：Graph-RAG-成败的一半" data-title="05 · 第 4 章领域知识工程：Graph RAG 成败的一半" aria-label="第 4 章领域知识工程：Graph RAG 成败的一半"></a><a class="toc-strip__dot" href="#%E7%AC%AC-5-%E7%AB%A0-%E4%BC%81%E4%B8%9A%E7%BA%A7-POC%EF%BC%9A%E8%BD%A6%E8%BE%86%E8%BF%9C%E7%A8%8B%E6%99%BA%E8%83%BD%E8%AF%8A%E6%96%AD%E5%B9%B3%E5%8F%B0" data-toc-target="第-5-章-企业级-POC：车辆远程智能诊断平台" data-title="06 · 第 5 章企业级 POC：车辆远程智能诊断平台" aria-label="第 5 章企业级 POC：车辆远程智能诊断平台"></a><a class="toc-strip__dot" href="#%E7%AC%AC-6-%E7%AB%A0-%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%BC%94%E7%A4%BA%E5%89%A7%E6%9C%AC%EF%BC%88%E4%B8%89%E4%B8%AA%E5%B7%A5%E5%86%B5%EF%BC%89" data-toc-target="第-6-章-端到端演示剧本（三个工况）" data-title="07 · 第 6 章端到端演示剧本（三个工况）" aria-label="第 6 章端到端演示剧本（三个工况）"></a><a class="toc-strip__dot" href="#%E7%AC%AC-7-%E7%AB%A0-%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%B0%83%E4%BC%98" data-toc-target="第-7-章-评测与调优" data-title="08 · 第 7 章评测与调优" aria-label="第 7 章评测与调优"></a><a class="toc-strip__dot" href="#%E7%AC%AC-8-%E7%AB%A0-%E4%BB%8E-POC-%E5%88%B0%E7%94%9F%E4%BA%A7" data-toc-target="第-8-章-从-POC-到生产" data-title="09 · 第 8 章从 POC 到生产" aria-label="第 8 章从 POC 到生产"></a><a class="toc-strip__dot" href="#%E7%AC%AC-9-%E7%AB%A0-FAQ-%E4%B8%8E%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95" data-toc-target="第-9-章-FAQ-与踩坑记录" data-title="10 · 第 9 章 FAQ 与踩坑记录" aria-label="第 9 章 FAQ 与踩坑记录"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-A-LightRAG-1-5-7-API-%E9%80%9F%E6%9F%A5" data-toc-target="附录-A-LightRAG-1-5-7-API-速查" data-title="11 · 附录 A LightRAG 1.5.7 API 速查" aria-label="附录 A LightRAG 1.5.7 API 速查"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-B-QueryParam-%E5%B8%B8%E7%94%A8%E5%AD%97%E6%AE%B5" data-toc-target="附录-B-QueryParam-常用字段" data-title="12 · 附录 B QueryParam 常用字段" aria-label="附录 B QueryParam 常用字段"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-C-%E7%AB%AF%E5%8F%A3%E4%B8%80%E8%A7%88" data-toc-target="附录-C-端口一览" data-title="13 · 附录 C 端口一览" aria-label="附录 C 端口一览"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95-D-v1-%E2%86%92-v2-%E8%BF%81%E7%A7%BB%E6%AD%A5%E9%AA%A4" data-toc-target="附录-D-v1-→-v2-迁移步骤" data-title="14 · 附录 D v1 → v2 迁移步骤" aria-label="附录 D v1 → v2 迁移步骤"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/LightRAG企业级实践指南","title":"LightRAG 企业级实践指南 v2：从入门到车辆远程智能诊断平台","url":"/2026/09/30/agent-systems/LightRAG%E4%BC%81%E4%B8%9A%E7%BA%A7%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%8D%97/","path":"langgraph-agent-engineering","index":4,"total":17,"next":{"title":"Mem0 实战指南（2026 版）：从入门到自托管与工程化落地","url":"/2026/09/30/agent-systems/Mem0%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

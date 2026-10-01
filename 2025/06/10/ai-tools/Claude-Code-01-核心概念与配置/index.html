@@ -1,0 +1,1028 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Claude Code 核心概念与基础配置 · 飞轮之道</title>
+<meta name="description" content="基于 Claude Code 1.0.18 梳理其 agent 循环、安装认证、CLAUDE.md 记忆、settings 层级、权限规则与模式、自定义命令、非交互模式与成本控制，并给出团队项目的最小可用配置。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/06/10/ai-tools/Claude-Code-01-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5%E4%B8%8E%E9%85%8D%E7%BD%AE/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Claude Code 核心概念与基础配置 · 飞轮之道">
+<meta property="og:description" content="基于 Claude Code 1.0.18 梳理其 agent 循环、安装认证、CLAUDE.md 记忆、settings 层级、权限规则与模式、自定义命令、非交互模式与成本控制，并给出团队项目的最小可用配置。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/06/10/ai-tools/Claude-Code-01-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5%E4%B8%8E%E9%85%8D%E7%BD%AE/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/AI%E5%B7%A5%E5%85%B7%E9%93%BE/">AI 工具链</a> / <a href="/paths/claude-code-workflow/">基础配置</a><a class="series-chip" href="/paths/claude-code-workflow/" title="查看学习路径">第 1 / 8 篇</a>
+    </div>
+    <h1>Claude Code 核心概念与基础配置</h1>
+    <p class="article-deck">基于 Claude Code 1.0.18 梳理其 agent 循环、安装认证、CLAUDE.md 记忆、settings 层级、权限规则与模式、自定义命令、非交互模式与成本控制…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>21 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/AI%E5%B7%A5%E5%85%B7/">#AI工具</a><a class="article-meta__tag" href="/tags/%E5%BC%80%E5%8F%91%E6%95%88%E7%8E%87/">#开发效率</a><a class="article-meta__tag" href="/tags/Claude-Code/">#Claude Code</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Claude Code 是「模型决定调用什么工具、本地客户端负责执行与把关」的循环，配置工作本质上是在管上下文、权限、扩展三个面。</li><li>CLAUDE.md 写可执行的命令、约束和坑，按项目 / 用户 / 导入分层；个人内容用 @~/ 导入，不进仓库。</li><li>权限规则 deny 优先于 allow，Bash 前缀规则按字符串前缀匹配；deny 清单是护栏不是沙箱。</li><li>团队共享的规则进 .claude/settings.json，模型选择和个人放行放 settings.local.json 或用户级配置。</li><li>用 -p 写脚本时解析 JSON 输出的 subtype，达到 --max-turns 上限时进程退出码仍是 0。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p>Claude Code 于 2025 年 2 月 24 日以研究预览形式发布，5 月 22 日随 Claude Opus 4 &#x2F; Sonnet 4 正式 GA（1.0.0）。本文以 6 月 9 日发布的 1.0.18 为准，命令、配置键和行为都对照了当时的官方文档与安装包实际代码；个别文档与代码不一致的地方会单独指出。</p>
+<h2 id="它是什么：跑在终端里的工具调用循环"><a href="#它是什么：跑在终端里的工具调用循环" class="headerlink" title="它是什么：跑在终端里的工具调用循环"></a>它是什么：跑在终端里的工具调用循环</h2><p>Claude Code 不是补全插件，而是一个 agentic coding 工具：你在终端里用自然语言描述任务，模型决定要读哪些文件、改哪几行、跑什么命令，由本地的 Claude Code 进程实际执行，再把结果交回模型，直到模型认为任务完成。</p>
+<pre class="mermaid">flowchart LR
+    U["用户输入或 -p 提示"] --&gt; C["组装上下文&lt;br/&gt;系统提示 + CLAUDE.md + 对话历史"]
+    C --&gt; M["模型推理"]
+    M --&gt;|"请求调用工具"| P&#123;"权限检查&lt;br/&gt;deny 规则 → allow 规则 / 当前模式 → 询问用户"&#125;
+    P --&gt;|"放行"| T["本地执行工具&lt;br/&gt;Read / Edit / Bash / MCP"]
+    P --&gt;|"拒绝"| M
+    T --&gt;|"结果回填"| M
+    M --&gt;|"不再调用工具"| R["输出最终回答"]</pre>
+
+
+<p>这张图决定了后面所有配置的意义：</p>
+<ul>
+<li><strong>上下文面</strong>：模型每一轮能看到什么。CLAUDE.md、对话历史、它读过的文件都在这里，窗口满了要压缩。</li>
+<li><strong>权限面</strong>：模型想做的事，哪些直接放行、哪些要问人、哪些一律拒绝。由 settings.json 的规则和当前权限模式决定。</li>
+<li><strong>扩展面</strong>：模型能调用哪些工具。内置工具之外，还有自定义斜杠命令（复用提示词）和 MCP 服务器（接入外部系统，见本系列第 2 篇）。</li>
+</ul>
+<p>1.0.18 的内置工具按是否需要授权分两类，这也是权限规则的作用对象：</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>工具</th>
+<th>默认是否询问</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>只读</td>
+<td>Read、LS、Glob、Grep、NotebookRead、TodoRead &#x2F; TodoWrite、Task（子任务，文档表格中列为 Agent）</td>
+<td>不询问</td>
+</tr>
+<tr>
+<td>执行命令</td>
+<td>Bash</td>
+<td>询问；选「不再询问」后对该项目目录与该命令永久生效</td>
+</tr>
+<tr>
+<td>修改文件</td>
+<td>Edit、MultiEdit、Write、NotebookEdit</td>
+<td>询问；选「不再询问」后仅本次会话有效</td>
+</tr>
+<tr>
+<td>网络</td>
+<td>WebFetch、WebSearch</td>
+<td>询问</td>
+</tr>
+</tbody></table>
+<p>两个推论：一是只读工具默认不拦，模型读到的任何文件内容都会作为上下文发往模型 API，敏感文件要靠 deny 规则挡；二是修改类授权只在会话内有效，而 Bash 授权会写进项目配置长期生效，点「不再询问」前要想清楚这条命令的前缀会覆盖哪些变体。</p>
+<h2 id="安装与认证"><a href="#安装与认证" class="headerlink" title="安装与认证"></a>安装与认证</h2><h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><p>1.0.18 的安装方式只有一种：npm 全局包。</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 需要 Node.js 18+；macOS 10.15+、Ubuntu 20.04+ / Debian 10+，Windows 只能在 WSL 中运行</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">npm install -g @anthropic-ai/claude-code</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">cd</span> your-project</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">claude</span></span></code></pre></div></div></figure>
+
+<p>几个容易踩的点：</p>
+<ul>
+<li><strong>不要用 <code>sudo npm install -g</code></strong>。Claude Code 会自动更新，全局目录需要当前用户可写。遇到权限错误，官方推荐的做法是把 npm 前缀改到用户目录（<code>npm config set prefix ~/.npm-global</code> 并把 <code>~/.npm-global/bin</code> 加入 PATH）后重装；也可以运行 <code>claude migrate-installer</code>，把全局安装迁移为 <code>~/.claude/local</code> 下的本地安装，从此不再依赖全局 npm 目录的写权限。</li>
+<li><strong>WSL 里用错了 Windows 版 Node</strong>：<code>which node</code> 指向 <code>/mnt/c/...</code> 时会报 <code>exec: node: not found</code> 或平台检测错误，应在 Linux 发行版内用包管理器或 nvm 装 Node。</li>
+<li><strong>自动更新异常</strong>：<code>claude doctor</code> 检查自动更新器状态，<code>claude update</code> 手动升级；实在不想自动更新可设 <code>DISABLE_AUTOUPDATER=1</code>。</li>
+</ul>
+<h3 id="认证方式怎么选"><a href="#认证方式怎么选" class="headerlink" title="认证方式怎么选"></a>认证方式怎么选</h3><p>首次运行 <code>claude</code> 会引导登录，之后可以用 <code>/login</code> 切换账号、<code>/status</code> 查看当前账号与系统状态。</p>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>计费</th>
+<th>适合</th>
+<th>注意</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Anthropic Console（OAuth）</td>
+<td>按 token 计费，需在 Console 开通付费</td>
+<td>需要精确核算、设置工作区消费上限的团队</td>
+<td>管理员可在 Console 批量邀请成员，「Claude Code」角色只能创建 Claude Code 用的 API Key</td>
+</tr>
+<tr>
+<td>Claude Max 订阅</td>
+<td>包月，含 Claude Code 用量</td>
+<td>个人重度使用</td>
+<td>默认模型策略是先用 Opus 4、达到一定用量比例后切 Sonnet 4</td>
+</tr>
+<tr>
+<td>Claude Pro 订阅</td>
+<td>包月</td>
+<td>个人轻度使用</td>
+<td>自 1.0.11（6 月 4 日）起可用，<code>/model</code> 里只有 Sonnet 4</td>
+</tr>
+<tr>
+<td>Amazon Bedrock &#x2F; Google Vertex AI</td>
+<td>走云厂商账单</td>
+<td>已有云上合规与采购流程的企业</td>
+<td>通过 <code>CLAUDE_CODE_USE_BEDROCK=1</code> 或 <code>CLAUDE_CODE_USE_VERTEX=1</code> 及对应云凭据启用</td>
+</tr>
+</tbody></table>
+<p>脚本或 SDK 场景常用环境变量 <code>ANTHROPIC_API_KEY</code>；需要短期凭据时用 settings 里的 <code>apiKeyHelper</code> 指向一个输出 Key 的脚本，默认每 5 分钟或遇到 HTTP 401 时重新调用，可用 <code>CLAUDE_CODE_API_KEY_HELPER_TTL_MS</code> 调整间隔。macOS 上 Claude Code 把凭据存在系统钥匙串里。</p>
+<h2 id="记忆体系：CLAUDE-md"><a href="#记忆体系：CLAUDE-md" class="headerlink" title="记忆体系：CLAUDE.md"></a>记忆体系：CLAUDE.md</h2><p>CLAUDE.md 是启动时自动载入上下文的 Markdown 文件，用来告诉模型「这个项目怎么干活」。它每次会话都占用上下文，写什么、放哪一层都值得推敲。</p>
+<h3 id="三个位置与查找规则"><a href="#三个位置与查找规则" class="headerlink" title="三个位置与查找规则"></a>三个位置与查找规则</h3><table>
+<thead>
+<tr>
+<th>类型</th>
+<th>位置</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>项目记忆</td>
+<td><code>./CLAUDE.md</code></td>
+<td>团队共享：架构、命令、规范，提交进仓库</td>
+</tr>
+<tr>
+<td>用户记忆</td>
+<td><code>~/.claude/CLAUDE.md</code></td>
+<td>个人跨项目偏好</td>
+</tr>
+<tr>
+<td>项目本地记忆</td>
+<td><code>./CLAUDE.local.md</code></td>
+<td>个人的项目内偏好；当前文档已标为弃用，建议改用导入</td>
+</tr>
+</tbody></table>
+<p>查找规则有两条：</p>
+<ol>
+<li><strong>向上递归</strong>：从当前工作目录开始，一路向上读取每一级的 <code>CLAUDE.md</code> 和 <code>CLAUDE.local.md</code>。在 monorepo 的 <code>packages/api/</code> 下启动，根目录和 <code>packages/api/</code> 的 CLAUDE.md 都会被加载。</li>
+<li><strong>子目录按需</strong>：工作目录之下子目录里的 CLAUDE.md 不会在启动时加载，而是在模型读取该子目录的文件时才纳入。</li>
+</ol>
+<p>因此 monorepo 的合理布局是：根目录放全局约定和通用命令，各子包放自己的构建与测试说明，从哪一层启动就自然得到对应的组合。</p>
+<h3 id="导入"><a href="#导入" class="headerlink" title="@ 导入"></a>@ 导入</h3><p>CLAUDE.md 可以用 <code>@路径</code> 导入其他文件，相对路径和绝对路径都可以：</p>
+<figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">项目概览见 @README.md，可用的 npm 脚本见 @package.json。</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="section"># 个人偏好（不入库）</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="bullet">-</span> @~/.claude/my-project-instructions.md</span></span></code></pre></div></div></figure>
+
+<p>规则与边界：</p>
+<ul>
+<li>导入可递归，最多 5 层；<code>/memory</code> 可以查看当前实际加载了哪些记忆文件。</li>
+<li>行内代码和代码块里的 <code>@</code> 不会被当作导入，所以写 <code>@anthropic-ai/claude-code</code> 这类包名要放进反引号。</li>
+<li>官方弃用 <code>CLAUDE.local.md</code> 的理由是它在多个 git worktree 之间不共享；把个人内容放在家目录，再从项目 CLAUDE.md 里导入，每个 worktree 都能用到。代价是项目 CLAUDE.md 里会出现一行指向个人文件的导入，团队需要约定统一的文件名。</li>
+<li>导入的内容和 CLAUDE.md 本体一样全量进入上下文。把一份 3000 行的设计文档挂在导入里，等于每次会话都为它付费；长文档更适合写一句「设计细节见 docs&#x2F;design.md」，让模型需要时自己读。</li>
+</ul>
+<h3 id="写入方式"><a href="#写入方式" class="headerlink" title="写入方式"></a>写入方式</h3><ul>
+<li><code>/init</code>：让 Claude 分析仓库并生成一份 CLAUDE.md 初稿。它能提取出构建命令和目录结构，但写不出团队踩过的坑，生成后要人工删改再提交。</li>
+<li><code>#</code> 快捷写入：输入以 <code>#</code> 开头，例如 <code># 测试统一用 vitest，不要引入 jest</code>，Claude Code 会询问写进哪个记忆文件。适合在纠正模型时顺手沉淀。</li>
+<li><code>/memory</code>：用系统编辑器打开记忆文件，适合整理结构。</li>
+</ul>
+<h3 id="该写什么、不该写什么"><a href="#该写什么、不该写什么" class="headerlink" title="该写什么、不该写什么"></a>该写什么、不该写什么</h3><table>
+<thead>
+<tr>
+<th>适合写进 CLAUDE.md</th>
+<th>不适合</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>精确的命令：怎么跑单个测试、怎么做类型检查</td>
+<td>「保持代码整洁」这类没有判断标准的口号</td>
+</tr>
+<tr>
+<td>仓库特有的约束：哪些目录不能改、迁移文件怎么建</td>
+<td>lint &#x2F; formatter 已能自动保证的格式细节</td>
+</tr>
+<tr>
+<td>已知的坑：某个测试依赖本地服务、某个脚本很慢</td>
+<td>整本架构文档（改成按需阅读的指引）</td>
+</tr>
+<tr>
+<td>压缩时要保留什么（见下文 Summary instructions）</td>
+<td>密钥、内网地址、个人账号</td>
+</tr>
+</tbody></table>
+<p>官方给的写法建议很实用：具体（「用 2 空格缩进」胜过「格式要规范」），每条一个列表项，按主题用标题分组，并随项目演进定期修订。</p>
+<h2 id="settings-json：层级与优先级"><a href="#settings-json：层级与优先级" class="headerlink" title="settings.json：层级与优先级"></a>settings.json：层级与优先级</h2><h3 id="文件位置"><a href="#文件位置" class="headerlink" title="文件位置"></a>文件位置</h3><table>
+<thead>
+<tr>
+<th>层级</th>
+<th>路径</th>
+<th>是否入库</th>
+<th>典型内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用户</td>
+<td><code>~/.claude/settings.json</code></td>
+<td>否</td>
+<td>个人通用的权限放行、环境变量</td>
+</tr>
+<tr>
+<td>项目共享</td>
+<td><code>.claude/settings.json</code></td>
+<td>是</td>
+<td>团队统一的权限规则</td>
+</tr>
+<tr>
+<td>项目本地</td>
+<td><code>.claude/settings.local.json</code></td>
+<td>否（创建时 Claude Code 自动配置 git 忽略）</td>
+<td>个人在该项目的放行、模型选择</td>
+</tr>
+<tr>
+<td>企业托管</td>
+<td>macOS：<code>/Library/Application Support/ClaudeCode/managed-settings.json</code>；Linux &#x2F; WSL：<code>/etc/claude-code/managed-settings.json</code></td>
+<td>由管理员下发</td>
+<td>不可被覆盖的安全策略</td>
+</tr>
+</tbody></table>
+<p>企业托管文件名需要特别注意：当前官方文档写的是 <code>policies.json</code>，而 1.0.18 代码实际读取的是 <code>managed-settings.json</code>。部署后用 <code>/permissions</code> 查看规则列表，该界面会标注每条规则来自哪个文件，据此确认策略已生效。</p>
+<h3 id="优先级"><a href="#优先级" class="headerlink" title="优先级"></a>优先级</h3><p>从高到低：企业托管策略 &gt; 命令行参数 &gt; 项目本地 &gt; 项目共享 &gt; 用户。企业策略用于兜底，任何层级都不能放宽它；命令行参数（如 <code>--allowedTools</code>）适合一次性覆盖；项目本地高于项目共享，个人可以在自己机器上补充团队配置。</p>
+<h3 id="1-0-18-支持的配置键"><a href="#1-0-18-支持的配置键" class="headerlink" title="1.0.18 支持的配置键"></a>1.0.18 支持的配置键</h3><table>
+<thead>
+<tr>
+<th>键</th>
+<th>作用</th>
+<th>建议放在</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>permissions</code></td>
+<td><code>allow</code> &#x2F; <code>deny</code> 两个规则数组</td>
+<td>共享规则放项目层，个人放行放本地层</td>
+</tr>
+<tr>
+<td><code>env</code></td>
+<td>每次会话注入的环境变量</td>
+<td>与项目强相关的放项目层</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>默认模型（别名如 <code>sonnet</code>、<code>opus</code>，或完整模型名）</td>
+<td>本地或用户层；订阅类型决定可用模型，不宜统一</td>
+</tr>
+<tr>
+<td><code>includeCoAuthoredBy</code></td>
+<td>提交与 PR 是否附带 Claude 署名，默认 <code>true</code></td>
+<td>项目层，统一团队提交规范</td>
+</tr>
+<tr>
+<td><code>apiKeyHelper</code></td>
+<td>动态生成凭据的脚本</td>
+<td>用户层或企业层</td>
+</tr>
+<tr>
+<td><code>cleanupPeriodDays</code></td>
+<td>本地对话记录保留天数，默认 30</td>
+<td>用户层或企业层</td>
+</tr>
+<tr>
+<td><code>enableAllProjectMcpServers</code>、<code>enabledMcpjsonServers</code>、<code>disabledMcpjsonServers</code></td>
+<td>项目 <code>.mcp.json</code> 中 MCP 服务器的审批结果</td>
+<td>本地层（第 2 篇展开）</td>
+</tr>
+</tbody></table>
+<p>主题、通知方式、详细输出等界面偏好还在旧的全局配置里，通过 <code>claude config set -g &lt;key&gt; &lt;value&gt;</code> 修改（如 <code>theme</code>、<code>preferredNotifChannel</code>、<code>verbose</code>）。官方已声明 <code>claude config</code> 会逐步让位于 settings.json，新配置优先写进 settings 文件。</p>
+<h2 id="权限：规则语法与模式"><a href="#权限：规则语法与模式" class="headerlink" title="权限：规则语法与模式"></a>权限：规则语法与模式</h2><h3 id="规则语法"><a href="#规则语法" class="headerlink" title="规则语法"></a>规则语法</h3><p>规则格式为 <code>Tool(可选说明符)</code>，只写工具名表示匹配该工具的全部调用。<strong>deny 优先于 allow</strong>，同一操作同时命中两边时按拒绝处理。</p>
+<p><strong>Bash</strong></p>
+<ul>
+<li><code>Bash(npm run build)</code>：精确匹配这条命令。</li>
+<li><code>Bash(npm run test:*)</code>：匹配以 <code>npm run test</code> 开头的命令。</li>
+<li>规则能识别 <code>&amp;&amp;</code> 等 shell 操作符，<code>Bash(safe-cmd:*)</code> 不会顺带放行 <code>safe-cmd &amp;&amp; other-cmd</code>。</li>
+</ul>
+<p>1.0.18 的前缀匹配实现就是字符串 <code>startsWith</code>：<code>Bash(npm run test:*)</code> 同样会放行 <code>npm run test-reset-db</code>。要么让危险脚本的名字与放行前缀区分开，要么对这类脚本改用精确规则。</p>
+<p><strong>Read 与 Edit</strong></p>
+<ul>
+<li>遵循 gitignore 语法，相对路径以 <code>.claude/settings.json</code> 所在的项目目录为基准；<code>//</code> 开头表示绝对路径，<code>~/</code> 开头表示家目录。</li>
+<li><code>Edit(docs/**)</code>：允许或禁止修改 docs 目录；<code>Read(~/.zshrc)</code>：匹配读取家目录下的 <code>.zshrc</code>；<code>Edit(//tmp/scratch.txt)</code>：匹配绝对路径。</li>
+<li>Edit 规则作用于所有内置改文件工具（Edit、MultiEdit、Write 等）；Read 规则会尽力套用到 Grep、Glob、LS 这类读取工具，但官方措辞是 best-effort。</li>
+</ul>
+<p><strong>其他</strong></p>
+<ul>
+<li><code>WebFetch(domain:example.com)</code>：按域名匹配抓取请求。</li>
+<li><code>mcp__github</code>：匹配 github 这个 MCP 服务器的全部工具；<code>mcp__github__create_issue</code>：只匹配单个工具。服务器名是你在 Claude Code 里配置时起的名字。</li>
+</ul>
+<h3 id="deny-清单不是沙箱"><a href="#deny-清单不是沙箱" class="headerlink" title="deny 清单不是沙箱"></a>deny 清单不是沙箱</h3><p><code>Read(.env)</code> 能拦住 Read 工具，却拦不住模型发起 <code>cat .env</code> 或 <code>python -c &quot;print(open(&#39;.env&#39;).read())&quot;</code>；<code>Bash(curl:*)</code> 放在 deny 里，<code>wget</code> 和各种脚本语言照样能发请求。deny 规则的价值在于挡住「顺手」的误操作，真正的防线是：未放行的 Bash 命令默认要人确认。所以团队配置的思路是「allow 尽量窄、deny 挡明显的坑、其余交给人审」，而不是试图用 deny 穷举危险命令。</p>
+<h3 id="权限模式"><a href="#权限模式" class="headerlink" title="权限模式"></a>权限模式</h3><p>交互会话里按 Shift+Tab 在三种模式间循环，状态栏会显示当前模式：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>行为</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>默认</td>
+<td>按规则放行，其余逐次询问</td>
+<td>日常开发、陌生仓库</td>
+</tr>
+<tr>
+<td>auto-accept edits</td>
+<td>文件修改自动接受，Bash 仍按规则询问</td>
+<td>已经对齐方案、改动集中在代码文件时</td>
+</tr>
+<tr>
+<td>plan mode</td>
+<td>只分析与规划，不改文件、不执行命令</td>
+<td>动手前先让模型出方案，评审后再切回执行</td>
+</tr>
+</tbody></table>
+<p>第四种是 bypassPermissions，通过 <code>claude --dangerously-skip-permissions</code> 启用，跳过全部权限检查。官方只建议在隔离环境中使用，并提供了一套 devcontainer 参考实现：容器内用防火墙把出站流量限制在 npm registry、GitHub、Anthropic API 等白名单域名，其余一律拒绝。在自己的开发机上直接开 bypass，等于把 Bash 的最终决定权交给模型。</p>
+<p>1.0.18 的 settings 里还没有「默认启动模式」这个配置项，每次会话从默认模式开始。非交互场景的权限用 <code>--allowedTools</code> &#x2F; <code>--disallowedTools</code> 控制，见后文。</p>
+<p><code>/permissions</code> 可以随时查看和增删规则，以及每条规则来自哪个文件。</p>
+<h2 id="自定义斜杠命令"><a href="#自定义斜杠命令" class="headerlink" title="自定义斜杠命令"></a>自定义斜杠命令</h2><p>把常用提示词存成 Markdown 文件，就能像内置命令一样调用。</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>位置</th>
+<th>调用方式（1.0.18）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>项目命令</td>
+<td><code>.claude/commands/*.md</code></td>
+<td><code>/project:文件名</code></td>
+</tr>
+<tr>
+<td>个人命令</td>
+<td><code>~/.claude/commands/*.md</code></td>
+<td><code>/user:文件名</code></td>
+</tr>
+<tr>
+<td>子目录命名空间</td>
+<td><code>.claude/commands/frontend/component.md</code></td>
+<td><code>/project:frontend:component</code></td>
+</tr>
+</tbody></table>
+<p>一个修复 issue 的项目命令：</p>
+<figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="section"># 按团队规范修复 issue</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">修复 issue #$ARGUMENTS：</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="bullet">1.</span> 用 gh issue view 读取 issue 描述与评论</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="bullet">2.</span> 先写一个能复现问题的失败测试</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="bullet">3.</span> 修改实现直到测试通过，再运行 npm run typecheck 和 npm run lint</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="bullet">4.</span> 用一句话总结根因，写进提交信息</span></span></code></pre></div></div></figure>
+
+<p>调用：<code>/project:fix-issue 123</code>。</p>
+<p>这一版命令文件的实现细节决定了几条写法约束：</p>
+<ul>
+<li><strong>没有 frontmatter</strong>。文件内容原样作为用户消息发出，菜单里显示的描述取自第一个非空行（去掉开头的 <code>#</code>），超过 100 字符截断。所以第一行应当写成一句能说明用途的标题。</li>
+<li><strong><code>$ARGUMENTS</code> 只替换第一处</strong>。实现用的是字符串 <code>replace</code>，同一个文件里写两次 <code>$ARGUMENTS</code>，第二处会原样保留。需要多次引用参数时，在第一处引出后用「上述 issue」之类的指代。</li>
+<li><strong>没写 <code>$ARGUMENTS</code> 时</strong>，参数会以 <code>ARGUMENTS: &lt;参数&gt;</code> 的形式追加在提示词末尾。</li>
+<li><strong>命令不自带权限</strong>。命令里要求执行的 Bash 仍然走当前会话的权限规则，命令文件本身不能预先放行工具。</li>
+</ul>
+<p>命令和 CLAUDE.md 的分工可以按触发频率来判断：每次会话都该遵守的约束放 CLAUDE.md；只在特定任务时才需要的流程（修 issue、写迁移、做发布检查）做成命令，避免常驻上下文。</p>
+<h2 id="非交互模式与会话管理"><a href="#非交互模式与会话管理" class="headerlink" title="非交互模式与会话管理"></a>非交互模式与会话管理</h2><h3 id="p-与输出格式"><a href="#p-与输出格式" class="headerlink" title="-p 与输出格式"></a>-p 与输出格式</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">claude -p <span class="string">&quot;解释 src/auth/session.ts 的过期逻辑&quot;</span>          <span class="comment"># 执行后退出</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">cat</span> build.log | claude -p <span class="string">&quot;找出第一个真正的错误并说明原因&quot;</span>  <span class="comment"># 管道输入</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">claude -p <span class="string">&quot;...&quot;</span> --output-format json                      <span class="comment"># 输出单个 JSON 结果</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">claude -p <span class="string">&quot;...&quot;</span> --output-format stream-json               <span class="comment"># 按消息流式输出 JSON</span></span></span></code></pre></div></div></figure>
+
+<p>常用参数：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--output-format text / json / stream-json</code></td>
+<td>输出格式，脚本里用 json</td>
+</tr>
+<tr>
+<td><code>--max-turns N</code></td>
+<td>限制 agent 轮数，防止跑飞</td>
+</tr>
+<tr>
+<td><code>--allowedTools</code> &#x2F; <code>--disallowedTools</code></td>
+<td>本次运行额外放行或禁止的工具规则，如 <code>&quot;Bash(git diff:*)&quot;</code></td>
+</tr>
+<tr>
+<td><code>--model</code></td>
+<td>指定模型别名或全名</td>
+</tr>
+<tr>
+<td><code>--add-dir</code></td>
+<td>追加可访问的工作目录（1.0.18 新增）</td>
+</tr>
+<tr>
+<td><code>--verbose</code></td>
+<td>输出完整的逐轮过程，排查问题用</td>
+</tr>
+<tr>
+<td><code>--permission-prompt-tool</code></td>
+<td>指定一个 MCP 工具在非交互模式下裁决权限请求</td>
+</tr>
+</tbody></table>
+<p><code>-p</code> 模式下没有人可以点确认，未被规则放行、又需要授权的操作会被拒绝，除非用 <code>--permission-prompt-tool</code> 交给 MCP 工具裁决。脚本要能跑通，就必须把所需工具显式列进 <code>--allowedTools</code> 或项目 settings。</p>
+<h3 id="JSON-结果与退出码"><a href="#JSON-结果与退出码" class="headerlink" title="JSON 结果与退出码"></a>JSON 结果与退出码</h3><p>1.0.18 的 json 输出是一个 <code>type: &quot;result&quot;</code> 对象，关键字段有 <code>subtype</code>、<code>result</code>、<code>session_id</code>、<code>is_error</code>、<code>num_turns</code>、<code>duration_ms</code>，以及费用字段。<code>subtype</code> 有三个取值：<code>success</code>、<code>error_max_turns</code>、<code>error_during_execution</code>。</p>
+<p>这里有一个 CI 里很容易漏的坑：<strong>达到 <code>--max-turns</code> 上限或执行出错时，<code>is_error</code> 为 false，进程退出码仍是 0</strong>，text 模式下只是在标准输出打印一行 <code>Error: Reached max turns (N)</code>。脚本必须检查 <code>subtype</code>：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">#!/usr/bin/env bash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">set</span> -euo pipefail</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">out=$(git diff origin/main...HEAD | claude -p \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="string">&quot;审查这段 diff，只列出可能导致缺陷的问题，每条注明文件与行号&quot;</span> \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  --output-format json --max-turns 8 \</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  --allowedTools <span class="string">&quot;Read&quot;</span> <span class="string">&quot;Grep&quot;</span> <span class="string">&quot;Glob&quot;</span> <span class="string">&quot;Bash(git diff:*)&quot;</span> <span class="string">&quot;Bash(git log:*)&quot;</span>)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">if</span> [ <span class="string">&quot;<span class="subst">$(jq -r &#x27;.subtype&#x27; &lt;&lt;&lt;<span class="string">&quot;<span class="variable">$out</span>&quot;</span>)</span>&quot;</span> != <span class="string">&quot;success&quot;</span> ]; <span class="keyword">then</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="built_in">echo</span> <span class="string">&quot;Claude 未正常完成：<span class="subst">$(jq -r &#x27;.subtype&#x27; &lt;&lt;&lt;<span class="string">&quot;<span class="variable">$out</span>&quot;</span>)</span>&quot;</span> &gt;&amp;2</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="built_in">exit</span> 1</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">jq -r <span class="string">&#x27;.result&#x27;</span> &lt;&lt;&lt;<span class="string">&quot;<span class="variable">$out</span>&quot;</span> &gt; review.md</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">jq -r <span class="string">&#x27;.session_id&#x27;</span> &lt;&lt;&lt;<span class="string">&quot;<span class="variable">$out</span>&quot;</span> &gt; .claude-review-session</span></span></code></pre></div></div></figure>
+
+<h3 id="继续与恢复会话"><a href="#继续与恢复会话" class="headerlink" title="继续与恢复会话"></a>继续与恢复会话</h3><ul>
+<li><code>claude -c</code>（<code>--continue</code>）：继续当前目录最近一次对话；<code>claude -c -p &quot;再检查一遍类型错误&quot;</code> 可以在非交互模式下接着跑。</li>
+<li><code>claude -r &lt;session-id&gt; &quot;问题&quot;</code>（<code>--resume</code>）：按 ID 恢复指定会话；不带 ID 时进入交互式选择。上面脚本保存的 <code>session_id</code> 就可以用来追问：<code>claude -r &quot;$(cat .claude-review-session)&quot; -p &quot;针对第 2 条给出修复补丁&quot;</code>。</li>
+</ul>
+<h2 id="上下文与成本管理"><a href="#上下文与成本管理" class="headerlink" title="上下文与成本管理"></a>上下文与成本管理</h2><h3 id="上下文"><a href="#上下文" class="headerlink" title="上下文"></a>上下文</h3><ul>
+<li>默认开启自动压缩，上下文用到约 95% 时触发，输入框下方会显示「Context left until auto-compact」的剩余比例；可在 <code>/config</code> 里关闭。</li>
+<li><code>/compact [指令]</code> 手动压缩，可附带保留重点，如 <code>/compact 保留测试失败输出和已修改的文件列表</code>。也可以在 CLAUDE.md 里写一段 <code># Summary instructions</code>，让每次压缩都遵循同样的取舍。</li>
+<li><code>/clear</code> 清空对话历史。换任务时优先 <code>/clear</code>，而不是在一段长对话里连续切换主题：旧任务的文件内容和中间结论会持续占位，还可能误导新任务。</li>
+</ul>
+<h3 id="模型选择"><a href="#模型选择" class="headerlink" title="模型选择"></a>模型选择</h3><p><code>/model</code> 交互切换，<code>--model</code> 按次指定，settings 的 <code>model</code> 或环境变量 <code>ANTHROPIC_MODEL</code> 设置默认值。1.0.18 的选项随账号类型不同：</p>
+<table>
+<thead>
+<tr>
+<th>账号</th>
+<th>可选</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Console（API）</td>
+<td>默认（Sonnet 4）、Opus 4</td>
+<td>界面标注的价格：Sonnet 4 每百万 token 输入 &#x2F; 输出 $3 &#x2F; $15，Opus 4 为 $15 &#x2F; $75</td>
+</tr>
+<tr>
+<td>Max 订阅</td>
+<td>默认、Opus、Sonnet</td>
+<td>默认策略为 Opus 4 用到一定用量比例后切换 Sonnet 4；固定选 Opus 会约 5 倍速度消耗用量额度</td>
+</tr>
+<tr>
+<td>Pro 订阅</td>
+<td>Sonnet</td>
+<td>只有 Sonnet 4</td>
+</tr>
+</tbody></table>
+<p>提示词里的思考关键词会触发扩展思考，1.0.18 的代码里分三档预算：think 为 4000 token，think hard、think deeply 等为 10000 token，think harder、ultrathink 等为 31999 token。思考 token 按输出计费，适合用在方案设计和疑难排查上，不必挂在每条指令里。</p>
+<h3 id="成本"><a href="#成本" class="headerlink" title="成本"></a>成本</h3><ul>
+<li><code>/cost</code> 显示本次会话的 token 用量与费用；订阅用户执行时只会提示用量已包含在订阅内。</li>
+<li>官方给出的参考数据：开发者平均每人每天约 $6，90% 的用户日均低于 $12。</li>
+<li>即使空闲，也有少量后台调用（输入时的趣味提示语生成、为 <code>--resume</code> 生成的历史会话摘要等），官方估计通常每个会话低于 $0.04；<code>DISABLE_NON_ESSENTIAL_MODEL_CALLS=1</code> 可关闭非关键路径的模型调用。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>优先动作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>回答开始遗忘早先约定</td>
+<td><code>/compact</code> 并在指令里点名要保留的约定，或把约定写进 CLAUDE.md</td>
+</tr>
+<tr>
+<td>同一会话已换过多个任务</td>
+<td><code>/clear</code> 后重新描述当前任务</td>
+</tr>
+<tr>
+<td>模型反复全仓搜索</td>
+<td>在提示词里给出入口文件或目录，减少探索性读取</td>
+</tr>
+<tr>
+<td>API 账单超预期</td>
+<td>先看 <code>/cost</code> 与 Console 用量，再检查 CLAUDE.md 与导入的体积、是否滥用 Opus 与 ultrathink</td>
+</tr>
+</tbody></table>
+<h2 id="团队项目最小可用配置"><a href="#团队项目最小可用配置" class="headerlink" title="团队项目最小可用配置"></a>团队项目最小可用配置</h2><p>以一个 TypeScript 服务为例，入库的只有三样东西：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">repo/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── CLAUDE.md                  # 团队共享记忆</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">└── .claude/</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    ├── settings.json          # 团队共享权限</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    └── commands/</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        └── fix-issue.md       # 团队共享命令</span></span></code></pre></div></div></figure>
+
+<h3 id="CLAUDE-md-片段"><a href="#CLAUDE-md-片段" class="headerlink" title="CLAUDE.md 片段"></a>CLAUDE.md 片段</h3><figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="21"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="section"># 项目速览</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">订单服务，Node.js 20 + TypeScript，入口 src/server.ts，架构说明见 docs/architecture.md（需要时再读）。</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="section">## 常用命令</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="bullet">-</span> 单个测试：npm run test -- src/order/order.test.ts（全量约 6 分钟，非必要不跑）</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="bullet">-</span> 类型检查：npm run typecheck</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="bullet">-</span> 代码检查：npm run lint</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="section">## 约束</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="bullet">-</span> 数据库访问只经过 src/db/repo/，handler 里不直接写 SQL</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="bullet">-</span> migrations/ 下已合并的迁移文件不可修改，新增迁移用 npm run db:new</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="bullet">-</span> 错误统一抛 AppError 子类，由 HTTP 层转换状态码</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="section">## 完成标准</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="bullet">-</span> 提交前 typecheck 与 lint 必须通过，改动涉及的测试文件必须跑过</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="section">## 个人偏好（各自维护，不入库）</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="bullet">-</span> @~/.claude/order-service-instructions.md</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="section"># Summary instructions</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">压缩上下文时优先保留：失败的测试输出、已修改的文件列表、尚未完成的步骤。</span></span></code></pre></div></div></figure>
+
+<h3 id="claude-settings-json"><a href="#claude-settings-json" class="headerlink" title=".claude&#x2F;settings.json"></a>.claude&#x2F;settings.json</h3><figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="25"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;permissions&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;allow&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="string">&quot;Bash(npm run test:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="string">&quot;Bash(npm run typecheck)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="string">&quot;Bash(npm run lint)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="string">&quot;Bash(git status)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="string">&quot;Bash(git diff:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="string">&quot;Bash(git log:*)&quot;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="attr">&quot;deny&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="string">&quot;Read(.env)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="string">&quot;Read(.env.*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="string">&quot;Edit(migrations/**)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="string">&quot;Edit(.claude/settings.json)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="string">&quot;Edit(.claude/settings.local.json)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="string">&quot;Bash(git push:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="string">&quot;Bash(npm publish:*)&quot;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">  <span class="attr">&quot;env&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="attr">&quot;BASH_DEFAULT_TIMEOUT_MS&quot;</span><span class="punctuation">:</span> <span class="string">&quot;300000&quot;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">  <span class="attr">&quot;includeCoAuthoredBy&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>逐项说明：</p>
+<ul>
+<li><strong>allow 只放验证类命令</strong>。测试、类型检查、lint、只读 git 命令是模型最频繁、风险最低的操作，放行后能省掉大半确认；<code>npm install</code>、<code>git commit</code> 这类改变状态的命令仍然逐次确认。<code>npm run test:*</code> 用前缀规则，是为了覆盖 <code>npm run test -- 某个文件</code>；相应地，package.json 里不要出现以 <code>test</code> 开头的破坏性脚本。</li>
+<li><strong>deny 挡三类坑</strong>。<code>.env</code> 系列防止密钥被读进上下文（gitignore 语法下不带 <code>/</code> 的模式在任意层级都生效）；<code>migrations/**</code> 把 CLAUDE.md 里「已合并迁移不可改」的约束变成硬规则，新增迁移仍通过 <code>npm run db:new</code> 走 Bash 确认；<code>git push</code>、<code>npm publish</code> 这类对外产生影响的操作一律由人执行。</li>
+<li><strong>禁止改权限文件本身</strong>。否则在 auto-accept edits 模式下，模型对 settings 文件的修改无需确认，相当于可以给自己扩权。</li>
+<li><strong><code>BASH_DEFAULT_TIMEOUT_MS</code></strong>。Bash 工具默认超时 2 分钟，全量测试会被中途杀掉，模型可能误判为测试失败；调到 5 分钟（不超过默认 10 分钟的上限 <code>BASH_MAX_TIMEOUT_MS</code>）。</li>
+<li><strong>显式写出 <code>includeCoAuthoredBy</code></strong>。默认值就是 <code>true</code>，写出来是为了让团队对提交署名有明确约定，想关掉时只改这一处。</li>
+<li><strong>没有写 <code>model</code></strong>。成员的订阅类型不同，Pro 用户根本选不了 Opus，模型放在各自的 <code>.claude/settings.local.json</code> 或用户级配置里。</li>
+</ul>
+<p>个人补充放在 <code>.claude/settings.local.json</code>，例如：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;model&quot;</span><span class="punctuation">:</span> <span class="string">&quot;opus&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;permissions&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">&quot;allow&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;Bash(docker compose ps)&quot;</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>落地顺序建议：先 <code>/init</code> 生成 CLAUDE.md 初稿并人工精简，再提交 settings.json，跑一周后用 <code>/permissions</code> 回看大家频繁手动放行的命令，把其中安全的补进 allow。</p>
+<h2 id="2026-09-补记：一年后哪些建议需要调整"><a href="#2026-09-补记：一年后哪些建议需要调整" class="headerlink" title="2026-09 补记：一年后哪些建议需要调整"></a>2026-09 补记：一年后哪些建议需要调整</h2><p>本文写于 1.0.18，一年多来 Claude Code 迭代到 2.1.x，下表只列与本文内容直接相关的变化。</p>
+<table>
+<thead>
+<tr>
+<th>变化</th>
+<th>时间与版本</th>
+<th>对本文建议的影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>原生 Windows 支持（需 Git for Windows）</td>
+<td>2025-07-11，1.0.51</td>
+<td>「Windows 只能用 WSL」不再成立</td>
+</tr>
+<tr>
+<td>去掉命令的 <code>project:</code> &#x2F; <code>user:</code> 前缀；命令文件支持 frontmatter（<code>description</code>、<code>allowed-tools</code>）</td>
+<td>2025-06-16，1.0.25</td>
+<td>调用改为 <code>/fix-issue</code>，子目录命名空间在 1.0.45 恢复为 <code>/frontend:component</code>；「命令不能预先放行工具」只适用于写作时的版本</td>
+</tr>
+<tr>
+<td>命令内可用 <code>!</code> 执行 Bash 并注入输出、用 <code>@</code> 引用文件</td>
+<td>2025-06-19，1.0.30</td>
+<td>命令可以先收集 git 状态等上下文再交给模型，不必让模型自己去跑</td>
+</tr>
+<tr>
+<td>settings 新增 <code>permissions.defaultMode</code>、<code>additionalDirectories</code>（2025 年 7 月初的文档已列出），<code>ask</code> 规则（1.0.72）</td>
+<td>2025 年 7—8 月</td>
+<td>可以把团队默认模式写进配置；需要「总是询问」的命令放进 <code>ask</code></td>
+</tr>
+<tr>
+<td>Hooks</td>
+<td>2025-06-30，1.0.38</td>
+<td>「提交前必须跑 lint」这类约束可以用 hook 强制，而不只是写在 CLAUDE.md 里</td>
+</tr>
+<tr>
+<td>Checkpoints 与 <code>/rewind</code></td>
+<td>2025-09-29，2.0</td>
+<td>模型的文件修改可以回退，acceptEdits 的试错成本下降；Bash 产生的副作用不在回退范围内，git push、数据库操作的 deny 仍然必要</td>
+</tr>
+<tr>
+<td><code>attribution</code> 取代 <code>includeCoAuthoredBy</code></td>
+<td>2025-12-09，2.0.62</td>
+<td>最小配置里的署名项应改写为 <code>attribution</code></td>
+</tr>
+<tr>
+<td><code>.claude/rules/*.md</code> 规则目录，支持 <code>paths:</code> 条件加载</td>
+<td>2025-12-10，2.0.64</td>
+<td>过长的 CLAUDE.md 应按目录或文件类型拆成规则文件，只在相关文件被读取时加载</td>
+</tr>
+<tr>
+<td>移除 <code>#</code> 快捷写入记忆</td>
+<td>2025-12-15，2.0.70</td>
+<td>改为直接让 Claude 编辑 CLAUDE.md</td>
+</tr>
+<tr>
+<td>斜杠命令与 Skills 合并</td>
+<td>2026-01-09，2.1.3</td>
+<td><code>.claude/commands/</code> 下的文件继续可用；新写的流程建议做成 <code>.claude/skills/&lt;名称&gt;/SKILL.md</code></td>
+</tr>
+<tr>
+<td>npm 安装出现弃用提示，推荐原生安装</td>
+<td>2026-01-21，2.1.15</td>
+<td>安装一节整体过时，新的安装方式见表后</td>
+</tr>
+<tr>
+<td><code>/output-style</code> 并入 <code>/config</code></td>
+<td>2026-03-11，2.1.73</td>
+<td>输出风格改在 <code>/config</code> 里设置</td>
+</tr>
+<tr>
+<td>Auto mode：研究预览（2026-03-24），2026-08-14 起对 Pro &#x2F; Max &#x2F; Team 默认开启</td>
+<td>2.1.x</td>
+<td>权限模式新增 <code>auto</code>：后台安全检查确认操作符合你的请求后自动放行。bypassPermissions 的使用场景进一步收窄；本文 allow &#x2F; deny 清单的思路不变，它们仍是 auto 模式之外的确定性边界</td>
+</tr>
+<tr>
+<td>支持 AGENTS.md：项目没有 CLAUDE.md 时读取 AGENTS.md</td>
+<td>2026-09-18，2.1.277</td>
+<td>已维护 AGENTS.md 的仓库不必再复制一份 CLAUDE.md</td>
+</tr>
+<tr>
+<td>默认模型：Sonnet 4.5（2025-09-29）、Opus 4.5（2025-11-24）、Opus 4.6（2026-02-05）；2026-06-30 起 Sonnet 5 为默认，2026-09-22 起 Opus 5.5 为默认 Opus</td>
+<td>—</td>
+<td>本文的模型选项与价格表只反映 2025 年 6 月的状态，以 <code>/model</code> 实际显示为准</td>
+</tr>
+</tbody></table>
+<p>当前推荐的安装方式：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># macOS / Linux / WSL：原生安装，后台自动更新</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">curl -fsSL https://claude.ai/install.sh | bash</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># 包管理器安装（不自动更新，需手动 upgrade）</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">brew install --cask claude-code</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">winget install Anthropic.ClaudeCode</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="comment"># 已有 npm 安装：迁移到原生安装</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">claude install</span></span></code></pre></div></div></figure>
+
+<p>npm 包仍然可以用，但自 2.1.198 起要求 Node.js 22 及以上。</p>
+<p>另外几处细节也有变化：</p>
+<ul>
+<li><strong>权限模式</strong>：除 <code>auto</code> 外，当前还有 <code>dontAsk</code> 模式，凡是需要询问的操作一律拒绝，只执行预先放行的工具，适合无人值守脚本；<code>permissions.disableAutoMode</code> 可以在托管策略里禁用 auto 模式。</li>
+<li><strong>Bash 规则写法</strong>：当前文档把 <code>Bash(npm run test *)</code> 这种空格加 <code>*</code> 的写法作为主写法，确认对话框「不再询问」时写入的也是这种形式；<code>:*</code> 后缀仍然等价可用。</li>
+<li><strong>CLAUDE.local.md</strong>：当前文档已不再标注弃用，它与 CLAUDE.md 一样逐级加载，适合放不入库的个人项目偏好；跨 worktree 共享仍然推荐从家目录导入。</li>
+<li><strong>企业托管</strong>：<code>managed-settings.json</code> 之外，还可以通过 MDM 或 claude.ai 控制台下发的服务端托管设置分发策略。</li>
+</ul>
+<p>回头看，本文最需要修正的是三处：安装方式改为原生安装；团队配置里的署名项改用 <code>attribution</code>，并按需加上 <code>defaultMode</code>；超过百行的 CLAUDE.md 拆到 <code>.claude/rules/</code>。上下文、权限、扩展三个面的划分，以及「allow 窄、deny 挡坑、其余人审」的权限思路，到现在仍然适用。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/07/08/ai-tools/Claude-Code-02-MCP%E6%B7%B1%E5%BA%A6%E9%85%8D%E7%BD%AE/">Claude Code MCP 服务器深度配置</a></h3>
+        <p>基于 Claude Code 1.0.44 与 MCP 2025-06-18 规范…</p>
+        <a class="btn primary" href="/2025/07/08/ai-tools/Claude-Code-02-MCP%E6%B7%B1%E5%BA%A6%E9%85%8D%E7%BD%AE/">继续阅读</a>
+      </div>
+      
+      
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%AE%83%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9A%E8%B7%91%E5%9C%A8%E7%BB%88%E7%AB%AF%E9%87%8C%E7%9A%84%E5%B7%A5%E5%85%B7%E8%B0%83%E7%94%A8%E5%BE%AA%E7%8E%AF" data-toc-target="它是什么：跑在终端里的工具调用循环"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">它是什么：跑在终端里的工具调用循环</span></a><a class="toc-level-2" href="#%E5%AE%89%E8%A3%85%E4%B8%8E%E8%AE%A4%E8%AF%81" data-toc-target="安装与认证"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">安装与认证</span></a><a class="toc-level-3" href="#%E5%AE%89%E8%A3%85" data-toc-target="安装"><span class="toc-text">安装</span></a><a class="toc-level-3" href="#%E8%AE%A4%E8%AF%81%E6%96%B9%E5%BC%8F%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="认证方式怎么选"><span class="toc-text">认证方式怎么选</span></a><a class="toc-level-2" href="#%E8%AE%B0%E5%BF%86%E4%BD%93%E7%B3%BB%EF%BC%9ACLAUDE-md" data-toc-target="记忆体系：CLAUDE-md"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">记忆体系：CLAUDE.md</span></a><a class="toc-level-3" href="#%E4%B8%89%E4%B8%AA%E4%BD%8D%E7%BD%AE%E4%B8%8E%E6%9F%A5%E6%89%BE%E8%A7%84%E5%88%99" data-toc-target="三个位置与查找规则"><span class="toc-text">三个位置与查找规则</span></a><a class="toc-level-3" href="#%E5%AF%BC%E5%85%A5" data-toc-target="导入"><span class="toc-text">@ 导入</span></a><a class="toc-level-3" href="#%E5%86%99%E5%85%A5%E6%96%B9%E5%BC%8F" data-toc-target="写入方式"><span class="toc-text">写入方式</span></a><a class="toc-level-3" href="#%E8%AF%A5%E5%86%99%E4%BB%80%E4%B9%88%E3%80%81%E4%B8%8D%E8%AF%A5%E5%86%99%E4%BB%80%E4%B9%88" data-toc-target="该写什么、不该写什么"><span class="toc-text">该写什么、不该写什么</span></a><a class="toc-level-2" href="#settings-json%EF%BC%9A%E5%B1%82%E7%BA%A7%E4%B8%8E%E4%BC%98%E5%85%88%E7%BA%A7" data-toc-target="settings-json：层级与优先级"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">settings.json：层级与优先级</span></a><a class="toc-level-3" href="#%E6%96%87%E4%BB%B6%E4%BD%8D%E7%BD%AE" data-toc-target="文件位置"><span class="toc-text">文件位置</span></a><a class="toc-level-3" href="#%E4%BC%98%E5%85%88%E7%BA%A7" data-toc-target="优先级"><span class="toc-text">优先级</span></a><a class="toc-level-3" href="#1-0-18-%E6%94%AF%E6%8C%81%E7%9A%84%E9%85%8D%E7%BD%AE%E9%94%AE" data-toc-target="1-0-18-支持的配置键"><span class="toc-text">1.0.18 支持的配置键</span></a><a class="toc-level-2" href="#%E6%9D%83%E9%99%90%EF%BC%9A%E8%A7%84%E5%88%99%E8%AF%AD%E6%B3%95%E4%B8%8E%E6%A8%A1%E5%BC%8F" data-toc-target="权限：规则语法与模式"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">权限：规则语法与模式</span></a><a class="toc-level-3" href="#%E8%A7%84%E5%88%99%E8%AF%AD%E6%B3%95" data-toc-target="规则语法"><span class="toc-text">规则语法</span></a><a class="toc-level-3" href="#deny-%E6%B8%85%E5%8D%95%E4%B8%8D%E6%98%AF%E6%B2%99%E7%AE%B1" data-toc-target="deny-清单不是沙箱"><span class="toc-text">deny 清单不是沙箱</span></a><a class="toc-level-3" href="#%E6%9D%83%E9%99%90%E6%A8%A1%E5%BC%8F" data-toc-target="权限模式"><span class="toc-text">权限模式</span></a><a class="toc-level-2" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E6%96%9C%E6%9D%A0%E5%91%BD%E4%BB%A4" data-toc-target="自定义斜杠命令"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">自定义斜杠命令</span></a><a class="toc-level-2" href="#%E9%9D%9E%E4%BA%A4%E4%BA%92%E6%A8%A1%E5%BC%8F%E4%B8%8E%E4%BC%9A%E8%AF%9D%E7%AE%A1%E7%90%86" data-toc-target="非交互模式与会话管理"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">非交互模式与会话管理</span></a><a class="toc-level-3" href="#p-%E4%B8%8E%E8%BE%93%E5%87%BA%E6%A0%BC%E5%BC%8F" data-toc-target="p-与输出格式"><span class="toc-text">-p 与输出格式</span></a><a class="toc-level-3" href="#JSON-%E7%BB%93%E6%9E%9C%E4%B8%8E%E9%80%80%E5%87%BA%E7%A0%81" data-toc-target="JSON-结果与退出码"><span class="toc-text">JSON 结果与退出码</span></a><a class="toc-level-3" href="#%E7%BB%A7%E7%BB%AD%E4%B8%8E%E6%81%A2%E5%A4%8D%E4%BC%9A%E8%AF%9D" data-toc-target="继续与恢复会话"><span class="toc-text">继续与恢复会话</span></a><a class="toc-level-2" href="#%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B8%8E%E6%88%90%E6%9C%AC%E7%AE%A1%E7%90%86" data-toc-target="上下文与成本管理"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">上下文与成本管理</span></a><a class="toc-level-3" href="#%E4%B8%8A%E4%B8%8B%E6%96%87" data-toc-target="上下文"><span class="toc-text">上下文</span></a><a class="toc-level-3" href="#%E6%A8%A1%E5%9E%8B%E9%80%89%E6%8B%A9" data-toc-target="模型选择"><span class="toc-text">模型选择</span></a><a class="toc-level-3" href="#%E6%88%90%E6%9C%AC" data-toc-target="成本"><span class="toc-text">成本</span></a><a class="toc-level-2" href="#%E5%9B%A2%E9%98%9F%E9%A1%B9%E7%9B%AE%E6%9C%80%E5%B0%8F%E5%8F%AF%E7%94%A8%E9%85%8D%E7%BD%AE" data-toc-target="团队项目最小可用配置"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">团队项目最小可用配置</span></a><a class="toc-level-3" href="#CLAUDE-md-%E7%89%87%E6%AE%B5" data-toc-target="CLAUDE-md-片段"><span class="toc-text">CLAUDE.md 片段</span></a><a class="toc-level-3" href="#claude-settings-json" data-toc-target="claude-settings-json"><span class="toc-text">.claude/settings.json</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E4%B8%80%E5%B9%B4%E5%90%8E%E5%93%AA%E4%BA%9B%E5%BB%BA%E8%AE%AE%E9%9C%80%E8%A6%81%E8%B0%83%E6%95%B4" data-toc-target="2026-09-补记：一年后哪些建议需要调整"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">2026-09 补记：一年后哪些建议需要调整</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/claude-code-workflow/" style="--rail: 13%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">1 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%AE%83%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9A%E8%B7%91%E5%9C%A8%E7%BB%88%E7%AB%AF%E9%87%8C%E7%9A%84%E5%B7%A5%E5%85%B7%E8%B0%83%E7%94%A8%E5%BE%AA%E7%8E%AF" data-toc-target="它是什么：跑在终端里的工具调用循环" data-title="01 · 它是什么：跑在终端里的工具调用循环" aria-label="它是什么：跑在终端里的工具调用循环"></a><a class="toc-strip__dot" href="#%E5%AE%89%E8%A3%85%E4%B8%8E%E8%AE%A4%E8%AF%81" data-toc-target="安装与认证" data-title="02 · 安装与认证" aria-label="安装与认证"></a><a class="toc-strip__dot" href="#%E8%AE%B0%E5%BF%86%E4%BD%93%E7%B3%BB%EF%BC%9ACLAUDE-md" data-toc-target="记忆体系：CLAUDE-md" data-title="03 · 记忆体系：CLAUDE.md" aria-label="记忆体系：CLAUDE.md"></a><a class="toc-strip__dot" href="#settings-json%EF%BC%9A%E5%B1%82%E7%BA%A7%E4%B8%8E%E4%BC%98%E5%85%88%E7%BA%A7" data-toc-target="settings-json：层级与优先级" data-title="04 · settings.json：层级与优先级" aria-label="settings.json：层级与优先级"></a><a class="toc-strip__dot" href="#%E6%9D%83%E9%99%90%EF%BC%9A%E8%A7%84%E5%88%99%E8%AF%AD%E6%B3%95%E4%B8%8E%E6%A8%A1%E5%BC%8F" data-toc-target="权限：规则语法与模式" data-title="05 · 权限：规则语法与模式" aria-label="权限：规则语法与模式"></a><a class="toc-strip__dot" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E6%96%9C%E6%9D%A0%E5%91%BD%E4%BB%A4" data-toc-target="自定义斜杠命令" data-title="06 · 自定义斜杠命令" aria-label="自定义斜杠命令"></a><a class="toc-strip__dot" href="#%E9%9D%9E%E4%BA%A4%E4%BA%92%E6%A8%A1%E5%BC%8F%E4%B8%8E%E4%BC%9A%E8%AF%9D%E7%AE%A1%E7%90%86" data-toc-target="非交互模式与会话管理" data-title="07 · 非交互模式与会话管理" aria-label="非交互模式与会话管理"></a><a class="toc-strip__dot" href="#%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B8%8E%E6%88%90%E6%9C%AC%E7%AE%A1%E7%90%86" data-toc-target="上下文与成本管理" data-title="08 · 上下文与成本管理" aria-label="上下文与成本管理"></a><a class="toc-strip__dot" href="#%E5%9B%A2%E9%98%9F%E9%A1%B9%E7%9B%AE%E6%9C%80%E5%B0%8F%E5%8F%AF%E7%94%A8%E9%85%8D%E7%BD%AE" data-toc-target="团队项目最小可用配置" data-title="09 · 团队项目最小可用配置" aria-label="团队项目最小可用配置"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E4%B8%80%E5%B9%B4%E5%90%8E%E5%93%AA%E4%BA%9B%E5%BB%BA%E8%AE%AE%E9%9C%80%E8%A6%81%E8%B0%83%E6%95%B4" data-toc-target="2026-09-补记：一年后哪些建议需要调整" data-title="10 · 2026-09 补记：一年后哪些建议需要调整" aria-label="2026-09 补记：一年后哪些建议需要调整"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"ai-tools/Claude-Code-01-核心概念与配置","title":"Claude Code 核心概念与基础配置","url":"/2025/06/10/ai-tools/Claude-Code-01-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5%E4%B8%8E%E9%85%8D%E7%BD%AE/","path":"claude-code-workflow","index":0,"total":8,"next":{"title":"Claude Code MCP 服务器深度配置","url":"/2025/07/08/ai-tools/Claude-Code-02-MCP%E6%B7%B1%E5%BA%A6%E9%85%8D%E7%BD%AE/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

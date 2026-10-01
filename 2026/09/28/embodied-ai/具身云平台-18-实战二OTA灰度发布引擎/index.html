@@ -1,0 +1,712 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 18 章 实战二：OTA 灰度发布引擎——让坏模型永远到不了全量 · 飞轮之道</title>
+<meta name="description" content="p02 实现了第 9 章 OTA 2.0 的核心：签名制品、多维兼容矩阵、端侧双槽 Agent、以作业质量为门禁的灰度环，并用 200 台机队仿真验证门禁的统计特性。本章还完整复盘了编写 p02 时踩到的一个真实缺陷——门禁没有统计显著性。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-18-%E5%AE%9E%E6%88%98%E4%BA%8COTA%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83%E5%BC%95%E6%93%8E/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 18 章 实战二：OTA 灰度发布引擎——让坏模型永远到不了全量 · 飞轮之道">
+<meta property="og:description" content="p02 实现了第 9 章 OTA 2.0 的核心：签名制品、多维兼容矩阵、端侧双槽 Agent、以作业质量为门禁的灰度环，并用 200 台机队仿真验证门禁的统计特性。本章还完整复盘了编写 p02 时踩到的一个真实缺陷——门禁没有统计显著性。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-18-%E5%AE%9E%E6%88%98%E4%BA%8COTA%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83%E5%BC%95%E6%93%8E/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">实战</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 19 / 28 篇</a>
+    </div>
+    <h1>第 18 章 实战二：OTA 灰度发布引擎——让坏模型永远到不了全量</h1>
+    <p class="article-deck">p02 实现了第 9 章 OTA 2.0 的核心：签名制品、多维兼容矩阵、端侧双槽 Agent、以作业质量为门禁的灰度环，并用 200 台机队仿真验证门禁的统计特性。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>7 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/OTA/">#OTA</a><a class="article-meta__tag" href="/tags/%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83/">#灰度发布</a><a class="article-meta__tag" href="/tags/%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE/">#实战项目</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>门禁要用分布证明：多种子验证误报率与漏报率。</li><li>误报门禁比没有更危险：会被习惯性放行。</li><li>确认是不可逆的安全决定：全量后提升安全下限、释放旧槽。</li><li>分站点取证：问题常常只在一个站点出现。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：p02 实现了第 9 章 OTA 2.0 的核心：签名制品、多维兼容矩阵、端侧双槽 Agent、以作业质量为门禁的灰度环，并用 200 台机队仿真验证门禁的统计特性。本章还完整复盘了编写 p02 时踩到的一个真实缺陷——<strong>门禁没有统计显著性</strong>。<br><strong>代码位置</strong>：<code>code/p02-ota-rollout</code>｜<strong>对应理论</strong>：第 6 章（引擎矩阵）、第 9 章（OTA 2.0）｜<strong>建议学时</strong>：6 小时</p>
+</blockquote>
+<h2 id="18-1-目标与验收"><a href="#18-1-目标与验收" class="headerlink" title="18.1 目标与验收"></a>18.1 目标与验收</h2><h3 id="18-1-1-四个剧本"><a href="#18-1-1-四个剧本" class="headerlink" title="18.1.1 四个剧本"></a>18.1.1 四个剧本</h3><table>
+<thead>
+<tr>
+<th>剧本</th>
+<th>输入</th>
+<th>期望结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>good</td>
+<td>真实更好的模型 2.3.0</td>
+<td>五个环逐环通过，到达全量</td>
+</tr>
+<tr>
+<td>bad</td>
+<td>在 sh-02（反光包装多）显著退化的 2.3.1</td>
+<td>在包含 sh-02 的多站点环破线 → 回滚 + 冻结 + 分站点取证</td>
+</tr>
+<tr>
+<td>tampered</td>
+<td>分发链路中字节被替换</td>
+<td>端侧摘要校验失败 → 暂停</td>
+</tr>
+<tr>
+<td>downgrade</td>
+<td>带已知漏洞的旧版本 2.1.9</td>
+<td>端侧防回滚拒绝 → 暂停</td>
+</tr>
+</tbody></table>
+<p>交付前验收：<strong>14 项测试全部通过</strong>，其中包括多随机种子的统计测试；pyflakes 无告警。</p>
+<h2 id="18-2-架构"><a href="#18-2-架构" class="headerlink" title="18.2 架构"></a>18.2 架构</h2><h3 id="18-2-1-模块与数据流"><a href="#18-2-1-模块与数据流" class="headerlink" title="18.2.1 模块与数据流"></a>18.2.1 模块与数据流</h3><pre class="mermaid">flowchart LR
+  subgraph Cloud["云端"]
+    AS["artifacts.py&lt;br/&gt;不可变制品库 + 冻结"] --&gt; RE["rollout.py&lt;br/&gt;环计划 · 烘烤 · 门禁 · 回滚"]
+    SG["signing.py&lt;br/&gt;Ed25519"] --&gt; AS
+    CP["compat.py&lt;br/&gt;兼容矩阵"] --&gt; RE
+  end
+  subgraph Fleet["200 台机队（fleet_sim.py）"]
+    AG["agent.py × 200&lt;br/&gt;窗口 · 预检 · 双槽 · 观察期"]
+  end
+  RE --&gt;|"清单 + 字节"| AG
+  AG --&gt;|"安装回执 / 作业结果"| RE</pre>
+
+
+<h3 id="18-2-2-机队构成"><a href="#18-2-2-机队构成" class="headerlink" title="18.2.2 机队构成"></a>18.2.2 机队构成</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>设置</th>
+<th>用意</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>站点</td>
+<td>lab（内部）+ sh-01 &#x2F; sh-02 &#x2F; sz-01 &#x2F; wh-01</td>
+<td>环 0 用内部设备，多站点环暴露站点差异</td>
+</tr>
+<tr>
+<td>主控</td>
+<td>80% Thor（hum-w2）、20% Orin（amr-x1，跑自己的导航模型）</td>
+<td>验证兼容矩阵：Thor 引擎永不下发到 Orin</td>
+</tr>
+<tr>
+<td>健康分</td>
+<td>0.5–1.0 随机</td>
+<td>健康分低于 0.6 的设备不纳入本次发布</td>
+</tr>
+<tr>
+<td>设备状态</td>
+<td>部分未充电、部分忙</td>
+<td>验证窗口条件（等待而不是失败）</td>
+</tr>
+</tbody></table>
+<h2 id="18-3-端侧-Agent"><a href="#18-3-端侧-Agent" class="headerlink" title="18.3 端侧 Agent"></a>18.3 端侧 Agent</h2><h3 id="18-3-1-状态与槽位"><a href="#18-3-1-状态与槽位" class="headerlink" title="18.3.1 状态与槽位"></a>18.3.1 状态与槽位</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">install</span>(<span class="params">self, manifest, blob, dev, self_test=<span class="keyword">lambda</span> m: <span class="literal">True</span></span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="keyword">if</span> (w := <span class="variable language_">self</span>.window_ok(dev)):</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">        <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;stage&quot;</span>: <span class="string">&quot;window&quot;</span>, <span class="string">&quot;reason&quot;</span>: w&#125;          <span class="comment"># 等待窗口，不是失败</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="keyword">if</span> (r := <span class="variable language_">self</span>.precheck(manifest, blob)):                          <span class="comment"># 签名 → 摘要 → 兼容 → 安全版本</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="variable language_">self</span>.state = <span class="string">&quot;FAILED&quot;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;stage&quot;</span>: <span class="string">&quot;verify&quot;</span>, <span class="string">&quot;reason&quot;</span>: r&#125;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    standby = <span class="string">&quot;B&quot;</span> <span class="keyword">if</span> <span class="variable language_">self</span>.active == <span class="string">&quot;A&quot;</span> <span class="keyword">else</span> <span class="string">&quot;A&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="variable language_">self</span>.slots[standby] = manifest                                    <span class="comment"># 预加载到备槽</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> self_test(manifest):                                       <span class="comment"># 固定样例推理自检</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="variable language_">self</span>.slots[standby], <span class="variable language_">self</span>.state = <span class="literal">None</span>, <span class="string">&quot;FAILED&quot;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;stage&quot;</span>: <span class="string">&quot;self_test&quot;</span>, <span class="string">&quot;reason&quot;</span>: <span class="string">&quot;self test failed&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="variable language_">self</span>.previous, <span class="variable language_">self</span>.active, <span class="variable language_">self</span>.state = <span class="variable language_">self</span>.active, standby, <span class="string">&quot;OBSERVING&quot;</span>   <span class="comment"># 原子切换</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">True</span>, <span class="string">&quot;stage&quot;</span>: <span class="string">&quot;observing&quot;</span>, <span class="string">&quot;version&quot;</span>: manifest[<span class="string">&quot;version&quot;</span>]&#125;</span></span></code></pre></div></div></figure>
+
+<h3 id="18-3-2-业务回滚与安全回滚的区别"><a href="#18-3-2-业务回滚与安全回滚的区别" class="headerlink" title="18.3.2 业务回滚与安全回滚的区别"></a>18.3.2 业务回滚与安全回滚的区别</h3><table>
+<thead>
+<tr>
+<th>操作</th>
+<th>何时</th>
+<th>安全版本下限</th>
+<th>旧槽</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>rollback()</code></td>
+<td>观察期内门禁破线</td>
+<td>不变（旧版本仍然合法）</td>
+<td>切回</td>
+</tr>
+<tr>
+<td><code>confirm()</code></td>
+<td>全量完成、观察期结束</td>
+<td><strong>提升到新版本的安全版本</strong></td>
+<td>释放</td>
+</tr>
+<tr>
+<td>安装更低安全版本</td>
+<td>任何时候</td>
+<td>—</td>
+<td>拒绝（防回滚）</td>
+</tr>
+</tbody></table>
+<p>测试 <code>test_confirm_raises_security_floor_and_releases_old_slot</code> 验证：确认之后既无法秒级回滚，也无法再安装更低安全版本的制品。这个取舍是有意的——<strong>确认是一个不可逆的安全决定</strong>，所以放在全量完成之后。</p>
+<h2 id="18-4-灰度引擎"><a href="#18-4-灰度引擎" class="headerlink" title="18.4 灰度引擎"></a>18.4 灰度引擎</h2><h3 id="18-4-1-一次发布的时序"><a href="#18-4-1-一次发布的时序" class="headerlink" title="18.4.1 一次发布的时序"></a>18.4.1 一次发布的时序</h3><pre class="mermaid">---
+title: "p02 一次模型发布：环 → 安装 → 烘烤 → 门禁"
+---
+sequenceDiagram
+  participant E as RolloutEngine
+  participant S as ArtifactStore
+  participant A as Agent × N&lt;br/&gt;(本环设备)
+  participant C as 对照组设备
+  E-&gt;&gt;S: get(artifact_id)（已冻结则拒绝）
+  E-&gt;&gt;E: plan()：兼容过滤 → 健康分排序 → 五个环
+  loop 每个环
+  E-&gt;&gt;A: install(manifest, blob, 设备状态)
+  A--&gt;&gt;E: ok / 窗口等待 / 校验失败原因
+  alt 安装失败率 &gt; 1%
+  E-&gt;&gt;E: PAUSE + 冻结 + 回滚已升级设备
+  end
+  loop 烘烤轮次（样本不足继续）
+  E-&gt;&gt;A: 实验组作业（按新版本质量）
+  E-&gt;&gt;C: 对照组作业（同站点优先，不足则全机队）
+  E-&gt;&gt;E: evaluate_gate(实验组, 对照组)
+  end
+  alt 破线
+  E-&gt;&gt;A: rollback()（全部已升级设备）
+  E-&gt;&gt;S: freeze()
+  E-&gt;&gt;E: 分站点取证
+  end
+  end
+  E-&gt;&gt;A: 全部通过 → confirm()</pre>
+
+
+<h3 id="18-4-2-good-剧本实际输出"><a href="#18-4-2-good-剧本实际输出" class="headerlink" title="18.4.2 good 剧本实际输出"></a>18.4.2 good 剧本实际输出</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">发布结果：COMPLETED  制品：pick-vla-2.3.0-thor-jp7.1-fp8  已冻结：False</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  ring0-internal     设备  3 安装  3 实验组 成功率 0.973 介入率 0.044 → PASS</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  ring1-single-site  设备  6 安装  6 实验组 成功率 0.956 介入率 0.033 → PASS</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  ring2-multi-site   设备 25 安装 25 实验组 成功率 0.960 介入率 0.044 → PASS</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  ring3-half         设备 31 安装 31 实验组 成功率 0.953 介入率 0.040 → PASS</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  ring4-full         设备 62 安装 62 实验组 成功率 0.952 介入率 0.039 → PASS</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">机队版本分布：&#123;&#x27;2.2.0&#x27;: 33, &#x27;2.3.0&#x27;: 127, &#x27;1.4.0&#x27;: 40&#125;</span></span></code></pre></div></div></figure>
+
+<p>33 台留在 2.2.0 的是健康分低于 0.6 的设备（先修设备、再补升级），40 台 1.4.0 是 Orin 机型（兼容矩阵排除）。</p>
+<h3 id="18-4-3-bad-剧本实际输出"><a href="#18-4-3-bad-剧本实际输出" class="headerlink" title="18.4.3 bad 剧本实际输出"></a>18.4.3 bad 剧本实际输出</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">发布结果：ROLLED_BACK  制品：pick-vla-2.3.1-thor-jp7.1-fp8  已冻结：True</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  ring0-internal     设备  3 → PASS            （内部设备没有反光包装场景）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  ring1-single-site  设备  6 → PASS            （sh-01 上退化很轻微）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  ring2-multi-site   设备 25 实验组 成功率 0.905 介入率 0.118 / 对照组 0.942 0.046</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">                     → ROLLBACK [&#x27;success drop 0.037&#x27;, &#x27;intervention rise 0.046-&gt;0.118&#x27;]</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">                     取证·实验组分站点 sh-02: 成功率 0.858 介入率 0.190；sz-01: 0.922 / 0.066；wh-01: 0.950 / 0.079</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">机队版本分布：&#123;&#x27;2.2.0&#x27;: 160, &#x27;1.4.0&#x27;: 40&#125;</span></span></code></pre></div></div></figure>
+
+<p>这个输出几乎就是第 9 章案例推演的现场：<strong>前两个环都通过了，因为问题只在特定站点出现</strong>；多站点环把它暴露出来，分站点取证直接指向 sh-02，所有已升级设备（包括前两环的）被回滚，制品被冻结。</p>
+<h2 id="18-5-真实缺陷复盘：门禁没有统计显著性"><a href="#18-5-真实缺陷复盘：门禁没有统计显著性" class="headerlink" title="18.5 真实缺陷复盘：门禁没有统计显著性"></a>18.5 真实缺陷复盘：门禁没有统计显著性</h2><h3 id="18-5-1-现象"><a href="#18-5-1-现象" class="headerlink" title="18.5.1 现象"></a>18.5.1 现象</h3><p>p02 的第一版门禁只比较阈值：成功率下降超过 2 个百分点或介入率上升超过 30% 即破线。第一次运行 good 剧本，<strong>好模型在环 0 被回滚</strong>，理由是“成功率下降 0.033”。</p>
+<h3 id="18-5-2-分析"><a href="#18-5-2-分析" class="headerlink" title="18.5.2 分析"></a>18.5.2 分析</h3><p>环 0 只有 3 台内部设备，实验组 240 个任务、对照组更少。在成功率约 94% 时，两组差值的标准误约 2.4 个百分点——<strong>3.3 个百分点的差异完全在噪声范围内</strong>。同样的原因也让 bad 剧本在环 0 以错误的理由被回滚（它本应在多站点环以“介入率上升”的理由被拦下）。</p>
+<h3 id="18-5-3-修复"><a href="#18-5-3-修复" class="headerlink" title="18.5.3 修复"></a>18.5.3 修复</h3><table>
+<thead>
+<tr>
+<th>修改</th>
+<th>做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>显著性</td>
+<td>破线必须同时满足“超过阈值”与“两比例 z 检验 z &gt; 2”</td>
+</tr>
+<tr>
+<td>最小样本</td>
+<td>实验组至少 400 个任务才做判断，不足继续烘烤</td>
+</tr>
+<tr>
+<td>对照组</td>
+<td>同站点对照不足 10 台时扩大到全机队</td>
+</tr>
+<tr>
+<td>累计基线</td>
+<td>最后一环没有对照组时，用前面各环累计的对照数据</td>
+</tr>
+<tr>
+<td>急停基线</td>
+<td>仿真中非人为急停基线取 0：任何额外急停一票否决，生产中逐起人工复核</td>
+</tr>
+<tr>
+<td>取证</td>
+<td>实验组按站点拆分统计</td>
+</tr>
+</tbody></table>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">@staticmethod</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">z_score</span>(<span class="params">p1: <span class="built_in">float</span>, n1: <span class="built_in">int</span>, p2: <span class="built_in">float</span>, n2: <span class="built_in">int</span></span>) -&gt; <span class="built_in">float</span>:</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;两比例 z 检验：p1 显著大于 p2 时为较大正数&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="keyword">if</span> n1 == <span class="number">0</span> <span class="keyword">or</span> n2 == <span class="number">0</span>:</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="keyword">return</span> <span class="number">0.0</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    p = (p1 * n1 + p2 * n2) / (n1 + n2)</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="keyword">return</span> (p1 - p2) / math.sqrt(<span class="built_in">max</span>(p * (<span class="number">1</span> - p) * (<span class="number">1</span> / n1 + <span class="number">1</span> / n2), <span class="number">1e-12</span>))</span></span></code></pre></div></div></figure>
+
+<h3 id="18-5-4-统计验证"><a href="#18-5-4-统计验证" class="headerlink" title="18.5.4 统计验证"></a>18.5.4 统计验证</h3><p>修复后，用 30 个随机种子分别运行 good 与 bad 剧本：</p>
+<table>
+<thead>
+<tr>
+<th>剧本</th>
+<th>结果</th>
+<th>拦截位置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>good</td>
+<td><strong>30&#x2F;30 到达全量</strong>（误回滚 0 次）</td>
+<td>—</td>
+</tr>
+<tr>
+<td>bad</td>
+<td><strong>30&#x2F;30 被拦截</strong>（从未到达全量）</td>
+<td>多站点环 21 次、单站点环 4 次、内部环 5 次</td>
+</tr>
+</tbody></table>
+<p>测试 <code>test_gate_statistics_across_seeds</code> 把这个性质固化下来（20 个种子，好模型至少 19 次到达全量，坏模型 20 次全部被拦截）。<strong>门禁的正确性不能用一次运行证明，要用分布证明</strong>——这是本章最想让你带走的一条经验。</p>
+<h3 id="18-5-5-为什么这个坑在生产中更危险"><a href="#18-5-5-为什么这个坑在生产中更危险" class="headerlink" title="18.5.5 为什么这个坑在生产中更危险"></a>18.5.5 为什么这个坑在生产中更危险</h3><p>在真实平台上，这个缺陷不会表现为“测试失败”，而会表现为<strong>频繁的误回滚</strong>。几次之后，发布负责人会开始手动放行门禁，门禁从此形同虚设；等到真正的坏模型出现时，它会被“习惯性放行”。<strong>一个经常误报的门禁，比没有门禁更危险。</strong></p>
+<h2 id="18-6-测试地图"><a href="#18-6-测试地图" class="headerlink" title="18.6 测试地图"></a>18.6 测试地图</h2><h3 id="18-6-1-14-项测试"><a href="#18-6-1-14-项测试" class="headerlink" title="18.6.1 14 项测试"></a>18.6.1 14 项测试</h3><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>覆盖</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>test_signing_compat</td>
+<td>签名与篡改、非法签名编码、密钥轮换、兼容矩阵四个维度</td>
+</tr>
+<tr>
+<td>test_agent</td>
+<td>窗口条件三种、预检失败四种、切换与回滚、确认提升安全下限、自检失败保持原槽、制品不可变与冻结</td>
+</tr>
+<tr>
+<td>test_rollout</td>
+<td>good 到全量、bad 在多站点环被拦且取证指向 sh-02、篡改与降级暂停、多种子统计、显著性门禁单元测试</td>
+</tr>
+</tbody></table>
+<h2 id="18-7-实验"><a href="#18-7-实验" class="headerlink" title="18.7 实验"></a>18.7 实验</h2><h3 id="18-7-1-五个实验"><a href="#18-7-1-五个实验" class="headerlink" title="18.7.1 五个实验"></a>18.7.1 五个实验</h3><ol>
+<li>把 <code>z_crit</code> 改为 0（等于去掉显著性），用 30 个种子重跑 good 剧本，统计误回滚次数；</li>
+<li>把 <code>min_samples</code> 从 400 改为 100，观察 bad 剧本拦截位置的分布变化；</li>
+<li>让 2.3.1 在所有站点都显著退化，观察它在哪一环被拦截；</li>
+<li>修改 <code>fleet_sim</code> 让 Orin 机型也使用 Thor 模型的清单，观察兼容检查在云端与端侧各拦截一次；</li>
+<li>实现“人工确认节点”：环 3 进入前需要调用 <code>approve()</code>，并把它设计成 Temporal 工作流中的信号。</li>
+</ol>
+<h2 id="18-8-玩具与生产"><a href="#18-8-玩具与生产" class="headerlink" title="18.8 玩具与生产"></a>18.8 玩具与生产</h2><h3 id="18-8-1-对照表"><a href="#18-8-1-对照表" class="headerlink" title="18.8.1 对照表"></a>18.8.1 对照表</h3><table>
+<thead>
+<tr>
+<th>简化</th>
+<th>生产</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>进程内环推进</td>
+<td>Temporal 发布工作流（持久化计时器、人工确认信号、可见性查询）</td>
+</tr>
+<tr>
+<td>作业质量由仿真真值生成</td>
+<td>遥测管道按实验组&#x2F;对照组聚合（第 11 章衍生流）</td>
+</tr>
+<tr>
+<td>内存制品库</td>
+<td>MinIO&#x2F;S3 + 元数据库 + HSM 签名服务</td>
+</tr>
+<tr>
+<td>最低安全版本在内存</td>
+<td>端侧安全存储中的防回滚计数器</td>
+</tr>
+<tr>
+<td>一次性下载</td>
+<td>分片续传、站点缓存预热（第 9 章四级瀑布）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>XOTA</th>
+<th>p02</th>
+<th>变化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>升级任务状态机</td>
+<td>Agent 状态（窗口&#x2F;校验&#x2F;观察&#x2F;确认&#x2F;回滚）</td>
+<td>新增观察期与双槽</td>
+</tr>
+<tr>
+<td>分批灰度</td>
+<td>五个环 + 健康分 + 站点</td>
+<td>新增站点维度</td>
+</tr>
+<tr>
+<td>崩溃率门禁</td>
+<td>成功率&#x2F;介入率&#x2F;急停 + 显著性 + 对照组</td>
+<td>本质变化</td>
+</tr>
+<tr>
+<td>固件签名</td>
+<td>清单签名 + 多受信公钥</td>
+<td>支持轮换</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>门禁无显著性</strong>：小环频繁误回滚，最终导致门禁被人为架空（p02 真实缺陷）。</li>
+<li><strong>确认过早</strong>：环 1 通过就释放旧槽，多站点环发现问题时已无法秒级回滚。对策：全量完成后再确认。</li>
+<li><strong>只报总体指标</strong>：问题只在一个站点出现时，总体指标被稀释。对策：分站点取证。</li>
+</ul>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>你的灰度门禁如何避免误判？（阈值 + 显著性 + 最小样本 + 对照组 + 多种子验证）</li>
+<li>为什么坏模型在前两个环没被发现？这是缺陷吗？（问题有站点性；这正是多站点环存在的理由）</li>
+<li>业务回滚和防回滚矛盾吗？（不矛盾：观察期内回切合法旧版本；确认后才提升安全下限）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>门禁要用分布证明</strong>：多种子验证误报率与漏报率。</li>
+<li><strong>误报门禁比没有更危险</strong>：会被习惯性放行。</li>
+<li><strong>确认是不可逆的安全决定</strong>：全量后提升安全下限、释放旧槽。</li>
+<li><strong>分站点取证</strong>：问题常常只在一个站点出现。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-17-%E5%AE%9E%E6%88%98%E4%B8%80RoboFleet-Core/">第 17 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-19-%E5%AE%9E%E6%88%98%E4%B8%89%E6%95%B0%E6%8D%AE%E9%A3%9E%E8%BD%AE%E6%B5%81%E6%B0%B4%E7%BA%BF/">第 19 章 实战三：数据飞轮流水线</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-19-%E5%AE%9E%E6%88%98%E4%B8%89%E6%95%B0%E6%8D%AE%E9%A3%9E%E8%BD%AE%E6%B5%81%E6%B0%B4%E7%BA%BF/">第 19 章 实战三：数据飞轮流水线——从一次人工介入到一个定向数据集</a></h3>
+        <p>p03 把第 12 章的数据引擎做成了可运行的流水线：触发与配额、元数据先行、分区入湖、以景搜景、四级漏斗、不可变数据集、血缘、LeRobo…</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-19-%E5%AE%9E%E6%88%98%E4%B8%89%E6%95%B0%E6%8D%AE%E9%A3%9E%E8%BD%AE%E6%B5%81%E6%B0%B4%E7%BA%BF/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-17-%E5%AE%9E%E6%88%98%E4%B8%80RoboFleet-Core/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 17 章 实战一：RoboFleet Core——机器人云平台最小内核</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#18-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="18-1-目标与验收"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">18.1 目标与验收</span></a><a class="toc-level-3" href="#18-1-1-%E5%9B%9B%E4%B8%AA%E5%89%A7%E6%9C%AC" data-toc-target="18-1-1-四个剧本"><span class="toc-text">18.1.1 四个剧本</span></a><a class="toc-level-2" href="#18-2-%E6%9E%B6%E6%9E%84" data-toc-target="18-2-架构"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">18.2 架构</span></a><a class="toc-level-3" href="#18-2-1-%E6%A8%A1%E5%9D%97%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81" data-toc-target="18-2-1-模块与数据流"><span class="toc-text">18.2.1 模块与数据流</span></a><a class="toc-level-3" href="#18-2-2-%E6%9C%BA%E9%98%9F%E6%9E%84%E6%88%90" data-toc-target="18-2-2-机队构成"><span class="toc-text">18.2.2 机队构成</span></a><a class="toc-level-2" href="#18-3-%E7%AB%AF%E4%BE%A7-Agent" data-toc-target="18-3-端侧-Agent"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">18.3 端侧 Agent</span></a><a class="toc-level-3" href="#18-3-1-%E7%8A%B6%E6%80%81%E4%B8%8E%E6%A7%BD%E4%BD%8D" data-toc-target="18-3-1-状态与槽位"><span class="toc-text">18.3.1 状态与槽位</span></a><a class="toc-level-3" href="#18-3-2-%E4%B8%9A%E5%8A%A1%E5%9B%9E%E6%BB%9A%E4%B8%8E%E5%AE%89%E5%85%A8%E5%9B%9E%E6%BB%9A%E7%9A%84%E5%8C%BA%E5%88%AB" data-toc-target="18-3-2-业务回滚与安全回滚的区别"><span class="toc-text">18.3.2 业务回滚与安全回滚的区别</span></a><a class="toc-level-2" href="#18-4-%E7%81%B0%E5%BA%A6%E5%BC%95%E6%93%8E" data-toc-target="18-4-灰度引擎"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">18.4 灰度引擎</span></a><a class="toc-level-3" href="#18-4-1-%E4%B8%80%E6%AC%A1%E5%8F%91%E5%B8%83%E7%9A%84%E6%97%B6%E5%BA%8F" data-toc-target="18-4-1-一次发布的时序"><span class="toc-text">18.4.1 一次发布的时序</span></a><a class="toc-level-3" href="#18-4-2-good-%E5%89%A7%E6%9C%AC%E5%AE%9E%E9%99%85%E8%BE%93%E5%87%BA" data-toc-target="18-4-2-good-剧本实际输出"><span class="toc-text">18.4.2 good 剧本实际输出</span></a><a class="toc-level-3" href="#18-4-3-bad-%E5%89%A7%E6%9C%AC%E5%AE%9E%E9%99%85%E8%BE%93%E5%87%BA" data-toc-target="18-4-3-bad-剧本实际输出"><span class="toc-text">18.4.3 bad 剧本实际输出</span></a><a class="toc-level-2" href="#18-5-%E7%9C%9F%E5%AE%9E%E7%BC%BA%E9%99%B7%E5%A4%8D%E7%9B%98%EF%BC%9A%E9%97%A8%E7%A6%81%E6%B2%A1%E6%9C%89%E7%BB%9F%E8%AE%A1%E6%98%BE%E8%91%97%E6%80%A7" data-toc-target="18-5-真实缺陷复盘：门禁没有统计显著性"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">18.5 真实缺陷复盘：门禁没有统计显著性</span></a><a class="toc-level-3" href="#18-5-1-%E7%8E%B0%E8%B1%A1" data-toc-target="18-5-1-现象"><span class="toc-text">18.5.1 现象</span></a><a class="toc-level-3" href="#18-5-2-%E5%88%86%E6%9E%90" data-toc-target="18-5-2-分析"><span class="toc-text">18.5.2 分析</span></a><a class="toc-level-3" href="#18-5-3-%E4%BF%AE%E5%A4%8D" data-toc-target="18-5-3-修复"><span class="toc-text">18.5.3 修复</span></a><a class="toc-level-3" href="#18-5-4-%E7%BB%9F%E8%AE%A1%E9%AA%8C%E8%AF%81" data-toc-target="18-5-4-统计验证"><span class="toc-text">18.5.4 统计验证</span></a><a class="toc-level-3" href="#18-5-5-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E4%B8%AA%E5%9D%91%E5%9C%A8%E7%94%9F%E4%BA%A7%E4%B8%AD%E6%9B%B4%E5%8D%B1%E9%99%A9" data-toc-target="18-5-5-为什么这个坑在生产中更危险"><span class="toc-text">18.5.5 为什么这个坑在生产中更危险</span></a><a class="toc-level-2" href="#18-6-%E6%B5%8B%E8%AF%95%E5%9C%B0%E5%9B%BE" data-toc-target="18-6-测试地图"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">18.6 测试地图</span></a><a class="toc-level-3" href="#18-6-1-14-%E9%A1%B9%E6%B5%8B%E8%AF%95" data-toc-target="18-6-1-14-项测试"><span class="toc-text">18.6.1 14 项测试</span></a><a class="toc-level-2" href="#18-7-%E5%AE%9E%E9%AA%8C" data-toc-target="18-7-实验"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">18.7 实验</span></a><a class="toc-level-3" href="#18-7-1-%E4%BA%94%E4%B8%AA%E5%AE%9E%E9%AA%8C" data-toc-target="18-7-1-五个实验"><span class="toc-text">18.7.1 五个实验</span></a><a class="toc-level-2" href="#18-8-%E7%8E%A9%E5%85%B7%E4%B8%8E%E7%94%9F%E4%BA%A7" data-toc-target="18-8-玩具与生产"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">18.8 玩具与生产</span></a><a class="toc-level-3" href="#18-8-1-%E5%AF%B9%E7%85%A7%E8%A1%A8" data-toc-target="18-8-1-对照表"><span class="toc-text">18.8.1 对照表</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 68%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">19 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#18-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="18-1-目标与验收" data-title="01 · 18.1 目标与验收" aria-label="18.1 目标与验收"></a><a class="toc-strip__dot" href="#18-2-%E6%9E%B6%E6%9E%84" data-toc-target="18-2-架构" data-title="02 · 18.2 架构" aria-label="18.2 架构"></a><a class="toc-strip__dot" href="#18-3-%E7%AB%AF%E4%BE%A7-Agent" data-toc-target="18-3-端侧-Agent" data-title="03 · 18.3 端侧 Agent" aria-label="18.3 端侧 Agent"></a><a class="toc-strip__dot" href="#18-4-%E7%81%B0%E5%BA%A6%E5%BC%95%E6%93%8E" data-toc-target="18-4-灰度引擎" data-title="04 · 18.4 灰度引擎" aria-label="18.4 灰度引擎"></a><a class="toc-strip__dot" href="#18-5-%E7%9C%9F%E5%AE%9E%E7%BC%BA%E9%99%B7%E5%A4%8D%E7%9B%98%EF%BC%9A%E9%97%A8%E7%A6%81%E6%B2%A1%E6%9C%89%E7%BB%9F%E8%AE%A1%E6%98%BE%E8%91%97%E6%80%A7" data-toc-target="18-5-真实缺陷复盘：门禁没有统计显著性" data-title="05 · 18.5 真实缺陷复盘：门禁没有统计显著性" aria-label="18.5 真实缺陷复盘：门禁没有统计显著性"></a><a class="toc-strip__dot" href="#18-6-%E6%B5%8B%E8%AF%95%E5%9C%B0%E5%9B%BE" data-toc-target="18-6-测试地图" data-title="06 · 18.6 测试地图" aria-label="18.6 测试地图"></a><a class="toc-strip__dot" href="#18-7-%E5%AE%9E%E9%AA%8C" data-toc-target="18-7-实验" data-title="07 · 18.7 实验" aria-label="18.7 实验"></a><a class="toc-strip__dot" href="#18-8-%E7%8E%A9%E5%85%B7%E4%B8%8E%E7%94%9F%E4%BA%A7" data-toc-target="18-8-玩具与生产" data-title="08 · 18.8 玩具与生产" aria-label="18.8 玩具与生产"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="09 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="10 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="11 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="12 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-18-实战二OTA灰度发布引擎","title":"第 18 章 实战二：OTA 灰度发布引擎——让坏模型永远到不了全量","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-18-%E5%AE%9E%E6%88%98%E4%BA%8COTA%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83%E5%BC%95%E6%93%8E/","path":"embodied-cloud-book","index":18,"total":28,"next":{"title":"第 19 章 实战三：数据飞轮流水线——从一次人工介入到一个定向数据集","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-19-%E5%AE%9E%E6%88%98%E4%B8%89%E6%95%B0%E6%8D%AE%E9%A3%9E%E8%BD%AE%E6%B5%81%E6%B0%B4%E7%BA%BF/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

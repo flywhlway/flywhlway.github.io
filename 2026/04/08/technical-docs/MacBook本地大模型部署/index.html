@@ -1,0 +1,1038 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>MacBook 本地大模型部署指南：统一内存、推理框架与模型选型 · 飞轮之道</title>
+<meta name="description" content="在 Apple Silicon MacBook 上部署本地大模型的操作指南：统一内存与带宽原理、GPU 内存上限调整、MLX/Ollama/LM Studio/llama.cpp 对比、按内存档位选模型、三类场景配置与实测方法。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/04/08/technical-docs/MacBook%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="MacBook 本地大模型部署指南：统一内存、推理框架与模型选型 · 飞轮之道">
+<meta property="og:description" content="在 Apple Silicon MacBook 上部署本地大模型的操作指南：统一内存与带宽原理、GPU 内存上限调整、MLX/Ollama/LM Studio/llama.cpp 对比、按内存档位选模型、三类场景配置与实测方法。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/04/08/technical-docs/MacBook%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/self-hosted-ai-infra/">模型</a><a class="series-chip" href="/paths/self-hosted-ai-infra/" title="查看学习路径">第 7 / 8 篇</a>
+    </div>
+    <h1>MacBook 本地大模型部署指南：统一内存、推理框架与模型选型</h1>
+    <p class="article-deck">在 Apple Silicon MacBook 上部署本地大模型的操作指南：统一内存与带宽原理、GPU 内存上限调整、MLX/Ollama/LM Studio/llama.cpp …</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>18 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B/">#本地大模型</a><a class="article-meta__tag" href="/tags/Apple-Silicon/">#Apple Silicon</a><a class="article-meta__tag" href="/tags/MLX/">#MLX</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>能跑多大看内存，跑多快看带宽：解码速度上限约等于内存带宽除以每个 token 要读取的权重字节数，所以 MoE 模型在 Mac 上格外划算。</li><li>GPU 可用内存默认低于物理内存；iogpu.wired_limit_mb 可以临时上调，但要给系统留足余量，重启后自动恢复。</li><li>框架按用途选：MLX 性能最好且能用上 M5 的 GPU 神经加速器，Ollama 集成最省事，LM Studio 适合可视化对比，llama.cpp 参数最全、可控性最强。</li><li>模型体积控制在内存的六成左右，剩下的留给 KV 缓存、嵌入模型和系统；Qwen3.5 这类混合注意力模型的 KV 缓存只有传统稠密模型的几分之一。</li><li>实测看三个数：预填充速度、首 token 延迟、解码速度，并同时盯住内存压力和交换；测试时避开前缀缓存和首次加载。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="这篇指南的使用方式"><a href="#这篇指南的使用方式" class="headerlink" title="这篇指南的使用方式"></a>这篇指南的使用方式</h2><p>本地部署大模型的决策顺序是：<strong>先看机器的内存和带宽，再选推理框架，然后按内存档位选模型和量化，最后按场景配置并实测</strong>。下文按这个顺序展开，所有版本号与模型均以 2026-04 上旬为准。本地模型在企业 Agent 平台中的定位是开发调试、离线演示与数据不出机的轻量任务，生产推理仍然放在服务器侧。</p>
+<h2 id="一、硬件原理"><a href="#一、硬件原理" class="headerlink" title="一、硬件原理"></a>一、硬件原理</h2><p>结论先行：统一内存容量决定能加载多大的模型，内存带宽决定解码速度，GPU 算力（M5 起包括 GPU 神经加速器）决定预填充速度。</p>
+<h3 id="1-1-推理的两个阶段"><a href="#1-1-推理的两个阶段" class="headerlink" title="1.1 推理的两个阶段"></a>1.1 推理的两个阶段</h3><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>做什么</th>
+<th>瓶颈</th>
+<th>影响的指标</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>预填充（prefill）</td>
+<td>一次性处理整段提示词，计算并写入 KV 缓存</td>
+<td>算力（大矩阵乘法）</td>
+<td>首 token 延迟（TTFT）</td>
+</tr>
+<tr>
+<td>解码（decode）</td>
+<td>逐个生成 token，每步都要读一遍参与计算的权重</td>
+<td>内存带宽</td>
+<td>每秒生成 token 数</td>
+</tr>
+</tbody></table>
+<p>解码速度可以用一个粗略上限来估算：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">解码速度上限（token/s）≈ 内存带宽（GB/s）÷ 每个 token 需读取的权重（GB）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">每个 token 需读取的权重 ≈ 激活参数量 × 每参数字节数（不含词嵌入表与视觉编码器）</span></span></code></pre></div></div></figure>
+
+<p>4 bit 量化加上分组缩放，每参数约 0.56 字节（MLX 默认 4 bit、分组 64 即为 4.5 bit）。以 M5 Pro 的 307GB&#x2F;s 为例：27B 稠密模型每 token 约读 14–15GB，上限约 20 token&#x2F;s；35B-A3B 的 MoE 模型每 token 只激活约 3B 参数、读约 1.7GB，上限高出一个数量级。实际速度低于上限，这个公式的用途是判断数量级、识别异常，以及解释<strong>为什么 MoE 模型在 Mac 上格外划算</strong>：总参数量占内存，激活参数量决定速度，而 Mac 恰好是「内存大、带宽中等、算力中等」。</p>
+<p>M5 系列在每个 GPU 核心里加入了神经加速器，主要加速预填充。Apple 机器学习研究博客（2025-11-19）的测试中，M5 相比 M4 的首 token 延迟缩短到 1&#x2F;3.3–1&#x2F;4.1，解码速度提升 19%–27%，后者与内存带宽从 120GB&#x2F;s 提升到 153GB&#x2F;s 基本一致。要在 MLX 中用上神经加速器，需要 macOS 26.2 或更高版本。Apple 在 M5 Pro &#x2F; M5 Max 发布稿中给出的是「LLM 提示词处理最高快 3.9 倍（M5 Pro 对比 M4 Pro）」。</p>
+<p>顺带纠正一个常见笔误：macOS 在 2025 年改为按年份编号，Tahoe 的版本号是 macOS 26，不存在「macOS 16」。</p>
+<h3 id="1-2-机型与内存档位"><a href="#1-2-机型与内存档位" class="headerlink" title="1.2 机型与内存档位"></a>1.2 机型与内存档位</h3><p>2026-04 在售的 M5 系列 MacBook（M5 Pro &#x2F; M5 Max 款于 2026-03-03 发布、03-11 上市；MacBook Air M5 同月上市）：</p>
+<table>
+<thead>
+<tr>
+<th>芯片</th>
+<th>内存带宽</th>
+<th>可选统一内存</th>
+<th>机型</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>M5</td>
+<td>153GB&#x2F;s</td>
+<td>16GB &#x2F; 24GB &#x2F; 32GB</td>
+<td>MacBook Air、14 英寸 MacBook Pro</td>
+</tr>
+<tr>
+<td>M5 Pro</td>
+<td>307GB&#x2F;s</td>
+<td>24GB &#x2F; 48GB &#x2F; 64GB（64GB 需 20 核 GPU 版本）</td>
+<td>14 &#x2F; 16 英寸 MacBook Pro</td>
+</tr>
+<tr>
+<td>M5 Max（32 核 GPU）</td>
+<td>460GB&#x2F;s</td>
+<td>36GB</td>
+<td>14 &#x2F; 16 英寸 MacBook Pro</td>
+</tr>
+<tr>
+<td>M5 Max（40 核 GPU）</td>
+<td>614GB&#x2F;s</td>
+<td>48GB &#x2F; 64GB &#x2F; 128GB</td>
+<td>14 &#x2F; 16 英寸 MacBook Pro</td>
+</tr>
+</tbody></table>
+<p>选机建议：内存容量优先于芯片档次。同样预算下，48GB 的 M5 Pro 能跑的模型明显多于 36GB 的 M5 Max；但要跑 60GB 以上的大模型，只能上 128GB 的 M5 Max。</p>
+<h3 id="1-3-GPU-可用内存上限：iogpu-wired-limit-mb"><a href="#1-3-GPU-可用内存上限：iogpu-wired-limit-mb" class="headerlink" title="1.3 GPU 可用内存上限：iogpu.wired_limit_mb"></a>1.3 GPU 可用内存上限：iogpu.wired_limit_mb</h3><p>统一内存不等于 GPU 可以用满全部内存。macOS 为 GPU 设定了一个推荐工作集上限，默认明显低于物理内存，模型加上 KV 缓存超过这个上限时，推理框架会报警、变慢，或者把部分层退回 CPU。</p>
+<p>先查看当前值：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">sysctl iogpu.wired_limit_mb          <span class="comment"># 0 表示使用系统默认上限</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">python -c <span class="string">&quot;import mlx.core as mx; print(mx.device_info())&quot;</span>   <span class="comment"># 看 max_recommended_working_set_size（字节）</span></span></span></code></pre></div></div></figure>
+
+<p>llama.cpp 启动时也会在日志里打印 <code>recommendedMaxWorkingSetSize</code>。</p>
+<p>需要加载接近上限的模型时，可以临时上调（单位 MB，需要管理员权限）：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 48GB 机器示例：给系统保留约 8GB，GPU 上限设为 40GB</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">sudo</span> sysctl iogpu.wired_limit_mb=40960</span></span></code></pre></div></div></figure>
+
+<p>mlx-lm 官方文档给出的约束是：这个值应当大于模型体积、小于机器内存。操作要点：</p>
+<table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>生效范围</td>
+<td>立即生效，重启后恢复默认；修改后重启推理进程，再用上面两种方式确认</td>
+</tr>
+<tr>
+<td>留多少给系统</td>
+<td>经验值为 8GB 以上；同时开着 IDE、浏览器、容器时要留更多</td>
+</tr>
+<tr>
+<td>设太高的后果</td>
+<td>GPU 锁定的内存无法被系统回收，其他进程被挤进交换，整机卡顿，严重时只能强制重启</td>
+</tr>
+<tr>
+<td>是否持久化</td>
+<td>笔记本不建议写成开机自动设置；只在需要跑大模型时手动调，用完重启或改回 <code>0</code></td>
+</tr>
+<tr>
+<td>什么时候不该调</td>
+<td>模型本身已接近物理内存（例如 48GB 机器跑 45GB 的模型）时，调高上限也只会换来大量交换，应该换更小的量化或更小的模型</td>
+</tr>
+</tbody></table>
+<h3 id="1-4-KV-缓存怎么估算"><a href="#1-4-KV-缓存怎么估算" class="headerlink" title="1.4 KV 缓存怎么估算"></a>1.4 KV 缓存怎么估算</h3><p>模型权重之外，第二大内存开销是 KV 缓存，它随上下文长度线性增长，并发请求时按请求数叠加：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">每 token 的 KV 字节数 = 2（K 和 V）× 全注意力层数 × KV 头数 × 每头维度 × 每元素字节数（fp16 为 2）</span></span></code></pre></div></div></figure>
+
+<p>Qwen3.5 系列采用线性注意力（Gated DeltaNet）与全注意力 3:1 交替的混合结构，只有四分之一的层产生随上下文增长的 KV 缓存，线性注意力层只保留固定大小的状态。按各模型 <code>config.json</code> 计算（fp16，未含框架额外开销）：</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>全注意力层 &#x2F; 总层数</th>
+<th>KV 头数 × 维度</th>
+<th>每 token</th>
+<th>32K 上下文</th>
+<th>128K 上下文</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Qwen3.5-9B</td>
+<td>8 &#x2F; 32</td>
+<td>4 × 256</td>
+<td>32 KiB</td>
+<td>1 GiB</td>
+<td>4 GiB</td>
+</tr>
+<tr>
+<td>Qwen3.5-27B</td>
+<td>16 &#x2F; 64</td>
+<td>4 × 256</td>
+<td>64 KiB</td>
+<td>2 GiB</td>
+<td>8 GiB</td>
+</tr>
+<tr>
+<td>Qwen3.5-35B-A3B</td>
+<td>10 &#x2F; 40</td>
+<td>2 × 256</td>
+<td>20 KiB</td>
+<td>0.6 GiB</td>
+<td>2.5 GiB</td>
+</tr>
+<tr>
+<td>Qwen3-32B（传统稠密结构对照）</td>
+<td>64 &#x2F; 64</td>
+<td>8 × 128</td>
+<td>256 KiB</td>
+<td>8 GiB</td>
+<td>32 GiB</td>
+</tr>
+</tbody></table>
+<p>两个推论：第一，同样是 30B 级模型，架构不同，长上下文的内存需求能差一个数量级，选型时要看 <code>config.json</code>，不能只看参数量；第二，KV 缓存量化到 q8_0 大约减半，是长上下文场景性价比最高的省内存手段。</p>
+<h2 id="二、推理框架对比"><a href="#二、推理框架对比" class="headerlink" title="二、推理框架对比"></a>二、推理框架对比</h2><p>四个主流选择的定位不同，经常组合使用：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>MLX &#x2F; mlx-lm</th>
+<th>Ollama</th>
+<th>LM Studio</th>
+<th>llama.cpp</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>版本（2026-04 上旬）</td>
+<td>mlx 0.31.1、mlx-lm 0.31.2</td>
+<td>0.20.x</td>
+<td>0.4.x</td>
+<td>b87xx 构建</td>
+</tr>
+<tr>
+<td>模型格式</td>
+<td>MLX（safetensors）</td>
+<td>GGUF；0.19 起预览 MLX 引擎</td>
+<td>GGUF 与 MLX 双引擎</td>
+<td>GGUF</td>
+</tr>
+<tr>
+<td>量化</td>
+<td>4&#x2F;5&#x2F;6&#x2F;8 bit 分组量化、mxfp4 等</td>
+<td>Q4_K_M 等 GGUF 量化；MLX 预览用 NVFP4</td>
+<td>随所选引擎</td>
+<td>K-quants、I-quants、MXFP4</td>
+</tr>
+<tr>
+<td>M5 神经加速器</td>
+<td>官方支持（macOS 26.2+）</td>
+<td>MLX 引擎下可用（官方博客说明）</td>
+<td>取决于内置 MLX 引擎版本</td>
+<td>以各版本发布说明为准</td>
+</tr>
+<tr>
+<td>并发</td>
+<td><code>mlx_lm.server</code> 可用，但官方不建议用于生产</td>
+<td><code>OLLAMA_NUM_PARALLEL</code>，默认 1</td>
+<td>0.4.0 起支持连续批处理（仅 llama.cpp 引擎）</td>
+<td><code>-np</code> 槽位 + 连续批处理</td>
+</tr>
+<tr>
+<td>API</td>
+<td>OpenAI 兼容（<code>mlx_lm.server</code>）</td>
+<td>原生 API、OpenAI 兼容、Anthropic 兼容</td>
+<td>OpenAI 兼容；0.4.1 起 Anthropic 兼容 <code>/v1/messages</code></td>
+<td>OpenAI 兼容、Anthropic 兼容 <code>/v1/messages</code></td>
+</tr>
+<tr>
+<td>适合</td>
+<td>追求性能、做 LoRA 微调冒烟、写 Python 实验</td>
+<td>应用开发的默认后端、接编码代理</td>
+<td>可视化对比模型和参数</td>
+<td>需要细粒度控制、脚本化部署、压测</td>
+</tr>
+</tbody></table>
+<p>几条需要特别注意的事实：</p>
+<ul>
+<li><strong>Ollama 的 MLX 引擎仍是预览</strong>。0.19.0（2026-03-27）起 Ollama 在 Apple Silicon 上引入 MLX 引擎，官方博客说明首批只针对 <code>qwen3.5:35b-a3b-coding-nvfp4</code> 这类 NVFP4 模型，并要求内存大于 32GB；其他模型仍走原有的 GGUF 引擎。</li>
+<li><strong>LM Studio 的并行请求只在 llama.cpp 引擎上生效</strong>，MLX 引擎官方文档标注为「即将支持」。多个代理同时调用同一个模型时要注意这一点。</li>
+<li><strong><code>mlx_lm.server</code> 官方明确不建议用于生产</strong>，只实现了基础的安全检查；做服务化用 Ollama、LM Studio 或 llama-server。</li>
+<li><strong>Ollama 默认上下文按显存分档</strong>：小于 24GiB 为 4K，24–48GiB 为 32K，48GiB 及以上为 256K。官方建议代理、编码工具至少设到 64000，用 <code>ollama ps</code> 的 <code>CONTEXT</code> 列确认实际值。</li>
+</ul>
+<p>选型建议：</p>
+<ol>
+<li>只想把本地模型接进应用或编码代理：Ollama。</li>
+<li>需要对比同一模型的 GGUF 与 MLX 版本、调参看效果：LM Studio。</li>
+<li>要最高性能或做 LoRA 冒烟：mlx-lm。</li>
+<li>要精确控制上下文、KV 量化、并发槽位，或写压测脚本：llama.cpp 的 <code>llama-server</code> 与 <code>llama-bench</code>。</li>
+</ol>
+<h2 id="三、按内存档位选模型"><a href="#三、按内存档位选模型" class="headerlink" title="三、按内存档位选模型"></a>三、按内存档位选模型</h2><p>原则：<strong>模型文件体积控制在物理内存的六成左右</strong>，剩下的留给 KV 缓存、嵌入模型、系统与开发工具。下表只列 2026-04-08 之前已发布的模型，体积为 Hugging Face 上对应量化文件的实际大小（MLX 取 mlx-community 的 4 bit 版本，GGUF 取 unsloth 的 Q4_K_M 版本）：</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>发布</th>
+<th>结构</th>
+<th>MLX 4 bit</th>
+<th>GGUF Q4_K_M</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Qwen3.5-4B</td>
+<td>2026-02</td>
+<td>稠密</td>
+<td>3.0GB</td>
+<td>—</td>
+<td>16GB 机器的常驻小模型</td>
+</tr>
+<tr>
+<td>Qwen3.5-9B</td>
+<td>2026-02</td>
+<td>稠密，混合注意力</td>
+<td>6.0GB</td>
+<td>—</td>
+<td>16–24GB 的主力；8 bit 版 10.4GB</td>
+</tr>
+<tr>
+<td>gpt-oss-20b</td>
+<td>2025-08</td>
+<td>MoE，MXFP4 原生量化</td>
+<td>12.1GB（MXFP4-Q8）</td>
+<td>12.1GB（MXFP4）</td>
+<td>工具调用与推理均衡</td>
+</tr>
+<tr>
+<td>Gemma 4 26B-A4B</td>
+<td>2026-03-31</td>
+<td>MoE，约 4B 激活</td>
+<td>15.3GB</td>
+<td>—</td>
+<td>多模态，速度快</td>
+</tr>
+<tr>
+<td>Gemma 4 31B</td>
+<td>2026-03-31</td>
+<td>稠密</td>
+<td>18.4GB</td>
+<td>—</td>
+<td>多模态，质量优先</td>
+</tr>
+<tr>
+<td>Qwen3.5-27B</td>
+<td>2026-02</td>
+<td>稠密，混合注意力</td>
+<td>16.1GB</td>
+<td>16.7GB</td>
+<td>解码慢于同档 MoE</td>
+</tr>
+<tr>
+<td>Qwen3.5-35B-A3B</td>
+<td>2026-02</td>
+<td>MoE，3B 激活，混合注意力</td>
+<td>20.4GB</td>
+<td>22.0GB</td>
+<td>32GB 以上机器的首选通用模型；8 bit 版 37.7GB</td>
+</tr>
+<tr>
+<td>Qwen3-Coder-Next</td>
+<td>2026-02</td>
+<td>MoE，80B 总参数、3B 激活</td>
+<td>44.8GB</td>
+<td>48.5GB</td>
+<td>编码专用，需 64GB 以上内存</td>
+</tr>
+<tr>
+<td>gpt-oss-120b</td>
+<td>2025-08</td>
+<td>MoE，MXFP4 原生量化</td>
+<td>63.4GB（MXFP4-Q8）</td>
+<td>—</td>
+<td>128GB 机器</td>
+</tr>
+<tr>
+<td>Qwen3.5-122B-A10B</td>
+<td>2026-02</td>
+<td>MoE，10B 激活</td>
+<td>69.6GB</td>
+<td>—</td>
+<td>128GB 机器</td>
+</tr>
+</tbody></table>
+<p>按档位的推荐组合：</p>
+<table>
+<thead>
+<tr>
+<th>内存</th>
+<th>通用对话 &#x2F; 编码</th>
+<th>RAG 生成模型 + 嵌入</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>16GB</td>
+<td>Qwen3.5-9B 4 bit，上下文 16K 以内</td>
+<td>Qwen3.5-4B + Qwen3-Embedding-0.6B</td>
+<td>不建议跑 20B 级模型</td>
+</tr>
+<tr>
+<td>24GB</td>
+<td>Qwen3.5-9B 8 bit 或 gpt-oss-20b</td>
+<td>Qwen3.5-9B + bge-m3</td>
+<td>Gemma 4 26B-A4B 可以加载但余量很小</td>
+</tr>
+<tr>
+<td>32–36GB</td>
+<td>Qwen3.5-35B-A3B 4 bit</td>
+<td>Gemma 4 26B-A4B + 嵌入模型</td>
+<td>27B 稠密模型可用，但解码明显慢于 35B-A3B</td>
+</tr>
+<tr>
+<td>48GB</td>
+<td>Qwen3.5-35B-A3B 6 bit（29.1GB）或 4 bit + 长上下文</td>
+<td>Qwen3.5-35B-A3B 4 bit + 嵌入 + 64K 上下文</td>
+<td>可同时常驻两个中型模型</td>
+</tr>
+<tr>
+<td>64GB</td>
+<td>Qwen3-Coder-Next 4 bit（需上调 GPU 内存上限）</td>
+<td>Qwen3.5-35B-A3B 8 bit + 嵌入</td>
+<td>跑 Coder-Next 时关闭其他大内存应用</td>
+</tr>
+<tr>
+<td>128GB</td>
+<td>Qwen3.5-122B-A10B 4 bit、gpt-oss-120b</td>
+<td>任意组合</td>
+<td>Qwen3-Coder-Next 8 bit（84.7GB）也可行</td>
+</tr>
+</tbody></table>
+<p>几个反例：48GB 机器上跑 Qwen3-Coder-Next 的 4 bit 版本（约 45–49GB），即使调高 GPU 内存上限也会大量交换；把 70B 级稠密模型压到 3 bit 塞进 48GB，速度（带宽 ÷ 30GB 以上）和质量都不如直接用 35B-A3B。</p>
+<h2 id="四、三类场景配置"><a href="#四、三类场景配置" class="headerlink" title="四、三类场景配置"></a>四、三类场景配置</h2><p>三类场景对模型的要求不同：编码助手看长上下文下的预填充速度，RAG 看嵌入与生成模型的内存合计，Agent 看工具调用格式是否稳定。</p>
+<h3 id="4-1-编码助手"><a href="#4-1-编码助手" class="headerlink" title="4.1 编码助手"></a>4.1 编码助手</h3><p>编码代理的特点是提示词长（系统提示 + 工具定义 + 代码上下文动辄数万 token）、多轮反复带同一前缀，所以<strong>上下文至少 64K、前缀缓存要能命中、预填充速度比解码速度更重要</strong>。</p>
+<p>用 Ollama 接 Claude Code 这类支持 Anthropic API 的编码代理（48GB 及以上机器）：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">ollama pull qwen3.5:35b-a3b-coding-nvfp4        <span class="comment"># MLX 引擎预览模型，要求内存大于 32GB</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">OLLAMA_CONTEXT_LENGTH=65536 ollama serve         <span class="comment"># 另开终端；也可在 Ollama 应用设置里调上下文</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">export</span> ANTHROPIC_AUTH_TOKEN=ollama               <span class="comment"># 必填但不校验</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="built_in">export</span> ANTHROPIC_BASE_URL=http://localhost:11434</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">claude --model qwen3.5:35b-a3b-coding-nvfp4</span></span></code></pre></div></div></figure>
+
+<p>Ollama 0.19 也提供了一步到位的 <code>ollama launch claude --model qwen3.5:35b-a3b-coding-nvfp4</code>。需要精细控制时换成 llama-server：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">brew install llama.cpp</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">llama-server -hf unsloth/Qwen3.5-35B-A3B-GGUF:Q4_K_M \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -c 65536 -fa on -ctk q8_0 -ctv q8_0 \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --<span class="built_in">alias</span> qwen3.5-35b-a3b --port 8080</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># /v1/chat/completions 与 /v1/messages 同时可用；工具调用依赖 --jinja（默认开启）</span></span></span></code></pre></div></div></figure>
+
+<p>64GB 机器可以换成 Qwen3-Coder-Next；32GB 以下机器用 Qwen3.5-9B 做补全和简单改写，复杂任务仍交给云端模型。本地模型接编码代理的现实预期是：能完成中小粒度的改动与解释，长链路自主修改的成功率明显低于云端旗舰模型，要按任务分流而不是全量替换。</p>
+<h3 id="4-2-RAG-本地知识库"><a href="#4-2-RAG-本地知识库" class="headerlink" title="4.2 RAG 本地知识库"></a>4.2 RAG 本地知识库</h3><p>内存预算要把四样东西一起算：生成模型、嵌入模型、检索结果占用的上下文、向量库本身。以 48GB 机器为例：Qwen3.5-35B-A3B 4 bit（约 21GB）+ Qwen3-Embedding-0.6B（0.6GB）+ 32K 上下文的 KV（约 0.6GB）+ 向量库与应用（几 GB），余量充足。</p>
+<p>上下文长度按检索量定：8 个 512 token 的片段加问题和系统提示，16K 足够，没必要开到 128K。最小可运行的检索问答（Ollama 的 OpenAI 兼容接口，嵌入与生成都在本机）：</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="37"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;local_rag.py：本机嵌入 + 本机生成的最小检索问答。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">client = OpenAI(base_url=<span class="string">&quot;http://localhost:11434/v1&quot;</span>, api_key=<span class="string">&quot;ollama&quot;</span>)</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">EMBED, CHAT = <span class="string">&quot;qwen3-embedding:0.6b&quot;</span>, <span class="string">&quot;qwen3.5:9b&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">docs = [</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="string">&quot;P0171：系统过稀（Bank 1），常见原因为进气漏气、MAF 传感器脏污、燃油压力不足。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="string">&quot;P0300：随机或多缸失火，优先检查点火线圈、火花塞与喷油器。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="string">&quot;U0111：与电池管理系统通信丢失，检查 CAN 线束与终端电阻。&quot;</span>,</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">]</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">embed</span>(<span class="params">texts: <span class="built_in">list</span>[<span class="built_in">str</span>]</span>) -&gt; np.ndarray:</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    vecs = np.array([d.embedding <span class="keyword">for</span> d <span class="keyword">in</span> client.embeddings.create(model=EMBED, <span class="built_in">input</span>=texts).data])</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="keyword">return</span> vecs / np.linalg.norm(vecs, axis=<span class="number">1</span>, keepdims=<span class="literal">True</span>)</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">doc_vecs = embed(docs)</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">ask</span>(<span class="params">question: <span class="built_in">str</span>, k: <span class="built_in">int</span> = <span class="number">2</span></span>) -&gt; <span class="built_in">str</span>:</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    scores = doc_vecs @ embed([question])[<span class="number">0</span>]</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    context = <span class="string">&quot;\n&quot;</span>.join(docs[i] <span class="keyword">for</span> i <span class="keyword">in</span> np.argsort(-scores)[:k])</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    resp = client.chat.completions.create(</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        model=CHAT,</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        temperature=<span class="number">0</span>,</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        messages=[</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;system&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;只依据给定资料回答；资料不足时直接说不知道。&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">f&quot;资料：\n<span class="subst">&#123;context&#125;</span>\n\n问题：<span class="subst">&#123;question&#125;</span>&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">        ],</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">    )</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">    <span class="keyword">return</span> resp.choices[<span class="number">0</span>].message.content</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx"><span class="built_in">print</span>(ask(<span class="string">&quot;怠速抖动并报 P0171，先查什么？&quot;</span>))</span></span></code></pre></div></div></figure>
+
+<p>先执行 <code>ollama pull qwen3-embedding:0.6b</code> 与 <code>ollama pull qwen3.5:9b</code>。文档量上万后，把 numpy 换成本地向量库（如 Chroma、LanceDB 或 pgvector），并注意<strong>嵌入模型一旦更换，索引必须全量重建</strong>。</p>
+<h3 id="4-3-Agent-工具调用"><a href="#4-3-Agent-工具调用" class="headerlink" title="4.3 Agent 工具调用"></a>4.3 Agent 工具调用</h3><p>本地模型做 Agent 的主要风险不是速度，而是工具调用的格式稳定性。上线前先用一个最小验收脚本确认：该调用时调用、参数是合法 JSON、不该调用时不乱调用：</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="34"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;tool_check.py：验收本地模型的工具调用是否可用（结构正确、参数可解析）。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> json</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> sys</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">base_url, model = sys.argv[<span class="number">1</span>], sys.argv[<span class="number">2</span>]</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">client = OpenAI(base_url=base_url, api_key=<span class="string">&quot;local&quot;</span>)</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">tools = [&#123;</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="string">&quot;type&quot;</span>: <span class="string">&quot;function&quot;</span>,</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="string">&quot;function&quot;</span>: &#123;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        <span class="string">&quot;name&quot;</span>: <span class="string">&quot;lookup_dtc&quot;</span>,</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="string">&quot;description&quot;</span>: <span class="string">&quot;查询 OBD 故障码的含义与常见原因&quot;</span>,</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="string">&quot;parameters&quot;</span>: &#123;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">            <span class="string">&quot;type&quot;</span>: <span class="string">&quot;object&quot;</span>,</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">            <span class="string">&quot;properties&quot;</span>: &#123;<span class="string">&quot;code&quot;</span>: &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;string&quot;</span>, <span class="string">&quot;description&quot;</span>: <span class="string">&quot;故障码，如 P0171&quot;</span>&#125;&#125;,</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">            <span class="string">&quot;required&quot;</span>: [<span class="string">&quot;code&quot;</span>],</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">        &#125;,</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    &#125;,</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">&#125;]</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">cases = [<span class="string">&quot;P0171 是什么意思？&quot;</span>, <span class="string">&quot;帮我查一下 P0300 和 P0420&quot;</span>, <span class="string">&quot;今天天气怎么样？&quot;</span>]  <span class="comment"># 最后一条不应调用工具</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="keyword">for</span> q <span class="keyword">in</span> cases:</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    resp = client.chat.completions.create(</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        model=model, temperature=<span class="number">0</span>, tools=tools,</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: q&#125;],</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    )</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">    calls = resp.choices[<span class="number">0</span>].message.tool_calls <span class="keyword">or</span> []</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    parsed = []</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    <span class="keyword">for</span> c <span class="keyword">in</span> calls:</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">        <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">            parsed.append((c.function.name, json.loads(c.function.arguments)))</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">        <span class="keyword">except</span> json.JSONDecodeError:</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">            parsed.append((c.function.name, <span class="string">&quot;参数不是合法 JSON&quot;</span>))</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">    <span class="built_in">print</span>(q, <span class="string">&quot;-&gt;&quot;</span>, parsed <span class="keyword">or</span> <span class="string">&quot;未调用工具&quot;</span>)</span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">python tool_check.py http://localhost:11434/v1 qwen3.5:9b      <span class="comment"># Ollama</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">python tool_check.py http://localhost:8080/v1 qwen3.5-35b-a3b  <span class="comment"># llama-server，模型名取 --alias</span></span></span></code></pre></div></div></figure>
+
+<p>配置要点：</p>
+<table>
+<thead>
+<tr>
+<th>关注点</th>
+<th>做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>思考模式</td>
+<td>Qwen3.5 默认先输出思考内容。llama-server 用 <code>--reasoning-format deepseek</code> 把思考放进 <code>reasoning_content</code>，不污染正文；不需要思考时用 <code>--chat-template-kwargs &#39;{&quot;enable_thinking&quot;:false}&#39;</code> 关闭</td>
+</tr>
+<tr>
+<td>多代理并发</td>
+<td>llama-server 用 <code>-np</code> 开多个槽位；Ollama 用 <code>OLLAMA_NUM_PARALLEL</code>，所需内存按「并发数 × 上下文」增长</td>
+</tr>
+<tr>
+<td>多模型常驻</td>
+<td>路由用小模型、执行用大模型时，Ollama 通过 <code>OLLAMA_MAX_LOADED_MODELS</code> 与 <code>keep_alive</code> 控制常驻，避免每次请求都重新加载</td>
+</tr>
+<tr>
+<td>结构化输出</td>
+<td>需要严格 JSON 时用框架的 JSON Schema 约束（Ollama 的 <code>format</code>、llama-server 的 <code>response_format</code>），比提示词约束可靠</td>
+</tr>
+<tr>
+<td>失败兜底</td>
+<td>工具参数解析失败时回退到云端模型，而不是让本地模型无限重试</td>
+</tr>
+</tbody></table>
+<h2 id="五、实测方法"><a href="#五、实测方法" class="headerlink" title="五、实测方法"></a>五、实测方法</h2><p>厂商与社区给出的数字都有特定条件，自己的机器、模型、上下文长度必须自己测。</p>
+<h3 id="5-1-指标定义"><a href="#5-1-指标定义" class="headerlink" title="5.1 指标定义"></a>5.1 指标定义</h3><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>含义</th>
+<th>主要取决于</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>预填充速度（prompt tok&#x2F;s）</td>
+<td>每秒处理的提示词 token 数</td>
+<td>GPU 算力、神经加速器、框架实现</td>
+</tr>
+<tr>
+<td>首 token 延迟（TTFT）</td>
+<td>请求发出到第一个 token 返回</td>
+<td>提示词长度 ÷ 预填充速度 + 模型是否已加载</td>
+</tr>
+<tr>
+<td>首个正文 token 延迟</td>
+<td>思考模型输出完思考、开始输出正文的时间</td>
+<td>思考长度，这是用户真正感知的等待</td>
+</tr>
+<tr>
+<td>解码速度（tok&#x2F;s）</td>
+<td>每秒生成 token 数</td>
+<td>内存带宽与激活参数量；上下文越长越慢</td>
+</tr>
+<tr>
+<td>内存压力</td>
+<td>是否发生交换、是否挤压其他进程</td>
+<td>模型体积 + KV 缓存 + 其他应用</td>
+</tr>
+</tbody></table>
+<h3 id="5-2-框架自带基准"><a href="#5-2-框架自带基准" class="headerlink" title="5.2 框架自带基准"></a>5.2 框架自带基准</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># llama.cpp：4096 token 预填充 + 128 token 解码，分别在上下文深度 0 与 16K 处测，重复 3 次</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">llama-bench -m Qwen3.5-35B-A3B-Q4_K_M.gguf -p 4096 -n 128 -d 0,16384 -fa 1 -r 3</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># MLX</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">mlx_lm.benchmark --model mlx-community/Qwen3.5-35B-A3B-4bit -p 4096 -g 128</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># Ollama：交互结束后打印 prompt eval rate 与 eval rate</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">ollama run qwen3.5:35b --verbose</span></span></code></pre></div></div></figure>
+
+<p><code>-d</code> 参数值得单独强调：上下文深度从 0 到 16K，解码速度会明显下降，只看空上下文的数字会高估长对话和编码代理场景的体验。</p>
+<h3 id="5-3-端到端测首-token-与解码速度"><a href="#5-3-端到端测首-token-与解码速度" class="headerlink" title="5.3 端到端测首 token 与解码速度"></a>5.3 端到端测首 token 与解码速度</h3><p>框架基准不含 HTTP、模板渲染、思考输出等开销。下面的脚本对任意 OpenAI 兼容端点测端到端数据，同时区分「首个 token」和「首个正文 token」：</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="59"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;bench_stream.py：对任意 OpenAI 兼容端点测首 token 延迟与解码速度。</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="string">用法：python bench_stream.py http://localhost:11434/v1 qwen3.5:9b [提示词重复次数]</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="string">&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">import</span> statistics</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">import</span> sys</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="keyword">import</span> time</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">import</span> uuid</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">base_url, model = sys.argv[<span class="number">1</span>], sys.argv[<span class="number">2</span>]</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">repeat = <span class="built_in">int</span>(sys.argv[<span class="number">3</span>]) <span class="keyword">if</span> <span class="built_in">len</span>(sys.argv) &gt; <span class="number">3</span> <span class="keyword">else</span> <span class="number">200</span>  <span class="comment"># 调整提示词长度，观察预填充的影响</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">client = OpenAI(base_url=base_url, api_key=<span class="string">&quot;local&quot;</span>)</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">BODY = <span class="string">&quot;以下是一段车辆故障描述：怠速时发动机抖动，故障码 P0171。&quot;</span> * repeat + <span class="string">&quot;\n请用三句话总结排查顺序。&quot;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">once</span>() -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    prompt = <span class="string">f&quot;[<span class="subst">&#123;uuid.uuid4().<span class="built_in">hex</span>&#125;</span>]\n<span class="subst">&#123;BODY&#125;</span>&quot;</span>  <span class="comment"># 开头加随机串，避免命中前缀缓存把预填充测没了</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    t0 = time.perf_counter()</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    first_any = first_text = <span class="literal">None</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    usage, chunks = <span class="literal">None</span>, <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    stream = client.chat.completions.create(</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">        model=model,</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: prompt&#125;],</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        max_tokens=<span class="number">1024</span>,</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        temperature=<span class="number">0</span>,</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        stream=<span class="literal">True</span>,</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        stream_options=&#123;<span class="string">&quot;include_usage&quot;</span>: <span class="literal">True</span>&#125;,</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    )</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    <span class="keyword">for</span> ev <span class="keyword">in</span> stream:</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">        now = time.perf_counter()</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">        <span class="keyword">if</span> ev.usage:</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">            usage = ev.usage</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">        <span class="keyword">if</span> <span class="keyword">not</span> ev.choices:</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">            <span class="keyword">continue</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">        delta = ev.choices[<span class="number">0</span>].delta</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">        extra = delta.model_extra <span class="keyword">or</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">        thinking = extra.get(<span class="string">&quot;reasoning&quot;</span>) <span class="keyword">or</span> extra.get(<span class="string">&quot;reasoning_content&quot;</span>)  <span class="comment"># Ollama / llama-server 的思考字段名不同</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">        <span class="keyword">if</span> delta.content <span class="keyword">or</span> thinking:</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">            chunks += <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">            first_any = first_any <span class="keyword">or</span> now</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">        <span class="keyword">if</span> delta.content <span class="keyword">and</span> first_text <span class="keyword">is</span> <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">            first_text = now</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">    end = time.perf_counter()</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">    out = usage.completion_tokens <span class="keyword">if</span> usage <span class="keyword">else</span> chunks  <span class="comment"># 含思考 token；端点不回 usage 时用分片数近似</span></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">    <span class="keyword">return</span> &#123;</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">        <span class="string">&quot;prompt_tokens&quot;</span>: usage.prompt_tokens <span class="keyword">if</span> usage <span class="keyword">else</span> <span class="literal">None</span>,</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">        <span class="string">&quot;ttft_s&quot;</span>: <span class="built_in">round</span>(first_any - t0, <span class="number">2</span>) <span class="keyword">if</span> first_any <span class="keyword">else</span> <span class="literal">None</span>,          <span class="comment"># 首个 token（含思考）</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">        <span class="string">&quot;first_answer_s&quot;</span>: <span class="built_in">round</span>(first_text - t0, <span class="number">2</span>) <span class="keyword">if</span> first_text <span class="keyword">else</span> <span class="literal">None</span>,  <span class="comment"># 首个正文 token，用户真正感知的延迟</span></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">        <span class="string">&quot;decode_tok_s&quot;</span>: <span class="built_in">round</span>(out / (end - first_any), <span class="number">1</span>) <span class="keyword">if</span> out <span class="keyword">and</span> first_any <span class="keyword">else</span> <span class="literal">None</span>,</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">runs = [once() <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">3</span>)]  <span class="comment"># 第 1 次可能包含模型加载，只看后两次</span></span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx"><span class="keyword">for</span> r <span class="keyword">in</span> runs:</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">    <span class="built_in">print</span>(r)</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">steady = [r[<span class="string">&quot;decode_tok_s&quot;</span>] <span class="keyword">for</span> r <span class="keyword">in</span> runs[<span class="number">1</span>:] <span class="keyword">if</span> r[<span class="string">&quot;decode_tok_s&quot;</span>]]</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx"><span class="keyword">if</span> steady:</span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">    <span class="built_in">print</span>(<span class="string">&quot;steady decode tok/s median:&quot;</span>, statistics.median(steady))</span></span></code></pre></div></div></figure>
+
+<p><code>first_answer_s</code> 为空，说明思考内容用完了 <code>max_tokens</code>，正文还没开始，这本身就是一个需要关注的结果。</p>
+<h3 id="5-4-内存压力怎么看"><a href="#5-4-内存压力怎么看" class="headerlink" title="5.4 内存压力怎么看"></a>5.4 内存压力怎么看</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">memory_pressure | <span class="built_in">tail</span> -1      <span class="comment"># System-wide memory free percentage，持续走低说明内存吃紧</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">sysctl vm.swapusage            <span class="comment"># 推理过程中 used 持续增长 = 已经在交换，速度数据作废</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">vm_stat 1                      <span class="comment"># 每秒刷新，关注 Swapouts 列是否持续增加</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">ollama ps                      <span class="comment"># SIZE、PROCESSOR（应为 100% GPU）与 CONTEXT</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="built_in">sudo</span> powermetrics --samplers gpu_power -i 1000 -n 5   <span class="comment"># GPU 频率与功耗</span></span></span></code></pre></div></div></figure>
+
+<p>判断标准很简单：测试期间出现交换增长，或者 <code>ollama ps</code> 显示部分层跑在 CPU 上，这组数据就不能代表该模型在这台机器上的正常表现，应当降低量化位数、缩短上下文或换模型。</p>
+<h3 id="5-5-测试纪律"><a href="#5-5-测试纪律" class="headerlink" title="5.5 测试纪律"></a>5.5 测试纪律</h3><table>
+<thead>
+<tr>
+<th>陷阱</th>
+<th>后果</th>
+<th>做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>相同提示词重复测</td>
+<td>命中前缀缓存，首 token 延迟被低估</td>
+<td>每次在提示词开头加随机串</td>
+</tr>
+<tr>
+<td>把首次请求算进去</td>
+<td>模型加载时间混进首 token 延迟</td>
+<td>先预热一次，或单独记录加载时间</td>
+</tr>
+<tr>
+<td>只测空上下文</td>
+<td>高估长对话和编码代理场景的速度</td>
+<td>用 <code>llama-bench -d</code> 或加长提示词测多个深度</td>
+</tr>
+<tr>
+<td>电池供电或低电量模式</td>
+<td>性能被限制，数据偏低</td>
+<td>接电源，关闭低电量模式</td>
+</tr>
+<tr>
+<td>长时间连续压测</td>
+<td>散热降频，后段数据偏低</td>
+<td>记录每轮数据，观察是否逐轮下降</td>
+</tr>
+<tr>
+<td>只比 tok&#x2F;s</td>
+<td>忽略量化带来的质量损失</td>
+<td>用同一批业务问题做质量对比，例如上文的 <code>tool_check.py</code></td>
+</tr>
+</tbody></table>
+<h2 id="2026-09-补记：2026-04-之后的新模型与框架版本"><a href="#2026-09-补记：2026-04-之后的新模型与框架版本" class="headerlink" title="2026-09 补记：2026-04 之后的新模型与框架版本"></a>2026-09 补记：2026-04 之后的新模型与框架版本</h2><p>以下为 2026-04-08 之后核实到的变化，正文的原理、方法与档位划分不受影响：</p>
+<ul>
+<li><strong>模型</strong>：Qwen3.6 于 2026-04 中下旬在 Hugging Face 上架（35B-A3B 与 27B 两个规格）；Google 在 2026-04-16 发布 Gemma 4 的 MTP 版本，2026-06-03 发布 Gemma 4 12B Unified；Qwen3.8 系列于 2026-08 上架（含 27B 等规格，模型卡注明基于 Qwen3.5 架构）。选型时按第三节的方法重新核对体积与 <code>config.json</code>。</li>
+<li><strong>Ollama</strong>：0.21.0（2026-04-16）起 Gemma 4 可以在 MLX 引擎上运行；0.30.0（2026-05-13）改进了与 llama.cpp 的兼容性，作为 MLX 引擎之外对更多硬件的补充；0.32.6（2026-08-04）起 MLX 引擎自动利用 Qwen3.5 的 MTP 头做投机解码。截至 2026-09-29 最新为 0.34.4（2026-09-23）。</li>
+<li><strong>MLX</strong>：mlx 最新为 0.32.2（2026-08-25）；mlx-lm 在 PyPI 上的最新版本仍为 0.31.3（2026-04-22）。</li>
+<li><strong>LM Studio</strong>：截至 2026-09-29 最新为 0.4.25（2026-09-19）；官方并行请求文档仍标注连续批处理只支持 llama.cpp 引擎。</li>
+<li><strong>llama.cpp</strong>：构建号已到 b11235（2026-09-28）。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/07/14/technical-docs/%E6%A8%A1%E5%9E%8B%E5%BE%AE%E8%B0%83%E4%B8%8E%E5%AE%9A%E5%88%B6%E8%83%BD%E5%8A%9B/">架构师的模型微调决策手册：何时微调、怎么做、如何验收</a></h3>
+        <p>面向企业 Agent 平台的微调决策手册：四级手段阶梯、托管与自建取舍、成本模型、诊断工单数据飞轮…</p>
+        <a class="btn primary" href="/2026/07/14/technical-docs/%E6%A8%A1%E5%9E%8B%E5%BE%AE%E8%B0%83%E4%B8%8E%E5%AE%9A%E5%88%B6%E8%83%BD%E5%8A%9B/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/02/10/technical-docs/Dify%E6%B7%B1%E5%BA%A6%E7%A0%94%E7%A9%B6DSL%E5%AE%9E%E6%88%98/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Dify 深度研究工作流实战：DSL 全解与编排/执行分层</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 7 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E8%BF%99%E7%AF%87%E6%8C%87%E5%8D%97%E7%9A%84%E4%BD%BF%E7%94%A8%E6%96%B9%E5%BC%8F" data-toc-target="这篇指南的使用方式"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">这篇指南的使用方式</span></a><a class="toc-level-2" href="#%E4%B8%80%E3%80%81%E7%A1%AC%E4%BB%B6%E5%8E%9F%E7%90%86" data-toc-target="一、硬件原理"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">一、硬件原理</span></a><a class="toc-level-3" href="#1-1-%E6%8E%A8%E7%90%86%E7%9A%84%E4%B8%A4%E4%B8%AA%E9%98%B6%E6%AE%B5" data-toc-target="1-1-推理的两个阶段"><span class="toc-text">1.1 推理的两个阶段</span></a><a class="toc-level-3" href="#1-2-%E6%9C%BA%E5%9E%8B%E4%B8%8E%E5%86%85%E5%AD%98%E6%A1%A3%E4%BD%8D" data-toc-target="1-2-机型与内存档位"><span class="toc-text">1.2 机型与内存档位</span></a><a class="toc-level-3" href="#1-3-GPU-%E5%8F%AF%E7%94%A8%E5%86%85%E5%AD%98%E4%B8%8A%E9%99%90%EF%BC%9Aiogpu-wired-limit-mb" data-toc-target="1-3-GPU-可用内存上限：iogpu-wired-limit-mb"><span class="toc-text">1.3 GPU 可用内存上限：iogpu.wired_limit_mb</span></a><a class="toc-level-3" href="#1-4-KV-%E7%BC%93%E5%AD%98%E6%80%8E%E4%B9%88%E4%BC%B0%E7%AE%97" data-toc-target="1-4-KV-缓存怎么估算"><span class="toc-text">1.4 KV 缓存怎么估算</span></a><a class="toc-level-2" href="#%E4%BA%8C%E3%80%81%E6%8E%A8%E7%90%86%E6%A1%86%E6%9E%B6%E5%AF%B9%E6%AF%94" data-toc-target="二、推理框架对比"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">二、推理框架对比</span></a><a class="toc-level-2" href="#%E4%B8%89%E3%80%81%E6%8C%89%E5%86%85%E5%AD%98%E6%A1%A3%E4%BD%8D%E9%80%89%E6%A8%A1%E5%9E%8B" data-toc-target="三、按内存档位选模型"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">三、按内存档位选模型</span></a><a class="toc-level-2" href="#%E5%9B%9B%E3%80%81%E4%B8%89%E7%B1%BB%E5%9C%BA%E6%99%AF%E9%85%8D%E7%BD%AE" data-toc-target="四、三类场景配置"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">四、三类场景配置</span></a><a class="toc-level-3" href="#4-1-%E7%BC%96%E7%A0%81%E5%8A%A9%E6%89%8B" data-toc-target="4-1-编码助手"><span class="toc-text">4.1 编码助手</span></a><a class="toc-level-3" href="#4-2-RAG-%E6%9C%AC%E5%9C%B0%E7%9F%A5%E8%AF%86%E5%BA%93" data-toc-target="4-2-RAG-本地知识库"><span class="toc-text">4.2 RAG 本地知识库</span></a><a class="toc-level-3" href="#4-3-Agent-%E5%B7%A5%E5%85%B7%E8%B0%83%E7%94%A8" data-toc-target="4-3-Agent-工具调用"><span class="toc-text">4.3 Agent 工具调用</span></a><a class="toc-level-2" href="#%E4%BA%94%E3%80%81%E5%AE%9E%E6%B5%8B%E6%96%B9%E6%B3%95" data-toc-target="五、实测方法"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">五、实测方法</span></a><a class="toc-level-3" href="#5-1-%E6%8C%87%E6%A0%87%E5%AE%9A%E4%B9%89" data-toc-target="5-1-指标定义"><span class="toc-text">5.1 指标定义</span></a><a class="toc-level-3" href="#5-2-%E6%A1%86%E6%9E%B6%E8%87%AA%E5%B8%A6%E5%9F%BA%E5%87%86" data-toc-target="5-2-框架自带基准"><span class="toc-text">5.2 框架自带基准</span></a><a class="toc-level-3" href="#5-3-%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%B5%8B%E9%A6%96-token-%E4%B8%8E%E8%A7%A3%E7%A0%81%E9%80%9F%E5%BA%A6" data-toc-target="5-3-端到端测首-token-与解码速度"><span class="toc-text">5.3 端到端测首 token 与解码速度</span></a><a class="toc-level-3" href="#5-4-%E5%86%85%E5%AD%98%E5%8E%8B%E5%8A%9B%E6%80%8E%E4%B9%88%E7%9C%8B" data-toc-target="5-4-内存压力怎么看"><span class="toc-text">5.4 内存压力怎么看</span></a><a class="toc-level-3" href="#5-5-%E6%B5%8B%E8%AF%95%E7%BA%AA%E5%BE%8B" data-toc-target="5-5-测试纪律"><span class="toc-text">5.5 测试纪律</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A2026-04-%E4%B9%8B%E5%90%8E%E7%9A%84%E6%96%B0%E6%A8%A1%E5%9E%8B%E4%B8%8E%E6%A1%86%E6%9E%B6%E7%89%88%E6%9C%AC" data-toc-target="2026-09-补记：2026-04-之后的新模型与框架版本"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">2026-09 补记：2026-04 之后的新模型与框架版本</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/self-hosted-ai-infra/" style="--rail: 88%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">7 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E8%BF%99%E7%AF%87%E6%8C%87%E5%8D%97%E7%9A%84%E4%BD%BF%E7%94%A8%E6%96%B9%E5%BC%8F" data-toc-target="这篇指南的使用方式" data-title="01 · 这篇指南的使用方式" aria-label="这篇指南的使用方式"></a><a class="toc-strip__dot" href="#%E4%B8%80%E3%80%81%E7%A1%AC%E4%BB%B6%E5%8E%9F%E7%90%86" data-toc-target="一、硬件原理" data-title="02 · 一、硬件原理" aria-label="一、硬件原理"></a><a class="toc-strip__dot" href="#%E4%BA%8C%E3%80%81%E6%8E%A8%E7%90%86%E6%A1%86%E6%9E%B6%E5%AF%B9%E6%AF%94" data-toc-target="二、推理框架对比" data-title="03 · 二、推理框架对比" aria-label="二、推理框架对比"></a><a class="toc-strip__dot" href="#%E4%B8%89%E3%80%81%E6%8C%89%E5%86%85%E5%AD%98%E6%A1%A3%E4%BD%8D%E9%80%89%E6%A8%A1%E5%9E%8B" data-toc-target="三、按内存档位选模型" data-title="04 · 三、按内存档位选模型" aria-label="三、按内存档位选模型"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E3%80%81%E4%B8%89%E7%B1%BB%E5%9C%BA%E6%99%AF%E9%85%8D%E7%BD%AE" data-toc-target="四、三类场景配置" data-title="05 · 四、三类场景配置" aria-label="四、三类场景配置"></a><a class="toc-strip__dot" href="#%E4%BA%94%E3%80%81%E5%AE%9E%E6%B5%8B%E6%96%B9%E6%B3%95" data-toc-target="五、实测方法" data-title="06 · 五、实测方法" aria-label="五、实测方法"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A2026-04-%E4%B9%8B%E5%90%8E%E7%9A%84%E6%96%B0%E6%A8%A1%E5%9E%8B%E4%B8%8E%E6%A1%86%E6%9E%B6%E7%89%88%E6%9C%AC" data-toc-target="2026-09-补记：2026-04-之后的新模型与框架版本" data-title="07 · 2026-09 补记：2026-04 之后的新模型与框架版本" aria-label="2026-09 补记：2026-04 之后的新模型与框架版本"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/MacBook本地大模型部署","title":"MacBook 本地大模型部署指南：统一内存、推理框架与模型选型","url":"/2026/04/08/technical-docs/MacBook%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2/","path":"self-hosted-ai-infra","index":6,"total":8,"next":{"title":"架构师的模型微调决策手册：何时微调、怎么做、如何验收","url":"/2026/07/14/technical-docs/%E6%A8%A1%E5%9E%8B%E5%BE%AE%E8%B0%83%E4%B8%8E%E5%AE%9A%E5%88%B6%E8%83%BD%E5%8A%9B/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

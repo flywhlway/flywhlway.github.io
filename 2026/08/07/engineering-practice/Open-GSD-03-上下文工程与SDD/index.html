@@ -1,0 +1,1537 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Open-GSD 源码解析（三）：上下文工程与五阶段 SDD 循环 · 飞轮之道</title>
+<meta name="description" content="Open-GSD 源码解析系列第三篇：拆解上下文工程在源码中的七类机制，包括子代理隔离、惰性加载、上下文监测与 Context Restore，并逐阶段解析 Discuss、Plan、Execute、Verify、Ship 五阶段循环。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/08/07/engineering-practice/Open-GSD-03-%E4%B8%8A%E4%B8%8B%E6%96%87%E5%B7%A5%E7%A8%8B%E4%B8%8ESDD/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Open-GSD 源码解析（三）：上下文工程与五阶段 SDD 循环 · 飞轮之道">
+<meta property="og:description" content="Open-GSD 源码解析系列第三篇：拆解上下文工程在源码中的七类机制，包括子代理隔离、惰性加载、上下文监测与 Context Restore，并逐阶段解析 Discuss、Plan、Execute、Verify、Ship 五阶段循环。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/08/07/engineering-practice/Open-GSD-03-%E4%B8%8A%E4%B8%8B%E6%96%87%E5%B7%A5%E7%A8%8B%E4%B8%8ESDD/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / <a href="/paths/spec-driven-development/">源码深读</a><a class="series-chip" href="/paths/spec-driven-development/" title="查看学习路径">第 5 / 10 篇</a>
+    </div>
+    <h1>Open-GSD 源码解析（三）：上下文工程与五阶段 SDD 循环</h1>
+    <p class="article-deck">Open-GSD 源码解析系列第三篇：拆解上下文工程在源码中的七类机制，包括子代理隔离、惰性加载、上下文监测与 Context Restore…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>38 分钟</span>
+      <span>发布于 2026.08</span>
+      <a class="article-meta__tag" href="/tags/%E8%A7%84%E8%8C%83%E9%A9%B1%E5%8A%A8%E5%BC%80%E5%8F%91/">#规范驱动开发</a><a class="article-meta__tag" href="/tags/AI-%E7%BC%96%E7%A8%8B/">#AI 编程</a><a class="article-meta__tag" href="/tags/Open-GSD/">#Open-GSD</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>上下文隔离不是免费的：中断点的数量本身就是成本，SubAgent 化的收益必须扣除冷启动成本后再评估。</li><li>窗口变大只放宽“读多深”，不放宽“读多广”，跨 Phase 信息正是 Context Rot 的原材料。</li><li>Context Restore 的真实形态是确保上下文可被安全丢弃，恢复的是磁盘状态而不是对话历史。</li><li>五阶段循环的每一步都在防御上一步无法防御的失效模式，Plan 阶段是歧义代价最高的时刻。</li><li>规范驱动的复利在 Ship 阶段兑现：前面为机器可读而写的结构化制品，最后自动装配成给人看的 PR 正文。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p><strong>本篇导读</strong>：本篇深入 GSD Core 的两大方法论支柱：上下文工程（Context Engineering）如何在源码中落地为七类可指认的机制，以及规范驱动开发（SDD）的 Discuss → Plan → Execute → Verify → Ship 五阶段循环如何逐阶段运转。上一篇给出了仓库目录与十一层架构的静态地图，本篇转向这些结构在一次真实开发循环中的动态行为。</p>
+<h2 id="第四部分-·-Context-Engineering（上下文工程深度解析）"><a href="#第四部分-·-Context-Engineering（上下文工程深度解析）" class="headerlink" title="第四部分 · Context Engineering（上下文工程深度解析）"></a>第四部分 · Context Engineering（上下文工程深度解析）</h2><blockquote>
+<p>上下文工程是整个系列的重点之一。本系列第一篇（第一部分）已从<strong>理念层面</strong>介绍过 Context Rot 与”新鲜子代理”解法；本部分不再重复理念，而是深入到<strong>机制层面</strong>——GSD Core 究竟用哪些具体的、可在源码中指认的手段，把”上下文工程”从一句口号变成一套可执行的纪律。</p>
+</blockquote>
+<h3 id="4-0-先结清一笔旧账：src-cts-与-bin-lib-cjs-的编译映射（本系列第二篇第二、三部分遗留的未决问题）"><a href="#4-0-先结清一笔旧账：src-cts-与-bin-lib-cjs-的编译映射（本系列第二篇第二、三部分遗留的未决问题）" class="headerlink" title="4.0 先结清一笔旧账：src/*.cts 与 bin/lib/*.cjs 的编译映射（本系列第二篇第二、三部分遗留的未决问题）"></a>4.0 先结清一笔旧账：<code>src/*.cts</code> 与 <code>bin/lib/*.cjs</code> 的编译映射（本系列第二篇第二、三部分遗留的未决问题）</h3><p>本系列第二篇（第二部分）2.2.2 节与本系列第二篇（第三部分）3.12 节都诚实地记录了一个未查清的问题：顶层 <code>src/</code> 有约 180 个 <code>.cts</code>，而 <code>gsd-core/bin/lib/</code> 只有 17 个 <code>.cjs</code>，数量对不上，当时我拒绝在未验证的情况下臆测其映射关系。本部分研究过程中因为需要追踪 <code>prompt-budget.cts</code>（token 估算模块）而顺带查清了这件事，现在给出<strong>结论性答案</strong>：</p>
+<ol>
+<li><strong><code>tsconfig.build.json</code> 的 <code>include</code> 是 <code>[&quot;src/**/*.cts&quot;]</code>，<code>outDir</code> 是 <code>gsd-core/bin/lib</code></strong> ——也就是说，映射关系确实是<strong>全量 1:1</strong> 的，<code>src/</code> 下每一个 <code>.cts</code> 都编译成 <code>bin/lib/</code> 下的同名 <code>.cjs</code>。我此前的怀疑（”可能只编译一小部分”）是错的。</li>
+<li><strong>绝大多数编译产物被 <code>.gitignore</code> 显式忽略</strong>——实测 <code>.gitignore</code> 中针对 <code>gsd-core/bin/lib/</code> 的忽略条目多达 <strong>166 条</strong>（逐个文件名列举，而非通配）。这就是为什么一次全新 <code>git clone</code> 只能看到 17 个 <code>.cjs</code>：其余的根本不在版本库里，它们在 <code>npm run build:lib</code> 时才被生成（<code>package.json</code> 的 <code>prepare</code> 与 <code>prepack</code> 钩子会自动触发）。</li>
+<li><code>tsconfig.build.json</code> 顶部的注释一句话说明了这套设计的来龙去脉（ADR-457 “build-at-publish”）：<strong>“随着模块逐步迁移，它们会从手写的 <code>bin/lib/*.cjs</code> 搬进这里的 <code>src/*.cts</code>“</strong> ——这是一场<strong>正在进行中的渐进式 TypeScript 迁移</strong>。</li>
+<li>那么留在版本库里的 17 个 <code>.cjs</code> 是什么？实测分为三类：<ul>
+<li><strong>生成并提交型</strong>——<code>capability-registry.cjs</code>、<code>loop-host-contract.cjs</code>、<code>package-identity.cjs</code> 等，由 <code>scripts/gen-*.cjs</code> 生成后<strong>故意提交</strong>（<code>package.json</code> 的 <code>version</code> 钩子里能看到显式的 <code>git add gsd-core/bin/lib/capability-registry.cjs</code>），因为运行时需要一份”冻结的第一方注册表”（本系列第二篇第三部分 3.11 节 Plugin Layer 的核心前提）；</li>
+<li><strong>尚未迁移的手写型</strong>——<code>capability-command-router.cjs</code>、<code>capability-validator.cjs</code>、<code>legacy-cleanup.cjs</code>、<code>profile-pipeline-command-router.cjs</code>、<code>stale-bake-guard.cjs</code> 等，还没轮到被搬进 <code>src/</code>；</li>
+<li><strong>编译产物但故意提交型</strong>——<code>api-coverage.cjs</code>、<code>assumption-delta.cjs</code>、<code>claude-orchestration.cjs</code>、<code>external-job.cjs</code>、<code>runtime-artifact-install-plan.cjs</code>、<code>state-transition.cjs</code> 等既有 <code>src/*.cts</code> 源头、又被提交进库。这类文件的一致性由一个专门的 CI 校验脚本 <code>scripts/lint-compiled-artifact-sync.cjs --check</code>（串在 <code>npm run lint:generated-sync</code> 里）保障——又一次印证本系列第二篇（第二部分）2.4 节归纳的”声明 → 生成 → 校验漂移”三件套模式。</li>
+</ul>
+</li>
+</ol>
+<p><strong>这个小插曲本身就是一条源码阅读方法论</strong>，值得记进本系列第六篇（第十八部分）：当仓库里”源文件数”与”产物数”对不上时，第一件该做的事不是猜测编译范围，而是去读 <code>tsconfig</code>&#x2F;<code>.gitignore</code>&#x2F;构建脚本这三件套——它们共同定义了”哪些东西是版本库里的真相，哪些是构建时才存在的真相”。</p>
+<hr>
+<h3 id="4-1-Context-Rot-的机制性根因回顾（一句话版）"><a href="#4-1-Context-Rot-的机制性根因回顾（一句话版）" class="headerlink" title="4.1 Context Rot 的机制性根因回顾（一句话版）"></a>4.1 Context Rot 的机制性根因回顾（一句话版）</h3><p>本系列第一篇（第一部分）已完整转述 <code>docs/explanation/context-engineering.md</code> 的论述，此处只保留最凝练的一句以承接下文：</p>
+<blockquote>
+<p>模型不会”遗忘”（它从未以人类的方式”记住”过），它是在一个有限窗口上分配注意力权重；当窗口被累积的噪声填满，信噪比就下降——<strong>这不是模型 bug，而是 Transformer 注意力在长序列上的固有属性</strong>。</p>
+</blockquote>
+<p>关键推论是：<strong>任何”提醒模型别忘了”的做法都是徒劳的</strong>，因为问题不在”记忆”而在”注意力预算”。唯一有效的干预是<strong>减少进入窗口的东西</strong>。GSD Core 的全部上下文工程机制，本质上都是这一条推论的不同施力点。</p>
+<hr>
+<h3 id="4-2-GSD-Core-的七种上下文控制机制总览"><a href="#4-2-GSD-Core-的七种上下文控制机制总览" class="headerlink" title="4.2 GSD Core 的七种上下文控制机制总览"></a>4.2 GSD Core 的七种上下文控制机制总览</h3><p>从源码里可指认的机制共有七类，它们作用在上下文生命周期的不同位置：</p>
+<pre class="mermaid">flowchart LR
+    subgraph PREVENT["① 预防：不让噪声进来"]
+        M1["机制1 · 新鲜子代理隔离&lt;br/&gt;（每次派生全新窗口）"]
+        M2["机制2 · 渐进式披露&lt;br/&gt;（workflow 字节预算 + 按需 Read）"]
+        M3["机制3 · 读取深度纪律&lt;br/&gt;（frontmatter-only vs full body）"]
+    end
+    subgraph MEASURE["② 度量：知道自己烧到哪了"]
+        M4["机制4 · 上下文余量监控&lt;br/&gt;（statusline→桥接文件→PostToolUse Hook）"]
+        M5["机制5 · Token 预算估算与校准&lt;br/&gt;（estimate/actuals + 项目级 factor）"]
+    end
+    subgraph REACT["③ 反应：烧到临界点怎么办"]
+        M6["机制6 · 降级分级与上下文守卫&lt;br/&gt;（PEAK/GOOD/DEGRADING/POOR + context_guard_mode）"]
+        M7["机制7 · 检查点与续接&lt;br/&gt;（pause-work + /clear + 续接格式）"]
+    end
+    PREVENT --&gt; MEASURE --&gt; REACT
+    REACT -.“/clear 后从磁盘状态重建”.-&gt; PREVENT</pre>
+
+
+<p>以下逐一展开。</p>
+<hr>
+<h3 id="4-3-机制-1：新鲜子代理隔离-——-以及一条”隔离不是免费的”的真实教训"><a href="#4-3-机制-1：新鲜子代理隔离-——-以及一条”隔离不是免费的”的真实教训" class="headerlink" title="4.3 机制 1：新鲜子代理隔离 —— 以及一条”隔离不是免费的”的真实教训"></a>4.3 机制 1：新鲜子代理隔离 —— 以及一条”隔离不是免费的”的真实教训</h3><p>新鲜子代理的原理本系列第一篇（第一部分）已述，此处补充一条<strong>在源码中被明确量化过的代价</strong>，它是本部分最有价值的发现之一。</p>
+<p><code>gsd-core/references/checkpoints.md</code> 记录了 <code>#3309</code> 引入的一次默认行为变更：<code>workflow.human_verify_mode</code> 的默认值从”mid-flight”（每遇到一个 <code>checkpoint:human-verify</code> 就当场停下等人）改为 <strong><code>end-of-phase</code></strong>（全程不中断，把所有需要人工确认的点收集起来，在 Phase 结束时一次性批量呈现）。变更理由原文如下（转述）：</p>
+<blockquote>
+<p>每一次中途停顿都要付出一次 Executor <strong>完全冷启动</strong>的代价（CLAUDE.md、MEMORY.md、STATE.md、重新读取 plan），因为<strong>子代理的上下文在暂停时会被丢弃</strong>。一个含 N 个 human-verify 检查点的 Plan，要付 <strong>N+1 次</strong>冷启动代价——在真实项目上实测为<strong>每次往返数万 token</strong>。</p>
+</blockquote>
+<p>这段话极其重要，因为它揭示了新鲜上下文隔离的<strong>对称代价</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>隔离带来的收益</th>
+<th>隔离带来的代价</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>每个 Agent 在满血注意力下工作，不受历史噪声污染</td>
+<td>每次派生都要重新加载全部必需上下文——<strong>没有任何跨派生的”记忆复用”</strong></td>
+</tr>
+<tr>
+<td>主编排会话的上下文增长缓慢可预测</td>
+<td>一次中断 &#x3D; 一次完整冷启动 &#x3D; 数万 token</td>
+</tr>
+<tr>
+<td>Agent 之间不会互相污染</td>
+<td>任何需要跨 Agent 传递的信息<strong>必须先落盘</strong>，否则就丢了</td>
+</tr>
+</tbody></table>
+<p><strong>设计启示</strong>（会在本系列第六篇第十六、十七部分复用）：在设计任何”子代理隔离”架构时，<strong>中断点的数量本身就是一项成本</strong>，而不是免费的安全措施。GSD 的应对不是取消检查点，而是把检查点<strong>批量化后移</strong>——从”N 次打断 + N+1 次冷启动”变成”0 次打断 + 1 次批量确认”。这与一些车辆日志诊断技能包里”非编排类技能尽量用 SubAgent 加载执行以保护主 Agent 上下文”的做法是同一族的权衡，但 GSD 的这条数据提醒：<strong>SubAgent 化的收益必须扣除冷启动成本后再评估</strong>，尤其当子代理需要反复往返时。</p>
+<p>值得注意的是，这条变更只影响 <code>checkpoint:human-verify</code>（事后验证类）；<code>checkpoint:decision</code> 与 <code>checkpoint:human-action</code>（前者要人做决定、后者要人做机器做不了的操作，如提供 API Key）<strong>不受影响</strong>——因为这两类门的是”工作本身”，而不是”事后确认”，无法后移。这是一处很细腻的分类学处理。</p>
+<hr>
+<h3 id="4-4-机制-2：渐进式披露-——-从”字节预算”到”-导入陷阱”"><a href="#4-4-机制-2：渐进式披露-——-从”字节预算”到”-导入陷阱”" class="headerlink" title="4.4 机制 2：渐进式披露 —— 从”字节预算”到”@-导入陷阱”"></a>4.4 机制 2：渐进式披露 —— 从”字节预算”到”@-导入陷阱”</h3><p>本系列第二篇（第二部分）2.2.1 节已完整介绍 workflow 文件的三级字节预算（XL 90,000 &#x2F; LARGE 54,000 &#x2F; DEFAULT 38,000）及其”保护注意力而非账单”的理由。本部分补充<strong>执行层面最容易踩的一个坑</strong>，原文在 <code>docs/ARCHITECTURE.md</code> 中被明确警告（<code>#720</code>）：</p>
+<blockquote>
+<p>因为预算衡量的是<strong>单个文件</strong>，它只是真实目标（<strong>受约束的已加载上下文</strong>）的一个代理指标。抽取只有在被抽取的内容是<strong>惰性加载</strong>（在需要它的那一步才 Read）时才真正有帮助。把散文挪进一个仍然被急切 <code>@</code>-导入的文件，只会缩小被测量的文件，而不会缩小已加载的上下文——那是在<strong>糊弄代理指标，而不是服务真实目标</strong>。</p>
+</blockquote>
+<p>配套的具体反例（同样来自源码文档）：<code>gsd-planner</code>&#x2F;<code>gsd-executor</code> 的 MVP 专用引用体（<code>planner-mvp-mode.md</code>、<code>user-story-template.md</code>、<code>skeleton-template.md</code>、<code>execute-mvp-tdd.md</code>）被刻意设计为<strong>由 Agent 在走到 MVP 路径时主动 Read</strong>，而不是写成 <code>@</code>-导入——因为**”<code>@</code>-导入即使被写在条件分支背后，仍然会被无条件急切加载”**。这是一个非常容易在自研框架里重犯的错误：以为”只在 if 分支里引用了这个文件”就等于”只在那个分支才付出 token 成本”，实际上如果引用机制是急切导入语义，成本在进入 if 之前就已经付掉了。</p>
+<pre class="mermaid">flowchart TB
+    subgraph WRONG["❌ 糊弄代理指标的做法"]
+        W1["parent.md（文件变小了 ✓）"]
+        W2["@import mode-a.md&lt;br/&gt;@import mode-b.md&lt;br/&gt;@import mode-c.md"]
+        W1 --&gt; W2
+        W2 --&gt; W3["实际加载上下文：&lt;br/&gt;parent + a + b + c&lt;br/&gt;（一点没少 ✗）"]
+    end
+    subgraph RIGHT["✅ 真正服务目标的做法"]
+        R1["parent.md（薄分发器）"]
+        R2["运行时判断当前模式 = b"]
+        R1 --&gt; R2
+        R2 --&gt; R3["Read('modes/b.md')&lt;br/&gt;仅此一份"]
+        R3 --&gt; R4["实际加载上下文：&lt;br/&gt;parent + b&lt;br/&gt;（真的少了 ✓）"]
+    end</pre>
+
+
+<hr>
+<h3 id="4-5-机制-3：读取深度纪律-——-随上下文窗口大小自适应"><a href="#4-5-机制-3：读取深度纪律-——-随上下文窗口大小自适应" class="headerlink" title="4.5 机制 3：读取深度纪律 —— 随上下文窗口大小自适应"></a>4.5 机制 3：读取深度纪律 —— 随上下文窗口大小自适应</h3><p><code>gsd-core/references/context-budget.md</code> 给出了一套<strong>所有派生子代理的工作流都必须遵守</strong>的通用规则，这是全框架最”硬”的上下文纪律：</p>
+<p><strong>五条通用规则</strong>（原文转述）：</p>
+<ol>
+<li><strong>永远不要</strong>读取 Agent 定义文件（<code>agents/*.md</code>）——<code>subagent_type</code> 会自动加载它们（重复读取纯属浪费）；</li>
+<li><strong>永远不要</strong>把大文件内联进子代理的 Prompt——<strong>告诉 Agent 自己去磁盘上读</strong>；</li>
+<li><strong>读取深度随上下文窗口大小伸缩</strong>——检查 <code>.planning/config.json</code> 里的 <code>context_window</code> 字段；</li>
+<li><strong>委派</strong>重活给子代理——编排器负责路由，不负责执行；</li>
+<li><strong>主动预警</strong>——如果已经消耗了可观的上下文（多次大文件读取、多个子代理结果），主动提醒用户考虑做检查点。</li>
+</ol>
+<p><strong>读取深度对照表</strong>（原文表格）：</p>
+<table>
+<thead>
+<tr>
+<th>上下文窗口</th>
+<th>子代理输出读取</th>
+<th>SUMMARY.md</th>
+<th>VERIFICATION.md</th>
+<th>其他 Phase 的 PLAN.md</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&lt; 500k（200k 模型）</td>
+<td>仅 frontmatter</td>
+<td>仅 frontmatter</td>
+<td>仅 frontmatter</td>
+<td>仅当前 Phase</td>
+</tr>
+<tr>
+<td>≥ 500k（1M 模型）</td>
+<td>允许读完整正文</td>
+<td>允许读完整正文</td>
+<td>允许读完整正文</td>
+<td>仍然仅当前 Phase</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>如何判断</strong>：读 <code>.planning/config.json</code> 检查 <code>context_window</code>；<strong>字段缺失时按 200k 处理</strong>（保守默认）。</p>
+</blockquote>
+<p>这张表里藏着一个很聪明的设计：注意最右列——即便在 1M 模型下，”其他 Phase 的 PLAN.md”<strong>依然不允许读</strong>。也就是说，窗口变大<strong>只放宽”读多深”，不放宽”读多广”</strong>。原因不难理解：读得更深是在同一个任务上下文内提升精度；读得更广则是引入跨 Phase 的无关信息——那正是 Context Rot 的原材料。<strong>窗口扩大不是放弃纪律的理由，只是调整纪律参数的理由</strong>，这一条对任何准备”等 1M 上下文普及了就不用做上下文工程了”的团队都是一记提醒。</p>
+<h4 id="一个-GSD-明确声明”不归我管”、但影响可能更大的成本项：MCP-工具-Schema"><a href="#一个-GSD-明确声明”不归我管”、但影响可能更大的成本项：MCP-工具-Schema" class="headerlink" title="一个 GSD 明确声明”不归我管”、但影响可能更大的成本项：MCP 工具 Schema"></a>一个 GSD 明确声明”不归我管”、但影响可能更大的成本项：MCP 工具 Schema</h4><p><code>context-budget.md</code> 用了一整节讲一件 GSD 自己管不了的事，坦诚得少见（转述）：</p>
+<blockquote>
+<p>每一个启用的 MCP Server 都会把它的工具 Schema 注入<strong>每一轮对话</strong>，无论你是否调用了它的任何工具。重量级 Server（浏览器&#x2F;playwright、Mac-tools、Windows-tools）每个可能耗费 <strong>20k+ token&#x2F;轮</strong>——这往往<strong>远远超过</strong> GSD 自己通过 <code>model_profile</code> 调优所能节省的量。这是 Claude Code 宿主层面的事，<strong>不是 GSD 的事</strong>：开关在 <code>.claude/settings.json</code> 的 <code>enabledMcpjsonServers</code> &#x2F; <code>disabledMcpjsonServers</code> 里。</p>
+</blockquote>
+<p>原文进一步算了一笔账：如果一个项目有 5 个用不上的 MCP Server，各自平均 5k token 的 Schema，那么<strong>每一轮</strong>对话在助手读到第一个项目文件之前，就已经先交了 25k token 的”过路费”。而且这个成本有<strong>乘数效应</strong>——它与你选哪个 <code>model_profile</code> 无关，且会<strong>在编排器派生的每一个子代理上叠加</strong>。文档给出的”Phase 前 MCP 审计清单”（本 Phase 无 UI 工作就关掉浏览器工具、关掉跨项目遗留的 MCP、合并重复 Server 等）是本系列中对<strong>日常实操最立竿见影</strong>的一段建议——它甚至不需要你采用 GSD 就能受益。</p>
+<hr>
+<h3 id="4-6-机制-4：上下文余量监控-——-一条完整的、可复制的观测链路"><a href="#4-6-机制-4：上下文余量监控-——-一条完整的、可复制的观测链路" class="headerlink" title="4.6 机制 4：上下文余量监控 —— 一条完整的、可复制的观测链路"></a>4.6 机制 4：上下文余量监控 —— 一条完整的、可复制的观测链路</h3><p>这是 GSD 上下文工程里工程实现最完整、也最容易被其他项目照搬的一条链路。源码：<code>docs/context-monitor.md</code> + <code>hooks/gsd-statusline.js</code> + <code>hooks/gsd-context-monitor.js</code>。</p>
+<p><strong>它要解决的问题</strong>（原文）：状态栏（statusline）把上下文使用量展示给了<strong>用户</strong>，但<strong>代理本身对上下文限制毫无感知</strong>。当上下文见底时，代理会一路工作到撞墙为止——可能正卡在任务中途，且没有保存任何状态。</p>
+<p><strong>完整链路</strong>：</p>
+<pre class="mermaid">sequenceDiagram
+    participant SL as Statusline Hook&lt;br/&gt;(gsd-statusline.js)
+    participant BR as 桥接文件&lt;br/&gt;/tmp/claude-ctx-&#123;session_id&#125;.json
+    participant CM as Context Monitor&lt;br/&gt;(gsd-context-monitor.js)
+    participant AG as Agent（对话上下文）
+
+    Note over SL: 宿主在 statusLine 事件调用
+    SL-&gt;&gt;BR: 写入 &#123;session_id, remaining_percentage, used_pct, timestamp&#125;
+    Note over CM: 宿主在 PostToolUse（Claude Code）/&lt;br/&gt;AfterTool（Antigravity CLI）事件调用
+    CM-&gt;&gt;BR: 每次工具调用后读取
+    alt 剩余 &gt; 35%（Normal）
+        CM--&gt;&gt;AG: 不注入任何内容
+    else 剩余 ≤ 35%（WARNING）
+        CM--&gt;&gt;AG: 注入 additionalContext：&lt;br/&gt;"收尾当前任务，不要开始新的复杂工作"
+    else 剩余 ≤ 25%（CRITICAL）
+        CM--&gt;&gt;AG: 注入 additionalContext：&lt;br/&gt;"立即停止，保存状态（/gsd-pause-work）"
+    end
+    Note over CM,AG: 防刷屏（Debounce）：首次警告立即触发；&lt;br/&gt;后续警告需间隔 5 次工具调用；&lt;br/&gt;严重度升级（WARNING→CRITICAL）无视防抖</pre>
+
+
+<p><strong>四条安全性设计</strong>（原文，值得逐条借鉴）：</p>
+<ol>
+<li>Hook 把一切包在 try&#x2F;catch 里，出错时<strong>静默退出</strong>；</li>
+<li><strong>永不阻塞工具执行</strong>——一个坏掉的监控器不应该弄坏代理的工作流；</li>
+<li><strong>陈旧指标（超过 60 秒）直接忽略</strong>；</li>
+<li>桥接文件缺失时<strong>优雅降级</strong>（子代理、全新会话等场景下文件本就不存在）。</li>
+</ol>
+<p><strong>这条链路的精妙之处</strong>在于它解决了一个看似无解的问题：LLM 无法感知自己的 token 用量（没有可编程的上下文百分比 API）。GSD 的做法是——<strong>绕过模型自省，从宿主侧测量，再通过 <code>additionalContext</code> 把测量结果”喂回”给模型当作普通对话内容</strong>。这是一个可以直接搬进任何自研 Agent 平台的模式：<strong>用确定性程序观测、用 Prompt 通道回传</strong>。</p>
+<hr>
+<h3 id="4-7-机制-5：Token-预算估算与项目级校准-——-拒绝模型自评"><a href="#4-7-机制-5：Token-预算估算与项目级校准-——-拒绝模型自评" class="headerlink" title="4.7 机制 5：Token 预算估算与项目级校准 —— 拒绝模型自评"></a>4.7 机制 5：Token 预算估算与项目级校准 —— 拒绝模型自评</h3><p><code>context-budget.md</code> 的后半段（”Phase Sizing”）与根 <code>CONTEXT.md</code> 里的 “Phase Estimation Module” 条目共同描述了一套相当严谨的估算体系（<code>#2631</code>、ADR-2629），其中有一条设计原则值得单独拎出来：</p>
+<blockquote>
+<p><strong><code>confidence</code> 是被推导出来的，不是被判断出来的</strong>——它来自同一次校准查询的 <code>confidence</code> 值，按样本数量分档（<code>low</code> &lt; 3、<code>med</code> 3–5、<code>high</code> ≥ 6）。<strong>不要给自己的确定性打分。</strong> 自评置信度在本项目中被实测过，结论是它很弱（见 <code>references/honest-verifier.md:25-29</code>）；这里的每一个信号都改为路由到<strong>实测历史</strong>上。</p>
+</blockquote>
+<p>这是整个 GSD 源码里最”反直觉但正确”的一条设计。展开成三步算法：</p>
+<ol>
+<li>按 <code>estimateTokens</code> 尺度累加计划成本（实现 + 每个任务要读的文件 + 验证输出，大致按”字符数&#x2F;4”估算 Executor 真正会碰到的量）；</li>
+<li>运行 <code>estimate-calibration</code>，把原始估算值<strong>乘以它返回的 <code>factor</code></strong>——那是<strong>这个项目</strong>实测的”估算 vs 实际”比值（factor 为 1 意味着历史样本还不够，尚无法校正）；</li>
+<li><code>confidence</code> 直接取校准查询的返回值，<strong>不允许模型自评</strong>。</li>
+</ol>
+<p>配套的两条不变量（来自根 <code>CONTEXT.md</code> 的模块描述）：<strong>（1）每个信号都是外生的</strong>——修正基于实测的 actual&#x2F;estimate 比值，<code>confidence</code> 基于校准样本数，<strong>永不基于模型的自我评估</strong>；<strong>（2）超预算标记是建议性的</strong>——只给警告和拆分建议，<strong>永不阻断</strong>。校准算法是”比值的中位数”，钳制在 <code>[0.5, 3.0]</code> 区间，样本数低于 3 时完全不生效。</p>
+<p>还有一个精彩的类型设计细节：源码用编译期品牌类型（brand）把 <code>RawTokens</code>（规划器未修正的原始投影，也是唯一合法的校准分母）与 <code>CalibratedTokens</code>（已应用项目 factor、也是唯一对预算有意义的数字）区分开。根 <code>CONTEXT.md</code> 直接记录了引入品牌类型的原因——<strong>这两者混用在运行时根本抓不住</strong>：它们都是同一数量级的正整数，而这个混用错误<strong>在一个约 26,800 个测试全绿的测试套件下溜过去了两次</strong>（<code>#2631</code> 的”factor 平方”事故与 <code>#2632</code> 的”自我抵消循环”事故）。</p>
+<blockquote>
+<p><strong>这是全系列最值得记住的工程教训之一</strong>：当两个语义不同的值恰好类型相同、量级相同时，<strong>测试覆盖率再高也拦不住混用</strong>——只有类型系统能拦住。这条对设备诊断平台里的各种”时间戳”（车端时间 vs 云端接收时间 vs 日志内嵌时间）同样适用。</p>
+</blockquote>
+<p>相关配置项：<code>workflow.smart_zone_tokens</code>（默认 100000）——文档明确称之为”<strong>策略默认值而非基准常数</strong>，因为有效上限依模型与任务而异”，定义是”模型上下文窗口中在输出质量退化之前<strong>真正可用的那段前缀</strong>“。此外规划层还有一条硬性建议：<strong>每份 Plan 最多 2–3 个任务</strong>，且计划应当在 <strong>~50% 上下文（而非 80%）</strong>内完成，理由是”没有上下文焦虑、质量从头到尾一致、给意外复杂度留余地”。</p>
+<hr>
+<h3 id="4-8-机制-6：四级降级分级与上下文守卫"><a href="#4-8-机制-6：四级降级分级与上下文守卫" class="headerlink" title="4.8 机制 6：四级降级分级与上下文守卫"></a>4.8 机制 6：四级降级分级与上下文守卫</h3><p><code>context-budget.md</code> 定义了一套贯穿全框架的上下文降级词汇表：</p>
+<table>
+<thead>
+<tr>
+<th>分级</th>
+<th>使用率</th>
+<th>行为</th>
+<th>execute-phase 的触发动作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>PEAK</strong></td>
+<td>0–30%</td>
+<td>全功能运行：读正文、派生多个 Agent、内联结果</td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>GOOD</strong></td>
+<td>30–50%</td>
+<td>正常运行：优先只读 frontmatter，积极委派</td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>DEGRADING</strong></td>
+<td>50–70%</td>
+<td>节约模式：仅 frontmatter、最小化内联、提醒用户预算情况</td>
+<td>发出警告，继续</td>
+</tr>
+<tr>
+<td><strong>POOR</strong></td>
+<td>70%+</td>
+<td>紧急模式：立即做检查点，除非关键否则不再新增读取</td>
+<td><code>warn</code>：警告 + 建议 <code>/gsd:pause-work</code>；<code>auto</code>：在下一波次前直接调用 pause-work；<code>off</code>：照常继续</td>
+</tr>
+</tbody></table>
+<p>由 <code>workflow.context_guard_mode</code> 配置项（取值 <code>auto</code>&#x2F;<code>warn</code>&#x2F;<code>off</code>，<strong>默认 <code>warn</code></strong>）控制 <code>execute-phase</code> 在<strong>波次边界</strong>上的响应策略（<code>gsd-core/references/execute-phase-context-guard.md</code>，<code>#1452</code>）。</p>
+<p><strong>这里有一个必须如实指出的诚实声明</strong>（原文）：</p>
+<blockquote>
+<p>这个守卫是<strong>启发式的——不存在可编程的上下文百分比 API</strong>。请使用你对降级信号的判断，而不是一个固定的 token 数字。</p>
+</blockquote>
+<p>也就是说，这一层与 4.6 节的监控 Hook 不同：Hook 那条链路有宿主侧的真实测量数据；而 <code>execute-phase</code> 内部的这个守卫，实际上是在<strong>要求模型自我评估</strong>。前面 4.7 节刚说过”自评置信度被实测为很弱”，这里却不得不依赖自评——这是一处<strong>架构上的无奈</strong>，而非疏忽。文档给出的补救办法是提供三条<strong>可观察的降级征兆</strong>，让自评有据可依，而不是凭空打分：</p>
+<ul>
+<li><strong>静默的部分完成</strong>——Agent 声称任务已完成，但实现其实不完整。自检只能查文件是否存在，查不出语义上是否完整。<strong>永远要验证 Agent 的输出满足了计划的 <code>must_haves</code>，而不只是文件存在</strong>。</li>
+<li><strong>越来越含糊</strong>——Agent 开始说”适当的处理””标准的模式”这类词，而不是给出具体代码。<strong>这个信号会在预算警告触发之前就出现</strong>。</li>
+<li><strong>跳步</strong>——Agent 省略了它平时会遵守的协议步骤。如果一个 Agent 的成功标准有 8 项而它只报告了 5 项，就该怀疑上下文压力。</li>
+</ul>
+<p>文档还坦承了一条根本性限制：<strong>编排器无法验证 Agent 输出的语义正确性，只能验证结构完整性</strong>。缓解手段是 <code>must_haves.truths</code> 与抽样式的点检验证。</p>
+<hr>
+<h3 id="4-9-机制-7：检查点、-clear-与续接-——-Context-Restore-的真实形态"><a href="#4-9-机制-7：检查点、-clear-与续接-——-Context-Restore-的真实形态" class="headerlink" title="4.9 机制 7：检查点、/clear 与续接 —— Context Restore 的真实形态"></a>4.9 机制 7：检查点、<code>/clear</code> 与续接 —— Context Restore 的真实形态</h3><p>常说的 “Context Restore”，在 GSD 里的实现形态可能与直觉不同：<strong>它不是”把上下文恢复回来”，而是”确保上下文可以被安全地丢弃”</strong>。</p>
+<p><code>gsd-core/references/continuation-format.md</code> 定义了每个命令&#x2F;工作流完成后必须呈现的标准续接格式，其核心结构是：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">## ▶ Next Up — [$&#123;PROJECT_CODE&#125;] $&#123;PROJECT_TITLE&#125;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">**&#123;标识&#125;: &#123;名称&#125;** — &#123;一句话描述&#125;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">`/clear` then:</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">`&#123;可直接复制粘贴的命令&#125;`</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">**Also available:**</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">- `&#123;备选项 1&#125;` — 描述</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">- `&#123;备选项 2&#125;` — 描述</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">---</span></span></code></pre></div></div></figure>
+
+<p>七条格式规则里，有三条直指上下文工程：</p>
+<ul>
+<li><strong>规则 4：先 <code>/clear</code></strong> ——“永远把 <code>/clear</code> 显示在命令之前，好让用户按正确顺序执行”。也就是说，<strong>主动清空上下文被设计成了工作流的标准动作，而不是异常处理</strong>；</li>
+<li><strong>规则 2：从源头拉取上下文</strong>——Phase 信息从 <code>ROADMAP.md</code> 拿，Plan 信息从 <code>PLAN.md</code> 的 <code>&lt;objective&gt;</code> 拿，而不是从对话历史里回忆；</li>
+<li><strong>规则 7：标题里带项目身份</strong>——把 <code>[PROJECT_CODE] PROJECT_TITLE</code> 放进标题，<strong>好让交接在跨会话时能自我标识</strong>。</li>
+</ul>
+<p>这三条合起来构成了 GSD 对 “Context Restore” 的真正回答：</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; 工作中
+    工作中 --&gt; 磁盘状态已完备: 每个有意义的步骤都写回 .planning/
+    磁盘状态已完备 --&gt; 呈现续接卡片: 从 ROADMAP/PLAN 源头拉取而非对话回忆
+    呈现续接卡片 --&gt; 上下文被清空: 用户执行 /clear
+    上下文被清空 --&gt; 全新会话: 用户粘贴续接命令
+    全新会话 --&gt; 从磁盘重建: gsd-tools init &lt;workflow&gt; 读回 STATE.md 等
+    从磁盘重建 --&gt; 工作中: 上下文重置为接近零，工作进度零丢失</pre>
+
+
+<p><strong>这与传统”会话恢复”的本质区别</strong>：传统做法试图<strong>保存并还原对话历史</strong>（于是历史噪声也被一并还原了）；GSD 的做法是<strong>保证任何时刻的进度都已经完整落盘，因此对话历史本身随时可以被安全丢弃</strong>——恢复的是<strong>状态</strong>，不是<strong>对话</strong>。这也解释了为什么 <code>STATE.md</code> 被称为”这套系统的脊柱”：它不是”备份”，它是唯一的真相来源，对话反而是那个可丢弃的副本。</p>
+<p>配套的检查点体系（<code>gsd-core/references/checkpoints.md</code>）定义了三类检查点与两级门禁，其中 <code>gate=&quot;blocking-human&quot;</code> 的设计尤其值得记录：</p>
+<table>
+<thead>
+<tr>
+<th>gate 取值</th>
+<th>自动模式下的行为</th>
+<th>用于</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gate=&quot;blocking&quot;</code></td>
+<td>被自动模式绕过（human-verify 自动批准、decision 自动选第一项）</td>
+<td>默认值。事后验证与”走推荐路径也安全”的实现选择</td>
+</tr>
+<tr>
+<td><code>gate=&quot;blocking-human&quot;</code></td>
+<td><strong>永不绕过</strong>。即使在自动模式下也停下来等人</td>
+<td>不可逆或需要建立信任的步骤：安装前的包合法性验证，以及任何”默认答案本身就是错的”的决策</td>
+</tr>
+</tbody></table>
+<p>原文对这个双层设计给出的解释相当到位：这道门横跨两层，<strong>两层都必须遵守它</strong>——<code>gsd-executor</code> 拒绝自动批准 <code>blocking-human</code> 检查点并向上升级，<code>execute-phase</code> 的 <code>checkpoint_handling</code> 步骤再决定用户实际看到什么。如果编排器只按检查点<strong>类型</strong>分发（而不看 <code>gate</code> 属性），它就会<strong>自动批准掉执行器刚刚拒绝自动批准的那个检查点</strong>，在上一层把下一层的拒绝作废掉，最终让一次无人值守的 <code>--auto</code>&#x2F;<code>--chain</code> 运行安装一个从没有人审核过的包。</p>
+<blockquote>
+<p><strong>这是一条极具普适性的安全设计教训</strong>：当一道安全门需要跨多层生效时，<strong>每一层都必须独立地认识这道门</strong>——只要有任何一层是”按类型分发”而不是”按门禁属性分发”，整条链路的防护就会在那一层被静默作废。</p>
+</blockquote>
+<hr>
+<h3 id="4-10-前沿方向：动态上下文管理（ADR-1671，尚未进入生产）"><a href="#4-10-前沿方向：动态上下文管理（ADR-1671，尚未进入生产）" class="headerlink" title="4.10 前沿方向：动态上下文管理（ADR-1671，尚未进入生产）"></a>4.10 前沿方向：动态上下文管理（ADR-1671，尚未进入生产）</h3><p>仓库里 <code>examples/dynamic-context-management/</code> 是一份<strong>明确标注为”非发布参考示例”</strong>的代码（原文强调：它在构建之外、npm 包 <code>files[]</code> 之外、安装器之外、CI 测试套件之外——<strong>没有任何东西会被编译进或安装进 GSD</strong>），对应 ADR-1671 与 Epic <code>#1671</code>。但它揭示的方向对本系列第六篇第十六部分（自研下一代 Skill Runtime）极有参考价值，因此在此记录。</p>
+<p>它演示的是 <strong>“谓词事实库 → JIT 选择器”</strong> 这一片段：把仓库根部 <code>CONTEXT.md</code> 里的 <code>CLASS.subkey=value</code> 谓词解析成结构化记录，用漂移守卫保护一份生成的索引，然后<strong>为某个具体任务选出相关的谓词子集</strong>——这是”即时组装 Agent 简报”的构件，用来<strong>替代”手工引用一个 200KB 的大文件”</strong>这种做法。</p>
+<p>实际的 <code>CONTEXT.md</code> 头部对这套格式有明确声明（转述）：</p>
+<blockquote>
+<p><strong>格式</strong>：本文档是<strong>机器可 grep 的</strong>。每一条运行事实都是一行谓词（<code>CLASS.subkey=value</code>）。Agent 简报<strong>逐字按 ID 引用</strong>谓词（依据 <code>META.RULE.brief-must-cite-doc</code>）——<strong>绝不从本文件转述</strong>。新的经验以谓词形式加入；编年体的散文属于文档底部的会话日志。</p>
+</blockquote>
+<p>实测的 <code>CONTEXT-INDEX.json</code> 显示这份索引包含 <strong>416 条谓词、20 个类别</strong>，分布为：<code>DEFECT</code> 167 条（缺陷经验最多，符合直觉）、<code>PRED</code> 68、<code>RULESET</code> 56、<code>RELEASE-NOTES</code> 31、<code>PROC</code> 14、<code>WORKTREE</code> 12、<code>PROBE</code> 11、<code>PROHIB</code> 10、<code>SESSION</code> 9、<code>EXEC</code> 8 等。</p>
+<p><strong>为什么这个方向重要</strong>：它把”上下文”从”一份要么全读要么不读的文档”，升级成了”<strong>一个可查询的事实库</strong>“——Agent 简报不再是”把 CONTEXT.md 塞进去”，而是”按任务选出这 20 条相关谓词塞进去”。这与车辆日志诊断技能包里常见的”证据工具 + 五级预算感知压缩 + 稀有模板全保留”是同一个思路的两种实现：<strong>都拒绝”全量 vs 全无”的二元选择，改为让检索粒度可编程</strong>。</p>
+<p>顺带一提，示例 README 里还记录了一个有意思的副产品：这套解析在验证过程中<strong>顺手发现了 <code>CONTEXT.md</code> 里 3 条潜伏的重复谓词 ID</strong>（<code>RULESET.WORKFLOW_MARKDOWN.FENCES</code>、<code>RULESET.GEMINI.TOOLS.ask_user</code>、<code>RULESET.GEMINI.TEST_SENTINEL</code>），并记录在索引的 <code>duplicates</code> 字段里——<strong>把知识库结构化的第一个收益，往往是发现它原本就不一致</strong>。</p>
+<hr>
+<h3 id="4-11-Context-Flow-全景图"><a href="#4-11-Context-Flow-全景图" class="headerlink" title="4.11 Context Flow 全景图"></a>4.11 Context Flow 全景图</h3><p>把七种机制放回一次完整的 Phase 执行，得到下面这张全景流：</p>
+<pre class="mermaid">flowchart TB
+    START(["用户执行 /gsd-execute-phase"]) --&gt; INIT["gsd-tools init execute-phase&lt;br/&gt;（仅加载精简 JSON 载荷）"]
+    INIT --&gt; GUARD&#123;"context_guard 自评&lt;br/&gt;（波次前，#1452）"&#125;
+    GUARD --&gt;|"PEAK/GOOD"| WAVE["派生本波次全部 Executor"]
+    GUARD --&gt;|"DEGRADING"| WARN1["警告：切换为仅 frontmatter 读取"] --&gt; WAVE
+    GUARD --&gt;|"POOR + mode=warn"| WARN2["警告 + 建议 /gsd:pause-work"] --&gt; WAVE
+    GUARD --&gt;|"POOR + mode=auto"| PAUSE["立即调用 pause-work 并停止&lt;br/&gt;不派生本波次"]
+
+    WAVE --&gt; AGENT["每个 Executor：&lt;br/&gt;全新 200K 上下文&lt;br/&gt;只收到自己的 PLAN.md + 精确必需项"]
+    AGENT --&gt; READRULE["遵守读取深度纪律：&lt;br/&gt;不读 agents/*.md&lt;br/&gt;不内联大文件&lt;br/&gt;按 context_window 决定读多深"]
+    READRULE --&gt; WORK["写代码 + 任务级原子提交"]
+    WORK --&gt; MONITOR["每次工具调用后：&lt;br/&gt;context-monitor Hook 读桥接文件"]
+    MONITOR --&gt;|"剩余 ≤35%"| INJECT1["注入 WARNING：收尾，别开新活"]
+    MONITOR --&gt;|"剩余 ≤25%"| INJECT2["注入 CRITICAL：立即保存状态"]
+    MONITOR --&gt;|"正常"| WORK
+    INJECT1 --&gt; WORK
+    INJECT2 --&gt; PAUSE
+    WORK --&gt; SUMMARY["写 SUMMARY.md（落盘 = 唯一真相）"]
+    SUMMARY --&gt; AGENTEND["Executor 终止&lt;br/&gt;其上下文被完全丢弃"]
+    AGENTEND --&gt; NEXTWAVE&#123;"还有下一波次？"&#125;
+    NEXTWAVE --&gt;|"是"| GUARD
+    NEXTWAVE --&gt;|"否"| VERIFY["派生 Verifier（全新上下文）"]
+    VERIFY --&gt; CONT["呈现续接卡片：&lt;br/&gt;/clear then &lt;下一条命令&gt;"]
+    PAUSE --&gt; CONT
+    CONT --&gt; CLEARED(["用户 /clear&lt;br/&gt;上下文归零&lt;br/&gt;进度零丢失"])</pre>
+
+
+<h3 id="4-12-Context-Timeline：一次典型会话的上下文占用曲线"><a href="#4-12-Context-Timeline：一次典型会话的上下文占用曲线" class="headerlink" title="4.12 Context Timeline：一次典型会话的上下文占用曲线"></a>4.12 Context Timeline：一次典型会话的上下文占用曲线</h3><pre class="mermaid">gantt
+    title 一次 Phase 执行中三类上下文的占用轨迹（示意，非实测数据）
+    dateFormat X
+    axisFormat %s
+
+    section 主编排会话（薄编排器）
+    加载精简 JSON 载荷（低）      :0, 5
+    派生 + 收集结果（缓慢增长）    :5, 45
+    警戒线 35%（Hook 注入 WARNING） :milestone, 45, 0
+    续接卡片 + /clear（归零）      :milestone, 55, 0
+
+    section Executor A（波次1，全新窗口）
+    冷启动加载（CLAUDE/STATE/PLAN） :5, 12
+    执行 + 提交                   :12, 28
+    写 SUMMARY 后终止（上下文丢弃） :milestone, 28, 0
+
+    section Executor B（波次2，全新窗口）
+    冷启动加载（再次付全额代价）    :28, 35
+    执行 + 提交                   :35, 50
+    写 SUMMARY 后终止（上下文丢弃） :milestone, 50, 0</pre>
+
+
+<p>这张图想传达的三个观察：</p>
+<ol>
+<li><strong>主编排会话的曲线是缓慢、可预测的单调增长</strong>——因为它只做路由，不做重活；它唯一的归零方式是 <code>/clear</code>；</li>
+<li><strong>每个 Executor 的曲线是锯齿状的</strong>——从零开始、爬升、然后<strong>被彻底丢弃</strong>（而不是衰减）；这就是”新鲜上下文”的字面含义；</li>
+<li><strong>每个锯齿的起跳段（冷启动加载）都是纯成本</strong>——这正是 4.3 节 <code>#3309</code> 那笔账的来源：<strong>锯齿越多，纯成本越高</strong>。所以”多派生子代理”不是无脑的优化方向，需要在”隔离收益”与”冷启动成本”之间找平衡点。</li>
+</ol>
+<hr>
+<h3 id="4-13-优缺点与-Token-节约原理总结"><a href="#4-13-优缺点与-Token-节约原理总结" class="headerlink" title="4.13 优缺点与 Token 节约原理总结"></a>4.13 优缺点与 Token 节约原理总结</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>评价</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Token 节约原理</strong></td>
+<td>并非”压缩”，而是<strong>结构性地不让内容进入窗口</strong>：①主会话不读源码文件；②子代理只收到任务必需项；③引用文档惰性 Read 而非急切导入；④跨步骤信息走磁盘而非对话；⑤读取深度按窗口大小自适应</td>
+</tr>
+<tr>
+<td><strong>与 Claude Context Window 的关系</strong></td>
+<td>GSD <strong>不做任何压缩或摘要式的 token 操作</strong>——它没有实现自己的 compaction。它做的是”<strong>避免触发宿主的自动压缩</strong>“：<code>PreCompact</code> Hook 的存在正是因为宿主自动压缩会<strong>静默丢弃编排器依赖的规划状态</strong>。换句话说，GSD 对 Context Window 的策略是<strong>规避而非管理</strong></td>
+</tr>
+<tr>
+<td><strong>优点</strong></td>
+<td>结构性而非补丁式；状态可被人类与 Git 检视；跨会话零丢失；纪律以可执行的字节预算&#x2F;Lint&#x2F;CI 形式固化，而非靠自觉</td>
+</tr>
+<tr>
+<td><strong>缺点（源码文档自陈）</strong></td>
+<td>①开销真实存在——三步分开跑比直接说”写个功能”慢；②延迟——多次派生带来往返成本；③小任务上是过度仪式（因此提供 <code>/gsd-quick</code>、<code>/gsd-fast</code> 轻量原语）；④<strong>冷启动代价可观</strong>（数万 token&#x2F;次往返）；⑤<code>execute-phase</code> 内的上下文守卫<strong>依赖模型自评，而自评已被本项目实测为不可靠</strong>——这是一处架构性无奈</td>
+</tr>
+<tr>
+<td><strong>最值得借鉴的三条</strong></td>
+<td>①<strong>用确定性程序观测、用 Prompt 通道回传</strong>（4.6 节的监控链路）；②<strong>拒绝模型自评，路由到实测历史</strong>（4.7 节的校准体系）；③<strong>安全门必须每一层独立识别</strong>（4.9 节 <code>blocking-human</code> 的双层教训）</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="4-14-本部分小结与下文预告"><a href="#4-14-本部分小结与下文预告" class="headerlink" title="4.14 本部分小结与下文预告"></a>4.14 本部分小结与下文预告</h3><p>第四部分把”上下文工程”从理念落到了七种可指认的机制上，并顺带结清了本系列第二篇遗留的编译映射问题。三条最值得带走的结论：</p>
+<ol>
+<li><strong>上下文隔离不是免费的</strong>——<code>#3309</code> 用”每次往返数万 token”的实测数据说明：中断点的数量本身就是成本，SubAgent 化的收益必须扣除冷启动成本后再评估；</li>
+<li><strong>窗口变大只放宽”读多深”，不放宽”读多广”</strong>——1M 模型下依然禁止读其他 Phase 的 PLAN.md，因为跨 Phase 信息正是 Context Rot 的原材料；</li>
+<li><strong>Context Restore 的真实形态是”确保上下文可被安全丢弃”</strong>，而不是”把上下文恢复回来”——恢复的是磁盘状态，不是对话历史。</li>
+</ol>
+<p>下一部分（第五部分 · Spec Driven Development）将逐阶段展开 Discuss → Plan → Execute → Verify → Ship 五个阶段的输入&#x2F;输出&#x2F;Prompt&#x2F;状态&#x2F;Artifacts&#x2F;依赖&#x2F;典型 Skill，为每个阶段配 Mermaid 流程图与 Sequence Diagram，并解释”为什么恰好是这五个阶段”。</p>
+<hr>
+<h2 id="第五部分-·-Spec-Driven-Development（五阶段循环全解）"><a href="#第五部分-·-Spec-Driven-Development（五阶段循环全解）" class="headerlink" title="第五部分 · Spec Driven Development（五阶段循环全解）"></a>第五部分 · Spec Driven Development（五阶段循环全解）</h2><h3 id="5-0-为什么恰好是这五个阶段"><a href="#5-0-为什么恰好是这五个阶段" class="headerlink" title="5.0 为什么恰好是这五个阶段"></a>5.0 为什么恰好是这五个阶段</h3><p><code>docs/explanation/the-phase-loop.md</code> 给出的核心论证已在本系列第一篇（第一部分）1.9 节引用，此处提炼成一句可检验的判据：</p>
+<blockquote>
+<p><strong>每一步之所以存在，是因为它防御了一类”上一步单独无法防御”的失败模式。</strong></p>
+</blockquote>
+<p>把这句话展开成一张对照表，就能理解为什么少一步不行、多一步冗余：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>防御的失败模式</th>
+<th>如果删掉这一步会发生什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Discuss</strong></td>
+<td>规划者被迫替你猜实现决策——有时猜对，更多时候猜得”合理但错误”</td>
+<td>产出一份内部自洽、却与你真实偏好错位的计划；等执行完才发现，返工成本已经产生</td>
+</tr>
+<tr>
+<td><strong>UI Design</strong>（可选）</td>
+<td>设计歧义导致多个执行者做出发散的实现选择</td>
+<td>视觉&#x2F;交互层出现互相冲突的实现，重做成本远高于先写一份设计契约</td>
+</tr>
+<tr>
+<td><strong>Plan</strong></td>
+<td>执行者面对模糊指令时各自做假设</td>
+<td>多个并行执行者对同一关注点做出<strong>不同</strong>假设 → 冲突</td>
+</tr>
+<tr>
+<td><strong>Execute</strong></td>
+<td>（这一步本身是产出，不防御，但它的<strong>新鲜上下文</strong>防御 Context Rot）</td>
+<td>执行者带着 180k token 的会话历史工作 &#x3D; 一个已退化的执行者</td>
+</tr>
+<tr>
+<td><strong>Verify</strong></td>
+<td>“执行没报错”被误当成”目标已达成”</td>
+<td>交付一个能跑但偏离需求的东西——LLM 驱动开发最典型的失效模式</td>
+</tr>
+<tr>
+<td><strong>Ship</strong></td>
+<td>工作完成但状态未归档，下一轮从脏状态起步</td>
+<td>状态漂移累积，<code>STATE.md</code> 与真实进度脱节</td>
+</tr>
+</tbody></table>
+<p><strong>判断”歧义在哪一步最贵”是这套设计的关键洞察</strong>——原文的原话是：Plan 步骤是歧义代价最高的时刻。因为一份含糊的计划会产出一个做假设的执行者，而多个并行执行者对同一关注点做出不同假设就会产生冲突。Plan-Checker 的职责正是在执行开始<strong>之前</strong>、而不是之后抓住这些问题。</p>
+<hr>
+<h3 id="5-1-五阶段全景流程图"><a href="#5-1-五阶段全景流程图" class="headerlink" title="5.1 五阶段全景流程图"></a>5.1 五阶段全景流程图</h3><pre class="mermaid">flowchart TB
+    ROADMAP[("ROADMAP.md&lt;br/&gt;本 Phase 的目标（What）")] --&gt; D
+
+    subgraph D["① Discuss（/gsd-discuss-phase）"]
+        D1["识别灰色地带 grey areas"]
+        D2&#123;"discuss_mode?"&#125;
+        D3["interview 模式（默认）&lt;br/&gt;每个领域约 4 个问题"]
+        D4["assumptions 模式&lt;br/&gt;子代理读 5–15 个代码文件&lt;br/&gt;形成带证据与置信度的假设&lt;br/&gt;通常 2–4 轮交互而非 15–20 轮"]
+        D1 --&gt; D2
+        D2 --&gt;|discuss| D3
+        D2 --&gt;|assumptions| D4
+    end
+
+    D --&gt; CTX[("&#123;phase&#125;-CONTEXT.md&lt;br/&gt;六个语义段落&lt;br/&gt;+ DISCUSSION-LOG.md")]
+
+    CTX -.可选.-&gt; UI["① .5 UI Design（/gsd-ui-phase）&lt;br/&gt;产出 UI-SPEC.md 设计契约"]
+    UI --&gt; P
+    CTX --&gt; P
+
+    subgraph P["② Plan（/gsd-plan-phase）三段式"]
+        P1["Research：gsd-phase-researcher&lt;br/&gt;→ RESEARCH.md&lt;br/&gt;（含包合法性门禁 slopcheck）"]
+        P2["Plan：gsd-planner&lt;br/&gt;→ 一份或多份 PLAN.md"]
+        P3["Verify：gsd-plan-checker&lt;br/&gt;多维度校验 + 修订循环（最多 3 轮）"]
+        P1 --&gt; P2 --&gt; P3
+        P3 --&gt;|ISSUES FOUND| P2
+    end
+
+    P --&gt; PLANS[("&#123;phase&#125;-&#123;NN&#125;-PLAN.md ×N&lt;br/&gt;+ VALIDATION.md + PATTERNS.md")]
+
+    PLANS --&gt; E
+
+    subgraph E["③ Execute（/gsd-execute-phase）"]
+        E1["波次分析：按 depends_on 分组"]
+        E2["每波次并行派生 gsd-executor&lt;br/&gt;（各自独立 git worktree）"]
+        E3["每任务一次原子提交"]
+        E1 --&gt; E2 --&gt; E3
+        E3 --&gt;|还有下一波次| E2
+    end
+
+    E --&gt; SUM[("&#123;phase&#125;-&#123;NN&#125;-SUMMARY.md ×N")]
+
+    SUM --&gt; V
+
+    subgraph V["④ Verify（gsd-verifier + /gsd-verify-work）"]
+        V1["gsd-verifier：目标回溯核查&lt;br/&gt;→ VERIFICATION.md"]
+        V2["/gsd-verify-work：对话式 UAT&lt;br/&gt;→ UAT.md（可跨 /clear 续接）"]
+        V3&#123;"发现问题？"&#125;
+        V4["并行派生 debug 代理定位根因&lt;br/&gt;→ gap-closure 模式重新规划&lt;br/&gt;→ /gsd-execute-phase N --gaps-only"]
+        V1 --&gt; V2 --&gt; V3
+        V3 --&gt;|是| V4 --&gt; V2
+    end
+
+    V --&gt;|全部通过| S
+
+    subgraph S["⑤ Ship（/gsd-ship）"]
+        S1["Preflight：验证状态/工作区干净/分支/远端/gh 认证"]
+        S2["推送分支 + 自动装配 PR 正文"]
+        S3["归档 Phase 制品 + 更新 STATE.md / ROADMAP.md"]
+        S1 --&gt; S2 --&gt; S3
+    end
+
+    S --&gt; NEXT&#123;"Milestone 还有下一个 Phase？"&#125;
+    NEXT --&gt;|是| ROADMAP
+    NEXT --&gt;|否| MS["/gsd-complete-milestone&lt;br/&gt;里程碑审计与归档"]</pre>
+
+
+<hr>
+<h3 id="5-2-阶段一-·-Discuss（讨论）"><a href="#5-2-阶段一-·-Discuss（讨论）" class="headerlink" title="5.2 阶段一 · Discuss（讨论）"></a>5.2 阶段一 · Discuss（讨论）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>目的</strong></td>
+<td>在规划开始<strong>之前</strong>收集这个 Phase 所需的实现决策——好让研究员和规划者不必再回头问你</td>
+</tr>
+<tr>
+<td><strong>前置条件</strong></td>
+<td><code>.planning/ROADMAP.md</code> 已存在（否则先跑 <code>/gsd-new-project</code>）</td>
+</tr>
+<tr>
+<td><strong>输入</strong></td>
+<td><code>ROADMAP.md</code> 里的 Phase 目标（描述的是”要什么结果”）；<code>PROJECT.md</code> 的既有决策；（assumptions 模式下）5–15 个相关代码文件</td>
+</tr>
+<tr>
+<td><strong>输出</strong></td>
+<td><code>{phase}-CONTEXT.md</code>（六段结构，见下）+ <code>{phase}-DISCUSSION-LOG.md</code>（人类可读的讨论审计轨迹）</td>
+</tr>
+<tr>
+<td><strong>状态变更</strong></td>
+<td><code>STATE.md</code> 的 <code>status</code> 字段在命令执行期间写入 <code>discussing</code>（<code>#2833</code> 约定）</td>
+</tr>
+<tr>
+<td><strong>典型 Skill</strong></td>
+<td><code>gsd-discuss-phase</code>；命名空间路由入口为 <code>gsd-ns-workflow</code></td>
+</tr>
+<tr>
+<td><strong>依赖</strong></td>
+<td>下游的 researcher、planner、plan-checker <strong>都读同一份 CONTEXT.md</strong>，且不区分它是哪种模式产出的</td>
+</tr>
+</tbody></table>
+<h4 id="两种模式的取舍（docs-workflow-discuss-mode-md-docs-how-to-discuss-a-phase-md）"><a href="#两种模式的取舍（docs-workflow-discuss-mode-md-docs-how-to-discuss-a-phase-md）" class="headerlink" title="两种模式的取舍（docs/workflow-discuss-mode.md + docs/how-to/discuss-a-phase.md）"></a>两种模式的取舍（<code>docs/workflow-discuss-mode.md</code> + <code>docs/how-to/discuss-a-phase.md</code>）</h4><table>
+<thead>
+<tr>
+<th></th>
+<th>interview 模式（默认）</th>
+<th>assumptions 模式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>触发</td>
+<td><code>/gsd-discuss-phase 2</code></td>
+<td><code>config-set workflow.discuss_mode assumptions</code></td>
+</tr>
+<tr>
+<td>机制</td>
+<td>Claude 识别 Phase 范围内的灰色地带，让你挑选要讨论哪些，然后每个领域走<strong>约四个问题</strong></td>
+<td>子代理读 <strong>5–15 个</strong>相关代码文件，形成<strong>带证据与置信度</strong>的假设，交给你确认或纠正</td>
+</tr>
+<tr>
+<td>交互轮次</td>
+<td>通常 15–20 轮</td>
+<td>通常 <strong>2–4 轮</strong></td>
+</tr>
+<tr>
+<td>适用</td>
+<td>你想主动表达自己的实现偏好</td>
+<td>代码库已有清晰模式，多数问题的答案”显而易见”</td>
+</tr>
+</tbody></table>
+<p>此外还有五个正交的行为标志：<code>--all</code>（跳过”选哪些灰色地带”的挑选步骤，全部走一遍）、<code>--auto</code>（每个问题都自动选推荐答案并记录，适用于低风险或已被前序 Phase 隐含决定的 Phase）、<code>--text</code>（把交互选择器降级为纯文本编号列表，适用于无 TUI 的远程会话）、<code>--batch</code>（每轮 2–5 个问题成组提问）、<code>--analyze</code>（每个问题附带选项权衡对比表）。</p>
+<p>还有一个<strong>只读探针</strong>模式值得单独指出：<code>--assumptions</code>。它输出 Claude 会做的假设（带代码库证据与置信度）<strong>然后直接退出，不写 CONTEXT.md</strong>——用途是”在投入讨论时间之前，先验证一下双方认知是否对齐”。这是一个很实用的”低成本对齐检查”原语。</p>
+<h4 id="CONTEXT-md-的六个语义段落"><a href="#CONTEXT-md-的六个语义段落" class="headerlink" title="CONTEXT.md 的六个语义段落"></a><code>CONTEXT.md</code> 的六个语义段落</h4><table>
+<thead>
+<tr>
+<th>段落</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&lt;domain&gt;</code></td>
+<td>Phase 边界——这个 Phase 交付什么</td>
+</tr>
+<tr>
+<td><code>&lt;decisions&gt;</code></td>
+<td>本次会话锁定的实现决策</td>
+</tr>
+<tr>
+<td><code>&lt;canonical_refs&gt;</code></td>
+<td>下游 Agent <strong>必须读</strong>的规格、ADR、文档</td>
+</tr>
+<tr>
+<td><code>&lt;code_context&gt;</code></td>
+<td>可复用的资产、模式、集成点</td>
+</tr>
+<tr>
+<td><code>&lt;specifics&gt;</code></td>
+<td>用户提供的参考资料与偏好</td>
+</tr>
+<tr>
+<td><code>&lt;deferred&gt;</code></td>
+<td>记录下来留给未来 Phase 的想法</td>
+</tr>
+</tbody></table>
+<p>其中 <code>&lt;canonical_refs&gt;</code> 被标注为<strong>强制段落</strong>：如果你在讨论中提到了某份文档&#x2F;规格&#x2F;ADR，Claude 会立即把它加进来<strong>并当场读取它</strong>，用于影响后续提问。这是一个很聪明的细节——它把”你随口提到的资料”变成了”立刻生效的上下文”，而不是”记下来以后再说”。</p>
+<h4 id="两条逃生通道"><a href="#两条逃生通道" class="headerlink" title="两条逃生通道"></a>两条逃生通道</h4><ul>
+<li><strong>完全跳过 Discuss</strong>：如果你已经有 PRD 或验收标准文档，直接 <code>/gsd-plan-phase 1 --prd path/to/prd.md</code>——规划者会<strong>从 PRD 合成 CONTEXT.md</strong>，并把其中全部需求视为已锁定的决策。</li>
+<li><strong>缺 CONTEXT.md 时的降级</strong>：如果直接跑 <code>/gsd-plan-phase</code> 而 CONTEXT.md 不存在，会给你一个二选一：继续（计划只依据研究和需求，不含你的设计偏好）或先去跑 <code>/gsd-discuss-phase</code>。<strong>不是硬性阻断</strong>——这是 GSD 在”纪律”与”不挡路”之间的一贯取舍风格。</li>
+</ul>
+<hr>
+<h3 id="5-3-阶段一点五-·-UI-Design（可选）"><a href="#5-3-阶段一点五-·-UI-Design（可选）" class="headerlink" title="5.3 阶段一点五 · UI Design（可选）"></a>5.3 阶段一点五 · UI Design（可选）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>目的</strong></td>
+<td>为含可视化交付物的 Phase 产出一份<strong>设计契约</strong>，在写任何代码之前固定布局、交互与视觉行为</td>
+</tr>
+<tr>
+<td><strong>输入</strong></td>
+<td>CONTEXT.md + Phase 目标</td>
+</tr>
+<tr>
+<td><strong>输出</strong></td>
+<td><code>UI-SPEC.md</code></td>
+</tr>
+<tr>
+<td><strong>典型 Skill &#x2F; Agent</strong></td>
+<td><code>gsd-ui-phase</code> → <code>gsd-ui-researcher</code> 产出，<code>gsd-ui-checker</code> 按质量维度校验（带验证循环）</td>
+</tr>
+<tr>
+<td><strong>何时值得跑</strong></td>
+<td>原文判据：当 UI 复杂到”设计上的歧义会导致实现选择发散”时。一份清晰的设计契约，<strong>写起来远比重新实现一遍便宜</strong></td>
+</tr>
+<tr>
+<td><strong>配套</strong></td>
+<td>事后还有 <code>/gsd-ui-review</code>（<code>gsd-ui-auditor</code> 做回溯式的六支柱视觉审计，产出 <code>UI-REVIEW.md</code>）</td>
+</tr>
+</tbody></table>
+<p>同一位置上还有一个平行的可选阶段：<code>/gsd-ai-integration-phase</code>，产出 <code>AI-SPEC.md</code>——通过框架选型（<code>gsd-framework-selector</code>，一个 ≤6 问的交互式决策矩阵）、研究（<code>gsd-ai-researcher</code> 把选定框架的官方文档转成可实施指导）、评估规划（<code>gsd-eval-planner</code>）三步为”要集成 AI 能力的 Phase”建立设计契约。这说明<strong>”可选设计契约阶段”本身是可扩展的一类插槽</strong>，而不是只为 UI 服务的特例——这对本系列第六篇（第十七部分）设计设备诊断平台时很有参考价值（完全可以类比出一个”DIAG-SPEC 阶段”）。</p>
+<hr>
+<h3 id="5-4-阶段二-·-Plan（规划）——-三段式流水线"><a href="#5-4-阶段二-·-Plan（规划）——-三段式流水线" class="headerlink" title="5.4 阶段二 · Plan（规划）—— 三段式流水线"></a>5.4 阶段二 · Plan（规划）—— 三段式流水线</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>目的</strong></td>
+<td>把 Phase 决策与研究，转化为一组原子、可验证、按依赖排序的任务计划</td>
+</tr>
+<tr>
+<td><strong>前置条件</strong></td>
+<td><code>ROADMAP.md</code> 存在；<code>CONTEXT.md</code> <strong>强烈推荐但非必需</strong></td>
+</tr>
+<tr>
+<td><strong>输入</strong></td>
+<td><code>CONTEXT.md</code>、<code>REQUIREMENTS.md</code>、<code>ROADMAP.md</code>、<code>PROJECT.md</code>，以及本阶段自产的 <code>RESEARCH.md</code></td>
+</tr>
+<tr>
+<td><strong>输出</strong></td>
+<td><code>{phase}-RESEARCH.md</code>、一份或多份 <code>{phase}-{NN}-PLAN.md</code>、<code>{phase}-VALIDATION.md</code>（Nyquist 测试覆盖策略）、可选的 <code>{phase}-PATTERNS.md</code>（代码库类比映射）</td>
+</tr>
+<tr>
+<td><strong>状态变更</strong></td>
+<td>执行期间 <code>status: planning</code>；完成后 <code>state planned-phase</code> 写入”Planned &#x2F; Ready to execute”</td>
+</tr>
+<tr>
+<td><strong>典型 Skill</strong></td>
+<td><code>gsd-plan-phase</code>；变体 <code>gsd-mvp-phase</code>（垂直 MVP 切片 + SPIDR 拆分）、<code>gsd-ultraplan-phase</code>（[BETA] 云端卸载）、<code>gsd-plan-review-convergence</code>（跨 AI 评审收敛循环，最多 3 轮）</td>
+</tr>
+</tbody></table>
+<h4 id="三段式流水线的时序"><a href="#三段式流水线的时序" class="headerlink" title="三段式流水线的时序"></a>三段式流水线的时序</h4><pre class="mermaid">sequenceDiagram
+    participant U as 用户
+    participant O as plan-phase 编排器（薄）
+    participant R as gsd-phase-researcher&lt;br/&gt;（全新上下文）
+    participant PL as gsd-planner&lt;br/&gt;（全新上下文）
+    participant PC as gsd-plan-checker&lt;br/&gt;（全新上下文）
+    participant FS as .planning/
+
+    U-&gt;&gt;O: /gsd-plan-phase 2
+    O-&gt;&gt;FS: 读 ROADMAP/CONTEXT/REQUIREMENTS（精简载荷）
+    Note over O: 研究门禁：若 RESEARCH.md 存在未解决的开放问题则阻断
+
+    O-&gt;&gt;R: 派生（携带 CONTEXT.md）
+    R-&gt;&gt;FS: 写 RESEARCH.md
+    Note over R,FS: 包合法性门禁：对每个包跑 slopcheck&lt;br/&gt;[SLOP] 直接移除；[SUS]/[ASSUMED] 打标&lt;br/&gt;审计表写入 RESEARCH.md
+    R--&gt;&gt;O: "## RESEARCH COMPLETE" 或 "## RESEARCH BLOCKED"
+
+    O-&gt;&gt;PL: 派生（携带 RESEARCH.md 路径 + CONTEXT + 需求）
+    PL-&gt;&gt;FS: 写 PLAN.md ×N（含 estimate 区块）
+    Note over PL: 对 [ASSUMED]/[SUS] 的安装步骤&lt;br/&gt;注入 checkpoint:human-verify（gate=blocking-human）&lt;br/&gt;为含安装的计划补 STRIDE 威胁行
+    PL--&gt;&gt;O: "## PLANNING COMPLETE"
+
+    loop 修订循环（最多 3 轮，含停滞检测）
+        O-&gt;&gt;PC: 派生（携带全部 PLAN.md）
+        PC--&gt;&gt;O: "## VERIFICATION PASSED" 或 "## ISSUES FOUND"
+        alt ISSUES FOUND 且未达上限
+            O-&gt;&gt;PL: 带具体反馈重新派生 Planner（全新上下文）
+        end
+    end
+
+    O-&gt;&gt;FS: 需求覆盖门禁（REQ-ID → 计划）
+    O-&gt;&gt;FS: 决策覆盖门禁（CONTEXT.md &lt;decisions&gt; → 计划）【阻断，#2492】
+    O-&gt;&gt;FS: state planned-phase → STATE.md
+    O--&gt;&gt;U: 呈现续接卡片：/clear then /gsd-execute-phase 2</pre>
+
+
+<h4 id="一处必须如实指出的文档与源码差异：Plan-Checker-的”维度”数量"><a href="#一处必须如实指出的文档与源码差异：Plan-Checker-的”维度”数量" class="headerlink" title="一处必须如实指出的文档与源码差异：Plan-Checker 的”维度”数量"></a>一处必须如实指出的文档与源码差异：Plan-Checker 的”维度”数量</h4><p><code>docs/how-to/plan-a-phase.md</code> 与 <code>docs/INVENTORY.md</code> 都称 plan-checker “跨<strong>八个维度</strong>校验计划质量”。但本次直接阅读 <code>agents/gsd-plan-checker.md</code> 实测到的维度标题是：</p>
+<blockquote>
+<p>Dimension 1 需求覆盖 &#x2F; 2 任务完整性 &#x2F; 3 依赖正确性 &#x2F; 4 关键链路已规划 &#x2F; 5 范围合理性 &#x2F; 6 验证推导 &#x2F; 7 上下文合规（CONTEXT.md 存在时）&#x2F; <strong>7b 范围缩水检测</strong> &#x2F; <strong>7c 架构层级合规</strong> &#x2F; 8 Nyquist 合规 &#x2F; 9 跨计划数据契约 &#x2F; 10 CLAUDE.md 合规 &#x2F; 11 研究问题已解决（<code>#1602</code>）&#x2F; 12 模式合规（<code>#1861</code>），外加两个未编号维度：Verify 命令格式合理性（<code>#1478</code>&#x2F;<code>#1479</code>）、数值&#x2F;事实断言的权威性（<code>#1480</code>）</p>
+</blockquote>
+<p>也就是说<strong>实际维度数已经增长到 16 个左右</strong>（12 个编号 + 2 个字母子维度 + 2 个未编号），”八个维度”是一处<strong>未随代码更新的文档滞后</strong>。这与本系列第二篇（第三部分）3.9 节记录的 <code>ARCHITECTURE.md</code> vs <code>git-integration.md</code> 分歧属于同一类现象，再次印证本系列第二篇（第二部分）的观察——这个项目用大量生成脚本+漂移 Lint 来对抗文档漂移，但<strong>散文类文档中的数字仍然会滞后</strong>，因为那部分没有被自动化覆盖。</p>
+<blockquote>
+<p><strong>顺带记录一次”差点误报”的核查过程</strong>，作为源码阅读方法论：用 <code>grep &quot;^## Dimension&quot;</code> 时会看到 “Dimension 8: Nyquist Compliance” 出现<strong>两次</strong>（行 462 与行 507），初看像是重复定义的 bug。但打开上下文一看，行 507 那处位于一个 &#96;&#96;&#96; 围栏代码块内部——它是该维度<strong>输出格式的模板示例</strong>，不是重复的标题。<strong>grep 不认识 Markdown 围栏</strong>，这类假阳性在源码分析中非常常见，必须打开上下文确认后才能下结论。（有意思的是，GSD 自己的 <code>CONTEXT.md</code> 里恰好有一条谓词叫 <code>RULESET.WORKFLOW_MARKDOWN.FENCES</code>，说明这个坑他们自己也踩过并固化成了规则。）</p>
+</blockquote>
+<p>agent 文件里还有一句关于<strong>校验心态</strong>的自我告诫，很值得引用：</p>
+<blockquote>
+<p>让通过的维度锚定判断（是一种反模式）——一份计划可以通过 7 个维度中的 6 个，仍然在第 7 个维度上没能达成 Phase 目标。以及：为了避免与规划者冲突，而把实际上是阻断项的问题降级成警告。</p>
+</blockquote>
+<p>配套要求是：<strong>每一个问题都必须携带显式的严重度分级</strong>。这是一条防”评审员为了显得建设性而软化问题”的机制化设计。</p>
+<h4 id="Plan-阶段的四个可调档位"><a href="#Plan-阶段的四个可调档位" class="headerlink" title="Plan 阶段的四个可调档位"></a>Plan 阶段的四个可调档位</h4><table>
+<thead>
+<tr>
+<th>标志</th>
+<th>效果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--skip-research</code></td>
+<td>领域熟悉、不需要新研究时跳过研究段</td>
+</tr>
+<tr>
+<td><code>--research</code></td>
+<td>RESEARCH.md 已存在但强制刷新</td>
+</tr>
+<tr>
+<td><code>--research-phase N</code></td>
+<td><strong>只跑研究</strong>：写完 RESEARCH.md 就退出，不进入规划（注意：这是 <code>/gsd-plan-phase</code> 的一个标志，独立的 research 命令已被废弃）</td>
+</tr>
+<tr>
+<td><code>--prd path</code></td>
+<td>从 PRD 合成 CONTEXT.md，把全部需求当作已锁定决策</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="5-5-阶段三-·-Execute（执行）"><a href="#5-5-阶段三-·-Execute（执行）" class="headerlink" title="5.5 阶段三 · Execute（执行）"></a>5.5 阶段三 · Execute（执行）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>目的</strong></td>
+<td>通过波次化并行执行跑完一个已规划的 Phase，并把每份计划落成原子 Git 提交</td>
+</tr>
+<tr>
+<td><strong>前置条件</strong></td>
+<td>该 Phase 至少有一份 <code>PLAN.md</code></td>
+</tr>
+<tr>
+<td><strong>输入</strong></td>
+<td>全部 <code>PLAN.md</code>（按 <code>depends_on</code> 分组为波次）、<code>PROJECT.md</code>、<code>STATE.md</code>、<code>CONTEXT.md</code>&#x2F;<code>RESEARCH.md</code></td>
+</tr>
+<tr>
+<td><strong>输出</strong></td>
+<td>代码变更 + 任务级原子提交 + 每份计划一个 <code>{phase}-{NN}-SUMMARY.md</code>；全部波次完成后写 <code>VERIFICATION.md</code></td>
+</tr>
+<tr>
+<td><strong>状态变更</strong></td>
+<td>执行期间 <code>status: executing</code>；全部波次完成后自动更新 <code>STATE.md</code> 与 <code>ROADMAP.md</code></td>
+</tr>
+<tr>
+<td><strong>典型 Skill</strong></td>
+<td><code>gsd-execute-phase</code>；轻量替代 <code>gsd-quick</code>、<code>gsd-fast</code>；无人值守用 <code>gsd-autonomous</code></td>
+</tr>
+</tbody></table>
+<h4 id="派发前先给一张波次表"><a href="#派发前先给一张波次表" class="headerlink" title="派发前先给一张波次表"></a>派发前先给一张波次表</h4><p>原文示例（<code>docs/how-to/execute-a-phase.md</code>）——在派发任何 Agent 之前，GSD 会先打印执行计划：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">## Execution Plan</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">Phase 1: Core middleware — 3 plans across 2 wave(s)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">| Wave | Plans          | What it builds            |</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">|------|----------------|---------------------------|</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">| 1    | 01-01, 01-02   | Core validation function  |</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">| 2    | 01-03          | Express middleware wrapper |</span></span></code></pre></div></div></figure>
+
+<p><strong>Wave 1 的计划并行运行（各自在隔离的 git worktree 里）；Wave 2 等到 Wave 1 的全部提交合并后才开始。</strong></p>
+<h4 id="断点续跑：三种恢复语义"><a href="#断点续跑：三种恢复语义" class="headerlink" title="断点续跑：三种恢复语义"></a>断点续跑：三种恢复语义</h4><p>这是 Execute 阶段设计最扎实的部分。如果执行中途停止（配额耗尽、网络中断、会话崩溃），波次级进度是被保留的——GSD 通过检查每份计划是否有 <code>SUMMARY.md</code> 来判断，有的直接跳过，从第一个未完成的计划继续。</p>
+<p>但真正精彩的是那个<strong>边界情况</strong>：<strong>提交存在但 <code>SUMMARY.md</code> 缺失</strong>（执行者提交了代码，但还没来得及写摘要就死了）。这时 GSD 会浮出一道”安全续跑门禁”，给三个选项：</p>
+<table>
+<thead>
+<tr>
+<th>选项</th>
+<th>语义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>close out manually</code></td>
+<td>你去检查那些提交，手工补写 <code>SUMMARY.md</code>，然后重跑</td>
+</tr>
+<tr>
+<td><code>re-execute from scratch</code></td>
+<td>先回退或作废那些部分提交，再派发一个新的执行者</td>
+</tr>
+<tr>
+<td><code>mark-and-skip</code></td>
+<td>记录这处异常并继续——<strong>仅在显式确认后</strong>才允许</td>
+</tr>
+</tbody></table>
+<p>这三个选项的设计哲学值得学习：它<strong>没有替用户猜</strong>“那些提交到底算不算数”，因为这个判断需要人看代码；它把三种可能的真实情况都摆出来，并对最危险的那个（跳过）加了显式确认门槛。</p>
+<h4 id="跨-AI-执行"><a href="#跨-AI-执行" class="headerlink" title="跨 AI 执行"></a>跨 AI 执行</h4><p><code>--cross-ai</code> 可以把执行委派给配置在 <code>workflow.cross_ai_command</code> 里的外部 AI CLI（Codex、Gemini 等）；<code>--no-cross-ai</code> 则在配置已开启跨 AI 时强制本地执行。这是”Runtime Layer 中立性”（本系列第二篇第三部分 3.3 节）在执行阶段的体现——<strong>GSD 不但能被不同宿主承载，还能在一次执行里调度另一个 AI CLI 当劳动力</strong>。</p>
+<hr>
+<h3 id="5-6-阶段四-·-Verify（验证）——-双层结构"><a href="#5-6-阶段四-·-Verify（验证）——-双层结构" class="headerlink" title="5.6 阶段四 · Verify（验证）—— 双层结构"></a>5.6 阶段四 · Verify（验证）—— 双层结构</h3><p>Verify 实际上是<strong>两层</strong>，很容易被混为一谈，这里明确切分：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>第一层：自动验证</th>
+<th>第二层：人工验收（UAT）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>触发</td>
+<td><code>execute-phase</code> 全部波次完成后自动派生</td>
+<td>用户显式跑 <code>/gsd-verify-work N</code></td>
+</tr>
+<tr>
+<td>执行者</td>
+<td><code>gsd-verifier</code> Agent</td>
+<td>对话式流程（编排器直接与人交互）</td>
+</tr>
+<tr>
+<td>产物</td>
+<td><code>{phase}-VERIFICATION.md</code></td>
+<td><code>{phase}-UAT.md</code></td>
+</tr>
+<tr>
+<td>检查内容</td>
+<td>目标回溯分析：需求覆盖（REQ-ID）、决策覆盖（<code>CONTEXT.md</code> → 已交付制品，<strong>非阻断</strong>）、Phase 目标整体对齐</td>
+<td>从 <code>SUMMARY.md</code> 里抽出<strong>用户可观察的交付物</strong>，逐个走查</td>
+</tr>
+<tr>
+<td>完成标记</td>
+<td><code>## Verification Complete</code>（注意是标题式大小写，非全大写——<code>agent-contracts.md</code> 明确说明这是<strong>有意为之，不是 bug</strong>）</td>
+<td>——</td>
+</tr>
+</tbody></table>
+<h4 id="UAT-的三个精巧细节"><a href="#UAT-的三个精巧细节" class="headerlink" title="UAT 的三个精巧细节"></a>UAT 的三个精巧细节</h4><ol>
+<li><strong>严重度由描述推断，不要用户分类</strong>——原文：<code>yes</code>&#x2F;<code>y</code>&#x2F;空 → 通过；其他任何内容 → 记为问题，<strong>严重度从你的描述里推断</strong>（”crashes” → blocker，”doesn’t work” → major，”looks off” → cosmetic）。用户永远不需要自己给问题定级。这是一个降低认知负担的好设计。</li>
+<li><strong>进度可跨 <code>/clear</code> 存活</strong>——进度写入 <code>{phase}-UAT.md</code>；会话被打断后重跑 <code>/gsd-verify-work 1</code>，GSD 会提供”从上一个检查点继续”。这正是第四部分 4.9 节”Context Restore 的真实形态”的又一实例。</li>
+<li><strong>发现问题后的四步自动闭环</strong>：</li>
+</ol>
+<pre class="mermaid">flowchart LR
+    A["UAT 报告问题"] --&gt; B["① 并行派生 debug 代理&lt;br/&gt;每个问题一个&lt;br/&gt;把根因写回 UAT.md"]
+    B --&gt; C["② 派生 gsd-planner&lt;br/&gt;（gap-closure 模式）&lt;br/&gt;读带诊断的 UAT.md&lt;br/&gt;写出新的 PLAN.md"]
+    C --&gt; D["③ 派生 gsd-plan-checker&lt;br/&gt;确保修复计划可执行&lt;br/&gt;planner↔checker 最多迭代 3 轮"]
+    D --&gt; E["④ 呈现下一步：&lt;br/&gt;/clear then&lt;br/&gt;/gsd-execute-phase 1 --gaps-only"]
+    E --&gt; F["跑完后重跑 /gsd-verify-work 1 确认"]
+    F -.仍有问题.-&gt; A</pre>
+
+
+<p>注意 <code>--gaps-only</code> 这个标志：它让 Execute 阶段<strong>只跑缺口修复计划</strong>，而不是重跑整个 Phase。整个闭环没有引入任何新概念——它复用了已有的 planner、plan-checker、executor 三个 Agent 和同一套修订循环，只是换了输入源（<code>UAT.md</code> 而非 <code>CONTEXT.md</code>）。<strong>用同一套原语解决新问题，而不是为新问题发明新机制</strong>，这是 GSD 架构上一以贯之的克制。</p>
+<hr>
+<h3 id="5-7-阶段五-·-Ship（交付）"><a href="#5-7-阶段五-·-Ship（交付）" class="headerlink" title="5.7 阶段五 · Ship（交付）"></a>5.7 阶段五 · Ship（交付）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>目的</strong></td>
+<td>创建 PR、归档 Phase 制品、更新状态，为下一个 Phase 让出干净的起点</td>
+</tr>
+<tr>
+<td><strong>前置条件</strong></td>
+<td>UAT 全部通过（或首次运行未发现问题），Phase 已在 <code>ROADMAP.md</code>&#x2F;<code>STATE.md</code> 标记完成</td>
+</tr>
+<tr>
+<td><strong>Preflight 检查</strong></td>
+<td>验证状态、工作区是否干净、分支、远端、<code>gh</code> CLI 认证</td>
+</tr>
+<tr>
+<td><strong>输出</strong></td>
+<td>一个 PR（<code>--draft</code> 可创建草稿 PR，适用于后面还有更多 Phase 的情况）</td>
+</tr>
+<tr>
+<td><strong>典型 Skill</strong></td>
+<td><code>gsd-ship</code>；配套 <code>gsd-pr-branch</code>、<code>gsd-code-review</code>、<code>gsd-complete-milestone</code></td>
+</tr>
+</tbody></table>
+<h4 id="PR-正文完全自动装配"><a href="#PR-正文完全自动装配" class="headerlink" title="PR 正文完全自动装配"></a>PR 正文完全自动装配</h4><p>这是 Ship 阶段最能体现”规范驱动”红利的地方——<strong>PR 正文不需要手写一个字</strong>，全部从既有规划制品里装配：</p>
+<table>
+<thead>
+<tr>
+<th>PR 正文组成部分</th>
+<th>来源制品</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Phase 目标</td>
+<td><code>ROADMAP.md</code></td>
+</tr>
+<tr>
+<td>逐计划摘要 + 关键文件</td>
+<td>各份 <code>SUMMARY.md</code></td>
+</tr>
+<tr>
+<td>已覆盖的需求（REQ-ID）</td>
+<td>需求映射</td>
+</tr>
+<tr>
+<td>验证状态</td>
+<td><code>VERIFICATION.md</code></td>
+</tr>
+<tr>
+<td>关键决策</td>
+<td><code>STATE.md</code></td>
+</tr>
+</tbody></table>
+<p><strong>这正是 Spec-Driven Development 的复利效应</strong>：前面每一步为了让机器能处理而写下的结构化制品，到最后一步自动变成了给人看的交付说明。如果前面是靠对话推进的，这一步就只能靠人回忆着手写。</p>
+<h4 id="一个体贴的工程细节：-gsd-pr-branch"><a href="#一个体贴的工程细节：-gsd-pr-branch" class="headerlink" title="一个体贴的工程细节：/gsd-pr-branch"></a>一个体贴的工程细节：<code>/gsd-pr-branch</code></h4><p>如果你的分支里混着 <code>.planning/</code> 的提交，而团队的评审规范不希望评审者看到这些规划噪声，<code>/gsd-pr-branch</code> 会创建一个<strong>只含代码变更</strong>的新分支，把规划制品的提交排除掉。这解决了一个 GSD 这类”把规划过程也提交进 Git”的框架必然会遇到的现实摩擦。</p>
+<hr>
+<h3 id="5-8-STATE-md：贯穿五阶段的状态机"><a href="#5-8-STATE-md：贯穿五阶段的状态机" class="headerlink" title="5.8 STATE.md：贯穿五阶段的状态机"></a>5.8 STATE.md：贯穿五阶段的状态机</h3><p><code>docs/reference/state-md.md</code> 定义的状态机是理解整个循环”当前在哪”的关键。这份文件被刻意保持<strong>在 100 行以内</strong>——原文的定位很清楚：<strong>它是项目状态的摘要（digest），不是归档（archive）</strong>。</p>
+<h4 id="状态归一化表（normalizeStateStatus-，源码-gsd-core-bin-lib-state-document-cjs）"><a href="#状态归一化表（normalizeStateStatus-，源码-gsd-core-bin-lib-state-document-cjs）" class="headerlink" title="状态归一化表（normalizeStateStatus()，源码 gsd-core/bin/lib/state-document.cjs）"></a>状态归一化表（<code>normalizeStateStatus()</code>，源码 <code>gsd-core/bin/lib/state-document.cjs</code>）</h4><table>
+<thead>
+<tr>
+<th>规范值</th>
+<th>匹配的正文文本（大小写不敏感）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>discussing</code></td>
+<td>含 <code>discussing</code></td>
+</tr>
+<tr>
+<td><code>planning</code></td>
+<td>含 <code>planning</code> 或 <code>ready to plan</code></td>
+</tr>
+<tr>
+<td><code>executing</code></td>
+<td>含 <code>executing</code>、<code>in progress</code> 或 <code>ready to execute</code></td>
+</tr>
+<tr>
+<td><code>verifying</code></td>
+<td>含 <code>verif</code></td>
+</tr>
+<tr>
+<td><code>completed</code></td>
+<td>含 <code>complete</code> 或 <code>done</code></td>
+</tr>
+<tr>
+<td><code>paused</code></td>
+<td>含 <code>paused</code> 或 <code>stopped</code>，或存在 <code>paused_at</code> 字段</td>
+</tr>
+<tr>
+<td><code>unknown</code></td>
+<td>以上都不匹配</td>
+</tr>
+</tbody></table>
+<p><strong>为什么要做这种”模糊匹配归一化”</strong>：因为 <code>STATE.md</code> 的正文是给人写的，人（和 LLM）会写出各种措辞变体。GSD 的做法不是强制人写标准枚举值，而是<strong>在读取侧做归一化</strong>——这是一个务实的容错设计，代价是必须维护这张映射表。</p>
+<h4 id="命令在执行期间写入的状态（-2833-约定）"><a href="#命令在执行期间写入的状态（-2833-约定）" class="headerlink" title="命令在执行期间写入的状态（#2833 约定）"></a>命令在执行期间写入的状态（<code>#2833</code> 约定）</h4><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>执行期间的 <code>status</code></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/gsd-discuss-phase</code></td>
+<td><code>discussing</code></td>
+</tr>
+<tr>
+<td><code>/gsd-plan-phase</code></td>
+<td><code>planning</code></td>
+</tr>
+<tr>
+<td><code>/gsd-execute-phase</code></td>
+<td><code>executing</code></td>
+</tr>
+<tr>
+<td><code>/gsd-verify-work</code></td>
+<td><code>verifying</code></td>
+</tr>
+</tbody></table>
+<h4 id="阶段-里程碑边界上的严格生命周期（ADR-2207）"><a href="#阶段-里程碑边界上的严格生命周期（ADR-2207）" class="headerlink" title="阶段&#x2F;里程碑边界上的严格生命周期（ADR-2207）"></a>阶段&#x2F;里程碑边界上的严格生命周期（ADR-2207）</h4><table>
+<thead>
+<tr>
+<th>值</th>
+<th>写入者</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Ready to plan</code></td>
+<td><code>completePhaseCore</code>（非最后一个 Phase）</td>
+<td>下一个 Phase 可以开始规划了</td>
+</tr>
+<tr>
+<td><code>All phases complete</code></td>
+<td><code>completePhaseCore</code>（最后一个 Phase）</td>
+<td>全部 Phase 完成；里程碑等待正式关闭</td>
+</tr>
+<tr>
+<td><code>&lt;version&gt; milestone complete</code></td>
+<td><code>milestoneCompleteCore</code></td>
+<td>里程碑已正式关闭并归档</td>
+</tr>
+<tr>
+<td><code>Awaiting next milestone</code></td>
+<td><code>milestoneCompleteCore</code></td>
+<td>终态&#x2F;已归档</td>
+</tr>
+</tbody></table>
+<p>原文特别记录了一次纠错：<strong>Phase 级的完成动作永不写入 <code>Milestone complete</code></strong>——那个含义过载的裸值在 <code>#2204</code> 中依 ADR-2207 被移除，目的是<strong>把 Phase 级的写入与 Milestone 终结解耦</strong>。这是一个典型的”枚举值语义过载”重构案例：同一个值被两个不同层级的动作写入，导致无法区分”这个 Phase 是最后一个”和”整个里程碑已经正式收尾”。</p>
+<h4 id="状态机全图"><a href="#状态机全图" class="headerlink" title="状态机全图"></a>状态机全图</h4><pre class="mermaid">stateDiagram-v2
+    [*] --&gt; discussing: /gsd-discuss-phase
+    discussing --&gt; planning: CONTEXT.md 写就
+    planning --&gt; planning: plan-checker 打回（最多3轮）
+    planning --&gt; executing: state planned-phase
+    executing --&gt; executing: 下一波次
+    executing --&gt; verifying: 全部波次完成
+    verifying --&gt; planning: UAT 发现问题 → gap-closure 重新规划
+    verifying --&gt; completed: UAT 全部通过
+
+    completed --&gt; discussing: Ready to plan（还有下一个 Phase）
+    completed --&gt; AllComplete: All phases complete（这是最后一个 Phase）
+    AllComplete --&gt; MilestoneComplete: /gsd-complete-milestone
+    MilestoneComplete --&gt; AwaitingNext: Awaiting next milestone（终态）
+    AwaitingNext --&gt; [*]
+
+    discussing --&gt; paused: /gsd-pause-work
+    planning --&gt; paused: /gsd-pause-work
+    executing --&gt; paused: 上下文守卫 POOR + auto 模式
+    paused --&gt; discussing: 从 .continue-here.md 恢复
+    paused --&gt; planning: 从 .continue-here.md 恢复
+    paused --&gt; executing: 从 .continue-here.md 恢复</pre>
+
+
+<hr>
+<h3 id="5-9-完整制品依赖图"><a href="#5-9-完整制品依赖图" class="headerlink" title="5.9 完整制品依赖图"></a>5.9 完整制品依赖图</h3><p>把五个阶段产出的全部制品放在一起，可以看清”谁生产、谁消费”这张网（源码：<code>docs/reference/planning-artifacts.md</code>）：</p>
+<pre class="mermaid">flowchart LR
+    subgraph ROOT["根级制品（跨 Phase 长存）"]
+        PROJ["PROJECT.md&lt;br/&gt;项目身份与核心价值"]
+        REQ["REQUIREMENTS.md&lt;br/&gt;编号验收标准"]
+        RM["ROADMAP.md&lt;br/&gt;里程碑+Phase 清单"]
+        ST["STATE.md&lt;br/&gt;活的位置追踪器（&lt;100行）"]
+        CFG["config.json"]
+        OPT["可选：MILESTONES.md / BACKLOG.md&lt;br/&gt;LEARNINGS.md / DECISIONS-INDEX.md&lt;br/&gt;METHODOLOGY.md / HANDOFF.json"]
+        CB["codebase/ 代码库地图"]
+        INTEL["intel/ 可查询符号索引"]
+    end
+
+    subgraph PHASE["phases/&amp;lt;NN&amp;gt;-&amp;lt;slug&amp;gt;/（单个 Phase 内）"]
+        C["NN-CONTEXT.md"]
+        DL["NN-DISCUSSION-LOG.md"]
+        RS["NN-RESEARCH.md"]
+        VAL["NN-VALIDATION.md"]
+        PAT["NN-PATTERNS.md"]
+        PLN["NN-PP-PLAN.md ×N"]
+        SUM["NN-PP-SUMMARY.md ×N"]
+        VER["NN-VERIFICATION.md"]
+        UAT["NN-UAT.md"]
+        CH[".continue-here.md"]
+    end
+
+    PROJ --&gt; C
+    RM --&gt; C
+    C --&gt; RS
+    C --&gt; PLN
+    REQ --&gt; PLN
+    RS --&gt; PLN
+    PAT --&gt; PLN
+    PLN --&gt; SUM
+    PLN --&gt; VAL
+    SUM --&gt; VER
+    C --&gt; VER
+    REQ --&gt; VER
+    SUM --&gt; UAT
+    VER --&gt; UAT
+    UAT -."gap-closure 回流".-&gt; PLN
+    SUM --&gt; ST
+    VER --&gt; ST
+    ST --&gt; CH
+    CB --&gt; C
+    INTEL --&gt; PLN
+    SUM --&gt; PR(["PR 正文自动装配"])
+    VER --&gt; PR
+    RM --&gt; PR
+    ST --&gt; PR</pre>
+
+
+<hr>
+<h3 id="5-10-循环之外的轻量原语"><a href="#5-10-循环之外的轻量原语" class="headerlink" title="5.10 循环之外的轻量原语"></a>5.10 循环之外的轻量原语</h3><p>原文反复强调”五阶段循环是一个工具，不是唯一的工具”。GSD 提供了一整套逃生阀，用于低于循环门槛的工作：</p>
+<table>
+<thead>
+<tr>
+<th>原语</th>
+<th>定位</th>
+<th>与循环的关系</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/gsd-fast</code></td>
+<td>琐碎任务内联执行——<strong>无子代理、无规划开销</strong></td>
+<td>完全绕过循环</td>
+</tr>
+<tr>
+<td><code>/gsd-quick</code></td>
+<td>保留 GSD 保证（原子提交、STATE 追踪）但跳过可选 Agent；任务活在 <code>.planning/quick/</code> 而非 phases 目录，只更新 STATE.md 的”Quick Tasks Completed”表而不动 ROADMAP.md</td>
+<td>循环的短路径版；<code>--discuss</code>&#x2F;<code>--research</code>&#x2F;<code>--validate</code> 可按需组合，<code>--full</code> 等于全开</td>
+</tr>
+<tr>
+<td><code>/gsd-spike</code></td>
+<td>快速用一次性实验试探想法；<code>--wrap-up</code> 可把发现打包成一个持久 Skill</td>
+<td>循环之前的探索</td>
+</tr>
+<tr>
+<td><code>/gsd-sketch</code></td>
+<td>用一次性 HTML 稿快速草绘 UI&#x2F;设计想法</td>
+<td>循环之前的探索</td>
+</tr>
+<tr>
+<td><code>/gsd-autonomous</code></td>
+<td>无人值守跑完所有剩余 Phase</td>
+<td>循环的自动串联</td>
+</tr>
+</tbody></table>
+<p><code>the-phase-loop.md</code> 给出的判断标准非常实用：<strong>如果这个任务能用一句短提示词完整说清，并且一个 Agent 一轮就能做完、不需要进一步澄清——那就跳过循环。如果它需要研究、涉及你最近没读过的文件、或依赖尚未敲定的决策——那循环在保护你。</strong></p>
+<hr>
+<h3 id="5-11-本部分小结与下文预告"><a href="#5-11-本部分小结与下文预告" class="headerlink" title="5.11 本部分小结与下文预告"></a>5.11 本部分小结与下文预告</h3><p>第五部分逐阶段拆解了五阶段循环的输入&#x2F;输出&#x2F;Prompt&#x2F;状态&#x2F;制品&#x2F;依赖&#x2F;典型 Skill。四条最值得带走的结论：</p>
+<ol>
+<li><strong>每一步的存在理由都是”防御上一步无法防御的失效模式”</strong>——这个判据可以直接用来审视任何自研流程里的某个环节是否冗余；</li>
+<li><strong>Plan 阶段是歧义代价最高的时刻</strong>——因为含糊的计划会让多个并行执行者各自做出<strong>不同的</strong>假设，冲突由此而生；</li>
+<li><strong>规范驱动的复利在 Ship 阶段兑现</strong>——前面为机器可读而写的结构化制品，最后自动装配成了给人看的 PR 正文；</li>
+<li><strong>用同一套原语解决新问题</strong>——UAT 失败后的 gap-closure 闭环没有发明任何新机制，只是把 planner&#x2F;plan-checker&#x2F;executor 换了输入源再跑一遍。</li>
+</ol>
+<p>本部分也新增了一处文档滞后记录：plan-checker 的”八个维度”实际已增长到 16 个左右；同时记录了一次”grep 假阳性”的核查过程作为方法论示例。</p>
+<p>下一篇《Open-GSD 源码解析（四）：Skill 框架、SKILL.md、加载与命中》将从第六部分 Skill Framework 开始，这是整个系列的重点，将展开 Skill 的完整生命周期——Discovery、Loading、Activation、Execution、Exit、Recovery、Isolation、Dependency、Version、Override、Priority、Dispatch、Routing、Registry、Metadata、Context、Prompt、Template、Cache、Sandbox、Composition、Chain、Graph，并画出完整的 Skill 生命周期图。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/08/10/engineering-practice/Open-GSD-04-Skill%E6%A1%86%E6%9E%B6/">Open-GSD 源码解析（四）：Skill 框架、SKILL.md、加载与命中</a></h3>
+        <p>Open-GSD 源码解析系列第四篇：回应 Skill 生命周期的 23 个子主题，逐字段解析 SKILL.md…</p>
+        <a class="btn primary" href="/2026/08/10/engineering-practice/Open-GSD-04-Skill%E6%A1%86%E6%9E%B6/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/08/05/engineering-practice/Open-GSD-02-%E4%BB%93%E5%BA%93%E4%B8%8E%E6%9E%B6%E6%9E%84/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Open-GSD 源码解析（二）：仓库结构与十一层架构</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 2 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E5%9B%9B%E9%83%A8%E5%88%86-%C2%B7-Context-Engineering%EF%BC%88%E4%B8%8A%E4%B8%8B%E6%96%87%E5%B7%A5%E7%A8%8B%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90%EF%BC%89" data-toc-target="第四部分-·-Context-Engineering（上下文工程深度解析）"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第四部分 · Context Engineering（上下文工程深度解析）</span></a><a class="toc-level-3" href="#4-0-%E5%85%88%E7%BB%93%E6%B8%85%E4%B8%80%E7%AC%94%E6%97%A7%E8%B4%A6%EF%BC%9Asrc-cts-%E4%B8%8E-bin-lib-cjs-%E7%9A%84%E7%BC%96%E8%AF%91%E6%98%A0%E5%B0%84%EF%BC%88%E6%9C%AC%E7%B3%BB%E5%88%97%E7%AC%AC%E4%BA%8C%E7%AF%87%E7%AC%AC%E4%BA%8C%E3%80%81%E4%B8%89%E9%83%A8%E5%88%86%E9%81%97%E7%95%99%E7%9A%84%E6%9C%AA%E5%86%B3%E9%97%AE%E9%A2%98%EF%BC%89" data-toc-target="4-0-先结清一笔旧账：src-cts-与-bin-lib-cjs-的编译映射（本系列第二篇第二、三部分遗留的未决问题）"><span class="toc-text">4.0 先结清一笔旧账：src/*.cts 与 bin/lib/*.cjs 的编译映射（本系列第二篇第二、三部分遗留的未决问题）</span></a><a class="toc-level-3" href="#4-1-Context-Rot-%E7%9A%84%E6%9C%BA%E5%88%B6%E6%80%A7%E6%A0%B9%E5%9B%A0%E5%9B%9E%E9%A1%BE%EF%BC%88%E4%B8%80%E5%8F%A5%E8%AF%9D%E7%89%88%EF%BC%89" data-toc-target="4-1-Context-Rot-的机制性根因回顾（一句话版）"><span class="toc-text">4.1 Context Rot 的机制性根因回顾（一句话版）</span></a><a class="toc-level-3" href="#4-2-GSD-Core-%E7%9A%84%E4%B8%83%E7%A7%8D%E4%B8%8A%E4%B8%8B%E6%96%87%E6%8E%A7%E5%88%B6%E6%9C%BA%E5%88%B6%E6%80%BB%E8%A7%88" data-toc-target="4-2-GSD-Core-的七种上下文控制机制总览"><span class="toc-text">4.2 GSD Core 的七种上下文控制机制总览</span></a><a class="toc-level-3" href="#4-3-%E6%9C%BA%E5%88%B6-1%EF%BC%9A%E6%96%B0%E9%B2%9C%E5%AD%90%E4%BB%A3%E7%90%86%E9%9A%94%E7%A6%BB-%E2%80%94%E2%80%94-%E4%BB%A5%E5%8F%8A%E4%B8%80%E6%9D%A1%E2%80%9D%E9%9A%94%E7%A6%BB%E4%B8%8D%E6%98%AF%E5%85%8D%E8%B4%B9%E7%9A%84%E2%80%9D%E7%9A%84%E7%9C%9F%E5%AE%9E%E6%95%99%E8%AE%AD" data-toc-target="4-3-机制-1：新鲜子代理隔离-——-以及一条”隔离不是免费的”的真实教训"><span class="toc-text">4.3 机制 1：新鲜子代理隔离 —— 以及一条”隔离不是免费的”的真实教训</span></a><a class="toc-level-3" href="#4-4-%E6%9C%BA%E5%88%B6-2%EF%BC%9A%E6%B8%90%E8%BF%9B%E5%BC%8F%E6%8A%AB%E9%9C%B2-%E2%80%94%E2%80%94-%E4%BB%8E%E2%80%9D%E5%AD%97%E8%8A%82%E9%A2%84%E7%AE%97%E2%80%9D%E5%88%B0%E2%80%9D-%E5%AF%BC%E5%85%A5%E9%99%B7%E9%98%B1%E2%80%9D" data-toc-target="4-4-机制-2：渐进式披露-——-从”字节预算”到”-导入陷阱”"><span class="toc-text">4.4 机制 2：渐进式披露 —— 从”字节预算”到”@-导入陷阱”</span></a><a class="toc-level-3" href="#4-5-%E6%9C%BA%E5%88%B6-3%EF%BC%9A%E8%AF%BB%E5%8F%96%E6%B7%B1%E5%BA%A6%E7%BA%AA%E5%BE%8B-%E2%80%94%E2%80%94-%E9%9A%8F%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AA%97%E5%8F%A3%E5%A4%A7%E5%B0%8F%E8%87%AA%E9%80%82%E5%BA%94" data-toc-target="4-5-机制-3：读取深度纪律-——-随上下文窗口大小自适应"><span class="toc-text">4.5 机制 3：读取深度纪律 —— 随上下文窗口大小自适应</span></a><a class="toc-level-3" href="#4-6-%E6%9C%BA%E5%88%B6-4%EF%BC%9A%E4%B8%8A%E4%B8%8B%E6%96%87%E4%BD%99%E9%87%8F%E7%9B%91%E6%8E%A7-%E2%80%94%E2%80%94-%E4%B8%80%E6%9D%A1%E5%AE%8C%E6%95%B4%E7%9A%84%E3%80%81%E5%8F%AF%E5%A4%8D%E5%88%B6%E7%9A%84%E8%A7%82%E6%B5%8B%E9%93%BE%E8%B7%AF" data-toc-target="4-6-机制-4：上下文余量监控-——-一条完整的、可复制的观测链路"><span class="toc-text">4.6 机制 4：上下文余量监控 —— 一条完整的、可复制的观测链路</span></a><a class="toc-level-3" href="#4-7-%E6%9C%BA%E5%88%B6-5%EF%BC%9AToken-%E9%A2%84%E7%AE%97%E4%BC%B0%E7%AE%97%E4%B8%8E%E9%A1%B9%E7%9B%AE%E7%BA%A7%E6%A0%A1%E5%87%86-%E2%80%94%E2%80%94-%E6%8B%92%E7%BB%9D%E6%A8%A1%E5%9E%8B%E8%87%AA%E8%AF%84" data-toc-target="4-7-机制-5：Token-预算估算与项目级校准-——-拒绝模型自评"><span class="toc-text">4.7 机制 5：Token 预算估算与项目级校准 —— 拒绝模型自评</span></a><a class="toc-level-3" href="#4-8-%E6%9C%BA%E5%88%B6-6%EF%BC%9A%E5%9B%9B%E7%BA%A7%E9%99%8D%E7%BA%A7%E5%88%86%E7%BA%A7%E4%B8%8E%E4%B8%8A%E4%B8%8B%E6%96%87%E5%AE%88%E5%8D%AB" data-toc-target="4-8-机制-6：四级降级分级与上下文守卫"><span class="toc-text">4.8 机制 6：四级降级分级与上下文守卫</span></a><a class="toc-level-3" href="#4-9-%E6%9C%BA%E5%88%B6-7%EF%BC%9A%E6%A3%80%E6%9F%A5%E7%82%B9%E3%80%81-clear-%E4%B8%8E%E7%BB%AD%E6%8E%A5-%E2%80%94%E2%80%94-Context-Restore-%E7%9A%84%E7%9C%9F%E5%AE%9E%E5%BD%A2%E6%80%81" data-toc-target="4-9-机制-7：检查点、-clear-与续接-——-Context-Restore-的真实形态"><span class="toc-text">4.9 机制 7：检查点、/clear 与续接 —— Context Restore 的真实形态</span></a><a class="toc-level-3" href="#4-10-%E5%89%8D%E6%B2%BF%E6%96%B9%E5%90%91%EF%BC%9A%E5%8A%A8%E6%80%81%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%EF%BC%88ADR-1671%EF%BC%8C%E5%B0%9A%E6%9C%AA%E8%BF%9B%E5%85%A5%E7%94%9F%E4%BA%A7%EF%BC%89" data-toc-target="4-10-前沿方向：动态上下文管理（ADR-1671，尚未进入生产）"><span class="toc-text">4.10 前沿方向：动态上下文管理（ADR-1671，尚未进入生产）</span></a><a class="toc-level-3" href="#4-11-Context-Flow-%E5%85%A8%E6%99%AF%E5%9B%BE" data-toc-target="4-11-Context-Flow-全景图"><span class="toc-text">4.11 Context Flow 全景图</span></a><a class="toc-level-3" href="#4-12-Context-Timeline%EF%BC%9A%E4%B8%80%E6%AC%A1%E5%85%B8%E5%9E%8B%E4%BC%9A%E8%AF%9D%E7%9A%84%E4%B8%8A%E4%B8%8B%E6%96%87%E5%8D%A0%E7%94%A8%E6%9B%B2%E7%BA%BF" data-toc-target="4-12-Context-Timeline：一次典型会话的上下文占用曲线"><span class="toc-text">4.12 Context Timeline：一次典型会话的上下文占用曲线</span></a><a class="toc-level-3" href="#4-13-%E4%BC%98%E7%BC%BA%E7%82%B9%E4%B8%8E-Token-%E8%8A%82%E7%BA%A6%E5%8E%9F%E7%90%86%E6%80%BB%E7%BB%93" data-toc-target="4-13-优缺点与-Token-节约原理总结"><span class="toc-text">4.13 优缺点与 Token 节约原理总结</span></a><a class="toc-level-3" href="#4-14-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="4-14-本部分小结与下文预告"><span class="toc-text">4.14 本部分小结与下文预告</span></a><a class="toc-level-2" href="#%E7%AC%AC%E4%BA%94%E9%83%A8%E5%88%86-%C2%B7-Spec-Driven-Development%EF%BC%88%E4%BA%94%E9%98%B6%E6%AE%B5%E5%BE%AA%E7%8E%AF%E5%85%A8%E8%A7%A3%EF%BC%89" data-toc-target="第五部分-·-Spec-Driven-Development（五阶段循环全解）"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">第五部分 · Spec Driven Development（五阶段循环全解）</span></a><a class="toc-level-3" href="#5-0-%E4%B8%BA%E4%BB%80%E4%B9%88%E6%81%B0%E5%A5%BD%E6%98%AF%E8%BF%99%E4%BA%94%E4%B8%AA%E9%98%B6%E6%AE%B5" data-toc-target="5-0-为什么恰好是这五个阶段"><span class="toc-text">5.0 为什么恰好是这五个阶段</span></a><a class="toc-level-3" href="#5-1-%E4%BA%94%E9%98%B6%E6%AE%B5%E5%85%A8%E6%99%AF%E6%B5%81%E7%A8%8B%E5%9B%BE" data-toc-target="5-1-五阶段全景流程图"><span class="toc-text">5.1 五阶段全景流程图</span></a><a class="toc-level-3" href="#5-2-%E9%98%B6%E6%AE%B5%E4%B8%80-%C2%B7-Discuss%EF%BC%88%E8%AE%A8%E8%AE%BA%EF%BC%89" data-toc-target="5-2-阶段一-·-Discuss（讨论）"><span class="toc-text">5.2 阶段一 · Discuss（讨论）</span></a><a class="toc-level-3" href="#5-3-%E9%98%B6%E6%AE%B5%E4%B8%80%E7%82%B9%E4%BA%94-%C2%B7-UI-Design%EF%BC%88%E5%8F%AF%E9%80%89%EF%BC%89" data-toc-target="5-3-阶段一点五-·-UI-Design（可选）"><span class="toc-text">5.3 阶段一点五 · UI Design（可选）</span></a><a class="toc-level-3" href="#5-4-%E9%98%B6%E6%AE%B5%E4%BA%8C-%C2%B7-Plan%EF%BC%88%E8%A7%84%E5%88%92%EF%BC%89%E2%80%94%E2%80%94-%E4%B8%89%E6%AE%B5%E5%BC%8F%E6%B5%81%E6%B0%B4%E7%BA%BF" data-toc-target="5-4-阶段二-·-Plan（规划）——-三段式流水线"><span class="toc-text">5.4 阶段二 · Plan（规划）—— 三段式流水线</span></a><a class="toc-level-3" href="#5-5-%E9%98%B6%E6%AE%B5%E4%B8%89-%C2%B7-Execute%EF%BC%88%E6%89%A7%E8%A1%8C%EF%BC%89" data-toc-target="5-5-阶段三-·-Execute（执行）"><span class="toc-text">5.5 阶段三 · Execute（执行）</span></a><a class="toc-level-3" href="#5-6-%E9%98%B6%E6%AE%B5%E5%9B%9B-%C2%B7-Verify%EF%BC%88%E9%AA%8C%E8%AF%81%EF%BC%89%E2%80%94%E2%80%94-%E5%8F%8C%E5%B1%82%E7%BB%93%E6%9E%84" data-toc-target="5-6-阶段四-·-Verify（验证）——-双层结构"><span class="toc-text">5.6 阶段四 · Verify（验证）—— 双层结构</span></a><a class="toc-level-3" href="#5-7-%E9%98%B6%E6%AE%B5%E4%BA%94-%C2%B7-Ship%EF%BC%88%E4%BA%A4%E4%BB%98%EF%BC%89" data-toc-target="5-7-阶段五-·-Ship（交付）"><span class="toc-text">5.7 阶段五 · Ship（交付）</span></a><a class="toc-level-3" href="#5-8-STATE-md%EF%BC%9A%E8%B4%AF%E7%A9%BF%E4%BA%94%E9%98%B6%E6%AE%B5%E7%9A%84%E7%8A%B6%E6%80%81%E6%9C%BA" data-toc-target="5-8-STATE-md：贯穿五阶段的状态机"><span class="toc-text">5.8 STATE.md：贯穿五阶段的状态机</span></a><a class="toc-level-3" href="#5-9-%E5%AE%8C%E6%95%B4%E5%88%B6%E5%93%81%E4%BE%9D%E8%B5%96%E5%9B%BE" data-toc-target="5-9-完整制品依赖图"><span class="toc-text">5.9 完整制品依赖图</span></a><a class="toc-level-3" href="#5-10-%E5%BE%AA%E7%8E%AF%E4%B9%8B%E5%A4%96%E7%9A%84%E8%BD%BB%E9%87%8F%E5%8E%9F%E8%AF%AD" data-toc-target="5-10-循环之外的轻量原语"><span class="toc-text">5.10 循环之外的轻量原语</span></a><a class="toc-level-3" href="#5-11-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="5-11-本部分小结与下文预告"><span class="toc-text">5.11 本部分小结与下文预告</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/spec-driven-development/" style="--rail: 50%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 10</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E5%9B%9B%E9%83%A8%E5%88%86-%C2%B7-Context-Engineering%EF%BC%88%E4%B8%8A%E4%B8%8B%E6%96%87%E5%B7%A5%E7%A8%8B%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90%EF%BC%89" data-toc-target="第四部分-·-Context-Engineering（上下文工程深度解析）" data-title="01 · 第四部分 · Context Engineering（上下文工程深度解析）" aria-label="第四部分 · Context Engineering（上下文工程深度解析）"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E4%BA%94%E9%83%A8%E5%88%86-%C2%B7-Spec-Driven-Development%EF%BC%88%E4%BA%94%E9%98%B6%E6%AE%B5%E5%BE%AA%E7%8E%AF%E5%85%A8%E8%A7%A3%EF%BC%89" data-toc-target="第五部分-·-Spec-Driven-Development（五阶段循环全解）" data-title="02 · 第五部分 · Spec Driven Development（五阶段循环全解）" aria-label="第五部分 · Spec Driven Development（五阶段循环全解）"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/Open-GSD-03-上下文工程与SDD","title":"Open-GSD 源码解析（三）：上下文工程与五阶段 SDD 循环","url":"/2026/08/07/engineering-practice/Open-GSD-03-%E4%B8%8A%E4%B8%8B%E6%96%87%E5%B7%A5%E7%A8%8B%E4%B8%8ESDD/","path":"spec-driven-development","index":4,"total":10,"next":{"title":"Open-GSD 源码解析（四）：Skill 框架、SKILL.md、加载与命中","url":"/2026/08/10/engineering-practice/Open-GSD-04-Skill%E6%A1%86%E6%9E%B6/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

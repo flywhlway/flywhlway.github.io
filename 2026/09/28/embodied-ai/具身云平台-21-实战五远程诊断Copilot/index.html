@@ -1,0 +1,682 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 21 章 实战五：远程诊断 Copilot——可解释、可恢复、可闭环 · 飞轮之道</title>
+<meta name="description" content="p05 把第 11 章的 车联网智能诊断迁移方案做成可运行工程：故障图谱、证据特征、可解释的假设排序、只读诊断原语、可断点恢复的诊断工作流、人审分级、带摘要清单的证据包与闭环学习。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-21-%E5%AE%9E%E6%88%98%E4%BA%94%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%ADCopilot/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 21 章 实战五：远程诊断 Copilot——可解释、可恢复、可闭环 · 飞轮之道">
+<meta property="og:description" content="p05 把第 11 章的 车联网智能诊断迁移方案做成可运行工程：故障图谱、证据特征、可解释的假设排序、只读诊断原语、可断点恢复的诊断工作流、人审分级、带摘要清单的证据包与闭环学习。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-21-%E5%AE%9E%E6%88%98%E4%BA%94%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%ADCopilot/">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Robot_arm_picks_up_cylindrical_objects_in_a_factory_setting.jpg/1280px-Robot_arm_picks_up_cylindrical_objects_in_a_factory_setting.jpg">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">实战</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 22 / 28 篇</a>
+    </div>
+    <h1>第 21 章 实战五：远程诊断 Copilot——可解释、可恢复、可闭环</h1>
+    <p class="article-deck">p05 把第 11 章的 车联网智能诊断迁移方案做成可运行工程：故障图谱、证据特征、可解释的假设排序、只读诊断原语、可断点恢复的诊断工作流、人审分级、带摘要清单的证据包与闭环学习。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>7 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%AD/">#远程诊断</a><a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE/">#实战项目</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>缺失不惩罚：没检查过不等于不成立。</li><li>检查带来信息增益：只读原语补证据再重排。</li><li>打分确定性：可复现、可学习、可审计。</li><li>评估集也要治理：错误样本会让你修错东西。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：p05 把第 11 章的 车联网智能诊断迁移方案做成可运行工程：故障图谱、证据特征、可解释的假设排序、只读诊断原语、可断点恢复的诊断工作流、人审分级、带摘要清单的证据包与闭环学习。本章用三个剧本演示诊断全过程，并重点讲“为什么打分不交给大模型”。<br><strong>代码位置</strong>：<code>code/p05-remote-diagnosis</code>｜<strong>对应理论</strong>：第 11 章｜<strong>建议学时</strong>：5 小时</p>
+</blockquote>
+<h2 id="21-1-目标与验收"><a href="#21-1-目标与验收" class="headerlink" title="21.1 目标与验收"></a>21.1 目标与验收</h2><h3 id="21-1-1-三个剧本"><a href="#21-1-1-三个剧本" class="headerlink" title="21.1.1 三个剧本"></a>21.1.1 三个剧本</h3><table>
+<thead>
+<tr>
+<th>剧本</th>
+<th>证据特点</th>
+<th>期望结论</th>
+<th>期望处置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>overheat</td>
+<td>关节温度持续上升、后段出现错误码 301</td>
+<td>关节模组过热</td>
+<td>自动降载；维修检查走人审</td>
+</tr>
+<tr>
+<td>wifi</td>
+<td>重连 6 次、定位丢失 6 次、信号最低 -82 dBm、地图 40 天未更新</td>
+<td>Wi-Fi 漫游（地图过期为备选）</td>
+<td>自动放宽 keepalive；通知 IT 调整 AP</td>
+</tr>
+<tr>
+<td>thermal</td>
+<td>换模型后半程持续降频、推理 P99 超过动作块时长</td>
+<td>主控热降频</td>
+<td>检查风扇自动；回滚模型走人审</td>
+</tr>
+</tbody></table>
+<p>交付前验收：<strong>14 项测试全部通过</strong>（含“可选 LLM 改写不改变结论、LLM 故障时降级”两项），pyflakes 无告警。</p>
+<h2 id="21-2-架构"><a href="#21-2-架构" class="headerlink" title="21.2 架构"></a>21.2 架构</h2><h3 id="21-2-1-工作流六步"><a href="#21-2-1-工作流六步" class="headerlink" title="21.2.1 工作流六步"></a>21.2.1 工作流六步</h3><pre class="mermaid">flowchart LR
+  C["collect&lt;br/&gt;采集证据（重试）"] --&gt; R["rank&lt;br/&gt;图谱打分"]
+  R --&gt; K["check&lt;br/&gt;只读诊断原语"]
+  K --&gt; RR["rerank&lt;br/&gt;补充证据后重排"]
+  RR --&gt; D["decide&lt;br/&gt;低风险自动 / 人审"]
+  D --&gt; P["report&lt;br/&gt;报告 + 证据包"]
+  P -.-&gt;|"工程师确认根因"| FB["feedback&lt;br/&gt;更新先验"]</pre>
+
+
+<h3 id="21-2-2-可恢复执行"><a href="#21-2-2-可恢复执行" class="headerlink" title="21.2.2 可恢复执行"></a>21.2.2 可恢复执行</h3><pre class="mermaid">---
+title: "诊断工作流：每步落盘，崩溃后断点恢复"
+---
+sequenceDiagram
+  participant A as 进程 A
+  participant S as 状态文件&lt;br/&gt;case.state.json
+  participant C as Collector&lt;br/&gt;(端侧证据)
+  participant B as 进程 B
+  A-&gt;&gt;C: collect（失败重试最多 3 次）
+  C--&gt;&gt;A: 原始证据
+  A-&gt;&gt;S: 落盘 done=[collect]（原子替换）
+  A-&gt;&gt;S: 落盘 done=[collect, rank]
+  A-&gt;&gt;S: 落盘 done=[collect, rank, check]
+  Note over A: 进程崩溃
+  B-&gt;&gt;S: 读取状态
+  B-&gt;&gt;B: 跳过已完成步骤（不重新采集）
+  B-&gt;&gt;S: rerank → decide → report 逐步落盘
+  Note over B,C: 测试断言：Collector 调用次数仍为 1</pre>
+
+
+<p>p05 用 JSON 状态文件与原子替换模拟 Temporal 的持久化执行。生产中换成 Temporal：每一步是一个活动（Activity），重试策略、超时、人审信号都由工作流引擎承担。<strong>证据采集依赖端侧在线，失败重试与断点恢复不是锦上添花，而是必需</strong>——机器人可能正在电梯里、正在漫游、正在重启。</p>
+<h2 id="21-3-可解释打分"><a href="#21-3-可解释打分" class="headerlink" title="21.3 可解释打分"></a>21.3 可解释打分</h2><h3 id="21-3-1-规则"><a href="#21-3-1-规则" class="headerlink" title="21.3.1 规则"></a>21.3.1 规则</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">for</span> s <span class="keyword">in</span> f[<span class="string">&quot;symptoms&quot;</span>]:</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    cond = <span class="string">f&quot;<span class="subst">&#123;s[<span class="string">&#x27;feature&#x27;</span>]&#125;</span> <span class="subst">&#123;s[<span class="string">&#x27;op&#x27;</span>]&#125;</span> <span class="subst">&#123;s[<span class="string">&#x27;value&#x27;</span>]&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="keyword">if</span> s[<span class="string">&quot;feature&quot;</span>] <span class="keyword">not</span> <span class="keyword">in</span> features:</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">        h.missing.append(cond)                       <span class="comment"># 无数据：不加不减，列为缺失</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="keyword">elif</span> OPS[s[<span class="string">&quot;op&quot;</span>]](features[s[<span class="string">&quot;feature&quot;</span>]], s[<span class="string">&quot;value&quot;</span>]):</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        logit += s[<span class="string">&quot;weight&quot;</span>]                         <span class="comment"># 命中：加权</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        h.support.append(<span class="string">f&quot;<span class="subst">&#123;cond&#125;</span>（实测 …）&quot;</span>)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="keyword">else</span>:</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        logit -= <span class="number">0.5</span> * s[<span class="string">&quot;weight&quot;</span>]                   <span class="comment"># 不成立：减半权</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        h.against.append(<span class="string">f&quot;<span class="subst">&#123;cond&#125;</span> 不成立（实测 …）&quot;</span>)</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">h.score = <span class="number">1</span> / (<span class="number">1</span> + math.exp(-logit))                 <span class="comment"># 先验对数几率 + 证据 → 概率</span></span></span></code></pre></div></div></figure>
+
+<p>三条设计：<strong>缺失不惩罚</strong>（没检查过不等于不成立，所以需要“只读检查”补证据）；<strong>反对证据减半权</strong>（一条不成立的症状削弱但不否定假设）；<strong>每个分数都附解释</strong>（支持、反对、缺失）。</p>
+<h3 id="21-3-2-为什么不让大模型打分"><a href="#21-3-2-为什么不让大模型打分" class="headerlink" title="21.3.2 为什么不让大模型打分"></a>21.3.2 为什么不让大模型打分</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>确定性打分</th>
+<th>大模型打分</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>可复现</td>
+<td>同样证据同样结果</td>
+<td>可能每次不同</td>
+</tr>
+<tr>
+<td>可解释</td>
+<td>逐条列出命中症状与权重</td>
+<td>生成的解释未必是真实原因</td>
+</tr>
+<tr>
+<td>可学习</td>
+<td>确认根因后调整先验与权重，效果可度量</td>
+<td>难以针对性纠偏</td>
+</tr>
+<tr>
+<td>可审计</td>
+<td>事故复盘可追溯到规则与数据</td>
+<td>难以复盘</td>
+</tr>
+</tbody></table>
+<p>大模型在 p05 里的位置是<strong>把结构化结果写成报告</strong>（<code>diagnose/llm.py</code>，配置 <code>ECL_LLM_*</code> 环境变量才启用，离线时只用模板；改写失败不影响诊断），以及未来可以用来<strong>辅助编写与维护图谱</strong>。打分与处置决策保持确定性——这与第 15 章“规划器只提议、安全笼做决定”是同一原则。</p>
+<h2 id="21-4-剧本实际输出"><a href="#21-4-剧本实际输出" class="headerlink" title="21.4 剧本实际输出"></a>21.4 剧本实际输出</h2><h3 id="21-4-1-三个剧本的排序"><a href="#21-4-1-三个剧本的排序" class="headerlink" title="21.4.1 三个剧本的排序"></a>21.4.1 三个剧本的排序</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">########## 剧本 overheat ##########</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  0.94  F-JOINT-OVERHEAT     关节模组过热（负载或散热异常）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  0.01  F-BATTERY-AGING      电池老化（续航下降）</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  0.01  F-CLOCK-SKEW         时钟偏移导致数据对齐异常</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  决策：auto  → [&#x27;A-DERATE&#x27;]  待人审：[&#x27;A-INSPECT&#x27;]</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">########## 剧本 wifi ##########</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  0.99  F-LOC-WIFI           Wi-Fi 漫游导致定位与连接抖动</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  0.28  F-MAP-STALE          站点布局变化导致地图过期</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  决策：auto  → [&#x27;A-KEEPALIVE&#x27;, &#x27;A-AP-TUNE&#x27;]  待人审：[]</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">########## 剧本 thermal ##########</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  0.91  F-THERMAL-THROTTLE   主控热降频导致推理超时（常见于换模型后）</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  决策：auto  → [&#x27;A-FAN-CHECK&#x27;]  待人审：[&#x27;A-ROLLBACK-MODEL&#x27;]</span></span></code></pre></div></div></figure>
+
+<h3 id="21-4-2-一份真实生成的报告"><a href="#21-4-2-一份真实生成的报告" class="headerlink" title="21.4.2 一份真实生成的报告"></a>21.4.2 一份真实生成的报告</h3><figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="21"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="section"># 诊断报告 case-wifi（robot-wifi）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="section">## 结论</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">最可能根因：<span class="strong">**Wi-Fi 漫游导致定位与连接抖动**</span>（F-LOC-WIFI，置信度 0.99，P1）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="section">## 支持证据</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="bullet">-</span> reconnect<span class="emphasis">_count &gt;= 5（实测 6）</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="emphasis">- localization_</span>lost<span class="emphasis">_count &gt;= 2（实测 6）</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="emphasis">- wifi_</span>rssi<span class="emphasis">_min &lt; -75（实测 -82）</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="emphasis">- roam_</span>aligned<span class="emphasis">_with_</span>loc<span class="emphasis">_lost == True（实测 True）</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="emphasis"></span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="emphasis">## 备选假设</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="emphasis">- 站点布局变化导致地图过期（0.28）</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="emphasis"></span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="emphasis">## 已执行只读检查</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="emphasis">loc.quality_</span>timeline, net.roam<span class="emphasis">_log</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="emphasis"></span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="emphasis">## 处置决策</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="emphasis">模式：auto</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="emphasis">- 执行：放宽 keepalive 并开启漫游宽限（风险 low）</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="emphasis">- 执行：联系 IT 调整 AP 漫游阈值（风险 low）</span></span></span></code></pre></div></div></figure>
+
+<p>注意第四条支持证据 <code>roam_aligned_with_loc_lost</code>：它不在原始遥测里，而是<strong>只读检查 <code>net.roam_log</code> 补充的</strong>——检查“定位丢失是否紧跟在漫游之后”。检查前这条证据列在“缺失”中，检查后变成支持证据，置信度随之上升。测试 <code>test_wifi_needs_check_to_become_decisive</code> 专门验证这个“检查带来信息增益”的过程。</p>
+<h3 id="21-4-3-证据包"><a href="#21-4-3-证据包" class="headerlink" title="21.4.3 证据包"></a>21.4.3 证据包</h3><p>证据包是一个 zip，包含 <code>report.md</code>、<code>features.json</code>、<code>hypotheses.json</code>、<code>raw.json</code> 与 <code>MANIFEST.json</code>（每个文件的 SHA-256）。它可以在另一台机器上复现分析，也可以作为工单附件、安全取证材料或训练数据索引。测试 <code>test_evidence_package_integrity</code> 逐文件校验摘要。</p>
+<h2 id="21-5-构建复盘"><a href="#21-5-构建复盘" class="headerlink" title="21.5 构建复盘"></a>21.5 构建复盘</h2><h3 id="21-5-1-合成证据导致的“伪备选”"><a href="#21-5-1-合成证据导致的“伪备选”" class="headerlink" title="21.5.1 合成证据导致的“伪备选”"></a>21.5.1 合成证据导致的“伪备选”</h3><p>初版的关节过热剧本里，“电池老化”以 0.34 排在第二位。追查发现，合成数据中电量每 10 秒下降 0.001，折合每小时 0.36，超过了电池老化症状的阈值 0.25——<strong>这是合成证据的问题，不是图谱的问题</strong>。修正后第二名降为 0.01。</p>
+<p>这个小插曲有一个大教训：<strong>诊断系统的评估集必须接受与数据集同等的质量治理</strong>。合成或标注有误的评估样本，会让你去“修复”一个没有问题的图谱。</p>
+<h2 id="21-6-测试地图"><a href="#21-6-测试地图" class="headerlink" title="21.6 测试地图"></a>21.6 测试地图</h2><h3 id="21-6-1-14-项测试"><a href="#21-6-1-14-项测试" class="headerlink" title="21.6.1 14 项测试"></a>21.6.1 14 项测试</h3><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用例</th>
+<th>验证</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>test_engine</td>
+<td>overheat 第一且领先明显</td>
+<td>打分与区分度</td>
+</tr>
+<tr>
+<td></td>
+<td>wifi 需要检查才决定性</td>
+<td>检查的信息增益</td>
+</tr>
+<tr>
+<td></td>
+<td>thermal 第一且处置集合正确</td>
+<td>图谱处置映射</td>
+</tr>
+<tr>
+<td></td>
+<td>反对与缺失证据的解释</td>
+<td>可解释性</td>
+</tr>
+<tr>
+<td></td>
+<td>特征提取边界</td>
+<td>空证据、日志模式</td>
+</tr>
+<tr>
+<td></td>
+<td>缺字段帧整体跳过</td>
+<td>时间戳与温度成对取值，斜率不错位</td>
+</tr>
+<tr>
+<td>test_workflow</td>
+<td>瞬时失败重试成功</td>
+<td>采集重试</td>
+</tr>
+<tr>
+<td></td>
+<td>超过重试上限失败</td>
+<td>失败语义</td>
+</tr>
+<tr>
+<td></td>
+<td>崩溃后恢复不重复采集</td>
+<td>持久化执行</td>
+</tr>
+<tr>
+<td></td>
+<td>自动&#x2F;待人审&#x2F;人审拒绝</td>
+<td>决策分级</td>
+</tr>
+<tr>
+<td></td>
+<td>证据包摘要一致</td>
+<td>取证完整性</td>
+</tr>
+<tr>
+<td></td>
+<td>反馈只提升被确认根因的先验</td>
+<td>闭环学习</td>
+</tr>
+<tr>
+<td></td>
+<td>可选 LLM 改写不改结论；LLM 故障降级；未配置不启用</td>
+<td>LLM 边界</td>
+</tr>
+</tbody></table>
+<h2 id="21-7-实验"><a href="#21-7-实验" class="headerlink" title="21.7 实验"></a>21.7 实验</h2><h3 id="21-7-1-五个实验"><a href="#21-7-1-五个实验" class="headerlink" title="21.7.1 五个实验"></a>21.7.1 五个实验</h3><ol>
+<li>为“相机脏污导致感知失效”新增故障节点（症状：检测置信度整体下降、特定相机图像亮度方差下降），并编写合成剧本；</li>
+<li>修改 <code>auto_threshold</code> 为 0.95，观察三个剧本的决策模式变化，讨论阈值如何平衡效率与风险；</li>
+<li>对 wifi 剧本连续调用 10 次 <code>feedback</code>，观察 F-LOC-WIFI 先验的变化，思考先验更新如何防止“自我强化”；</li>
+<li>把 p05 的 <code>Collector</code> 接到 p01：从 p01 的遥测与事件表中拉取某台机器人的时间窗证据；</li>
+<li>用 LLM 把 <code>hypotheses.json</code> 改写成面向运营人员的通俗说明，对比模板报告。</li>
+</ol>
+<h2 id="21-8-玩具与生产"><a href="#21-8-玩具与生产" class="headerlink" title="21.8 玩具与生产"></a>21.8 玩具与生产</h2><h3 id="21-8-1-对照表"><a href="#21-8-1-对照表" class="headerlink" title="21.8.1 对照表"></a>21.8.1 对照表</h3><table>
+<thead>
+<tr>
+<th>简化</th>
+<th>生产</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>8 个故障节点的静态图谱</td>
+<td>知识图谱（图数据库或 LightRAG）+ 案例库 + 工程师维护界面</td>
+</tr>
+<tr>
+<td>合成证据</td>
+<td>遥测时序库 + 事件库 + 三通道日志召回（第 11 章）</td>
+</tr>
+<tr>
+<td>模拟的只读检查</td>
+<td>云桥执行白名单诊断命令并回传结构化结果</td>
+</tr>
+<tr>
+<td>状态文件</td>
+<td>Temporal 工作流</td>
+</tr>
+<tr>
+<td>固定学习率更新先验</td>
+<td>定期离线重估权重，用确认样本做评估</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车联网智能诊断平台</th>
+<th>p05</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DTC + 故障树</td>
+<td>多源特征 + 故障图谱</td>
+<td>症状更抽象</td>
+</tr>
+<tr>
+<td>远程读取数据流</td>
+<td>只读诊断原语</td>
+<td>同构</td>
+</tr>
+<tr>
+<td>诊断报告</td>
+<td>报告 + 证据包（摘要清单）</td>
+<td>增加可复现性</td>
+</tr>
+<tr>
+<td>专家经验沉淀</td>
+<td>feedback 闭环</td>
+<td>同构</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>把打分交给大模型</strong>：不可复现、不可学习、难审计。</li>
+<li><strong>缺失当作不成立</strong>：没检查过的症状被惩罚，正确假设被压低。</li>
+<li><strong>评估数据不治理</strong>：伪备选让人误改图谱（21.5）。</li>
+</ul>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>如何设计可解释的智能诊断？（先验 + 证据加权、支持&#x2F;反对&#x2F;缺失三栏、检查带来信息增益）</li>
+<li>诊断工作流为什么需要持久化执行？（端侧证据采集不可靠，崩溃恢复不重复采集）</li>
+<li>大模型在诊断系统里放在哪？（写报告、辅助维护图谱；不做打分与处置决策）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>缺失不惩罚</strong>：没检查过不等于不成立。</li>
+<li><strong>检查带来信息增益</strong>：只读原语补证据再重排。</li>
+<li><strong>打分确定性</strong>：可复现、可学习、可审计。</li>
+<li><strong>评估集也要治理</strong>：错误样本会让你修错东西。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-20-%E5%AE%9E%E6%88%98%E5%9B%9B%E5%85%B7%E8%BA%ABAgent%E8%B0%83%E5%BA%A6%E5%A4%A7%E8%84%91/">第 20 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-22-%E5%AE%9E%E6%88%98%E5%85%ADROS2%E7%AB%AF%E4%BE%A7%E5%A5%97%E4%BB%B6%E4%B8%8E%E5%85%A8%E5%AE%B6%E6%A1%B6%E8%81%94%E8%B0%83/">第 22 章 实战六：ROS 2 端侧套件与全家桶联调</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-22-%E5%AE%9E%E6%88%98%E5%85%ADROS2%E7%AB%AF%E4%BE%A7%E5%A5%97%E4%BB%B6%E4%B8%8E%E5%85%A8%E5%AE%B6%E6%A1%B6%E8%81%94%E8%B0%83/">第 22 章 实战六：ROS 2 端侧套件与全家桶联调</a></h3>
+        <p>p06 是全书唯一运行在“机器人上”的工程：一个 ROS 2 Jazzy 工作空间…</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-22-%E5%AE%9E%E6%88%98%E5%85%ADROS2%E7%AB%AF%E4%BE%A7%E5%A5%97%E4%BB%B6%E4%B8%8E%E5%85%A8%E5%AE%B6%E6%A1%B6%E8%81%94%E8%B0%83/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-20-%E5%AE%9E%E6%88%98%E5%9B%9B%E5%85%B7%E8%BA%ABAgent%E8%B0%83%E5%BA%A6%E5%A4%A7%E8%84%91/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 20 章 实战四：具身 Agent 调度大脑——让一句话安全地变成一个任务</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#21-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="21-1-目标与验收"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">21.1 目标与验收</span></a><a class="toc-level-3" href="#21-1-1-%E4%B8%89%E4%B8%AA%E5%89%A7%E6%9C%AC" data-toc-target="21-1-1-三个剧本"><span class="toc-text">21.1.1 三个剧本</span></a><a class="toc-level-2" href="#21-2-%E6%9E%B6%E6%9E%84" data-toc-target="21-2-架构"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">21.2 架构</span></a><a class="toc-level-3" href="#21-2-1-%E5%B7%A5%E4%BD%9C%E6%B5%81%E5%85%AD%E6%AD%A5" data-toc-target="21-2-1-工作流六步"><span class="toc-text">21.2.1 工作流六步</span></a><a class="toc-level-3" href="#21-2-2-%E5%8F%AF%E6%81%A2%E5%A4%8D%E6%89%A7%E8%A1%8C" data-toc-target="21-2-2-可恢复执行"><span class="toc-text">21.2.2 可恢复执行</span></a><a class="toc-level-2" href="#21-3-%E5%8F%AF%E8%A7%A3%E9%87%8A%E6%89%93%E5%88%86" data-toc-target="21-3-可解释打分"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">21.3 可解释打分</span></a><a class="toc-level-3" href="#21-3-1-%E8%A7%84%E5%88%99" data-toc-target="21-3-1-规则"><span class="toc-text">21.3.1 规则</span></a><a class="toc-level-3" href="#21-3-2-%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%AE%A9%E5%A4%A7%E6%A8%A1%E5%9E%8B%E6%89%93%E5%88%86" data-toc-target="21-3-2-为什么不让大模型打分"><span class="toc-text">21.3.2 为什么不让大模型打分</span></a><a class="toc-level-2" href="#21-4-%E5%89%A7%E6%9C%AC%E5%AE%9E%E9%99%85%E8%BE%93%E5%87%BA" data-toc-target="21-4-剧本实际输出"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">21.4 剧本实际输出</span></a><a class="toc-level-3" href="#21-4-1-%E4%B8%89%E4%B8%AA%E5%89%A7%E6%9C%AC%E7%9A%84%E6%8E%92%E5%BA%8F" data-toc-target="21-4-1-三个剧本的排序"><span class="toc-text">21.4.1 三个剧本的排序</span></a><a class="toc-level-3" href="#21-4-2-%E4%B8%80%E4%BB%BD%E7%9C%9F%E5%AE%9E%E7%94%9F%E6%88%90%E7%9A%84%E6%8A%A5%E5%91%8A" data-toc-target="21-4-2-一份真实生成的报告"><span class="toc-text">21.4.2 一份真实生成的报告</span></a><a class="toc-level-3" href="#21-4-3-%E8%AF%81%E6%8D%AE%E5%8C%85" data-toc-target="21-4-3-证据包"><span class="toc-text">21.4.3 证据包</span></a><a class="toc-level-2" href="#21-5-%E6%9E%84%E5%BB%BA%E5%A4%8D%E7%9B%98" data-toc-target="21-5-构建复盘"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">21.5 构建复盘</span></a><a class="toc-level-3" href="#21-5-1-%E5%90%88%E6%88%90%E8%AF%81%E6%8D%AE%E5%AF%BC%E8%87%B4%E7%9A%84%E2%80%9C%E4%BC%AA%E5%A4%87%E9%80%89%E2%80%9D" data-toc-target="21-5-1-合成证据导致的“伪备选”"><span class="toc-text">21.5.1 合成证据导致的“伪备选”</span></a><a class="toc-level-2" href="#21-6-%E6%B5%8B%E8%AF%95%E5%9C%B0%E5%9B%BE" data-toc-target="21-6-测试地图"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">21.6 测试地图</span></a><a class="toc-level-3" href="#21-6-1-14-%E9%A1%B9%E6%B5%8B%E8%AF%95" data-toc-target="21-6-1-14-项测试"><span class="toc-text">21.6.1 14 项测试</span></a><a class="toc-level-2" href="#21-7-%E5%AE%9E%E9%AA%8C" data-toc-target="21-7-实验"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">21.7 实验</span></a><a class="toc-level-3" href="#21-7-1-%E4%BA%94%E4%B8%AA%E5%AE%9E%E9%AA%8C" data-toc-target="21-7-1-五个实验"><span class="toc-text">21.7.1 五个实验</span></a><a class="toc-level-2" href="#21-8-%E7%8E%A9%E5%85%B7%E4%B8%8E%E7%94%9F%E4%BA%A7" data-toc-target="21-8-玩具与生产"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">21.8 玩具与生产</span></a><a class="toc-level-3" href="#21-8-1-%E5%AF%B9%E7%85%A7%E8%A1%A8" data-toc-target="21-8-1-对照表"><span class="toc-text">21.8.1 对照表</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 79%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">22 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#21-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="21-1-目标与验收" data-title="01 · 21.1 目标与验收" aria-label="21.1 目标与验收"></a><a class="toc-strip__dot" href="#21-2-%E6%9E%B6%E6%9E%84" data-toc-target="21-2-架构" data-title="02 · 21.2 架构" aria-label="21.2 架构"></a><a class="toc-strip__dot" href="#21-3-%E5%8F%AF%E8%A7%A3%E9%87%8A%E6%89%93%E5%88%86" data-toc-target="21-3-可解释打分" data-title="03 · 21.3 可解释打分" aria-label="21.3 可解释打分"></a><a class="toc-strip__dot" href="#21-4-%E5%89%A7%E6%9C%AC%E5%AE%9E%E9%99%85%E8%BE%93%E5%87%BA" data-toc-target="21-4-剧本实际输出" data-title="04 · 21.4 剧本实际输出" aria-label="21.4 剧本实际输出"></a><a class="toc-strip__dot" href="#21-5-%E6%9E%84%E5%BB%BA%E5%A4%8D%E7%9B%98" data-toc-target="21-5-构建复盘" data-title="05 · 21.5 构建复盘" aria-label="21.5 构建复盘"></a><a class="toc-strip__dot" href="#21-6-%E6%B5%8B%E8%AF%95%E5%9C%B0%E5%9B%BE" data-toc-target="21-6-测试地图" data-title="06 · 21.6 测试地图" aria-label="21.6 测试地图"></a><a class="toc-strip__dot" href="#21-7-%E5%AE%9E%E9%AA%8C" data-toc-target="21-7-实验" data-title="07 · 21.7 实验" aria-label="21.7 实验"></a><a class="toc-strip__dot" href="#21-8-%E7%8E%A9%E5%85%B7%E4%B8%8E%E7%94%9F%E4%BA%A7" data-toc-target="21-8-玩具与生产" data-title="08 · 21.8 玩具与生产" aria-label="21.8 玩具与生产"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="09 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="10 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="11 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="12 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-21-实战五远程诊断Copilot","title":"第 21 章 实战五：远程诊断 Copilot——可解释、可恢复、可闭环","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-21-%E5%AE%9E%E6%88%98%E4%BA%94%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%ADCopilot/","path":"embodied-cloud-book","index":21,"total":28,"next":{"title":"第 22 章 实战六：ROS 2 端侧套件与全家桶联调","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-22-%E5%AE%9E%E6%88%98%E5%85%ADROS2%E7%AB%AF%E4%BE%A7%E5%A5%97%E4%BB%B6%E4%B8%8E%E5%85%A8%E5%AE%B6%E6%A1%B6%E8%81%94%E8%B0%83/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

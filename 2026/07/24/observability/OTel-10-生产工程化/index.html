@@ -1,0 +1,734 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>可观测性生产工程化演进 · 飞轮之道</title>
+<meta name="description" content="POC 的目标是看得见，生产的目标是扛得住、管得住、算得清：按拓扑高可用、数据治理、安全合规、SLO 告警、规范治理五个维度给出演进路线，告警规则与 Collector 自身指标名均经实测核对。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/07/24/observability/OTel-10-%E7%94%9F%E4%BA%A7%E5%B7%A5%E7%A8%8B%E5%8C%96/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="可观测性生产工程化演进 · 飞轮之道">
+<meta property="og:description" content="POC 的目标是看得见，生产的目标是扛得住、管得住、算得清：按拓扑高可用、数据治理、安全合规、SLO 告警、规范治理五个维度给出演进路线，告警规则与 Collector 自身指标名均经实测核对。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/07/24/observability/OTel-10-%E7%94%9F%E4%BA%A7%E5%B7%A5%E7%A8%8B%E5%8C%96/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">生产治理</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 11 / 12 篇</a>
+    </div>
+    <h1>可观测性生产工程化演进</h1>
+    <p class="article-deck">POC 的目标是看得见，生产的目标是扛得住、管得住、算得清：按拓扑高可用、数据治理、安全合规、SLO 告警、规范治理五个维度给出演进路线…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>14 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a><a class="article-meta__tag" href="/tags/SLO/">#SLO</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Collector 自身指标默认从 8888 端口拉取，名称不带 _total；存量规则里常见的 otelcol_processor_dropped_spans 已不存在，丢数据要看拒收、入队失败、发送失败三类计数。</li><li>尾采样多副本必须先按 trace_id 负载均衡，否则同一 Trace 的决策会分裂。</li><li>Agent 级 SLO 可以直接用 Tempo 派生的 span 指标计算燃尽率，前提是 AI Trace 不被采样丢弃。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>POC 的目标是「看得见」，生产的目标是「扛得住、管得住、算得清」。本篇按拓扑高可用 → 数据治理 → 安全合规 → SLO 告警 → 规范治理五个维度给出演进路线与配置基线。文中 Collector 配置在 otelcol-contrib 0.156.0 上做过 <code>validate</code> 校验，告警规则经 promtool 检查，Collector 自身指标名以实际抓取结果为准。</p>
+</blockquote>
+<h2 id="1-演进总览：三阶段门禁"><a href="#1-演进总览：三阶段门禁" class="headerlink" title="1. 演进总览：三阶段门禁"></a>1. 演进总览：三阶段门禁</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>POC（本系列现状）</th>
+<th>Pilot（单业务线试点）</th>
+<th>Production</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Collector</td>
+<td>单实例合一</td>
+<td>Agent + Gateway 两层</td>
+<td>Gateway 多副本 + 按 trace_id 负载均衡</td>
+</tr>
+<tr>
+<td>采样</td>
+<td>SDK 全量，Collector 尾采样（AI Trace 全留，其余 10%）</td>
+<td>同左，按业务调整概率</td>
+<td>同左，外加高 token、慢调用保留规则</td>
+</tr>
+<tr>
+<td>存储</td>
+<td>本地盘</td>
+<td>对象存储（MinIO 等）</td>
+<td>Mimir + 对象存储，多租户</td>
+</tr>
+<tr>
+<td>内容捕获</td>
+<td><code>span_only</code>，Langfuse 管道脱敏</td>
+<td>同左，脱敏规则带样本回归</td>
+<td>同左；合规更严时改用上传钩子或 <code>no_content</code></td>
+</tr>
+<tr>
+<td>认证</td>
+<td>无</td>
+<td>Collector 入口 Token</td>
+<td>mTLS + 租户级鉴权</td>
+</tr>
+<tr>
+<td>告警</td>
+<td>手动看盘</td>
+<td>RED 基线告警 + Collector 自身告警</td>
+<td>SLO 燃尽率告警 + AI 指标告警</td>
+</tr>
+</tbody></table>
+<p>采样与内容捕获两行与文档 05、08 保持一致：SDK 侧不做头部概率采样（Java 的 Micrometer 路线要显式把默认的 0.1 改成 1.0），采样裁决只在 Collector 做一次；正文只有 openai-v2 一个来源，进入 Collector 后 Tempo 管道删除、Langfuse 管道脱敏。</p>
+<h2 id="2-高可用拓扑与-Kubernetes-落地"><a href="#2-高可用拓扑与-Kubernetes-落地" class="headerlink" title="2. 高可用拓扑与 Kubernetes 落地"></a>2. 高可用拓扑与 Kubernetes 落地</h2><h3 id="2-1-两层架构"><a href="#2-1-两层架构" class="headerlink" title="2.1 两层架构"></a>2.1 两层架构</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Pod(App+SDK) ─► Agent Collector（DaemonSet，就近接收、补 K8s 元数据）</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">                    │ OTLP + loadbalancing（按 trace_id 路由）</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">                    ▼</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">             Gateway Collector（Deployment ×N，尾采样 / 脱敏 / 扇出 / 认证）</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">                    ▼</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        Tempo（分布式）/ Mimir / Loki / Langfuse</span></span></code></pre></div></div></figure>
+
+<p>尾采样要求同一 Trace 的所有 Span 落在同一个 Gateway 实例，否则每个实例只看到 Trace 的一部分，各自做出不同的决策，结果是一条 Trace 被保留一半。Agent 层用 <code>loadbalancing</code> exporter 按 trace_id 路由：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">exporters:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">loadbalancing:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">routing_key:</span> <span class="string">traceID</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">protocol:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">otlp:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="attr">tls:</span> &#123; <span class="attr">insecure:</span> <span class="literal">true</span> &#125;        <span class="comment"># 集群内 mTLS 落地后改为证书配置</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">resolver:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">dns:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="attr">hostname:</span> <span class="string">otel-gateway-headless.observability.svc.cluster.local</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="attr">port:</span> <span class="string">&quot;4317&quot;</span>                   <span class="comment"># 字符串类型，写成数字会校验失败</span></span></span></code></pre></div></div></figure>
+
+<p><code>hostname</code> 必须指向 Headless Service，DNS 解析才能拿到每个 Pod 的 IP。Gateway 扩缩容时哈希环会重排，正在进行中的 Trace 会有一小部分被分到新实例，表现为扩缩容窗口内少量 Trace 残缺；尾采样的 <code>decision_wait</code> 越长，受影响的 Trace 越多，这是选择 <code>decision_wait</code> 时要一并考虑的代价。</p>
+<h3 id="2-2-部署方式"><a href="#2-2-部署方式" class="headerlink" title="2.2 部署方式"></a>2.2 部署方式</h3><ul>
+<li>官方 <strong>OpenTelemetry Operator</strong>（Helm）：以 <code>OpenTelemetryCollector</code> CRD 管理配置，支持 Sidecar &#x2F; DaemonSet &#x2F; Deployment 三种形态；Java 服务可以用 <code>Instrumentation</code> CRD 在不改镜像的前提下注入 Java Agent。</li>
+<li>存储层用 Grafana 官方 Helm Chart：<code>tempo-distributed</code>、<code>loki</code>、<code>mimir-distributed</code>，后端对接对象存储。</li>
+<li>导出可靠性：所有跨网络的 exporter 开启 <code>retry_on_failure</code> 与 <code>sending_queue</code>，发往外部或易抖动后端（Langfuse、跨机房存储）的再挂持久化队列：</li>
+</ul>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">extensions:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">file_storage/queue:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">directory:</span> <span class="string">/var/lib/otelcol/queue</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">create_directory:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">exporters:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">otlphttp/langfuse:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attr">endpoint:</span> <span class="string">http://langfuse-web:3000/api/public/otel</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="attr">sending_queue:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="attr">enabled:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="attr">storage:</span> <span class="string">file_storage/queue</span>       <span class="comment"># 队列落盘，Collector 重启不丢积压</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="attr">queue_size:</span> <span class="number">5000</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="attr">service:</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="attr">extensions:</span> [<span class="string">file_storage/queue</span>]</span></span></code></pre></div></div></figure>
+
+<p>持久化队列只保护 Collector 这一跳。应用 SDK 到 Collector 之间仍然是内存队列（文档 05 §9），所以 Agent Collector 要部署在离应用最近的位置（同节点），让这段链路足够短、足够稳。</p>
+<h2 id="3-数据治理：成本与基数控制"><a href="#3-数据治理：成本与基数控制" class="headerlink" title="3. 数据治理：成本与基数控制"></a>3. 数据治理：成本与基数控制</h2><table>
+<thead>
+<tr>
+<th>来源</th>
+<th>症状</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>指标基数爆炸</td>
+<td>Prometheus 内存暴涨</td>
+<td>禁止把 user_id、session_id、trace_id 作为指标维度（放 Trace 属性）；Collector 用 <code>transform</code> 删除高基数标签；Mimir 设租户级序列上限</td>
+</tr>
+<tr>
+<td>进程级序列翻新</td>
+<td>重启后序列数阶梯上涨</td>
+<td>Python SDK 1.43 起每个进程自动生成 UUID 形式的 <code>service.instance.id</code>，映射为 <code>instance</code> 标签；大盘一律 <code>sum by</code> 聚合掉 <code>instance</code>，存储侧按保留期自然淘汰</td>
+</tr>
+<tr>
+<td>Trace 属性膨胀</td>
+<td>单 Span 数十 KB</td>
+<td>正文只在 Langfuse 管道保留；Tempo 管道删正文后用 <code>transform</code> 的 <code>truncate_all(span.attributes, 4096)</code> 截断剩余长文本。不要在 Langfuse 管道截断正文，截断后的 JSON 无法解析</td>
+</tr>
+<tr>
+<td>日志噪声</td>
+<td>Loki 摄入量失控</td>
+<td>采集侧按级别过滤 DEBUG；健康检查、探针路径在源头排除（Python 用 <code>excluded_urls</code>，Java 用规则采样器，文档 06 第 7 节），Collector <code>filter</code> 兜底</td>
+</tr>
+</tbody></table>
+<p>留存策略基线：Metrics 30–90 天（降采样后更久）；Traces 7–14 天（错误链路可延长）；Logs 14–30 天；Langfuse 业务 Trace 按评测与回归需要保留 90 天以上。Langfuse 保存的是脱敏后的正文，留存期要经过数据合规评审。</p>
+<h2 id="4-安全与合规"><a href="#4-安全与合规" class="headerlink" title="4. 安全与合规"></a>4. 安全与合规</h2><ol>
+<li><strong>传输安全</strong>：App → Collector 集群内 mTLS；Collector → 后端 TLS + <code>basicauth</code> &#x2F; <code>bearertokenauth</code> 扩展；OTLP 端口不暴露到公网。</li>
+<li><strong>PII 纵深防御</strong>：应用侧对业务标识做带密钥哈希（文档 05 <code>pseudonymize()</code>）；Collector 的 Langfuse 管道先把消息 JSON 规范化再做正则脱敏（文档 08 §4.3）；Tempo 管道直接删除正文。脱敏规则纳入版本管理，每次变更用 debug exporter 回放样本集（覆盖 ASCII 转义与非转义两种 JSON）比对输出。</li>
+<li><strong>Baggage 边界</strong>：公网入口剥离外部 <code>baggage</code> 头，网关鉴权后写入，消费端只复制白名单键（文档 06 第 5 节、文档 08 第 5 节）；出口网关删除发往外部模型服务商的 <code>baggage</code> 头。</li>
+<li><strong>数据不出境</strong>：全自托管栈天然满足；若引入 SaaS 后端，消息正文类属性一律在 Collector 出口前删除。</li>
+<li><strong>审计</strong>：Grafana、Langfuse 接入 SSO 与 RBAC；含正文的数据单独租户存储、独立授权；Collector 配置变更走 GitOps。</li>
+<li><strong>供应链</strong>：镜像固定 digest、经私有仓库代理拉取；用 <code>ocb</code>（OpenTelemetry Collector Builder）只编译所需组件，缩小攻击面。Python 依赖锁定到传递依赖（<code>uv.lock</code> 提交入库），2026-03 LiteLLM 在 PyPI 上的供应链投毒事件说明，AI 工具链的第三方包同样需要按生产依赖对待。</li>
+</ol>
+<h2 id="5-SLO-与告警体系"><a href="#5-SLO-与告警体系" class="headerlink" title="5. SLO 与告警体系"></a>5. SLO 与告警体系</h2><h3 id="5-1-指标分层"><a href="#5-1-指标分层" class="headerlink" title="5.1 指标分层"></a>5.1 指标分层</h3><table>
+<thead>
+<tr>
+<th>层</th>
+<th>SLI 示例</th>
+<th>数据来源</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>入口层</td>
+<td>可用性、P95 延迟、平均首 Token 时延</td>
+<td>SCG 的 HTTP 指标、Higress ai-statistics 指标（文档 07）</td>
+</tr>
+<tr>
+<td>Agent 层</td>
+<td>诊断成功率、单次诊断 token 数、工具失败率</td>
+<td>Tempo 派生的 span 指标、<code>com.example.*</code> 自定义指标</td>
+</tr>
+<tr>
+<td>LLM 层</td>
+<td><code>gen_ai.client.operation.duration</code> P95、限流比例、首分片时延 P95</td>
+<td>GenAI 指标（文档 09 第 6 节）</td>
+</tr>
+<tr>
+<td>平台层</td>
+<td>Collector 拒收、入队失败、队列水位、SDK 丢弃</td>
+<td>Collector 与 SDK 自身指标</td>
+</tr>
+</tbody></table>
+<p>自定义指标沿用系列统一的反向域名前缀，以你的组织域名替换 <code>com.example</code>。</p>
+<h3 id="5-2-Collector-自身指标：名称以实际抓取为准"><a href="#5-2-Collector-自身指标：名称以实际抓取为准" class="headerlink" title="5.2 Collector 自身指标：名称以实际抓取为准"></a>5.2 Collector 自身指标：名称以实际抓取为准</h3><p>Collector 默认在 <code>:8888/metrics</code> 暴露自身指标，这个默认读取器设置了 <code>without_type_suffix</code> 与 <code>without_units</code>，所以计数器<strong>不带</strong> <code>_total</code>，时长也不带单位后缀。如果自定义了 <code>service.telemetry.metrics.readers</code>，或把自身指标经 OTLP 推给 Prometheus，名称会变成 <code>otelcol_exporter_send_failed_spans_total</code> 这种形式，告警表达式要跟着改。以 0.156.0 默认配置实测：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>含义</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>otelcol_receiver_accepted_spans</code></td>
+<td>接收端成功推入管道的 Span 数</td>
+<td>流量基线</td>
+</tr>
+<tr>
+<td><code>otelcol_receiver_refused_spans</code></td>
+<td>接收端被拒绝的 Span 数（<code>memory_limiter</code> 触发背压时计入这里）</td>
+<td>内存压力</td>
+</tr>
+<tr>
+<td><code>otelcol_exporter_sent_spans</code></td>
+<td>成功发往后端的 Span 数</td>
+<td>与接收量对比算端到端损耗</td>
+</tr>
+<tr>
+<td><code>otelcol_exporter_send_failed_spans</code></td>
+<td>重试耗尽后发送失败的 Span 数</td>
+<td>后端不可用</td>
+</tr>
+<tr>
+<td><code>otelcol_exporter_enqueue_failed_spans</code></td>
+<td>发送队列已满、入队失败的 Span 数</td>
+<td>队列容量不足，数据正在丢</td>
+</tr>
+<tr>
+<td><code>otelcol_exporter_queue_size</code> &#x2F; <code>otelcol_exporter_queue_capacity</code></td>
+<td>队列当前长度与容量（按批计）</td>
+<td>水位告警</td>
+</tr>
+<tr>
+<td><code>otelcol_processor_incoming_items</code> &#x2F; <code>otelcol_processor_outgoing_items</code></td>
+<td>处理器进出条目数</td>
+<td>观察 filter、尾采样的丢弃比例（预期内的丢弃）</td>
+</tr>
+<tr>
+<td><code>otelcol_processor_tail_sampling_sampling_trace_dropped_too_early</code></td>
+<td>未等到 <code>decision_wait</code> 就被挤出内存的 Trace 数</td>
+<td>尾采样 <code>num_traces</code> 不够</td>
+</tr>
+<tr>
+<td><code>otelcol_process_memory_rss</code></td>
+<td>Collector 进程常驻内存</td>
+<td>容量规划</td>
+</tr>
+</tbody></table>
+<p>不少存量告警规则里的 <code>otelcol_processor_dropped_spans</code> 在当前版本中并不存在，照抄的规则永远不会触发。「丢数据」要拆成三类看：接收端拒收（背压）、入队失败（队列满）、发送失败（后端故障）。</p>
+<p>文档 05 §9.3 的 SDK 自身指标（<code>OTEL_PYTHON_SDK_INTERNAL_METRICS_ENABLED=true</code>）经 OTLP 进入 Prometheus 后名为 <code>otel_sdk_processor_span_processed_total</code>，队列满丢弃的数据带 <code>error_type=&quot;queue_full&quot;</code>，用来发现应用侧的静默丢弃。</p>
+<h3 id="5-3-告警规则"><a href="#5-3-告警规则" class="headerlink" title="5.3 告警规则"></a>5.3 告警规则</h3><figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="85"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">groups:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">genai</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">rules:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">LLMErrorRateHigh</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="string">          sum by (job) (rate(gen_ai_client_operation_duration_seconds_count&#123;error_type!=&quot;&quot;&#125;[5m]))</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="string">          / sum by (job) (rate(gen_ai_client_operation_duration_seconds_count[5m])) &gt; 0.05</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="string"></span>        <span class="attr">for:</span> <span class="string">5m</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">critical</span> &#125;</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.job &#125;&#125;</span> 模型调用错误率超过 5%&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">LLMRateLimited</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum</span> <span class="string">by</span> <span class="string">(job)</span> <span class="string">(rate(gen_ai_client_operation_duration_seconds_count&#123;error_type=&quot;RateLimitError&quot;&#125;[5m]))</span> <span class="string">&gt;</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">10m</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.job &#125;&#125;</span> 持续触发模型服务商限流（429）&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">TokenUsageSpike</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="string">          sum by (job) (rate(gen_ai_client_token_usage_sum&#123;gen_ai_token_type=&quot;output&quot;&#125;[10m]))</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="string">            &gt; 2 * sum by (job) (rate(gen_ai_client_token_usage_sum&#123;gen_ai_token_type=&quot;output&quot;&#125;[10m] offset 1d))</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="string">          and</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="string">          sum by (job) (rate(gen_ai_client_token_usage_sum&#123;gen_ai_token_type=&quot;output&quot;&#125;[10m])) &gt; 50</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="string"></span>        <span class="attr">for:</span> <span class="string">15m</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.job &#125;&#125;</span> 输出 token 速率是昨日同时段的两倍以上，疑似循环失控或滥用&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">TokensPerDiagnosisHigh</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx"><span class="string">          sum by (job) (increase(gen_ai_client_token_usage_sum[1h]))</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx"><span class="string">          / sum by (job) (increase(com_example_diagnose_requests_total[1h])) &gt; 20000</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"><span class="string"></span>        <span class="attr">for:</span> <span class="string">30m</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.job &#125;&#125;</span> 单次诊断平均 token 超过阈值&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">FirstChunkLatencyHigh</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"><span class="string">          histogram_quantile(0.95, sum by (job, le) (</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx"><span class="string">            rate(gen_ai_client_operation_time_to_first_chunk_seconds_bucket[5m]))) &gt; 3</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx"><span class="string"></span>        <span class="attr">for:</span> <span class="string">10m</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.job &#125;&#125;</span> 首分片时延 P95 超过 3 秒&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">otel-pipeline</span></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">    <span class="attr">rules:</span></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">CollectorDown</span></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">up&#123;job=&quot;otel-collector&quot;&#125;</span> <span class="string">==</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">2m</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">critical</span> &#125;</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">CollectorRefusingData</span></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum</span> <span class="string">by</span> <span class="string">(receiver)</span> <span class="string">(rate(otelcol_receiver_refused_spans[5m]))</span> <span class="string">&gt;</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">5m</span></span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">critical</span> &#125;</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;接收端 <span class="template-variable">&#123;&#123; $labels.receiver &#125;&#125;</span> 正在拒收 Span（memory_limiter 背压）&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">CollectorQueueFull</span></span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum</span> <span class="string">by</span> <span class="string">(exporter)</span> <span class="string">(rate(otelcol_exporter_enqueue_failed_spans[5m]))</span> <span class="string">&gt;</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">1m</span></span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">critical</span> &#125;</span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.exporter &#125;&#125;</span> 发送队列已满，数据正在丢弃&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">CollectorQueueFilling</span></span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">max</span> <span class="string">by</span> <span class="string">(exporter)</span> <span class="string">(otelcol_exporter_queue_size</span> <span class="string">/</span> <span class="string">otelcol_exporter_queue_capacity)</span> <span class="string">&gt;</span> <span class="number">0.8</span></span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">5m</span></span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.exporter &#125;&#125;</span> 队列水位超过 80%&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">CollectorExportFailing</span></span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum</span> <span class="string">by</span> <span class="string">(exporter)</span> <span class="string">(rate(otelcol_exporter_send_failed_spans[5m]))</span> <span class="string">&gt;</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">10m</span></span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.exporter &#125;&#125;</span> 持续发送失败&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">TailSamplingEvictingEarly</span></span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum(rate(otelcol_processor_tail_sampling_sampling_trace_dropped_too_early[5m]))</span> <span class="string">&gt;</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">5m</span></span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;尾采样在决策前被迫丢弃 Trace，需调大 num_traces 或扩容&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">SdkDroppingSpans</span></span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">sum</span> <span class="string">by</span> <span class="string">(job)</span> <span class="string">(rate(otel_sdk_processor_span_processed_total&#123;error_type=&quot;queue_full&quot;&#125;[5m]))</span> <span class="string">&gt;</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx">        <span class="attr">for:</span> <span class="string">5m</span></span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; $labels.job &#125;&#125;</span> 的 SDK 队列已满，Span 在应用侧被丢弃&quot;</span> &#125;</span></span></code></pre></div></div></figure>
+
+<p>阈值说明：<code>TokenUsageSpike</code> 里的第二个条件（速率大于 50 token&#x2F;秒）用来屏蔽低流量时段的抖动，否则凌晨几次调用就能触发「翻倍」；<code>TokensPerDiagnosisHigh</code> 的 20000 与 <code>FirstChunkLatencyHigh</code> 的 3 秒是示例值，按上线后两周的实际分布取 P99 再留余量。<code>error_type</code> 取的是 SDK 异常类名，OpenAI Python SDK 的限流异常是 <code>RateLimitError</code>，超时是 <code>APITimeoutError</code>。</p>
+<h3 id="5-4-SLO-燃尽率"><a href="#5-4-SLO-燃尽率" class="headerlink" title="5.4 SLO 燃尽率"></a>5.4 SLO 燃尽率</h3><p>以「诊断请求 30 天 99% 成功」为例，错误预算是 1%。Agent 级成功与否直接取 Tempo metrics-generator 从 <code>invoke_agent</code> Span 派生的计数（文档 09 §6.5），前提是尾采样对 AI Trace 全量保留（文档 08 第 6 节），否则分子分母都被采样稀释：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="29"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">groups:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">slo-diagnose</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">rules:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">record:</span> <span class="string">slo:diagnose_errors:ratio_rate5m</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="string">          sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;, status_code=&quot;STATUS_CODE_ERROR&quot;&#125;[5m]))</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="string">          / sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;&#125;[5m]))</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="string"></span>      <span class="bullet">-</span> <span class="attr">record:</span> <span class="string">slo:diagnose_errors:ratio_rate30m</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="string">          sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;, status_code=&quot;STATUS_CODE_ERROR&quot;&#125;[30m]))</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="string">          / sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;&#125;[30m]))</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="string"></span>      <span class="bullet">-</span> <span class="attr">record:</span> <span class="string">slo:diagnose_errors:ratio_rate1h</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="string">          sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;, status_code=&quot;STATUS_CODE_ERROR&quot;&#125;[1h]))</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="string">          / sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;&#125;[1h]))</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="string"></span>      <span class="bullet">-</span> <span class="attr">record:</span> <span class="string">slo:diagnose_errors:ratio_rate6h</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="string">          sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;, status_code=&quot;STATUS_CODE_ERROR&quot;&#125;[6h]))</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="string">          / sum(rate(traces_spanmetrics_calls_total&#123;span_name=&quot;invoke_agent vehicle-diag-agent&quot;&#125;[6h]))</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">DiagnoseErrorBudgetBurnFast</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">slo:diagnose_errors:ratio_rate1h</span> <span class="string">&gt;</span> <span class="string">(14.4</span> <span class="string">*</span> <span class="number">0.01</span><span class="string">)</span> <span class="string">and</span> <span class="string">slo:diagnose_errors:ratio_rate5m</span> <span class="string">&gt;</span> <span class="string">(14.4</span> <span class="string">*</span> <span class="number">0.01</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">critical</span> &#125;</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;诊断成功率 SLO 快速燃尽：按当前速度约 2 天耗尽 30 天预算&quot;</span> &#125;</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">alert:</span> <span class="string">DiagnoseErrorBudgetBurnSlow</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        <span class="attr">expr:</span> <span class="string">slo:diagnose_errors:ratio_rate6h</span> <span class="string">&gt;</span> <span class="string">(6</span> <span class="string">*</span> <span class="number">0.01</span><span class="string">)</span> <span class="string">and</span> <span class="string">slo:diagnose_errors:ratio_rate30m</span> <span class="string">&gt;</span> <span class="string">(6</span> <span class="string">*</span> <span class="number">0.01</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        <span class="attr">labels:</span> &#123; <span class="attr">severity:</span> <span class="string">warning</span> &#125;</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        <span class="attr">annotations:</span> &#123; <span class="attr">summary:</span> <span class="string">&quot;诊断成功率 SLO 持续燃尽：按当前速度约 5 天耗尽 30 天预算&quot;</span> &#125;</span></span></code></pre></div></div></figure>
+
+<p>双窗口的作用：长窗口保证燃尽确实持续，短窗口保证问题仍在发生，故障恢复后告警能及时消失。14.4 与 6 这两个倍率来自「1 小时耗掉 2% 预算」「6 小时耗掉 5% 预算」，与 SLO 目标值无关，换成 99.5% 只需把 0.01 改成 0.005。</p>
+<p>Agent「成功」只覆盖了技术失败。回答质量（答非所问、幻觉）不会让 Span 变成 ERROR，这部分用 Langfuse 的评测分数单独建质量 SLO，两类 SLO 不要混在一个错误率里。</p>
+<h2 id="6-规范治理"><a href="#6-规范治理" class="headerlink" title="6. 规范治理"></a>6. 规范治理</h2><ul>
+<li><strong>语义约定版本</strong>：<code>OTEL_SEMCONV_STABILITY_OPT_IN</code>（本系列为 <code>gen_ai_latest_experimental,http</code>）写入基础镜像或 Chart，禁止服务自行漂移；GenAI 约定仍在 Development，每季度评审独立仓库的变更记录，属性改名先在 Collector 用 <code>transform</code> 做过渡映射（文档 03）。</li>
+<li><strong>私有属性登记制</strong>：<code>com.example.*</code> 属性与指标统一登记名称、类型、基数评估与负责人，防止随手添加的属性引发基数事故。</li>
+<li><strong>埋点即代码评审项</strong>：新服务上线清单包含「Resource 属性齐全、健康检查排除、错误路径 <code>record_exception</code>、无 PII 明文属性、节点内 Span 已挂回节点」。</li>
+<li><strong>升级节奏</strong>：Collector 按季度跟进并通读变更记录中的 breaking changes；SDK 与埋点包按批次成对升级（如 1.43.0 &#x2F; 0.64b0）；每次升级先在预发环境做对账：Span 数、指标名列表、Langfuse generation 数与升级前比对，任何一项有差异都要能解释。</li>
+</ul>
+<h2 id="7-生产就绪终检清单"><a href="#7-生产就绪终检清单" class="headerlink" title="7. 生产就绪终检清单"></a>7. 生产就绪终检清单</h2><ul>
+<li><input disabled="" type="checkbox"> Gateway Collector ≥ 2 副本，<code>loadbalancing</code> 按 trace_id 路由已验证（扩缩容期间残缺 Trace 比例可接受）；</li>
+<li><input disabled="" type="checkbox"> 发往 Langfuse 等外部后端的 exporter 挂了持久化队列，重启 Collector 后积压数据继续发送；</li>
+<li><input disabled="" type="checkbox"> 5.3 的 Collector 告警在预发做过故障注入：停掉后端触发 <code>CollectorExportFailing</code>，压小队列触发 <code>CollectorQueueFull</code>；</li>
+<li><input disabled="" type="checkbox"> 脱敏规则有样本集回归，Tempo 中无正文、Langfuse 中无明文手机号、身份证号、VIN；</li>
+<li><input disabled="" type="checkbox"> OTLP 入口有认证，Grafana、Langfuse 接入 SSO 与 RBAC；</li>
+<li><input disabled="" type="checkbox"> SLO 告警接入值班体系，告警可一键下钻到 Trace（exemplar 链路验证）；</li>
+<li><input disabled="" type="checkbox"> 遥测成本月报（存储量、序列数、摄入量按团队归因）机制建立；</li>
+<li><input disabled="" type="checkbox"> 灾备演练：Collector 全部不可用 30 分钟，应用无感（SDK 队列丢弃降级），恢复后指标连续（累积时间性自动补齐）。</li>
+</ul>
+<h2 id="8-结语：与平台架构的融合"><a href="#8-结语：与平台架构的融合" class="headerlink" title="8. 结语：与平台架构的融合"></a>8. 结语：与平台架构的融合</h2><p>可观测体系不是外挂，而是诊断平台「monitor → diagnose → treat → learn」运营闭环里的 monitor 基座：GenAI 语义约定为 LLM 这一概率性组件提供了<strong>确定性的度量面</strong>——token、时延、错误、循环次数都可以进入 SLO；Langfuse 层的评测与会话数据反哺 Prompt 与模型迭代，构成 learn 环节的数据来源。至此，「确定性 × 概率性融合」的架构原则在观测维度完成闭环。</p>
+<h2 id="2026-09-补记：一次上游升级验证了「按批次锁版本」"><a href="#2026-09-补记：一次上游升级验证了「按批次锁版本」" class="headerlink" title="2026-09 补记：一次上游升级验证了「按批次锁版本」"></a>2026-09 补记：一次上游升级验证了「按批次锁版本」</h2><p>2026-09-24 发布的 <code>opentelemetry-util-genai</code> 1.2b0 与当时最新的 <code>opentelemetry-instrumentation-openai-v2</code> 2.4b0 不兼容，新环境安装后 <code>import</code> 直接失败（复现与处理见文档 05 的补记）。openai-v2 只给这个传递依赖写了下限，没有写上限，所以只锁直接依赖的项目会在某次重新构建时突然坏掉，而提交了 <code>uv.lock</code> 的项目不受影响。第 6 节的两条规定因此需要落到可执行的层面：锁文件入库；依赖升级走单独的变更，并以预发对账通过作为合并条件。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/11/27/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-13-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">云管端 AI 平台可观测性</a></h3>
+        <p>端侧生成 Trace、Span 层级与必填属性、上下文快照回放、指标金字塔、告警与埋点治理。</p>
+        <a class="btn primary" href="/2025/11/27/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-13-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/07/22/observability/OTel-09-%E7%AB%AF%E5%88%B0%E7%AB%AFDemo/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：端到端 Demo：一次 Agent 会话的全链路观测</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 9 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#1-%E6%BC%94%E8%BF%9B%E6%80%BB%E8%A7%88%EF%BC%9A%E4%B8%89%E9%98%B6%E6%AE%B5%E9%97%A8%E7%A6%81" data-toc-target="1-演进总览：三阶段门禁"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">1. 演进总览：三阶段门禁</span></a><a class="toc-level-2" href="#2-%E9%AB%98%E5%8F%AF%E7%94%A8%E6%8B%93%E6%89%91%E4%B8%8E-Kubernetes-%E8%90%BD%E5%9C%B0" data-toc-target="2-高可用拓扑与-Kubernetes-落地"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">2. 高可用拓扑与 Kubernetes 落地</span></a><a class="toc-level-3" href="#2-1-%E4%B8%A4%E5%B1%82%E6%9E%B6%E6%9E%84" data-toc-target="2-1-两层架构"><span class="toc-text">2.1 两层架构</span></a><a class="toc-level-3" href="#2-2-%E9%83%A8%E7%BD%B2%E6%96%B9%E5%BC%8F" data-toc-target="2-2-部署方式"><span class="toc-text">2.2 部署方式</span></a><a class="toc-level-2" href="#3-%E6%95%B0%E6%8D%AE%E6%B2%BB%E7%90%86%EF%BC%9A%E6%88%90%E6%9C%AC%E4%B8%8E%E5%9F%BA%E6%95%B0%E6%8E%A7%E5%88%B6" data-toc-target="3-数据治理：成本与基数控制"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">3. 数据治理：成本与基数控制</span></a><a class="toc-level-2" href="#4-%E5%AE%89%E5%85%A8%E4%B8%8E%E5%90%88%E8%A7%84" data-toc-target="4-安全与合规"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">4. 安全与合规</span></a><a class="toc-level-2" href="#5-SLO-%E4%B8%8E%E5%91%8A%E8%AD%A6%E4%BD%93%E7%B3%BB" data-toc-target="5-SLO-与告警体系"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">5. SLO 与告警体系</span></a><a class="toc-level-3" href="#5-1-%E6%8C%87%E6%A0%87%E5%88%86%E5%B1%82" data-toc-target="5-1-指标分层"><span class="toc-text">5.1 指标分层</span></a><a class="toc-level-3" href="#5-2-Collector-%E8%87%AA%E8%BA%AB%E6%8C%87%E6%A0%87%EF%BC%9A%E5%90%8D%E7%A7%B0%E4%BB%A5%E5%AE%9E%E9%99%85%E6%8A%93%E5%8F%96%E4%B8%BA%E5%87%86" data-toc-target="5-2-Collector-自身指标：名称以实际抓取为准"><span class="toc-text">5.2 Collector 自身指标：名称以实际抓取为准</span></a><a class="toc-level-3" href="#5-3-%E5%91%8A%E8%AD%A6%E8%A7%84%E5%88%99" data-toc-target="5-3-告警规则"><span class="toc-text">5.3 告警规则</span></a><a class="toc-level-3" href="#5-4-SLO-%E7%87%83%E5%B0%BD%E7%8E%87" data-toc-target="5-4-SLO-燃尽率"><span class="toc-text">5.4 SLO 燃尽率</span></a><a class="toc-level-2" href="#6-%E8%A7%84%E8%8C%83%E6%B2%BB%E7%90%86" data-toc-target="6-规范治理"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">6. 规范治理</span></a><a class="toc-level-2" href="#7-%E7%94%9F%E4%BA%A7%E5%B0%B1%E7%BB%AA%E7%BB%88%E6%A3%80%E6%B8%85%E5%8D%95" data-toc-target="7-生产就绪终检清单"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">7. 生产就绪终检清单</span></a><a class="toc-level-2" href="#8-%E7%BB%93%E8%AF%AD%EF%BC%9A%E4%B8%8E%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E7%9A%84%E8%9E%8D%E5%90%88" data-toc-target="8-结语：与平台架构的融合"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">8. 结语：与平台架构的融合</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E4%B8%80%E6%AC%A1%E4%B8%8A%E6%B8%B8%E5%8D%87%E7%BA%A7%E9%AA%8C%E8%AF%81%E4%BA%86%E3%80%8C%E6%8C%89%E6%89%B9%E6%AC%A1%E9%94%81%E7%89%88%E6%9C%AC%E3%80%8D" data-toc-target="2026-09-补记：一次上游升级验证了「按批次锁版本」"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">2026-09 补记：一次上游升级验证了「按批次锁版本」</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 92%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">11 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#1-%E6%BC%94%E8%BF%9B%E6%80%BB%E8%A7%88%EF%BC%9A%E4%B8%89%E9%98%B6%E6%AE%B5%E9%97%A8%E7%A6%81" data-toc-target="1-演进总览：三阶段门禁" data-title="01 · 1. 演进总览：三阶段门禁" aria-label="1. 演进总览：三阶段门禁"></a><a class="toc-strip__dot" href="#2-%E9%AB%98%E5%8F%AF%E7%94%A8%E6%8B%93%E6%89%91%E4%B8%8E-Kubernetes-%E8%90%BD%E5%9C%B0" data-toc-target="2-高可用拓扑与-Kubernetes-落地" data-title="02 · 2. 高可用拓扑与 Kubernetes 落地" aria-label="2. 高可用拓扑与 Kubernetes 落地"></a><a class="toc-strip__dot" href="#3-%E6%95%B0%E6%8D%AE%E6%B2%BB%E7%90%86%EF%BC%9A%E6%88%90%E6%9C%AC%E4%B8%8E%E5%9F%BA%E6%95%B0%E6%8E%A7%E5%88%B6" data-toc-target="3-数据治理：成本与基数控制" data-title="03 · 3. 数据治理：成本与基数控制" aria-label="3. 数据治理：成本与基数控制"></a><a class="toc-strip__dot" href="#4-%E5%AE%89%E5%85%A8%E4%B8%8E%E5%90%88%E8%A7%84" data-toc-target="4-安全与合规" data-title="04 · 4. 安全与合规" aria-label="4. 安全与合规"></a><a class="toc-strip__dot" href="#5-SLO-%E4%B8%8E%E5%91%8A%E8%AD%A6%E4%BD%93%E7%B3%BB" data-toc-target="5-SLO-与告警体系" data-title="05 · 5. SLO 与告警体系" aria-label="5. SLO 与告警体系"></a><a class="toc-strip__dot" href="#6-%E8%A7%84%E8%8C%83%E6%B2%BB%E7%90%86" data-toc-target="6-规范治理" data-title="06 · 6. 规范治理" aria-label="6. 规范治理"></a><a class="toc-strip__dot" href="#7-%E7%94%9F%E4%BA%A7%E5%B0%B1%E7%BB%AA%E7%BB%88%E6%A3%80%E6%B8%85%E5%8D%95" data-toc-target="7-生产就绪终检清单" data-title="07 · 7. 生产就绪终检清单" aria-label="7. 生产就绪终检清单"></a><a class="toc-strip__dot" href="#8-%E7%BB%93%E8%AF%AD%EF%BC%9A%E4%B8%8E%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E7%9A%84%E8%9E%8D%E5%90%88" data-toc-target="8-结语：与平台架构的融合" data-title="08 · 8. 结语：与平台架构的融合" aria-label="8. 结语：与平台架构的融合"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E4%B8%80%E6%AC%A1%E4%B8%8A%E6%B8%B8%E5%8D%87%E7%BA%A7%E9%AA%8C%E8%AF%81%E4%BA%86%E3%80%8C%E6%8C%89%E6%89%B9%E6%AC%A1%E9%94%81%E7%89%88%E6%9C%AC%E3%80%8D" data-toc-target="2026-09-补记：一次上游升级验证了「按批次锁版本」" data-title="09 · 2026-09 补记：一次上游升级验证了「按批次锁版本」" aria-label="2026-09 补记：一次上游升级验证了「按批次锁版本」"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-10-生产工程化","title":"可观测性生产工程化演进","url":"/2026/07/24/observability/OTel-10-%E7%94%9F%E4%BA%A7%E5%B7%A5%E7%A8%8B%E5%8C%96/","path":"agent-observability","index":10,"total":12,"next":{"title":"云管端 AI 平台可观测性","url":"/2025/11/27/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-13-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

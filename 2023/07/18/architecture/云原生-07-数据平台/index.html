@@ -1,0 +1,699 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>车联网数据平台：离线、实时与时序三条链路 · 飞轮之道</title>
+<meta name="description" content="按访问模式把车辆信号拆成离线、实时、时序三条链路，论证为何需要专用时序库、IoTDB 与 TsFile 的取舍、与 Hive/ClickHouse 的分工、对象存储上的存算分离与数采链路监控，并在 2026 年回看表模型与湖仓演进。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2023/07/18/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="车联网数据平台：离线、实时与时序三条链路 · 飞轮之道">
+<meta property="og:description" content="按访问模式把车辆信号拆成离线、实时、时序三条链路，论证为何需要专用时序库、IoTDB 与 TsFile 的取舍、与 Hive/ClickHouse 的分工、对象存储上的存算分离与数采链路监控，并在 2026 年回看表模型与湖仓演进。">
+<meta property="og:url" content="https://flywhlway.github.io/2023/07/18/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">数据与中间件</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 8 / 9 篇</a>
+    </div>
+    <h1>车联网数据平台：离线、实时与时序三条链路</h1>
+    <p class="article-deck">按访问模式把车辆信号拆成离线、实时、时序三条链路…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a><a class="article-meta__tag" href="/tags/%E8%BD%A6%E8%81%94%E7%BD%91/">#车联网</a><a class="article-meta__tag" href="/tags/%E6%97%B6%E5%BA%8F%E6%95%B0%E6%8D%AE%E5%BA%93/">#时序数据库</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Hive 与 ClickHouse「算不动」的根源是访问模式错配：单车时间窗查询、异频信号对齐与补传乱序，是时序库的本职，不是 OLAP 的。</li><li>时序库只放诊断需要的关键信号并以模板建模；全量信号以 Parquet 进湖，TsFile 留在库内。</li><li>数采链路监控要有可计算的口径：序号缺口算丢包、事件时间与入库时间算延迟、信号字典算覆盖率。</li><li>2026 年回看：IoTDB 2.0 引入表模型，湖仓表格式与流批一体成熟，当年直接用 Hive 表落对象存储是最该修正的一步。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="同一份信号，四种访问方式"><a href="#同一份信号，四种访问方式" class="headerlink" title="同一份信号，四种访问方式"></a>同一份信号，四种访问方式</h2><p>车辆信号经过解码后是典型的时间序列：每辆车有数百到数千个信号，采样频率从 10 毫秒到 10 秒不等，还有故障前后触发的高频快照。平台上对这份数据的访问，可以归成四种模式：</p>
+<table>
+<thead>
+<tr>
+<th>访问模式</th>
+<th>典型问题</th>
+<th>数据范围</th>
+<th>时延要求</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>单车时间窗</td>
+<td>这辆车过去两小时的电芯电压曲线</td>
+<td>1 辆车、几十个信号、数小时</td>
+<td>秒级</td>
+</tr>
+<tr>
+<td>实时指标与告警</td>
+<td>电芯温差超过阈值持续 30 秒</td>
+<td>全部在线车辆、少数信号、滑动窗口</td>
+<td>秒级</td>
+</tr>
+<tr>
+<td>事件与多维分析</td>
+<td>本月各车型的告警事件分布</td>
+<td>事件明细宽表</td>
+<td>秒到分钟级</td>
+</tr>
+<tr>
+<td>车队横向分析</td>
+<td>某批次电池在高温工况下的衰减分布</td>
+<td>大量车辆、少数信号、数月</td>
+<td>分钟到小时级</td>
+</tr>
+</tbody></table>
+<p>原有平台只有两条链路：Hive 加 Spark 的离线链路、Flink 加 ClickHouse 的实时链路。「算不动」集中出现在第一种模式上：诊断工程师查一辆车的信号曲线，要么在 Hive 里扫整天的分区，要么在 ClickHouse 的长表里扫描数十亿行后再做异频信号对齐。</p>
+<p>这不是引擎不够快，而是<strong>访问模式与存储模型错配</strong>：</p>
+<ul>
+<li><strong>长表</strong>（<code>vin, ts, signal, value</code>）每个采样点一行，VIN 与信号名反复存储，行数随信号数线性膨胀；</li>
+<li><strong>宽表</strong>（每个信号一列）面对车型、软件版本各异的信号集，只能是数千列的稀疏表，每次信号矩阵变更都要改表结构；</li>
+<li><strong>异频对齐</strong>（把 10 毫秒的电流和 1 秒的温度按时间对齐、补值）用通用 SQL 表达，需要自连接或窗口函数，代价高昂；</li>
+<li><strong>补传乱序</strong>：车辆离线期间缓存的数据恢复连接后批量上传，事件时间远早于到达时间，通用 OLAP 只能靠后台合并去重。</li>
+</ul>
+<p>时序数据库的模型恰好对上：以「设备 → 测点」组织序列，按序列和时间分块存储，时间戳用二阶差分编码，缓变的数值用 Gorilla 或游程编码，并原生支持降采样、按时间对齐、补值与「最新值」查询。</p>
+<h2 id="三条链路的整体架构"><a href="#三条链路的整体架构" class="headerlink" title="三条链路的整体架构"></a>三条链路的整体架构</h2><pre class="mermaid">flowchart LR
+  V["车辆"] --&gt; GW["接入网关"]
+  GW --&gt; MQ["Kafka&lt;br/&gt;原始信号包"]
+  MQ --&gt; DEC["Flink 解码与清洗&lt;br/&gt;信号字典校验"]
+  DEC --&gt;|"未知信号 / 解码失败"| QT["隔离 topic"]
+  subgraph RT["实时链路"]
+    DEC --&gt; RTJ["Flink 指标与告警"]
+    RTJ --&gt; RD["Redis 最新状态"]
+    RTJ --&gt; CH["ClickHouse&lt;br/&gt;事件明细与聚合"]
+  end
+  subgraph TS["时序链路"]
+    DEC --&gt; IOT["IoTDB&lt;br/&gt;关键信号，保留 90 天"]
+  end
+  subgraph OFF["离线链路"]
+    DEC --&gt; LAKE["对象存储&lt;br/&gt;Parquet 分区表"]
+    LAKE --&gt; SP["Spark 批处理"]
+    SP --&gt; DW["数仓与特征表"]
+  end
+  GOV["数据治理：标准、质量、元数据与血缘"] -.-&gt; DEC
+  GOV -.-&gt; LAKE
+  GOV -.-&gt; CH</pre>
+
+
+<ul>
+<li><strong>实时链路</strong>负责秒级指标与告警，实时计算平台的设计见本系列 04 篇，最新状态写入缓存见本系列 05 篇；</li>
+<li><strong>时序链路</strong>服务单车诊断，只收关键信号；</li>
+<li><strong>离线链路</strong>保存全量原始包与解码明细，服务车队横向分析与模型训练，是唯一的「全量事实来源」；</li>
+<li>三条链路共用一个解码作业，信号语义只在一处定义。消息系统的选型见本系列 06 篇。</li>
+</ul>
+<h2 id="时序库选型"><a href="#时序库选型" class="headerlink" title="时序库选型"></a>时序库选型</h2><h3 id="容量口径"><a href="#容量口径" class="headerlink" title="容量口径"></a>容量口径</h3><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>假设</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>车辆保有</td>
+<td>200 万</td>
+</tr>
+<tr>
+<td>纳入时序库的关键信号</td>
+<td>每车 100 个（电池、电驱、热管理、故障码）</td>
+</tr>
+<tr>
+<td>采样</td>
+<td>行驶与充电时 1 Hz</td>
+</tr>
+<tr>
+<td>日活跃</td>
+<td>120 万辆，平均每天活跃 2 小时</td>
+</tr>
+</tbody></table>
+<p>推算：序列数 200 万 × 100 &#x3D; 2 亿条；日写入点数 120 万 × 7200 秒 × 100 ≈ 8.6 × 10¹¹，日均约 1000 万点&#x2F;秒，峰值按 3 倍计约 3000 万点&#x2F;秒。按对齐序列共享时间列、数值列压缩后平均 2 字节&#x2F;点估算，每天约 1.7 TB，保留 90 天、双副本约 310 TB。压缩率与单节点写入能力必须用真实信号做概念验证后替换，这两个数决定集群规模。</p>
+<p>2 亿条序列是选型的第一道门槛：如果每条序列都单独保存元数据，内存会先于磁盘耗尽。</p>
+<h3 id="候选对比（2023-年-7-月）"><a href="#候选对比（2023-年-7-月）" class="headerlink" title="候选对比（2023 年 7 月）"></a>候选对比（2023 年 7 月）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>IoTDB 1.1</th>
+<th>TDengine 3.x</th>
+<th>InfluxDB OSS 2.x</th>
+<th>ClickHouse 长表</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>数据模型</td>
+<td>树形路径，设备模板与对齐序列</td>
+<td>超级表，每设备一张子表</td>
+<td>measurement、tag、field</td>
+<td>普通 MergeTree 表</td>
+</tr>
+<tr>
+<td>开源分布式</td>
+<td>1.0（2022-12）起</td>
+<td>3.0 起</td>
+<td>仅单机，集群为商业版</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>高基数应对</td>
+<td>模板激活到设备，序列不单独存元数据</td>
+<td>子表数随车辆数增长，可承受</td>
+<td>高基数是已知短板</td>
+<td>与序列数无关，依赖排序键</td>
+</tr>
+<tr>
+<td>与大数据生态</td>
+<td>TsFile 有 Spark、Hive、Flink 连接器</td>
+<td>以 JDBC 与自有工具对接为主</td>
+<td>以 API 导出为主</td>
+<td>成熟</td>
+</tr>
+<tr>
+<td>许可证</td>
+<td>Apache 2.0</td>
+<td>社区版 AGPLv3</td>
+<td>MIT</td>
+<td>Apache 2.0</td>
+</tr>
+<tr>
+<td>查询语言</td>
+<td>树模型专用 SQL 方言</td>
+<td>类 SQL</td>
+<td>Flux 与 InfluxQL</td>
+<td>标准 SQL</td>
+</tr>
+</tbody></table>
+<p>选择 IoTDB 的理由：设备模板把「同车型同信号集」的元数据压缩为每设备一份；对齐序列让同时采样的信号共享时间列；乱序数据写入独立文件后合并，天然容纳补传；Apache 2.0 许可证没有额外法务成本；TsFile 可以被 Spark 直接读取，保留了与离线链路打通的可能。</p>
+<p>必须正视的风险：分布式版本 1.0 发布才七个月，故障切换与扩容需要在概念验证中专门演练；查询语言是树模型方言，BI 工具接入要经过一层服务封装；社区规模小于 ClickHouse，关键问题要有商业支持兜底。</p>
+<h3 id="TsFile-的取舍"><a href="#TsFile-的取舍" class="headerlink" title="TsFile 的取舍"></a>TsFile 的取舍</h3><p>TsFile 的压缩率和按序列读取的效率高于通用列存，理论上可以「一份文件、两种计算」：IoTDB 在线查询，Spark 离线分析。实际决策是<strong>TsFile 只留在时序库内部，湖里统一使用 Parquet</strong>，原因有三：</p>
+<ol>
+<li>离线链路的 Spark、Hive、Trino、ClickHouse 都原生读 Parquet，TsFile 依赖 IoTDB 仓库内的连接器，维护活跃度不及引擎内置格式；</li>
+<li>车队横向分析是「少数信号 × 大量车辆」的扫描，Parquet 按信号组分列、按车型分区已足够；</li>
+<li>全量信号（数千个）进湖，关键信号（100 个）进时序库，两者本来就不是同一份数据。</li>
+</ol>
+<h3 id="建模与关键配置"><a href="#建模与关键配置" class="headerlink" title="建模与关键配置"></a>建模与关键配置</h3><p>以子系统为数据库，模板设置在数据库路径上（官方建议），每辆车是一个设备：</p>
+<figure class="highlight sql cb" data-lang="sql" data-label="SQL" data-ext="sql" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">CREATE</span> DATABASE root.bms;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">CREATE</span> SCHEMA TEMPLATE bms_v1 ALIGNED (</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  pack_voltage  <span class="type">FLOAT</span> encoding<span class="operator">=</span>GORILLA compression<span class="operator">=</span>LZ4,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  pack_current  <span class="type">FLOAT</span> encoding<span class="operator">=</span>GORILLA compression<span class="operator">=</span>LZ4,</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  soc           <span class="type">FLOAT</span> encoding<span class="operator">=</span>GORILLA compression<span class="operator">=</span>LZ4,</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  max_cell_temp <span class="type">FLOAT</span> encoding<span class="operator">=</span>GORILLA compression<span class="operator">=</span>LZ4,</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  charge_state  INT32 encoding<span class="operator">=</span>RLE     compression<span class="operator">=</span>LZ4</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">);</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="keyword">SET</span> SCHEMA TEMPLATE bms_v1 <span class="keyword">TO</span> root.bms;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="keyword">CREATE</span> TIMESERIES <span class="keyword">OF</span> SCHEMA TEMPLATE <span class="keyword">ON</span> root.bms.vin_a0001;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="comment">-- 90 天过期，单位毫秒</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="keyword">SET</span> TTL <span class="keyword">TO</span> root.bms <span class="number">7776000000</span>;</span></span></code></pre></div></div></figure>
+
+<p>单车诊断的两类典型查询：</p>
+<figure class="highlight sql cb" data-lang="sql" data-label="SQL" data-ext="sql" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">-- 两小时窗口，按 10 秒降采样</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">SELECT</span> <span class="built_in">avg</span>(pack_voltage), max_value(max_cell_temp), min_value(soc)</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">FROM</span> root.bms.vin_a0001</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">GROUP</span> <span class="keyword">BY</span> ([<span class="number">2023</span><span class="number">-07</span><span class="number">-10</span>T08:<span class="number">00</span>:<span class="number">00</span>, <span class="number">2023</span><span class="number">-07</span><span class="number">-10</span>T10:<span class="number">00</span>:<span class="number">00</span>), <span class="number">10</span>s);</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment">-- 最新值</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">SELECT</span> <span class="keyword">last</span> soc, charge_state <span class="keyword">FROM</span> root.bms.vin_a0001;</span></span></code></pre></div></div></figure>
+
+<p>信号矩阵升级时新增模板版本（<code>bms_v2</code>），不在原模板上改字段；车辆按软件版本切换模板，历史数据不受影响。</p>
+<h2 id="与-Hive、ClickHouse-的分工"><a href="#与-Hive、ClickHouse-的分工" class="headerlink" title="与 Hive、ClickHouse 的分工"></a>与 Hive、ClickHouse 的分工</h2><table>
+<thead>
+<tr>
+<th>存储</th>
+<th>承担</th>
+<th>不承担</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>IoTDB</td>
+<td>单车时间窗、异频对齐、最新值、90 天内的诊断回溯</td>
+<td>跨车聚合报表、长期归档</td>
+</tr>
+<tr>
+<td>ClickHouse</td>
+<td>事件明细、告警统计、运营多维分析</td>
+<td>原始高频信号</td>
+</tr>
+<tr>
+<td>对象存储上的 Parquet 表</td>
+<td>全量原始包与解码明细、车队横向分析、训练样本</td>
+<td>秒级交互查询</td>
+</tr>
+</tbody></table>
+<p>ClickHouse 的事件表按「事件类型、VIN、时间」排序，冷数据通过存储策略下沉：</p>
+<figure class="highlight sql cb" data-lang="sql" data-label="SQL" data-ext="sql" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">CREATE TABLE</span> ods.vehicle_event</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">(</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  vin         String,</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  event_time  DateTime64(<span class="number">3</span>),</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  event_type  LowCardinality(String),</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  model_code  LowCardinality(String),</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  payload     String,</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  ingest_time DateTime64(<span class="number">3</span>)</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">ENGINE <span class="operator">=</span> ReplicatedMergeTree(<span class="string">&#x27;/clickhouse/tables/&#123;shard&#125;/vehicle_event&#x27;</span>, <span class="string">&#x27;&#123;replica&#125;&#x27;</span>)</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="keyword">PARTITION</span> <span class="keyword">BY</span> toYYYYMM(event_time)</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="keyword">ORDER</span> <span class="keyword">BY</span> (event_type, vin, event_time)</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">TTL toDateTime(event_time) <span class="operator">+</span> <span class="type">INTERVAL</span> <span class="number">180</span> <span class="keyword">DAY</span> <span class="keyword">TO</span> VOLUME <span class="string">&#x27;cold&#x27;</span>,</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    toDateTime(event_time) <span class="operator">+</span> <span class="type">INTERVAL</span> <span class="number">400</span> <span class="keyword">DAY</span> <span class="keyword">DELETE</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">SETTINGS storage_policy <span class="operator">=</span> <span class="string">&#x27;hot_cold&#x27;</span>;</span></span></code></pre></div></div></figure>
+
+<h2 id="离线链路：对象存储上的存算分离"><a href="#离线链路：对象存储上的存算分离" class="headerlink" title="离线链路：对象存储上的存算分离"></a>离线链路：对象存储上的存算分离</h2><p>用对象存储替代 HDFS 的收益是存储与计算各自伸缩：存储按量计费、无需三副本本地盘；Spark 自 3.1 起在 Kubernetes 上正式可用，批计算可以按作业申请资源。需要处理的问题同样明确：</p>
+<ul>
+<li><strong>提交语义</strong>：对象存储没有原子重命名，Hive 表直接写入会出现部分可见或重复文件，需要启用 Hadoop 3.1 起提供的 S3A committer，或者引入表格式；</li>
+<li><strong>小文件</strong>：流式写入按分钟落文件会产生海量小文件，需要定时合并作业；</li>
+<li><strong>列举性能</strong>：大分区目录的 list 请求慢且计费，分区粒度控制在「天 × 车型组」；</li>
+<li><strong>成本口径</strong>：不能只比较单价，要把请求次数、跨区流量与合并作业的计算成本算进去。「存算分离降本若干成」这类结论必须基于自身账单测算。</li>
+</ul>
+<p>表格式方面，Iceberg 1.3 于 2023 年 6 月发布，Paimon 仍在孵化（0.4 版于 6 月发布）。本期先以 Hive 表加 S3A committer 落地，同时对 Iceberg 做概念验证。</p>
+<p>批量同步不再使用 Sqoop（2021 年 6 月已退役进入 Apache Attic）：关系库全量与增量同步用 DataX 或 SeaTunnel（2023 年 5 月成为 Apache 顶级项目），需要变更捕获的业务库用 Flink CDC。</p>
+<h2 id="数据治理的三个落点"><a href="#数据治理的三个落点" class="headerlink" title="数据治理的三个落点"></a>数据治理的三个落点</h2><p>治理平台常见的问题是「建了目录、配了规则，却没人用」。在车联网场景，三件套要落在具体环节上：</p>
+<ol>
+<li><strong>数据标准落在解码环节</strong>。核心标准是信号字典：统一信号名、单位、精度、取值范围、枚举值，并关联信号矩阵版本。解码作业只认字典，未知信号 ID 与解码失败的消息进入隔离 topic，而不是静默丢弃或原样入库。</li>
+<li><strong>数据质量落在分区发布前</strong>。质量规则作为离线作业的一个步骤执行，关键规则失败则不发布分区、下游不调度；规则类型为完整性（每小时分区覆盖的车辆数）、有效性（按字典校验取值范围）、一致性（里程单调不减、电量无异常跳变）、及时性（事件时间到入库时间的延迟）。</li>
+<li><strong>元数据与血缘落在调度与引擎上</strong>。目录从 Hive Metastore、ClickHouse 系统表自动采集；Spark 作业血缘可通过 OpenLineage 集成采集，Flink 作业与 IoTDB 写入的血缘在 2023 年仍需自行补齐。</li>
+</ol>
+<h3 id="数采链路监控指标"><a href="#数采链路监控指标" class="headerlink" title="数采链路监控指标"></a>数采链路监控指标</h3><table>
+<thead>
+<tr>
+<th>环节</th>
+<th>指标</th>
+<th>计算口径</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>车端采集</td>
+<td>信号覆盖率</td>
+<td>实际上报信号数 ÷ 该车型与配置版本应报信号数</td>
+</tr>
+<tr>
+<td>传输</td>
+<td>丢包率</td>
+<td>按车统计信号包序号缺口；序号随点火周期重置时按「VIN + 启动序号」分组</td>
+</tr>
+<tr>
+<td>传输</td>
+<td>端到端延迟</td>
+<td>入库时间 − 事件时间，看 p99，补传数据单独统计</td>
+</tr>
+<tr>
+<td>传输</td>
+<td>补传占比</td>
+<td>事件时间早于入库时间 1 小时以上的包占比</td>
+</tr>
+<tr>
+<td>解码</td>
+<td>解码失败率、未知信号比例</td>
+<td>隔离 topic 消息数 ÷ 总消息数，按车型与软件版本分组</td>
+</tr>
+<tr>
+<td>存储</td>
+<td>写入积压、乱序率</td>
+<td>消费位点滞后；乱序写入点数 ÷ 总点数</td>
+</tr>
+<tr>
+<td>加工</td>
+<td>分区准点率、质量规则通过率</td>
+<td>按约定时间产出的分区比例</td>
+</tr>
+<tr>
+<td>消费</td>
+<td>表与接口调用量</td>
+<td>连续 90 天无访问的表进入下线流程</td>
+</tr>
+</tbody></table>
+<p>丢包率的计算示例：</p>
+<figure class="highlight sql cb" data-lang="sql" data-label="SQL" data-ext="sql" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">SELECT</span> dt,</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">       <span class="built_in">sum</span>(max_seq <span class="operator">-</span> min_seq <span class="operator">+</span> <span class="number">1</span> <span class="operator">-</span> cnt) <span class="operator">/</span> <span class="built_in">sum</span>(max_seq <span class="operator">-</span> min_seq <span class="operator">+</span> <span class="number">1</span>) <span class="keyword">AS</span> loss_rate</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">FROM</span> (</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="keyword">SELECT</span> dt, vin, boot_id,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">         <span class="built_in">min</span>(seq) <span class="keyword">AS</span> min_seq, <span class="built_in">max</span>(seq) <span class="keyword">AS</span> max_seq, <span class="built_in">count</span>(<span class="keyword">DISTINCT</span> seq) <span class="keyword">AS</span> cnt</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="keyword">FROM</span> ods.telemetry_packet</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="keyword">WHERE</span> dt <span class="operator">=</span> <span class="string">&#x27;$&#123;bizdate&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="keyword">GROUP</span> <span class="keyword">BY</span> dt, vin, boot_id</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">) t</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">GROUP</span> <span class="keyword">BY</span> dt;</span></span></code></pre></div></div></figure>
+
+<h2 id="反例与风险"><a href="#反例与风险" class="headerlink" title="反例与风险"></a>反例与风险</h2><ul>
+<li><strong>全量信号进时序库</strong>：数千信号乘以百万车辆，元数据与存储同时失控；时序库只放诊断必需的信号。</li>
+<li><strong>让时序库做车队报表</strong>：跨数十万设备的聚合是离线链路的职责，放在时序库会拖垮在线诊断。</li>
+<li><strong>没有统一解码</strong>：各链路各自解码，同一信号在不同系统中含义不一致，治理无从谈起。</li>
+<li><strong>质量规则只告警不阻断</strong>：下游已经消费了错误分区，告警只是事后通知。</li>
+<li><strong>模板原地修改</strong>：直接修改在用模板，会让历史数据的解释依赖修改时间。</li>
+</ul>
+<h2 id="2026-回看：表模型、湖仓与流批一体"><a href="#2026-回看：表模型、湖仓与流批一体" class="headerlink" title="2026 回看：表模型、湖仓与流批一体"></a>2026 回看：表模型、湖仓与流批一体</h2><h3 id="经受住时间的判断"><a href="#经受住时间的判断" class="headerlink" title="经受住时间的判断"></a>经受住时间的判断</h3><p><strong>「按访问模式拆链路、时序库只收关键信号」依然成立。</strong> 单车诊断的低延迟时间窗查询，至今仍是专用时序库最有优势的场景。统一解码、信号字典与分区发布前的质量阻断，与具体引擎无关。</p>
+<h3 id="需要修正的地方"><a href="#需要修正的地方" class="headerlink" title="需要修正的地方"></a>需要修正的地方</h3><p><strong>离线链路应当直接上表格式。</strong> 以 Hive 表加 S3A committer 落对象存储，确实暴露了小文件、分区覆盖不原子、字段演进困难的问题，概念验证本该更快转为正式方案。此后 Iceberg 持续演进到 1.10（2025-09-11）和 1.11（2026-05-20）；Paimon 从 2023 年的孵化版本一路发展到 2.0（2026 年 8 月）；Flink 在 2025 年进入 2.x。今天的做法是：解码明细以 Iceberg 追加写入，最新状态与变更类数据用 Paimon 的主键表由 Flink 持续更新，实时与离线共用一份表，减少一条链路。</p>
+<p><strong>IoTDB 的方言风险已被正面回应。</strong> 2.0 线（2025 年 2 月的 2.0.1-beta 起）引入表模型，以标签、属性与测点三类列组织数据，查询接近标准 SQL，2.0.2 起树模型与表模型在数据库级别完全隔离。截至 2026 年 9 月，2.0 线最新为 2.0.11（2026-09-11），1.3 线仍在维护。存量树模型数据不会自动转换，新业务库直接用表模型更合适。</p>
+<p><strong>时序库与湖格式在趋同。</strong> InfluxDB 3.0 Core 与 Enterprise 于 2025 年 4 月 16 日正式可用，数据以 Parquet 文件持久化到对象存储或本地盘；TDengine 走到 3.4（2026 年 1 月）。当年「TsFile 留在库内、湖里用 Parquet」的判断方向正确。</p>
+<h3 id="今天会怎么做"><a href="#今天会怎么做" class="headerlink" title="今天会怎么做"></a>今天会怎么做</h3><ul>
+<li><strong>两条主链路加一个诊断库</strong>：Flink 写 Iceberg 或 Paimon 的流批一体湖仓承担实时与离线，时序库只服务单车诊断，新库采用 IoTDB 2.x 表模型；</li>
+<li><strong>信号字典升级为数据契约</strong>：字典变更走评审与版本发布，解码作业、质量规则、下游表结构从同一份契约生成；</li>
+<li><strong>监控指标原样保留</strong>：丢包率、端到端延迟、补传占比、解码失败率的口径三年未变，是这套方案最耐用的部分。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2023/10/17/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-08-%E5%AE%89%E5%85%A8%E5%90%88%E8%A7%84%E5%B7%A6%E7%A7%BB/">安全与开源合规左移：SSDLC、SBOM 与开源治理</a></h3>
+        <p>把安全与开源合规做成流水线门禁：按研发阶段设计阻断条件，用 2023 年可用的 SAST、SCA、SBOM 与签名工具落地…</p>
+        <a class="btn primary" href="/2023/10/17/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-08-%E5%AE%89%E5%85%A8%E5%90%88%E8%A7%84%E5%B7%A6%E7%A7%BB/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2023/06/27/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-06-%E6%B6%88%E6%81%AF%E9%80%89%E5%9E%8B/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：车联网消息中间件选型：Kafka 与 Pulsar</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%90%8C%E4%B8%80%E4%BB%BD%E4%BF%A1%E5%8F%B7%EF%BC%8C%E5%9B%9B%E7%A7%8D%E8%AE%BF%E9%97%AE%E6%96%B9%E5%BC%8F" data-toc-target="同一份信号，四种访问方式"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">同一份信号，四种访问方式</span></a><a class="toc-level-2" href="#%E4%B8%89%E6%9D%A1%E9%93%BE%E8%B7%AF%E7%9A%84%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84" data-toc-target="三条链路的整体架构"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">三条链路的整体架构</span></a><a class="toc-level-2" href="#%E6%97%B6%E5%BA%8F%E5%BA%93%E9%80%89%E5%9E%8B" data-toc-target="时序库选型"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">时序库选型</span></a><a class="toc-level-3" href="#%E5%AE%B9%E9%87%8F%E5%8F%A3%E5%BE%84" data-toc-target="容量口径"><span class="toc-text">容量口径</span></a><a class="toc-level-3" href="#%E5%80%99%E9%80%89%E5%AF%B9%E6%AF%94%EF%BC%882023-%E5%B9%B4-7-%E6%9C%88%EF%BC%89" data-toc-target="候选对比（2023-年-7-月）"><span class="toc-text">候选对比（2023 年 7 月）</span></a><a class="toc-level-3" href="#TsFile-%E7%9A%84%E5%8F%96%E8%88%8D" data-toc-target="TsFile-的取舍"><span class="toc-text">TsFile 的取舍</span></a><a class="toc-level-3" href="#%E5%BB%BA%E6%A8%A1%E4%B8%8E%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE" data-toc-target="建模与关键配置"><span class="toc-text">建模与关键配置</span></a><a class="toc-level-2" href="#%E4%B8%8E-Hive%E3%80%81ClickHouse-%E7%9A%84%E5%88%86%E5%B7%A5" data-toc-target="与-Hive、ClickHouse-的分工"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">与 Hive、ClickHouse 的分工</span></a><a class="toc-level-2" href="#%E7%A6%BB%E7%BA%BF%E9%93%BE%E8%B7%AF%EF%BC%9A%E5%AF%B9%E8%B1%A1%E5%AD%98%E5%82%A8%E4%B8%8A%E7%9A%84%E5%AD%98%E7%AE%97%E5%88%86%E7%A6%BB" data-toc-target="离线链路：对象存储上的存算分离"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">离线链路：对象存储上的存算分离</span></a><a class="toc-level-2" href="#%E6%95%B0%E6%8D%AE%E6%B2%BB%E7%90%86%E7%9A%84%E4%B8%89%E4%B8%AA%E8%90%BD%E7%82%B9" data-toc-target="数据治理的三个落点"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">数据治理的三个落点</span></a><a class="toc-level-3" href="#%E6%95%B0%E9%87%87%E9%93%BE%E8%B7%AF%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87" data-toc-target="数采链路监控指标"><span class="toc-text">数采链路监控指标</span></a><a class="toc-level-2" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">反例与风险</span></a><a class="toc-level-2" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E8%A1%A8%E6%A8%A1%E5%9E%8B%E3%80%81%E6%B9%96%E4%BB%93%E4%B8%8E%E6%B5%81%E6%89%B9%E4%B8%80%E4%BD%93" data-toc-target="2026-回看：表模型、湖仓与流批一体"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">2026 回看：表模型、湖仓与流批一体</span></a><a class="toc-level-3" href="#%E7%BB%8F%E5%8F%97%E4%BD%8F%E6%97%B6%E9%97%B4%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="经受住时间的判断"><span class="toc-text">经受住时间的判断</span></a><a class="toc-level-3" href="#%E9%9C%80%E8%A6%81%E4%BF%AE%E6%AD%A3%E7%9A%84%E5%9C%B0%E6%96%B9" data-toc-target="需要修正的地方"><span class="toc-text">需要修正的地方</span></a><a class="toc-level-3" href="#%E4%BB%8A%E5%A4%A9%E4%BC%9A%E6%80%8E%E4%B9%88%E5%81%9A" data-toc-target="今天会怎么做"><span class="toc-text">今天会怎么做</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 89%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">8 / 9</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%90%8C%E4%B8%80%E4%BB%BD%E4%BF%A1%E5%8F%B7%EF%BC%8C%E5%9B%9B%E7%A7%8D%E8%AE%BF%E9%97%AE%E6%96%B9%E5%BC%8F" data-toc-target="同一份信号，四种访问方式" data-title="01 · 同一份信号，四种访问方式" aria-label="同一份信号，四种访问方式"></a><a class="toc-strip__dot" href="#%E4%B8%89%E6%9D%A1%E9%93%BE%E8%B7%AF%E7%9A%84%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84" data-toc-target="三条链路的整体架构" data-title="02 · 三条链路的整体架构" aria-label="三条链路的整体架构"></a><a class="toc-strip__dot" href="#%E6%97%B6%E5%BA%8F%E5%BA%93%E9%80%89%E5%9E%8B" data-toc-target="时序库选型" data-title="03 · 时序库选型" aria-label="时序库选型"></a><a class="toc-strip__dot" href="#%E4%B8%8E-Hive%E3%80%81ClickHouse-%E7%9A%84%E5%88%86%E5%B7%A5" data-toc-target="与-Hive、ClickHouse-的分工" data-title="04 · 与 Hive、ClickHouse 的分工" aria-label="与 Hive、ClickHouse 的分工"></a><a class="toc-strip__dot" href="#%E7%A6%BB%E7%BA%BF%E9%93%BE%E8%B7%AF%EF%BC%9A%E5%AF%B9%E8%B1%A1%E5%AD%98%E5%82%A8%E4%B8%8A%E7%9A%84%E5%AD%98%E7%AE%97%E5%88%86%E7%A6%BB" data-toc-target="离线链路：对象存储上的存算分离" data-title="05 · 离线链路：对象存储上的存算分离" aria-label="离线链路：对象存储上的存算分离"></a><a class="toc-strip__dot" href="#%E6%95%B0%E6%8D%AE%E6%B2%BB%E7%90%86%E7%9A%84%E4%B8%89%E4%B8%AA%E8%90%BD%E7%82%B9" data-toc-target="数据治理的三个落点" data-title="06 · 数据治理的三个落点" aria-label="数据治理的三个落点"></a><a class="toc-strip__dot" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险" data-title="07 · 反例与风险" aria-label="反例与风险"></a><a class="toc-strip__dot" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E8%A1%A8%E6%A8%A1%E5%9E%8B%E3%80%81%E6%B9%96%E4%BB%93%E4%B8%8E%E6%B5%81%E6%89%B9%E4%B8%80%E4%BD%93" data-toc-target="2026-回看：表模型、湖仓与流批一体" data-title="08 · 2026 回看：表模型、湖仓与流批一体" aria-label="2026 回看：表模型、湖仓与流批一体"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-07-数据平台","title":"车联网数据平台：离线、实时与时序三条链路","url":"/2023/07/18/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-07-%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0/","path":"cloud-native-platform","index":7,"total":9,"next":{"title":"安全与开源合规左移：SSDLC、SBOM 与开源治理","url":"/2023/10/17/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-08-%E5%AE%89%E5%85%A8%E5%90%88%E8%A7%84%E5%B7%A6%E7%A7%BB/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

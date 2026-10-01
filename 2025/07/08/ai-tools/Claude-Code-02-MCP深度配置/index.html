@@ -1,0 +1,908 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Claude Code MCP 服务器深度配置 · 飞轮之道</title>
+<meta name="description" content="基于 Claude Code 1.0.44 与 MCP 2025-06-18 规范，讲清 MCP 服务器的添加命令、三种作用域与项目审批、三种传输与 OAuth、密钥处理、权限写法、输出上限与调试，并给出按场景选服务器的决策表和安全清单。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/07/08/ai-tools/Claude-Code-02-MCP%E6%B7%B1%E5%BA%A6%E9%85%8D%E7%BD%AE/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Claude Code MCP 服务器深度配置 · 飞轮之道">
+<meta property="og:description" content="基于 Claude Code 1.0.44 与 MCP 2025-06-18 规范，讲清 MCP 服务器的添加命令、三种作用域与项目审批、三种传输与 OAuth、密钥处理、权限写法、输出上限与调试，并给出按场景选服务器的决策表和安全清单。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/07/08/ai-tools/Claude-Code-02-MCP%E6%B7%B1%E5%BA%A6%E9%85%8D%E7%BD%AE/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/AI%E5%B7%A5%E5%85%B7%E9%93%BE/">AI 工具链</a> / <a href="/paths/claude-code-workflow/">基础配置</a><a class="series-chip" href="/paths/claude-code-workflow/" title="查看学习路径">第 2 / 8 篇</a>
+    </div>
+    <h1>Claude Code MCP 服务器深度配置</h1>
+    <p class="article-deck">基于 Claude Code 1.0.44 与 MCP 2025-06-18 规范…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>20 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/AI%E5%B7%A5%E5%85%B7/">#AI工具</a><a class="article-meta__tag" href="/tags/%E5%BC%80%E5%8F%91%E6%95%88%E7%8E%87/">#开发效率</a><a class="article-meta__tag" href="/tags/Claude-Code/">#Claude Code</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>MCP 工具在 Claude Code 里与内置工具同等对待：名字是 mcp__服务器__工具，受同一套权限规则约束，工具定义常驻上下文。</li><li>作用域同名时 local 优先于 project 再优先于 user；.mcp.json 入库共享，但信任对话框选择启用会顺带写入 enableAllProjectMcpServers: true。</li><li>1.0.44 的 .mcp.json 不展开环境变量，stdio 服务器的密钥应从启动 Claude Code 的 shell 环境继承，而不是写进文件。</li><li>工具返回超过 MAX_MCP_OUTPUT_TOKENS（默认 25000）会直接报错而不是截断，服务器侧要支持分页或 LIMIT。</li><li>选服务器先问能不能用现成 CLI 解决；接入后坚持只读优先、版本固定、不可信输入与写权限不同场。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p>本文以 7 月 7 日发布的 Claude Code 1.0.44 为准。这个版本内置的 MCP SDK 以 2025-06-18 为最新协议版本，并向下兼容 2025-03-26 与 2024-11-05；文中命令、配置字段和行为都对照了当时的官方文档与安装包代码。基础的权限规则与 settings 层级见本系列第 1 篇。</p>
+<h2 id="MCP-在-Claude-Code-中的角色"><a href="#MCP-在-Claude-Code-中的角色" class="headerlink" title="MCP 在 Claude Code 中的角色"></a>MCP 在 Claude Code 中的角色</h2><h3 id="协议背景"><a href="#协议背景" class="headerlink" title="协议背景"></a>协议背景</h3><p>Model Context Protocol 由 Anthropic 于 2024 年 11 月 25 日开源，首个规范版本号为 2024-11-05。之后两次修订与本文直接相关：</p>
+<table>
+<thead>
+<tr>
+<th>规范版本</th>
+<th>与 Claude Code 使用相关的变化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2025-03-26</td>
+<td>引入基于 OAuth 2.1 的授权框架；用 Streamable HTTP 取代原先的 HTTP+SSE 传输；工具注解（如只读、破坏性）</td>
+</tr>
+<tr>
+<td>2025-06-18</td>
+<td>MCP 服务器被定义为 OAuth 资源服务器，通过受保护资源元数据发现授权服务器，客户端必须实现 RFC 8707 资源指示符；结构化工具输出；工具结果可返回资源链接；新增 elicitation（服务器向用户索取信息）；移除 JSON-RPC 批处理</td>
+</tr>
+</tbody></table>
+<h3 id="三类原语在-Claude-Code-里的落点"><a href="#三类原语在-Claude-Code-里的落点" class="headerlink" title="三类原语在 Claude Code 里的落点"></a>三类原语在 Claude Code 里的落点</h3><p>Claude Code 是 MCP 客户端，为每个配置的服务器建立一条连接。服务器暴露的三类原语各有去处：</p>
+<table>
+<thead>
+<tr>
+<th>原语</th>
+<th>在 Claude Code 中的形态</th>
+<th>由谁触发</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>tools</td>
+<td>与内置工具并列，名字为 <code>mcp__&lt;服务器名&gt;__&lt;工具名&gt;</code>，受权限规则约束</td>
+<td>模型决定调用</td>
+</tr>
+<tr>
+<td>resources</td>
+<td>输入 <code>@</code> 时出现在补全菜单里，引用后作为附件载入</td>
+<td>用户引用；Claude Code 也会为支持资源的服务器提供列出与读取资源的工具</td>
+</tr>
+<tr>
+<td>prompts</td>
+<td>变成斜杠命令 <code>/mcp__&lt;服务器名&gt;__&lt;提示名&gt;</code></td>
+<td>用户输入命令</td>
+</tr>
+</tbody></table>
+<p>反方向的能力要看客户端声明了什么。1.0.44 在握手时只声明了 roots 能力，并把启动目录作为唯一的 root 返回给服务器；没有声明 sampling 和 elicitation。也就是说，服务器不能反过来借 Claude Code 调用模型，也不能在执行中途弹框向你要参数，这类服务器功能在 Claude Code 里会退化或不可用。</p>
+<p>另一个方向是 <code>claude mcp serve</code>：把 Claude Code 自己的工具（读写文件、执行命令等）作为 MCP 服务器暴露给其他客户端，例如 Claude Desktop。此时逐次确认工具调用的责任落在那个客户端身上。</p>
+<pre class="mermaid">flowchart LR
+    subgraph CFG["配置来源（同名时 local 优先）"]
+        L["local：~/.claude.json 中按项目路径存放"]
+        P["project：仓库根目录 .mcp.json，需审批"]
+        U["user：~/.claude.json，所有项目可用"]
+    end
+    CFG --&gt; CC["Claude Code（MCP 客户端）"]
+    CC --&gt;|"stdio：启动本地子进程"| S1["本地服务器&lt;br/&gt;npx / docker"]
+    CC --&gt;|"SSE / Streamable HTTP"| S2["远程服务器&lt;br/&gt;OAuth 或请求头认证"]
+    S1 --&gt; M["模型上下文&lt;br/&gt;工具定义 / 资源附件 / 提示词"]
+    S2 --&gt; M</pre>
+
+
+<h3 id="什么时候不需要-MCP"><a href="#什么时候不需要-MCP" class="headerlink" title="什么时候不需要 MCP"></a>什么时候不需要 MCP</h3><p>每个已连接服务器的全部工具定义（名称、描述、参数 schema）都会随每次请求进入上下文。GitHub 官方服务器全开时有数十个工具，这部分开销在整个会话里持续存在。接入前先比较一下现成 CLI：</p>
+<table>
+<thead>
+<tr>
+<th>需求</th>
+<th>优先选择</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本机已装好并登录的 CLI（<code>gh</code>、<code>psql</code>、<code>kubectl</code>）</td>
+<td>Bash + 权限规则，如 <code>Bash(gh issue view:*)</code></td>
+<td>零上下文常驻成本，权限按命令前缀控制，团队成员行为一致</td>
+</tr>
+<tr>
+<td>需要 OAuth 的 SaaS、没有 CLI 的系统</td>
+<td>MCP 远程服务器</td>
+<td>认证由 Claude Code 托管，不必把 token 交给 shell</td>
+</tr>
+<tr>
+<td>需要结构化交互的能力，如浏览器操作</td>
+<td>MCP</td>
+<td>CLI 很难把页面状态以结构化方式交还给模型</td>
+</tr>
+<tr>
+<td>同一套集成要在多个 MCP 客户端复用</td>
+<td>MCP</td>
+<td>配置一次，Claude Code、Claude Desktop 等客户端共用</td>
+</tr>
+</tbody></table>
+<h2 id="管理命令与三种作用域"><a href="#管理命令与三种作用域" class="headerlink" title="管理命令与三种作用域"></a>管理命令与三种作用域</h2><h3 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># stdio 服务器：名字、命令、参数</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">claude mcp add playwright -- npx -y @playwright/mcp@0.0.29 --isolated</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># 带环境变量</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">claude mcp add my-server -e API_KEY=apikey_ChangeMe_0000 -- /path/to/server arg1</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># 远程服务器</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">claude mcp add --transport http sentry https://mcp.sentry.dev/mcp</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">claude mcp add --transport sse legacy-api https://mcp.example.com/sse --header <span class="string">&quot;X-API-Key: apikey_ChangeMe_0000&quot;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="comment"># 用一段 JSON 添加</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">claude mcp add-json db <span class="string">&#x27;&#123;&quot;command&quot;:&quot;npx&quot;,&quot;args&quot;:[&quot;-y&quot;,&quot;@bytebase/dbhub@0.10.0&quot;,&quot;--readonly&quot;]&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">claude mcp list                 <span class="comment"># 列出所有作用域的服务器</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">claude mcp get sentry           <span class="comment"># 查看单个服务器的配置与作用域</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">claude mcp remove sentry        <span class="comment"># 不带 -s 时从它所在的作用域删除</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">claude mcp add-from-claude-desktop   <span class="comment"># 从 Claude Desktop 导入（仅 macOS 与 WSL）</span></span></span></code></pre></div></div></figure>
+
+<p><code>claude mcp add</code> 的选项：</p>
+<table>
+<thead>
+<tr>
+<th>选项</th>
+<th>取值</th>
+<th>默认</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-s, --scope</code></td>
+<td><code>local</code>、<code>project</code>、<code>user</code></td>
+<td><code>local</code></td>
+</tr>
+<tr>
+<td><code>-t, --transport</code></td>
+<td><code>stdio</code>、<code>sse</code>、<code>http</code></td>
+<td><code>stdio</code></td>
+</tr>
+<tr>
+<td><code>-e, --env</code></td>
+<td><code>KEY=value</code>，可多次</td>
+<td>无</td>
+</tr>
+<tr>
+<td><code>-H, --header</code></td>
+<td><code>&quot;Name: value&quot;</code>，用于 SSE 与 HTTP</td>
+<td>无</td>
+</tr>
+</tbody></table>
+<p><strong><code>--</code> 分隔符</strong>是最常见的坑。服务器命令本身带 <code>-y</code>、<code>--isolated</code> 这类参数时，不加 <code>--</code> 会被 <code>claude mcp add</code> 当成自己的选项解析而报错或丢参数。约定：stdio 服务器一律在命令前写 <code>--</code>。</p>
+<h3 id="三种作用域"><a href="#三种作用域" class="headerlink" title="三种作用域"></a>三种作用域</h3><table>
+<thead>
+<tr>
+<th>作用域</th>
+<th>存放位置</th>
+<th>可见范围</th>
+<th>适合</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>local（默认）</td>
+<td><code>~/.claude.json</code> 中当前项目路径下</td>
+<td>仅自己、仅当前项目</td>
+<td>试验中的服务器、带个人凭据的服务器</td>
+</tr>
+<tr>
+<td>project</td>
+<td>项目根目录 <code>.mcp.json</code></td>
+<td>所有克隆仓库的人</td>
+<td>团队约定的标准工具链</td>
+</tr>
+<tr>
+<td>user</td>
+<td><code>~/.claude.json</code> 全局部分</td>
+<td>自己的所有项目</td>
+<td>与项目无关的个人工具，如文档检索</td>
+</tr>
+</tbody></table>
+<p>早期版本的命名不同：现在的 local 以前叫 project，user 以前叫 global。网上旧教程里的 <code>-s global</code> 对应现在的 <code>-s user</code>。</p>
+<p>同名服务器出现在多个作用域时，按 local &gt; project &gt; user 取值。这个规则可以用来在本机覆盖团队配置，例如团队 <code>.mcp.json</code> 里的 <code>github</code> 连远程服务，你在 local 里加一个同名的 Docker 版本做调试。副作用是：团队针对 <code>mcp__github__*</code> 写的权限规则会作用到你覆盖后的那个服务器上，覆盖前要确认工具名一致。</p>
+<h3 id="mcp-json-与项目审批"><a href="#mcp-json-与项目审批" class="headerlink" title=".mcp.json 与项目审批"></a>.mcp.json 与项目审批</h3><p><code>claude mcp add -s project</code> 会在项目根目录创建或更新 <code>.mcp.json</code>：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;mcpServers&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;sentry&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;http&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">&quot;url&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://mcp.sentry.dev/mcp&quot;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">&quot;playwright&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;npx&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;-y&quot;</span><span class="punctuation">,</span> <span class="string">&quot;@playwright/mcp@0.0.29&quot;</span><span class="punctuation">,</span> <span class="string">&quot;--isolated&quot;</span><span class="punctuation">,</span> <span class="string">&quot;--headless&quot;</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>stdio 服务器写 <code>command</code>、<code>args</code>、<code>env</code>；远程服务器写 <code>type</code>（<code>sse</code> 或 <code>http</code>）、<code>url</code> 和可选的 <code>headers</code>。</p>
+<p><code>.mcp.json</code> 里的服务器能在你的机器上执行任意代码，所以 Claude Code 不会直接启用它们：</p>
+<ul>
+<li><strong>首次进入目录的信任对话框</strong>：仓库含 <code>.mcp.json</code> 时，选项是「启用 MCP 服务器并继续」「禁用 MCP 服务器并继续」「退出」。选择启用会把当前所有服务器写进 <code>.claude/settings.local.json</code> 的 <code>enabledMcpjsonServers</code>，<strong>同时写入 <code>enableAllProjectMcpServers: true</code></strong>。从此别人在 <code>.mcp.json</code> 里新增的服务器，你 <code>git pull</code> 之后不会再被询问。</li>
+<li><strong>后续新增服务器</strong>：若没有开启上述总开关，每发现一个新服务器会单独询问，选项是「使用这个及以后所有服务器」「只使用这个」「不使用」。第一个选项同样会打开总开关。</li>
+<li><strong>重置</strong>：<code>claude mcp reset-project-choices</code> 清空本项目的批准与拒绝记录，下次启动重新询问。</li>
+</ul>
+<p>建议的做法：希望逐个把关时，把 <code>.claude/settings.local.json</code> 里的 <code>enableAllProjectMcpServers</code> 改为 <code>false</code>；团队共享的 <code>.claude/settings.json</code> 里不要出现这个字段；<code>.mcp.json</code> 的改动在代码评审里按 CI 配置同等对待。</p>
+<h3 id="一次性配置与-CI"><a href="#一次性配置与-CI" class="headerlink" title="一次性配置与 CI"></a>一次性配置与 CI</h3><p><code>--mcp-config &lt;文件或 JSON 字符串&gt;</code> 为本次运行加载额外的服务器，配合 <code>--strict-mcp-config</code> 可以忽略所有其他来源的配置，只用传入的这一份。CI 里跑 <code>claude -p</code> 时这样做能避免被开发者本地或仓库里的服务器影响：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">claude -p <span class="string">&quot;读取 issue 1234，总结复现步骤&quot;</span> \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --mcp-config ci/mcp.json --strict-mcp-config \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  --allowedTools <span class="string">&quot;mcp__github__get_issue&quot;</span> <span class="string">&quot;mcp__github__list_issues&quot;</span> \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --output-format json</span></span></code></pre></div></div></figure>
+
+<p><code>-p</code> 模式下没有人点确认，MCP 工具必须显式放行，否则调用会被拒绝。</p>
+<h2 id="三种传输与远程认证"><a href="#三种传输与远程认证" class="headerlink" title="三种传输与远程认证"></a>三种传输与远程认证</h2><table>
+<thead>
+<tr>
+<th>传输</th>
+<th>服务器在哪运行</th>
+<th>典型认证</th>
+<th>适用</th>
+<th>注意</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>stdio</td>
+<td>本机子进程，由 Claude Code 启动</td>
+<td>环境变量里的 token</td>
+<td>本地工具、需要访问本机资源的服务器</td>
+<td>子进程继承 Claude Code 的环境变量；启动慢会触发超时</td>
+</tr>
+<tr>
+<td>SSE</td>
+<td>远程</td>
+<td>OAuth 或请求头</td>
+<td>只提供 SSE 端点的旧服务</td>
+<td>2025-03-26 规范已用 Streamable HTTP 取代 HTTP+SSE；1.0.18 起断线会自动重连</td>
+</tr>
+<tr>
+<td>Streamable HTTP</td>
+<td>远程</td>
+<td>OAuth 或请求头</td>
+<td>新的远程服务首选</td>
+<td>1.0.27 起支持</td>
+</tr>
+</tbody></table>
+<p>同一个服务同时提供两种端点时（例如 Sentry 的 <code>/mcp</code> 与 <code>/sse</code>），选 HTTP。</p>
+<h3 id="OAuth-流程"><a href="#OAuth-流程" class="headerlink" title="OAuth 流程"></a>OAuth 流程</h3><p>1.0.27 起远程服务器支持 OAuth，1.0.35 补上了授权服务器发现。以 Sentry 为例：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">claude mcp add --transport http sentry https://mcp.sentry.dev/mcp</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">claude</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">&gt; /mcp</span></span></code></pre></div></div></figure>
+
+<p>在 <code>/mcp</code> 菜单里选中 sentry 并选择认证，浏览器会打开授权页面，完成后 Claude Code 保存并自动刷新令牌。同一菜单还能查看每个服务器的连接状态、工具列表（含工具注解与标题），以及清除认证。浏览器没有自动打开时，可以手动复制菜单里给出的链接。</p>
+<p>OAuth 的好处是令牌不经过你的 shell，也不出现在任何配置文件里，最适合放进 project 作用域共享：<code>.mcp.json</code> 里只有一个 URL，每个人各自授权。</p>
+<h3 id="请求头认证"><a href="#请求头认证" class="headerlink" title="请求头认证"></a>请求头认证</h3><p>不支持 OAuth 的服务只能用 <code>-H</code> 传 token：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">export</span> GITHUB_PERSONAL_ACCESS_TOKEN=github_pat_ChangeMe_0000</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">claude mcp add --transport http github https://api.githubcopilot.com/mcp/readonly \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -H <span class="string">&quot;Authorization: Bearer <span class="variable">$GITHUB_PERSONAL_ACCESS_TOKEN</span>&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>shell 在执行这条命令时就把变量展开了，写进配置的是 token 明文：local 与 user 作用域落在 <code>~/.claude.json</code>，project 作用域则会落进要提交的 <code>.mcp.json</code>。请求头认证的服务器只放 local 或 user 作用域。</p>
+<h2 id="密钥与环境变量：1-0-44-的现实做法"><a href="#密钥与环境变量：1-0-44-的现实做法" class="headerlink" title="密钥与环境变量：1.0.44 的现实做法"></a>密钥与环境变量：1.0.44 的现实做法</h2><p>1.0.44 不会展开 <code>.mcp.json</code> 里的 <code>${VAR}</code>，写进去的就是字面量。团队共享配置又不能带密钥，可用的办法是利用 stdio 子进程的环境继承：Claude Code 启动服务器时使用「自身进程环境 + 配置里的 env」合并后的环境。于是：</p>
+<ul>
+<li>非敏感参数（工具集、只读开关）写进 <code>.mcp.json</code> 的 <code>env</code>，随仓库共享；</li>
+<li>敏感值（token、DSN）不写进文件，由每个人在启动 <code>claude</code> 的 shell 里提供，可以用 direnv 或从系统钥匙串读取后 export；</li>
+<li>Docker 启动的服务器用 <code>-e 变量名</code>（不带值），docker 会从自己的环境里取值，而这个环境正是从 Claude Code 继承来的。</li>
+</ul>
+<p>一份按这个思路写的团队 <code>.mcp.json</code>：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="26"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;mcpServers&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;github&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;docker&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="string">&quot;run&quot;</span><span class="punctuation">,</span> <span class="string">&quot;-i&quot;</span><span class="punctuation">,</span> <span class="string">&quot;--rm&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="string">&quot;-e&quot;</span><span class="punctuation">,</span> <span class="string">&quot;GITHUB_PERSONAL_ACCESS_TOKEN&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        <span class="string">&quot;-e&quot;</span><span class="punctuation">,</span> <span class="string">&quot;GITHUB_TOOLSETS&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="string">&quot;-e&quot;</span><span class="punctuation">,</span> <span class="string">&quot;GITHUB_READ_ONLY&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="string">&quot;ghcr.io/github/github-mcp-server&quot;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="attr">&quot;env&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="attr">&quot;GITHUB_TOOLSETS&quot;</span><span class="punctuation">:</span> <span class="string">&quot;context,repos,issues,pull_requests&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="attr">&quot;GITHUB_READ_ONLY&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="attr">&quot;db&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;npx&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">      <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;-y&quot;</span><span class="punctuation">,</span> <span class="string">&quot;@bytebase/dbhub@0.10.0&quot;</span><span class="punctuation">,</span> <span class="string">&quot;--readonly&quot;</span><span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="attr">&quot;sentry&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;http&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">      <span class="attr">&quot;url&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://mcp.sentry.dev/mcp&quot;</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>使用前每个人在自己的 shell 里准备好变量：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">export</span> GITHUB_PERSONAL_ACCESS_TOKEN=github_pat_ChangeMe_0000</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">export</span> DSN=<span class="string">&quot;postgres://readonly_user:db_ChangeMe_0000@db.example.com:5432/app?sslmode=require&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">claude</span></span></code></pre></div></div></figure>
+
+<p>两个边界情况：</p>
+<ul>
+<li>DBHub 读取 DSN 的优先级是命令行参数 &gt; <code>DSN</code> 环境变量 &gt; 启动目录下的 <code>.env</code> 文件。如果项目 <code>.env</code> 里恰好有 <code>DSN</code>，而你的 shell 没有设置，它会连到 <code>.env</code> 指向的库，启动前用 <code>echo $DSN</code> 确认。</li>
+<li>远程服务器的请求头无法借助环境继承，这也是它们只适合 local 或 user 作用域的原因；需要团队共享的远程服务，优先选支持 OAuth 的。</li>
+</ul>
+<h2 id="权限、资源与提示词"><a href="#权限、资源与提示词" class="headerlink" title="权限、资源与提示词"></a>权限、资源与提示词</h2><h3 id="权限规则写法"><a href="#权限规则写法" class="headerlink" title="权限规则写法"></a>权限规则写法</h3><p>MCP 工具使用与内置工具相同的 allow &#x2F; deny 规则，1.0.44 文档给出两种写法：</p>
+<ul>
+<li><code>mcp__github</code>：匹配 github 服务器的全部工具；</li>
+<li><code>mcp__github__get_issue</code>：只匹配这一个工具。</li>
+</ul>
+<p>服务器名是配置里起的名字，不是包名。这也是团队 <code>.mcp.json</code> 值得统一命名的原因：名字一致，<code>.claude/settings.json</code> 里的规则才能对所有人生效。</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;permissions&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;allow&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="string">&quot;mcp__github__get_issue&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="string">&quot;mcp__github__list_issues&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="string">&quot;mcp__github__get_pull_request&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="string">&quot;mcp__github__get_pull_request_diff&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="string">&quot;mcp__github__search_code&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="attr">&quot;deny&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="string">&quot;mcp__github__merge_pull_request&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="string">&quot;mcp__github__push_files&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="string">&quot;mcp__github__create_or_update_file&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="string">&quot;mcp__github__delete_file&quot;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><code>.mcp.json</code> 已经开了只读模式，deny 里的写工具理论上不会出现，这几条规则是给在 local 作用域另配了可写版本的成员兜底的。</p>
+<h3 id="用-hook-留痕"><a href="#用-hook-留痕" class="headerlink" title="用 hook 留痕"></a>用 hook 留痕</h3><p>6 月 30 日发布的 1.0.38 加入了 hooks，PreToolUse 的 matcher 支持正则，可以覆盖某个服务器乃至所有 MCP 工具。deny 规则负责禁止，hook 负责留痕，两者分工：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;hooks&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;PreToolUse&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">&quot;matcher&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mcp__.*&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="attr">&quot;hooks&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">          <span class="punctuation">&#123;</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;command&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;bash ~/.claude/hooks/mcp-audit.sh&quot;</span> <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">#!/usr/bin/env bash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 记录每一次 MCP 工具调用：时间、工具名、参数</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">input=$(<span class="built_in">cat</span>)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">printf</span> <span class="string">&#x27;%s %s %s\n&#x27;</span> <span class="string">&quot;<span class="subst">$(date -u +%FT%TZ)</span>&quot;</span> \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="string">&quot;<span class="subst">$(jq -r &#x27;.tool_name&#x27; &lt;&lt;&lt;<span class="string">&quot;<span class="variable">$input</span>&quot;</span>)</span>&quot;</span> \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="string">&quot;<span class="subst">$(jq -c &#x27;.tool_input&#x27; &lt;&lt;&lt;<span class="string">&quot;<span class="variable">$input</span>&quot;</span>)</span>&quot;</span> &gt;&gt; <span class="string">&quot;<span class="variable">$HOME</span>/.claude/mcp-audit.log&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="built_in">exit</span> 0</span></span></code></pre></div></div></figure>
+
+<p>hook 从标准输入收到包含 <code>tool_name</code>、<code>tool_input</code> 的 JSON。脚本以退出码 2 结束时会阻止这次调用，并把标准错误的内容反馈给模型；需要按参数内容拦截（例如禁止查询某些表）时可以在这里实现。</p>
+<h3 id="引用资源"><a href="#引用资源" class="headerlink" title="引用资源"></a>引用资源</h3><p>输入 <code>@</code> 时，已连接服务器提供的资源与本地文件一起出现在补全菜单里，格式为 <code>@服务器名:协议://资源路径</code>，例如 <code>@docs:file://api/authentication</code>。引用的资源会被自动拉取并作为附件放进本轮上下文，同一条消息可以引用多个。能引用什么完全取决于服务器实现，以补全菜单列出的为准。</p>
+<h3 id="用提示词做斜杠命令"><a href="#用提示词做斜杠命令" class="headerlink" title="用提示词做斜杠命令"></a>用提示词做斜杠命令</h3><p>服务器暴露的 prompts 会以 <code>/mcp__服务器名__提示名</code> 的形式出现在斜杠命令列表里，参数以空格分隔跟在后面，例如 <code>/mcp__github__pr_review 456</code>。服务器名和提示名中的空格会被规范化为下划线。它和第 1 篇讲的自定义命令作用相同，区别在于提示词由服务器维护、随服务器版本更新。</p>
+<h2 id="输出上限、超时与调试"><a href="#输出上限、超时与调试" class="headerlink" title="输出上限、超时与调试"></a>输出上限、超时与调试</h2><h3 id="输出上限"><a href="#输出上限" class="headerlink" title="输出上限"></a>输出上限</h3><p>1.0.44 对单次 MCP 工具返回有 token 上限，由环境变量 <code>MAX_MCP_OUTPUT_TOKENS</code> 控制，默认 25000。实现细节：</p>
+<ul>
+<li>先按字符数除以 4 粗估，每张图片按 1600 token 计；</li>
+<li>粗估超过上限的一半时，调用 token 计数接口精确计算；</li>
+<li>超过上限时<strong>不截断，而是整条结果作废</strong>，模型收到的错误信息会提示它改用分页、过滤或 limit 参数。</li>
+</ul>
+<p>因此，数据库、日志、搜索类服务器是否支持分页或结果条数参数，是选型时的硬条件。调高上限（如 <code>MAX_MCP_OUTPUT_TOKENS=50000 claude</code>）能让大结果通过，但这些 token 会一直占着上下文，通常不如在提示词里要求加 LIMIT 划算。</p>
+<h3 id="超时"><a href="#超时" class="headerlink" title="超时"></a>超时</h3><table>
+<thead>
+<tr>
+<th>环境变量</th>
+<th>作用</th>
+<th>默认</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MCP_TIMEOUT</code></td>
+<td>服务器启动超时（毫秒）</td>
+<td>30000</td>
+</tr>
+<tr>
+<td><code>MCP_TOOL_TIMEOUT</code></td>
+<td>单次工具调用超时（毫秒）</td>
+<td>100000000，约 27.8 小时，相当于不限制</td>
+</tr>
+</tbody></table>
+<p>Docker 版服务器首次启动要拉镜像，npx 首次要下载包，很容易超过 30 秒。提前执行一次 <code>docker pull ghcr.io/github/github-mcp-server</code> 或 npx 预热，比调大超时更好。远程服务偶尔挂起时，设置一个合理的 <code>MCP_TOOL_TIMEOUT</code> 可以避免会话一直卡住。</p>
+<h3 id="排查顺序"><a href="#排查顺序" class="headerlink" title="排查顺序"></a>排查顺序</h3><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>检查</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>服务器没出现在 <code>/mcp</code> 里</td>
+<td><code>claude mcp list</code> 与 <code>claude mcp get &lt;名字&gt;</code> 确认作用域；project 作用域检查是否被拒绝过（<code>disabledMcpjsonServers</code>）</td>
+</tr>
+<tr>
+<td>显示连接失败</td>
+<td><code>claude --debug</code> 启动查看服务器报错（旧的 <code>--mcp-debug</code> 已弃用）；把 command 与 args 原样在终端里执行一遍</td>
+</tr>
+<tr>
+<td>启动超时</td>
+<td>预先拉取镜像或包，必要时 <code>MCP_TIMEOUT=60000 claude</code></td>
+</tr>
+<tr>
+<td>远程服务 401</td>
+<td><code>/mcp</code> 里重新认证或清除认证；请求头方式检查 token 是否过期</td>
+</tr>
+<tr>
+<td>模型不调用某个工具</td>
+<td><code>/mcp</code> 查看工具是否已列出；检查是否被 deny 规则覆盖；工具描述含糊时在提示词里点名工具</td>
+</tr>
+<tr>
+<td>需要单独调试服务器</td>
+<td>用 MCP Inspector（<code>npx @modelcontextprotocol/inspector</code>）脱离 Claude Code 直接调用服务器</td>
+</tr>
+</tbody></table>
+<h2 id="按场景选服务器"><a href="#按场景选服务器" class="headerlink" title="按场景选服务器"></a>按场景选服务器</h2><p>下表只列在 2025 年 7 月初可用、包名与启动方式已核对的服务器。<code>modelcontextprotocol/servers</code> 仓库里原先的 GitHub、PostgreSQL、Puppeteer、Sentry、Slack、SQLite 等参考实现已移入 servers-archived 归档，不再维护，旧教程里的 <code>@modelcontextprotocol/server-github</code>、<code>@modelcontextprotocol/server-postgres</code> 不要再用。</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>服务器</th>
+<th>接入方式</th>
+<th>认证</th>
+<th>收紧权限的手段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>读 issue、PR、跨仓库搜代码</td>
+<td>GitHub 官方 MCP Server（github&#x2F;github-mcp-server）</td>
+<td>远程 <code>https://api.githubcopilot.com/mcp/</code>，或 Docker 镜像 <code>ghcr.io/github/github-mcp-server</code></td>
+<td>PAT（请求头或环境变量）；README 也给出了 OAuth 配置</td>
+<td>远程在 URL 后加 <code>/readonly</code> 或发送 <code>X-MCP-Readonly: true</code>，按工具集用 <code>/x/&lt;工具集&gt;</code> 路径或 <code>X-MCP-Toolsets</code>；本地用 <code>GITHUB_READ_ONLY=1</code>、<code>GITHUB_TOOLSETS</code>；PAT 用细粒度令牌并限定仓库</td>
+</tr>
+<tr>
+<td>在浏览器里验证前端改动、复现 UI 问题</td>
+<td>Playwright MCP（<code>@playwright/mcp</code>）</td>
+<td>stdio：<code>npx -y @playwright/mcp@0.0.29</code></td>
+<td>无</td>
+<td><code>--isolated</code> 使用内存中的临时 profile；<code>--allowed-origins</code> &#x2F; <code>--blocked-origins</code>（分号分隔）限制可访问站点；CI 加 <code>--headless</code></td>
+</tr>
+<tr>
+<td>排查线上错误</td>
+<td>Sentry MCP</td>
+<td>远程 <code>https://mcp.sentry.dev/mcp</code>；自建 Sentry 用 <code>npx @sentry/mcp-server@latest --access-token=... --host=...</code></td>
+<td>远程为 OAuth，stdio 为用户令牌</td>
+<td>授权账号的组织权限决定可操作范围，用权限最小的成员账号授权</td>
+</tr>
+<tr>
+<td>查第三方库的最新文档与示例</td>
+<td>Context7</td>
+<td>远程 <code>https://mcp.context7.com/mcp</code>，或 <code>npx -y @upstash/context7-mcp</code></td>
+<td>无</td>
+<td>内容来自第三方聚合，按不可信输入对待</td>
+</tr>
+<tr>
+<td>只读查询数据库</td>
+<td>DBHub（<code>@bytebase/dbhub</code>），支持 PostgreSQL、MySQL、MariaDB、SQL Server、SQLite</td>
+<td>stdio：<code>npx -y @bytebase/dbhub@0.10.0 --readonly</code></td>
+<td>DSN</td>
+<td><code>--readonly</code> 按 SQL 关键字过滤，数据库账号本身也必须只读；提示词要求加 LIMIT，避免超出输出上限</td>
+</tr>
+<tr>
+<td>访问项目之外的目录</td>
+<td>通常不需要 MCP</td>
+<td><code>--add-dir</code> 或 settings 的 <code>additionalDirectories</code></td>
+<td>无</td>
+<td>用 Read &#x2F; Edit 规则控制范围；<code>@modelcontextprotocol/server-filesystem</code> 只在需要与其他 MCP 客户端共用配置时才值得接入</td>
+</tr>
+</tbody></table>
+<p>几条选型经验：</p>
+<ul>
+<li>Playwright MCP 默认用可访问性快照而不是截图驱动页面，不需要视觉模型，适合让 Claude 改完前端后自己点一遍；需要按像素坐标操作时才用 <code>--vision</code>。它默认使用持久化的浏览器 profile，登录态会保存在磁盘上，除非确实需要复用登录，否则加 <code>--isolated</code>。</li>
+<li>GitHub 服务器的工具集里，<code>context</code> 工具集（当前用户与环境信息）被 README 标为强烈建议开启；其余按需开启，工具越少，模型选工具越准，上下文占用也越小。</li>
+<li>数据库场景先问一句：模型真的需要实时查库吗？很多时候导出 schema 文件放进仓库，让它读文件就够了，风险和成本都低一个数量级。</li>
+</ul>
+<h2 id="安全清单"><a href="#安全清单" class="headerlink" title="安全清单"></a>安全清单</h2><p>MCP 把外部系统的能力和外部系统的文本同时带进了模型的上下文，风险也就有了两个来源。两起公开披露值得每个接入 MCP 的团队读一遍：</p>
+<ul>
+<li><strong>工具投毒</strong>（Invariant Labs，2025-04-01）：恶意服务器在工具描述里藏入指令，这些文字模型看得到、用户在界面上通常看不到；同文还描述了「rug pull」，即服务器在获得批准后再悄悄更换工具描述。</li>
+<li><strong>GitHub MCP 数据外泄</strong>（Invariant Labs，2025-05-26）：攻击者在公开仓库提交一个带注入指令的 issue，持有广权限令牌的 agent 读取该 issue 后，被诱导读取私有仓库内容，并通过向公开仓库提交 PR 泄露出去。服务器本身没有漏洞，问题出在「不可信输入 + 过宽权限」的组合上。</li>
+</ul>
+<p>对应的清单：</p>
+<ol>
+<li><strong>凭据最小化</strong>：GitHub 用细粒度 PAT，只授权需要的仓库与只读权限；数据库用专用只读账号。凭据能做的事，就是注入成功后攻击者能做的事。</li>
+<li><strong>能力最小化</strong>：优先开只读模式、只开需要的工具集；不常用的服务器不要常驻 user 作用域。每多一个工具，就多一段常驻上下文，也多一个可被诱导调用的入口。</li>
+<li><strong>项目审批当代码评审</strong>：<code>.mcp.json</code> 的改动走评审；需要逐个审批时把本地的 <code>enableAllProjectMcpServers</code> 设为 <code>false</code>；团队共享 settings 里不出现这个字段。</li>
+<li><strong>固定版本</strong>：npx 包写死版本号，Docker 镜像使用明确的版本标签。<code>@latest</code> 意味着每次启动都可能拿到新代码和新的工具描述，这正是 rug pull 在现实中的样子。远程服务器无法固定版本，定期在 <code>/mcp</code> 里核对工具列表是否有变化。</li>
+<li><strong>不可信输入与写权限不同场</strong>：会读取公开内容的服务器（浏览器、公开仓库的 issue、第三方文档）不要和拥有写权限的工具出现在同一会话里。确实需要时，写操作放进 deny，由人来执行。</li>
+<li><strong>密钥不入库</strong>：<code>.mcp.json</code> 只放非敏感配置；<code>-H</code> 写入的 token 以明文存在 <code>~/.claude.json</code>，注意这个文件的权限；永远不要用 <code>-s project</code> 加带 token 请求头的服务器。</li>
+<li><strong>自动化只放行只读工具</strong>：<code>claude -p</code> 的 <code>--allowedTools</code> 只列只读的 MCP 工具，CI 里配合 <code>--strict-mcp-config</code> 固定服务器集合。</li>
+<li><strong>留痕</strong>：用 PreToolUse hook 记录所有 <code>mcp__</code> 调用，出了问题能回溯模型在什么输入下调用了什么工具。</li>
+</ol>
+<h2 id="2026-09-补记：MCP-这一年的变化"><a href="#2026-09-补记：MCP-这一年的变化" class="headerlink" title="2026-09 补记：MCP 这一年的变化"></a>2026-09 补记：MCP 这一年的变化</h2><p>本文示例对应 MCP 2025-06-18 规范与 Claude Code 1.0.44。以下变化会影响文中的做法：</p>
+<table>
+<thead>
+<tr>
+<th>变化</th>
+<th>时间与版本</th>
+<th>对本文做法的影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>.mcp.json</code> 支持 <code>${VAR}</code> 与 <code>${VAR:-默认值}</code> 展开，可用于 <code>command</code>、<code>args</code>、<code>env</code>、<code>url</code>、<code>headers</code></td>
+<td>2025-07-10，1.0.48</td>
+<td>「密钥与环境变量」一节的迂回做法不再必要：远程服务器的请求头可以写成 <code>&quot;Authorization&quot;: &quot;Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}&quot;</code> 放进 project 作用域共享</td>
+</tr>
+<tr>
+<td>支持 MCP 服务器 instructions</td>
+<td>2025-07-15，1.0.52</td>
+<td>服务器可以告诉模型何时该用它的工具，配合后面的 Tool Search 更重要</td>
+</tr>
+<tr>
+<td>权限规则支持 <code>mcp__server__*</code> 通配；当前 deny &#x2F; ask 规则还支持 <code>mcp__*</code> 这类工具名通配</td>
+<td>2025-12-15，2.0.70</td>
+<td>「只有两种写法」已过时，按服务器整体放行或禁止更方便</td>
+</tr>
+<tr>
+<td>Plugins 与 marketplace 公测</td>
+<td>2025-10-09，2.0.12</td>
+<td>插件可在根目录 <code>.mcp.json</code> 或 <code>plugin.json</code> 的 <code>mcpServers</code> 中打包 MCP 服务器，路径用 <code>${CLAUDE_PLUGIN_ROOT}</code>。启用插件就等于引入它带的服务器，插件要像依赖一样评审</td>
+</tr>
+<tr>
+<td>MCP Tool Search 自动模式默认开启：工具描述超过上下文 10% 时延迟加载</td>
+<td>2026-01-13，2.1.7</td>
+<td>「工具定义常驻上下文」的顾虑大为缓解。当前文档中默认行为已是延迟加载，<code>ENABLE_TOOL_SEARCH</code> 可设为 <code>true</code>、<code>auto</code>、<code>auto:N</code> 或 <code>false</code>；该功能需要支持 <code>tool_reference</code> 的模型（Sonnet 4.5、Haiku 4.5、Opus 4.5 及更新版本），<code>ANTHROPIC_BASE_URL</code> 指向非官方网关时会回退为预加载</td>
+</tr>
+<tr>
+<td>支持 elicitation：服务器可在执行中途通过对话框索取结构化输入</td>
+<td>2026-03-14，2.1.76</td>
+<td>正文所说「服务器无法向你要参数」已不成立；可以用 <code>Elicitation</code> hook 自动应答</td>
+</tr>
+<tr>
+<td>企业托管的 MCP 白名单与黑名单</td>
+<td>2025-10-17，2.0.22</td>
+<td>企业可部署 <code>managed-mcp.json</code>（macOS <code>/Library/Application Support/ClaudeCode/managed-mcp.json</code>，Linux 与 WSL <code>/etc/claude-code/managed-mcp.json</code>，Windows <code>C:\Program Files\ClaudeCode\managed-mcp.json</code>）独占指定服务器集合，或用托管设置中的 <code>managedMcpServers</code> 统一提供、<code>allowedMcpServers</code> &#x2F; <code>deniedMcpServers</code> 做白名单与黑名单。2.1.83 修复了 <code>--mcp-config</code> 可绕过白名单的问题</td>
+</tr>
+<tr>
+<td>SSE 传输在官方文档中标为弃用</td>
+<td>—</td>
+<td>新接入一律用 HTTP</td>
+</tr>
+</tbody></table>
+<p>输出上限也有细化：当前版本在单次输出超过 10000 token 时给出警告，默认上限仍是 25000，<code>MAX_MCP_OUTPUT_TOKENS</code> 继续有效；服务器还可以用 <code>anthropic/maxResultSizeChars</code> 注解为单个工具声明更大的文本上限。</p>
+<p>规范与治理层面：</p>
+<ul>
+<li><strong>2025-11-25 规范</strong>：实验性的 tasks（可轮询、延后取结果的长任务）、URL 模式 elicitation、sampling 支持工具调用、以 OAuth Client ID Metadata Documents 作为推荐的客户端注册方式、支持 OpenID Connect Discovery、工具与资源可携带图标等。</li>
+<li><strong>2026-07-28 规范</strong>：去掉了会话（session）机制，并把 Roots、Sampling、Logging 标为废弃。正文提到的 Claude Code 通过 roots 告诉服务器工作目录，这一机制在新规范下已不再推荐依赖。Claude Code 2.1.281（2026-09-23）起，在使用 2026-07-28 协议的连接上支持 URL 模式 elicitation。</li>
+<li><strong>治理</strong>：2025 年 12 月 9 日，MCP 与 AGENTS.md 一起捐入 Linux 基金会旗下的 Agentic AI Foundation（AAIF）。2025 年 12 月 18 日发布的 Agent Skills 开放标准（agentskills.io）是另一条线，不属于 AAIF 项目。</li>
+</ul>
+<p>回头看，本文仍然成立的是作用域与审批机制、「先问能否用 CLI」的取舍、只读优先与版本固定的安全原则；需要更新的是密钥处理（直接用 <code>${VAR}</code> 展开）、权限通配写法，以及对工具数量的顾虑（Tool Search 之后可以放心多接几个服务器，但每个服务器带来的攻击面并没有因此变小）。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/08/05/ai-tools/Claude-Code-03-Hooks%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F/">Claude Code Hooks 生命周期：用确定性规则约束 Agent</a></h3>
+        <p>基于 Claude Code 1.0.68 梳理 Hooks：八个生命周期事件、stdin 输入、退出码与 JSON 决策控制…</p>
+        <a class="btn primary" href="/2025/08/05/ai-tools/Claude-Code-03-Hooks%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/06/10/ai-tools/Claude-Code-01-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5%E4%B8%8E%E9%85%8D%E7%BD%AE/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Claude Code 核心概念与基础配置</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 9 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#MCP-%E5%9C%A8-Claude-Code-%E4%B8%AD%E7%9A%84%E8%A7%92%E8%89%B2" data-toc-target="MCP-在-Claude-Code-中的角色"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">MCP 在 Claude Code 中的角色</span></a><a class="toc-level-3" href="#%E5%8D%8F%E8%AE%AE%E8%83%8C%E6%99%AF" data-toc-target="协议背景"><span class="toc-text">协议背景</span></a><a class="toc-level-3" href="#%E4%B8%89%E7%B1%BB%E5%8E%9F%E8%AF%AD%E5%9C%A8-Claude-Code-%E9%87%8C%E7%9A%84%E8%90%BD%E7%82%B9" data-toc-target="三类原语在-Claude-Code-里的落点"><span class="toc-text">三类原语在 Claude Code 里的落点</span></a><a class="toc-level-3" href="#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%B8%8D%E9%9C%80%E8%A6%81-MCP" data-toc-target="什么时候不需要-MCP"><span class="toc-text">什么时候不需要 MCP</span></a><a class="toc-level-2" href="#%E7%AE%A1%E7%90%86%E5%91%BD%E4%BB%A4%E4%B8%8E%E4%B8%89%E7%A7%8D%E4%BD%9C%E7%94%A8%E5%9F%9F" data-toc-target="管理命令与三种作用域"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">管理命令与三种作用域</span></a><a class="toc-level-3" href="#%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4" data-toc-target="常用命令"><span class="toc-text">常用命令</span></a><a class="toc-level-3" href="#%E4%B8%89%E7%A7%8D%E4%BD%9C%E7%94%A8%E5%9F%9F" data-toc-target="三种作用域"><span class="toc-text">三种作用域</span></a><a class="toc-level-3" href="#mcp-json-%E4%B8%8E%E9%A1%B9%E7%9B%AE%E5%AE%A1%E6%89%B9" data-toc-target="mcp-json-与项目审批"><span class="toc-text">.mcp.json 与项目审批</span></a><a class="toc-level-3" href="#%E4%B8%80%E6%AC%A1%E6%80%A7%E9%85%8D%E7%BD%AE%E4%B8%8E-CI" data-toc-target="一次性配置与-CI"><span class="toc-text">一次性配置与 CI</span></a><a class="toc-level-2" href="#%E4%B8%89%E7%A7%8D%E4%BC%A0%E8%BE%93%E4%B8%8E%E8%BF%9C%E7%A8%8B%E8%AE%A4%E8%AF%81" data-toc-target="三种传输与远程认证"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">三种传输与远程认证</span></a><a class="toc-level-3" href="#OAuth-%E6%B5%81%E7%A8%8B" data-toc-target="OAuth-流程"><span class="toc-text">OAuth 流程</span></a><a class="toc-level-3" href="#%E8%AF%B7%E6%B1%82%E5%A4%B4%E8%AE%A4%E8%AF%81" data-toc-target="请求头认证"><span class="toc-text">请求头认证</span></a><a class="toc-level-2" href="#%E5%AF%86%E9%92%A5%E4%B8%8E%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F%EF%BC%9A1-0-44-%E7%9A%84%E7%8E%B0%E5%AE%9E%E5%81%9A%E6%B3%95" data-toc-target="密钥与环境变量：1-0-44-的现实做法"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">密钥与环境变量：1.0.44 的现实做法</span></a><a class="toc-level-2" href="#%E6%9D%83%E9%99%90%E3%80%81%E8%B5%84%E6%BA%90%E4%B8%8E%E6%8F%90%E7%A4%BA%E8%AF%8D" data-toc-target="权限、资源与提示词"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">权限、资源与提示词</span></a><a class="toc-level-3" href="#%E6%9D%83%E9%99%90%E8%A7%84%E5%88%99%E5%86%99%E6%B3%95" data-toc-target="权限规则写法"><span class="toc-text">权限规则写法</span></a><a class="toc-level-3" href="#%E7%94%A8-hook-%E7%95%99%E7%97%95" data-toc-target="用-hook-留痕"><span class="toc-text">用 hook 留痕</span></a><a class="toc-level-3" href="#%E5%BC%95%E7%94%A8%E8%B5%84%E6%BA%90" data-toc-target="引用资源"><span class="toc-text">引用资源</span></a><a class="toc-level-3" href="#%E7%94%A8%E6%8F%90%E7%A4%BA%E8%AF%8D%E5%81%9A%E6%96%9C%E6%9D%A0%E5%91%BD%E4%BB%A4" data-toc-target="用提示词做斜杠命令"><span class="toc-text">用提示词做斜杠命令</span></a><a class="toc-level-2" href="#%E8%BE%93%E5%87%BA%E4%B8%8A%E9%99%90%E3%80%81%E8%B6%85%E6%97%B6%E4%B8%8E%E8%B0%83%E8%AF%95" data-toc-target="输出上限、超时与调试"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">输出上限、超时与调试</span></a><a class="toc-level-3" href="#%E8%BE%93%E5%87%BA%E4%B8%8A%E9%99%90" data-toc-target="输出上限"><span class="toc-text">输出上限</span></a><a class="toc-level-3" href="#%E8%B6%85%E6%97%B6" data-toc-target="超时"><span class="toc-text">超时</span></a><a class="toc-level-3" href="#%E6%8E%92%E6%9F%A5%E9%A1%BA%E5%BA%8F" data-toc-target="排查顺序"><span class="toc-text">排查顺序</span></a><a class="toc-level-2" href="#%E6%8C%89%E5%9C%BA%E6%99%AF%E9%80%89%E6%9C%8D%E5%8A%A1%E5%99%A8" data-toc-target="按场景选服务器"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">按场景选服务器</span></a><a class="toc-level-2" href="#%E5%AE%89%E5%85%A8%E6%B8%85%E5%8D%95" data-toc-target="安全清单"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">安全清单</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9AMCP-%E8%BF%99%E4%B8%80%E5%B9%B4%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：MCP-这一年的变化"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">2026-09 补记：MCP 这一年的变化</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/claude-code-workflow/" style="--rail: 25%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">2 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#MCP-%E5%9C%A8-Claude-Code-%E4%B8%AD%E7%9A%84%E8%A7%92%E8%89%B2" data-toc-target="MCP-在-Claude-Code-中的角色" data-title="01 · MCP 在 Claude Code 中的角色" aria-label="MCP 在 Claude Code 中的角色"></a><a class="toc-strip__dot" href="#%E7%AE%A1%E7%90%86%E5%91%BD%E4%BB%A4%E4%B8%8E%E4%B8%89%E7%A7%8D%E4%BD%9C%E7%94%A8%E5%9F%9F" data-toc-target="管理命令与三种作用域" data-title="02 · 管理命令与三种作用域" aria-label="管理命令与三种作用域"></a><a class="toc-strip__dot" href="#%E4%B8%89%E7%A7%8D%E4%BC%A0%E8%BE%93%E4%B8%8E%E8%BF%9C%E7%A8%8B%E8%AE%A4%E8%AF%81" data-toc-target="三种传输与远程认证" data-title="03 · 三种传输与远程认证" aria-label="三种传输与远程认证"></a><a class="toc-strip__dot" href="#%E5%AF%86%E9%92%A5%E4%B8%8E%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F%EF%BC%9A1-0-44-%E7%9A%84%E7%8E%B0%E5%AE%9E%E5%81%9A%E6%B3%95" data-toc-target="密钥与环境变量：1-0-44-的现实做法" data-title="04 · 密钥与环境变量：1.0.44 的现实做法" aria-label="密钥与环境变量：1.0.44 的现实做法"></a><a class="toc-strip__dot" href="#%E6%9D%83%E9%99%90%E3%80%81%E8%B5%84%E6%BA%90%E4%B8%8E%E6%8F%90%E7%A4%BA%E8%AF%8D" data-toc-target="权限、资源与提示词" data-title="05 · 权限、资源与提示词" aria-label="权限、资源与提示词"></a><a class="toc-strip__dot" href="#%E8%BE%93%E5%87%BA%E4%B8%8A%E9%99%90%E3%80%81%E8%B6%85%E6%97%B6%E4%B8%8E%E8%B0%83%E8%AF%95" data-toc-target="输出上限、超时与调试" data-title="06 · 输出上限、超时与调试" aria-label="输出上限、超时与调试"></a><a class="toc-strip__dot" href="#%E6%8C%89%E5%9C%BA%E6%99%AF%E9%80%89%E6%9C%8D%E5%8A%A1%E5%99%A8" data-toc-target="按场景选服务器" data-title="07 · 按场景选服务器" aria-label="按场景选服务器"></a><a class="toc-strip__dot" href="#%E5%AE%89%E5%85%A8%E6%B8%85%E5%8D%95" data-toc-target="安全清单" data-title="08 · 安全清单" aria-label="安全清单"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9AMCP-%E8%BF%99%E4%B8%80%E5%B9%B4%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：MCP-这一年的变化" data-title="09 · 2026-09 补记：MCP 这一年的变化" aria-label="2026-09 补记：MCP 这一年的变化"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"ai-tools/Claude-Code-02-MCP深度配置","title":"Claude Code MCP 服务器深度配置","url":"/2025/07/08/ai-tools/Claude-Code-02-MCP%E6%B7%B1%E5%BA%A6%E9%85%8D%E7%BD%AE/","path":"claude-code-workflow","index":1,"total":8,"next":{"title":"Claude Code Hooks 生命周期：用确定性规则约束 Agent","url":"/2025/08/05/ai-tools/Claude-Code-03-Hooks%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

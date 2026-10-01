@@ -1,0 +1,693 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>OpenClaw（原 Clawdbot）爆红之后：个人 AI 基础设施的安全边界 · 飞轮之道</title>
+<meta name="description" content="从 OpenClaw 的信任模型和 CVE-2026-25253 攻击链出发，梳理本地执行型个人 Agent 的五类风险，给出附理由与验证方法的个人加固清单，以及企业应对影子 AI 的思路。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/02/04/agent-systems/%E4%B8%AA%E4%BA%BAAI%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AE%89%E5%85%A8%E8%BE%B9%E7%95%8C/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="OpenClaw（原 Clawdbot）爆红之后：个人 AI 基础设施的安全边界 · 飞轮之道">
+<meta property="og:description" content="从 OpenClaw 的信任模型和 CVE-2026-25253 攻击链出发，梳理本地执行型个人 Agent 的五类风险，给出附理由与验证方法的个人加固清单，以及企业应对影子 AI 的思路。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/02/04/agent-systems/%E4%B8%AA%E4%BA%BAAI%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AE%89%E5%85%A8%E8%BE%B9%E7%95%8C/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/langgraph-agent-engineering/">生态与选型</a><a class="series-chip" href="/paths/langgraph-agent-engineering/" title="查看学习路径">第 17 / 17 篇</a>
+    </div>
+    <h1>OpenClaw（原 Clawdbot）爆红之后：个人 AI 基础设施的安全边界</h1>
+    <p class="article-deck">从 OpenClaw 的信任模型和 CVE-2026-25253 攻击链出发，梳理本地执行型个人 Agent 的五类风险，给出附理由与验证方法的个人加固清单…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>12 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E4%BE%9B%E5%BA%94%E9%93%BE%E5%AE%89%E5%85%A8/">#供应链安全</a><a class="article-meta__tag" href="/tags/Agent/">#Agent</a><a class="article-meta__tag" href="/tags/OpenClaw/">#OpenClaw</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>只绑定 localhost 挡不住浏览器这座桥：CVE-2026-25253 通过受害者浏览器外泄网关令牌，再反向连回本机网关，1 次点击即可远程执行代码。</li><li>网关令牌等于操作员权限，审批开关和沙箱配置都能被它改掉；令牌一旦可能泄露，必须轮换，不能只升级版本。</li><li>技能和插件是代码加指令，要按不受信任的第三方代码审查；市场里已出现成批投递窃密木马的恶意技能。</li><li>旧包名 clawdbot 在 npm 上停在 2026.1.24-3，只升级旧包拿不到修复，要切换到 openclaw 包并升级到 2026.1.29 及以上。</li><li>企业不能只靠封禁影子 AI，需要同时具备终端发现能力、授权治理和一个可审计的替代方案。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="从「会聊天」到「能动手」：本地执行型个人-Agent"><a href="#从「会聊天」到「能动手」：本地执行型个人-Agent" class="headerlink" title="从「会聊天」到「能动手」：本地执行型个人 Agent"></a>从「会聊天」到「能动手」：本地执行型个人 Agent</h2><p>OpenClaw 这类个人 Agent 和网页版聊天助手的区别，不在模型更聪明，而在它拿到了三样东西：<strong>长期运行的进程、真实的系统权限、来自外部的输入通道</strong>。</p>
+<p>按官方文档的描述，它的核心是一个运行在用户机器上的 Gateway 进程，在单一端口（默认 18789）上同时提供 WebSocket 和 HTTP 服务。围绕这个进程有几类能力：</p>
+<ul>
+<li><strong>消息通道</strong>：WhatsApp、Telegram、Slack、Discord、iMessage 等。别人发来的消息可以直接触发 Agent。</li>
+<li><strong>工具</strong>：执行 Shell 命令（exec）、读写文件、驱动浏览器、定时任务。配对的 macOS 节点还可以远程执行 <code>system.run</code>。</li>
+<li><strong>技能与插件</strong>：技能以 <code>SKILL.md</code> 加脚本的形式存在；插件在 Gateway 进程内运行，与 Gateway 拥有相同权限。</li>
+<li><strong>本地状态</strong>：配置、渠道凭证、模型 API Key 和 OAuth 令牌、会话记录，全部保存在 <code>~/.openclaw/</code> 目录下。</li>
+</ul>
+<pre class="mermaid">flowchart LR
+  subgraph Outside["外部输入（不可信）"]
+    MSG["消息发送者"]
+    WEB["网页 / 邮件 / 附件"]
+    SKILL["第三方技能 / 插件"]
+  end
+  subgraph Host["用户主机"]
+    UI["Control UI（浏览器）"] -- "WebSocket + 令牌" --&gt; GW["Gateway :18789"]
+    GW --&gt; TOOLS["exec / 文件 / 浏览器"]
+    GW --&gt; STATE["~/.openclaw&lt;br/&gt;令牌、API Key、会话"]
+  end
+  MSG --&gt; GW
+  WEB -. "工具读取的内容" .-&gt; GW
+  SKILL --&gt; GW
+  GW --&gt; LLM["模型服务"]</pre>
+
+
+<h3 id="信任模型：三类主体，三种权限"><a href="#信任模型：三类主体，三种权限" class="headerlink" title="信任模型：三类主体，三种权限"></a>信任模型：三类主体，三种权限</h3><p>官方安全文档把问题归结为三件事：谁能跟 Agent 说话，Agent 能在哪里动手，Agent 能碰到什么。拆开来看，系统里有三类主体，应当给它们不同的权限：</p>
+<table>
+<thead>
+<tr>
+<th>主体</th>
+<th>实际能做什么</th>
+<th>应有的信任级别</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作员（持有网关令牌的人或程序）</td>
+<td>修改配置、调整审批与沙箱、调用任意工具</td>
+<td>最高，等同于本机管理员</td>
+</tr>
+<tr>
+<td>消息发送者（已配对或在白名单中的联系人）</td>
+<td>触发 Agent 执行任务</td>
+<td>按人授予，默认只能触发只读或受限工具</td>
+</tr>
+<tr>
+<td>内容（网页、邮件、文档、工具输出）</td>
+<td>不应有任何权限，但会进入模型上下文</td>
+<td>零信任，只能作为数据</td>
+</tr>
+</tbody></table>
+<p>多数事故都出在这三层混在了一起：内容里的指令被当成主人的指令，发送者拿到了操作员才该有的工具，或者操作员令牌被一个网页拿走。官方文档写得很直白：提示注入没有被解决，系统提示词只是软约束，真正起强制作用的是工具策略、执行审批、沙箱和渠道白名单。</p>
+<h2 id="名称演变与-CVE-2026-25253"><a href="#名称演变与-CVE-2026-25253" class="headerlink" title="名称演变与 CVE-2026-25253"></a>名称演变与 CVE-2026-25253</h2><h3 id="两个月里改了四次名字"><a href="#两个月里改了四次名字" class="headerlink" title="两个月里改了四次名字"></a>两个月里改了四次名字</h3><table>
+<thead>
+<tr>
+<th>时间</th>
+<th>名称</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2025-11-24</td>
+<td>warelay</td>
+<td>GitHub 仓库创建时的名字</td>
+</tr>
+<tr>
+<td>2025-12</td>
+<td>Clawdis</td>
+<td>第一次更名</td>
+</tr>
+<tr>
+<td>2026-01</td>
+<td>Clawdbot</td>
+<td>以这个名字爆红，npm 包名为 <code>clawdbot</code></td>
+</tr>
+<tr>
+<td>2026-01-27</td>
+<td>Moltbot</td>
+<td>因收到商标方面的请求而更名</td>
+</tr>
+<tr>
+<td>2026-01-29&#x2F;30</td>
+<td>OpenClaw</td>
+<td>定名，npm 包改为 <code>openclaw</code></td>
+</tr>
+</tbody></table>
+<p>频繁更名直接带来一个运维问题。截至写作时，旧包 <code>clawdbot</code> 在 npm 上的最新版本停在 <strong>2026.1.24-3</strong>（2026-01-25 发布），而下面这个漏洞在 2026.1.29 才修复。如果用 <code>npm update -g clawdbot</code> 升级，永远拿不到修复。正确做法是安装 <code>openclaw</code> 包（官方文档说明新包保留了 <code>clawdbot</code> 命令作为兼容入口）。搜索引擎里旧名字对应的教程和仓库，也要格外留意来源。</p>
+<h3 id="攻击链"><a href="#攻击链" class="headerlink" title="攻击链"></a>攻击链</h3><p>以下内容依据 GitHub 安全公告 GHSA-g8p2-7wf7-98mq（对应 CVE-2026-25253，CVSS 3.1 评分 8.8，向量 <code>AV:N/AC:L/PR:N/UI:R</code>），以及报告方 depthfirst 公开的技术分析。受影响版本为 2026.1.28 及以下，修复版本为 2026.1.29。</p>
+<pre class="mermaid">sequenceDiagram
+  participant V as 受害者浏览器
+  participant A as 攻击者服务器
+  participant G as 本机 Gateway（仅监听 loopback）
+  V-&gt;&gt;V: 点击构造链接，Control UI 读取 ?gatewayUrl=攻击者地址
+  V-&gt;&gt;A: 页面加载即自动连接，握手中携带已保存的网关令牌
+  A--&gt;&gt;V: 令牌到手；恶意页面脚本在受害者浏览器中运行
+  V-&gt;&gt;G: 从浏览器发起到 ws://localhost:18789 的连接（未校验 Origin）
+  G--&gt;&gt;V: 以操作员身份认证通过
+  V-&gt;&gt;G: 关闭执行审批，把 exec 执行位置改到宿主机
+  V-&gt;&gt;G: 调用 system.run 执行任意命令</pre>
+
+
+<ol>
+<li><strong>令牌外泄</strong>：Control UI 直接信任查询串中的 <code>gatewayUrl</code>，不做校验，页面加载时自动连接，并在 WebSocket 连接载荷中带上已保存的网关令牌。受害者只要点开一个构造好的链接，令牌就会发到攻击者的服务器。</li>
+<li><strong>绕过仅本机监听</strong>：公告明确指出，即使 Gateway 只监听 loopback，这个漏洞依然可以利用，因为出站连接是由受害者的浏览器发起的。depthfirst 的分析补充说，当时 Gateway 的 WebSocket 服务端不校验 Origin 头，攻击者页面的脚本可以在受害者浏览器里直接连 <code>ws://localhost:18789</code>，这是一种跨站 WebSocket 劫持。</li>
+<li><strong>关掉防护</strong>：拿到操作员权限后，按 depthfirst 的描述，攻击者先通过 <code>exec.approvals.set</code> 把审批设为 <code>ask: &quot;off&quot;</code>，再用 <code>config.patch</code> 把 <code>tools.exec.host</code> 设为 <code>gateway</code>，让命令离开沙箱、在宿主机上执行。</li>
+<li><strong>执行代码</strong>：最后通过 <code>node.invoke</code> 调用 <code>system.run</code>，在宿主机上执行任意命令。</li>
+</ol>
+<p>修复方式是去掉「加载即自动连接」的行为：切换到新的网关地址时，必须由用户在界面上确认。</p>
+<p>这条攻击链说明了三件事：</p>
+<ul>
+<li><strong>「只监听 127.0.0.1」保护的是网络层，保护不了浏览器这一层。</strong> 本机浏览器能访问 localhost，浏览器里跑着任意网站的脚本，所以本机服务必须校验 Origin 并强制认证。</li>
+<li><strong>审批和沙箱只要能被同一个令牌改掉，就不算安全边界。</strong> 令牌泄露之后，这些配置在攻击者手里只是一次 API 调用。</li>
+<li><strong>升级不等于恢复。</strong> 如果在未修复版本上点过来路不明的链接，除了升级，还要轮换网关令牌，并检查配置是否被改过。</li>
+</ul>
+<p>2026-01-31 同一批公开的还有两个命令注入漏洞，也在 2026.1.29 修复：CVE-2026-24763（Docker 执行路径中通过 PATH 环境变量注入，8.8 分）和 CVE-2026-25157（<code>sshNodeCommand</code> 中通过项目根路径注入，7.7 分）。</p>
+<h2 id="风险分类"><a href="#风险分类" class="headerlink" title="风险分类"></a>风险分类</h2><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>典型路径</th>
+<th>已公开的依据</th>
+<th>首要缓解</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本地 RCE</td>
+<td>本机浏览器或进程作为跳板，改配置后执行命令</td>
+<td>CVE-2026-25253、CVE-2026-24763、CVE-2026-25157</td>
+<td>及时升级；令牌轮换；专用低权限账户</td>
+</tr>
+<tr>
+<td>网关对外暴露</td>
+<td>监听局域网地址或做端口转发；反向代理把外部请求变成 127.0.0.1 后被当作本地连接自动信任</td>
+<td>据媒体报道，2026-01 下旬有研究者用 Shodan 检索控制面板指纹，发现数百个暴露实例，其中部分无需认证；官方文档已加入 <code>gateway.trustedProxies</code> 的配置说明</td>
+<td>只监听 loopback；远程访问走 Tailscale Serve；代理配置 <code>trustedProxies</code> 并覆盖 <code>X-Forwarded-For</code></td>
+</tr>
+<tr>
+<td>技能与插件供应链</td>
+<td>技能说明里要求先执行一条「前置依赖安装」命令；插件在进程内运行；npm 安装时会执行生命周期脚本</td>
+<td>据 The Hacker News 报道，安全厂商 Koi Security 于 2026-02-01 发布审计结果：ClawHub 上的 2857 个技能中有 341 个是恶意技能，其中 335 个属于同一投毒活动，主要投递 macOS 窃密木马 Atomic Stealer，并使用 <code>clawhub1</code>、<code>clawhubb</code> 这类仿冒名称</td>
+<td>不安装未审计的技能；插件使用 <code>plugins.allow</code> 白名单；固定版本</td>
+</tr>
+<tr>
+<td>凭证与会话令牌</td>
+<td><code>openclaw.json</code> 中的网关令牌、<code>auth-profiles.json</code> 中的模型 API Key 和 OAuth 令牌、渠道凭证、会话记录，都以文件形式存放在家目录</td>
+<td>官方文档列出了这份凭证存放位置清单；技能的 <code>env</code> &#x2F; <code>apiKey</code> 配置会注入宿主进程，而不是沙箱</td>
+<td>目录权限 700、文件 600；全盘加密；使用有额度上限的专用 API Key</td>
+</tr>
+<tr>
+<td>提示注入导致越权</td>
+<td>邮件、网页、文档里夹带指令，Agent 用自己的工具权限去执行</td>
+<td>官方文档承认提示注入没有被解决；早期测试中 Agent 曾把 <code>find ~</code> 的完整输出发到群聊</td>
+<td>读取不可信内容的 Agent 只给只读工具；高危工具需审批；启用沙箱</td>
+</tr>
+</tbody></table>
+<p>其中最容易被低估的是最后一类。攻击者不需要能给 Agent 发消息，只要 Agent 会去读一封邮件或一个网页就够了。官方给出的一种缓解方式值得采纳：先用一个无工具或只读的「阅读 Agent」对不可信内容做摘要，再把摘要交给有工具权限的主 Agent。</p>
+<h2 id="个人加固清单"><a href="#个人加固清单" class="headerlink" title="个人加固清单"></a>个人加固清单</h2><p>先给一份基线配置（json5，放在 <code>~/.openclaw/openclaw.json</code>），下面的表格逐条说明理由和验证方法：</p>
+<figure class="highlight json5 cb" data-lang="json5" data-label="Json5" data-ext="txt" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  gateway<span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    bind<span class="punctuation">:</span> <span class="string">&quot;loopback&quot;</span><span class="punctuation">,</span>               <span class="comment">// 默认值，保持不变</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    auth<span class="punctuation">:</span> <span class="punctuation">&#123;</span> mode<span class="punctuation">:</span> <span class="string">&quot;token&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span>        <span class="comment">// 令牌用 openclaw doctor --generate-gateway-token 生成，不要写进任何仓库</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  discovery<span class="punctuation">:</span> <span class="punctuation">&#123;</span> mdns<span class="punctuation">:</span> <span class="punctuation">&#123;</span> mode<span class="punctuation">:</span> <span class="string">&quot;minimal&quot;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span>   <span class="comment">// 不在局域网广播 CLI 路径和 SSH 端口</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  session<span class="punctuation">:</span> <span class="punctuation">&#123;</span> dmScope<span class="punctuation">:</span> <span class="string">&quot;per-channel-peer&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span>   <span class="comment">// 多人可私聊时隔离会话</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  channels<span class="punctuation">:</span> <span class="punctuation">&#123;</span> whatsapp<span class="punctuation">:</span> <span class="punctuation">&#123;</span> dmPolicy<span class="punctuation">:</span> <span class="string">&quot;pairing&quot;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  agents<span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    defaults<span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      sandbox<span class="punctuation">:</span> <span class="punctuation">&#123;</span> mode<span class="punctuation">:</span> <span class="string">&quot;all&quot;</span><span class="punctuation">,</span> workspaceAccess<span class="punctuation">:</span> <span class="string">&quot;ro&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span>  <span class="comment">// 需要本机装有 Docker</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  logging<span class="punctuation">:</span> <span class="punctuation">&#123;</span> redactSensitive<span class="punctuation">:</span> <span class="string">&quot;tools&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<table>
+<thead>
+<tr>
+<th>措施</th>
+<th>理由</th>
+<th>验证方法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>切换到 <code>openclaw</code> 包并升级到 2026.1.29 及以上（写作时最新为 2026.2.2 系列）</td>
+<td>旧包 <code>clawdbot</code> 停在 2026.1.24-3，仍受 CVE-2026-25253 影响</td>
+<td><code>npm ls -g --depth=0</code> 应只看到 <code>openclaw</code>，没有独立的 <code>clawdbot</code> 包；在已升级版本上打开带 <code>gatewayUrl</code> 参数的控制台链接，界面应弹出确认</td>
+</tr>
+<tr>
+<td>升级后轮换网关令牌</td>
+<td>在旧版本上点过的链接可能已经泄露令牌，升级并不会让旧令牌失效</td>
+<td>生成新令牌并重启后，用旧令牌连接应被拒绝</td>
+</tr>
+<tr>
+<td>只监听 loopback，远程访问走 Tailscale Serve</td>
+<td>局域网监听或端口转发会让攻击面扩大到整个网络；Serve 可以让 Gateway 保持只监听本机</td>
+<td>macOS 执行 <code>lsof -nP -iTCP:18789 -sTCP:LISTEN</code>，Linux 执行 <code>ss -ltnp | grep 18789</code>，只应出现 <code>127.0.0.1</code>；从另一台设备执行 <code>nc -vz &lt;本机IP&gt; 18789</code> 应失败</td>
+</tr>
+<tr>
+<td>使用反向代理时配置 <code>gateway.trustedProxies</code>，并让代理覆盖而不是追加 <code>X-Forwarded-For</code></td>
+<td>否则经代理进来的请求来源都是 127.0.0.1，会被当成本地连接</td>
+<td>从外网访问应被要求认证；检查代理配置中请求头是否为覆盖写入</td>
+</tr>
+<tr>
+<td>私聊用 <code>pairing</code> 或 <code>allowlist</code>，群聊要求 @ 才响应</td>
+<td>陌生人能触发 Agent 是最常见的事故起点</td>
+<td><code>openclaw pairing list &lt;channel&gt;</code> 核对已批准的发送者；让陌生账号发消息，应只收到配对码</td>
+</tr>
+<tr>
+<td>沙箱 <code>mode: &quot;all&quot;</code>，工作区只读；读取不可信内容的 Agent 禁用 exec、browser</td>
+<td>沙箱默认可选且关闭，关闭时 exec 直接在宿主机执行；沙箱容器默认没有网络</td>
+<td><code>openclaw security audit</code> 不应再提示工具影响范围过大；在会话中让 Agent 执行 <code>whoami</code> 和 <code>hostname</code>，结果应来自容器</td>
+</tr>
+<tr>
+<td>用专用的非管理员系统账户运行 Gateway，辅助功能、屏幕录制、完全磁盘访问等权限按需授予</td>
+<td>即使 RCE 成功，攻击者也拿不到你日常账户下的 SSH 密钥、浏览器 Cookie 和文档</td>
+<td>用 <code>ps</code> 查看网关进程的属主；在该账户下尝试读取主账户家目录，应被拒绝</td>
+</tr>
+<tr>
+<td><code>~/.openclaw</code> 目录权限 700，配置文件 600，开启全盘加密</td>
+<td>令牌、API Key、会话记录全是明文文件，是窃密木马的首要目标</td>
+<td><code>openclaw security audit --fix</code> 会收紧权限；用 <code>stat</code> 复核</td>
+</tr>
+<tr>
+<td>不安装未审计的技能；不执行技能说明里要求的下载或粘贴命令；插件用 <code>plugins.allow</code> 白名单并固定版本</td>
+<td>技能市场已出现成批投毒；插件在进程内运行，npm 安装时会执行生命周期脚本</td>
+<td>安装前阅读 <code>SKILL.md</code> 和随附脚本，检查是否有外部下载、base64 解码、<code>curl | sh</code> 这类片段；避免不看差异就执行 <code>clawhub update --all</code></td>
+</tr>
+<tr>
+<td>浏览器控制使用专用配置文件，不用日常浏览器</td>
+<td>日常配置文件里有已登录的会话，Agent 能访问的范围就是你能访问的范围</td>
+<td>在 Agent 的浏览器里打开常用站点，应处于未登录状态</td>
+</tr>
+<tr>
+<td>模型 API Key 单独申请，并设置消费上限</td>
+<td>凭证被窃后，损失有上限，也便于单独吊销</td>
+<td>在模型服务商控制台确认该 Key 独立存在且设置了额度</td>
+</tr>
+<tr>
+<td>定期执行 <code>openclaw security audit --deep</code>，并订阅仓库的安全公告</td>
+<td>项目处于 1.0 之前，迭代快，安全公告密集</td>
+<td>审计报告无高危项；GitHub 仓库 Watch 设置中勾选 Security alerts</td>
+</tr>
+</tbody></table>
+<p>如果怀疑已经被入侵，按官方文档的顺序处理：先停止 Gateway 并把监听改回 loopback；再轮换网关令牌、远程客户端凭证、渠道令牌和模型 API Key；然后检查 <code>~/.openclaw/agents/&lt;agentId&gt;/sessions/*.jsonl</code> 中有没有异常的工具调用，检查 <code>extensions/</code> 下有没有不认识的插件，再核对 <code>gateway.bind</code>、<code>gateway.auth</code>、<code>tools.elevated</code> 最近是否被改动过。</p>
+<h2 id="企业视角：影子-AI-与终端管控"><a href="#企业视角：影子-AI-与终端管控" class="headerlink" title="企业视角：影子 AI 与终端管控"></a>企业视角：影子 AI 与终端管控</h2><p>对企业来说，OpenClaw 的问题首先是<strong>看不见</strong>。员工在办公电脑上装了它，把公司的 Slack、邮箱、日历接进去，调用的是个人账户的模型服务。这就同时造成了几个问题：</p>
+<ul>
+<li><strong>数据外流</strong>：公司消息和文档进入个人模型账户的上下文，没有经过数据防泄漏审查。</li>
+<li><strong>凭证落在终端</strong>：公司系统的 OAuth 令牌以明文形式存放在员工家目录，窃密木马会优先收集这些文件。</li>
+<li><strong>内网横向移动</strong>：如果 Gateway 监听了局域网地址，或者开启了完整模式的 mDNS 广播，同网段的主机都能发现并尝试连接它。</li>
+</ul>
+<h3 id="发现手段"><a href="#发现手段" class="headerlink" title="发现手段"></a>发现手段</h3><table>
+<thead>
+<tr>
+<th>信号</th>
+<th>依据</th>
+<th>局限</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>进程与软件包名：<code>openclaw</code>，以及兼容用的 <code>clawdbot</code> 命令</td>
+<td>官方安装方式包括全局 npm 包、安装脚本和 macOS 应用</td>
+<td>从源码运行时进程名可能不同</td>
+</tr>
+<tr>
+<td>本机监听端口 18789</td>
+<td>默认端口</td>
+<td>可以通过 <code>gateway.port</code> 修改</td>
+</tr>
+<tr>
+<td>mDNS 服务 <code>_openclaw-gw._tcp</code></td>
+<td>官方文档中的发现机制</td>
+<td>可以关闭</td>
+</tr>
+<tr>
+<td>家目录下存在 <code>~/.openclaw/</code></td>
+<td>默认状态目录</td>
+<td>可以通过 <code>OPENCLAW_STATE_DIR</code> 修改</td>
+</tr>
+<tr>
+<td>访问 <code>clawhub.com</code> 及各模型服务商的出站流量</td>
+<td>技能市场与模型调用</td>
+<td>只能说明有使用，无法说明风险高低</td>
+</tr>
+</tbody></table>
+<p>发现之后的处置，取决于企业有没有替代方案：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>适用情况</th>
+<th>必须同时做的事</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>禁止</td>
+<td>研发终端接触生产凭证、合规要求严格</td>
+<td>提供审计完备的内部 Agent 平台，否则员工会转到个人设备上用，并把公司数据带过去</td>
+</tr>
+<tr>
+<td>受控允许</td>
+<td>小规模试点</td>
+<td>规定使用专用终端或虚拟机；只允许接入非敏感的渠道；技能从内部镜像的白名单中安装；模型走公司的网关</td>
+</tr>
+<tr>
+<td>集中提供</td>
+<td>需求普遍</td>
+<td>把「个人助理」能力做到企业平台里：按用户身份授权，有副作用的工具需要审批，操作留存审计记录，工具执行放在隔离沙箱中</td>
+</tr>
+</tbody></table>
+<p>另外有两项治理动作，和终端管控同样重要：一是定期审查 Slack、Google Workspace、Microsoft 365 里第三方应用的 OAuth 授权，吊销来路不明的授权；二是在 EDR 中把 <code>~/.openclaw/</code> 下的凭证文件纳入敏感文件访问监控。</p>
+<h2 id="2026-09-补记：技能市场投毒、治理变化与后续漏洞"><a href="#2026-09-补记：技能市场投毒、治理变化与后续漏洞" class="headerlink" title="2026-09 补记：技能市场投毒、治理变化与后续漏洞"></a>2026-09 补记：技能市场投毒、治理变化与后续漏洞</h2><ul>
+<li><strong>技能市场投毒持续发酵</strong>：2026-02 起，多家安全厂商陆续发布分析，确认 ClawHub 上有数百个恶意技能以「安装前置依赖」为名投递窃密木马。据后续报道，随着市场规模扩大到一万余个技能，被识别出的恶意技能增加到八百余个。OpenClaw 于 2026-02-07 在官方博客宣布与 VirusTotal 合作：技能发布时即扫描，判定为恶意的直接阻止下载，可疑的加警告标签，所有在架技能每天重新扫描。官方博客同时承认，用自然语言写成的恶意指令和精心构造的提示注入不会触发病毒特征，扫描无法覆盖。所以上文「不装未审计技能」这一条依然有效，市场侧的扫描只是其中一层防线。</li>
+<li><strong>项目治理变化</strong>：据 TechCrunch 等媒体 2026-02-15 报道，作者 Peter Steinberger 加入 OpenAI，项目转交 OpenClaw Foundation，继续以开源方式运作。</li>
+<li><strong>后续 CVE</strong>：写作当天（2026-02-04）公开的 CVE-2026-25593，是 Gateway WebSocket 的 <code>config.apply</code> 接口存在本地未授权 RCE：本机任意进程可以写入不安全的 <code>cliPath</code>，从而注入命令。该漏洞 CVSS 8.4，已在 2026.1.20 修复，按上文升级到 2026.1.29 及以上的用户不受影响。2026-02-14 至 02-15 又集中公开了数十条安全公告，其中包括插件安装路径穿越、节点调用审批绕过导致 RCE、借助命令替换或 Windows <code>cmd.exe</code> 解析绕过 exec 白名单等 critical 和 high 级别问题。这说明审批和白名单在实现层面被多次绕过，不能作为唯一的安全边界，沙箱、独立账户和网络隔离才是兜底。</li>
+<li><strong>现状</strong>：截至 2026-09，GitHub 仓库约 39 万 star，公开的安全公告累计约 720 条（其中 critical 14 条、high 249 条），2 月和 3 月最为集中，各有两百余条。最新版本为 v2026.9.6（2026-09-23）。公告数量这么多，对个人用户意味着「及时升级」本身就需要一个固定流程，比如每周检查一次更新并执行 <code>openclaw security audit</code>，不能等出事再补。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列已读完</div>
+        <h3>「LangGraph Agent 工程实战」到此结束</h3>
+        <p>回到路径总览，选择下一条要完成的学习路径。</p>
+        <a class="btn primary" href="/paths/">选择下一条路径</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/09/16/agent-systems/PageIndex-%E6%97%A0%E5%90%91%E9%87%8FRAG%E6%96%B0%E8%8C%83%E5%BC%8F/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：PageIndex：无向量、推理驱动的长文档检索</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 6 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E4%BB%8E%E3%80%8C%E4%BC%9A%E8%81%8A%E5%A4%A9%E3%80%8D%E5%88%B0%E3%80%8C%E8%83%BD%E5%8A%A8%E6%89%8B%E3%80%8D%EF%BC%9A%E6%9C%AC%E5%9C%B0%E6%89%A7%E8%A1%8C%E5%9E%8B%E4%B8%AA%E4%BA%BA-Agent" data-toc-target="从「会聊天」到「能动手」：本地执行型个人-Agent"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">从「会聊天」到「能动手」：本地执行型个人 Agent</span></a><a class="toc-level-3" href="#%E4%BF%A1%E4%BB%BB%E6%A8%A1%E5%9E%8B%EF%BC%9A%E4%B8%89%E7%B1%BB%E4%B8%BB%E4%BD%93%EF%BC%8C%E4%B8%89%E7%A7%8D%E6%9D%83%E9%99%90" data-toc-target="信任模型：三类主体，三种权限"><span class="toc-text">信任模型：三类主体，三种权限</span></a><a class="toc-level-2" href="#%E5%90%8D%E7%A7%B0%E6%BC%94%E5%8F%98%E4%B8%8E-CVE-2026-25253" data-toc-target="名称演变与-CVE-2026-25253"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">名称演变与 CVE-2026-25253</span></a><a class="toc-level-3" href="#%E4%B8%A4%E4%B8%AA%E6%9C%88%E9%87%8C%E6%94%B9%E4%BA%86%E5%9B%9B%E6%AC%A1%E5%90%8D%E5%AD%97" data-toc-target="两个月里改了四次名字"><span class="toc-text">两个月里改了四次名字</span></a><a class="toc-level-3" href="#%E6%94%BB%E5%87%BB%E9%93%BE" data-toc-target="攻击链"><span class="toc-text">攻击链</span></a><a class="toc-level-2" href="#%E9%A3%8E%E9%99%A9%E5%88%86%E7%B1%BB" data-toc-target="风险分类"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">风险分类</span></a><a class="toc-level-2" href="#%E4%B8%AA%E4%BA%BA%E5%8A%A0%E5%9B%BA%E6%B8%85%E5%8D%95" data-toc-target="个人加固清单"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">个人加固清单</span></a><a class="toc-level-2" href="#%E4%BC%81%E4%B8%9A%E8%A7%86%E8%A7%92%EF%BC%9A%E5%BD%B1%E5%AD%90-AI-%E4%B8%8E%E7%BB%88%E7%AB%AF%E7%AE%A1%E6%8E%A7" data-toc-target="企业视角：影子-AI-与终端管控"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">企业视角：影子 AI 与终端管控</span></a><a class="toc-level-3" href="#%E5%8F%91%E7%8E%B0%E6%89%8B%E6%AE%B5" data-toc-target="发现手段"><span class="toc-text">发现手段</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E6%8A%80%E8%83%BD%E5%B8%82%E5%9C%BA%E6%8A%95%E6%AF%92%E3%80%81%E6%B2%BB%E7%90%86%E5%8F%98%E5%8C%96%E4%B8%8E%E5%90%8E%E7%BB%AD%E6%BC%8F%E6%B4%9E" data-toc-target="2026-09-补记：技能市场投毒、治理变化与后续漏洞"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">2026-09 补记：技能市场投毒、治理变化与后续漏洞</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/langgraph-agent-engineering/" style="--rail: 100%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">17 / 17</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E4%BB%8E%E3%80%8C%E4%BC%9A%E8%81%8A%E5%A4%A9%E3%80%8D%E5%88%B0%E3%80%8C%E8%83%BD%E5%8A%A8%E6%89%8B%E3%80%8D%EF%BC%9A%E6%9C%AC%E5%9C%B0%E6%89%A7%E8%A1%8C%E5%9E%8B%E4%B8%AA%E4%BA%BA-Agent" data-toc-target="从「会聊天」到「能动手」：本地执行型个人-Agent" data-title="01 · 从「会聊天」到「能动手」：本地执行型个人 Agent" aria-label="从「会聊天」到「能动手」：本地执行型个人 Agent"></a><a class="toc-strip__dot" href="#%E5%90%8D%E7%A7%B0%E6%BC%94%E5%8F%98%E4%B8%8E-CVE-2026-25253" data-toc-target="名称演变与-CVE-2026-25253" data-title="02 · 名称演变与 CVE-2026-25253" aria-label="名称演变与 CVE-2026-25253"></a><a class="toc-strip__dot" href="#%E9%A3%8E%E9%99%A9%E5%88%86%E7%B1%BB" data-toc-target="风险分类" data-title="03 · 风险分类" aria-label="风险分类"></a><a class="toc-strip__dot" href="#%E4%B8%AA%E4%BA%BA%E5%8A%A0%E5%9B%BA%E6%B8%85%E5%8D%95" data-toc-target="个人加固清单" data-title="04 · 个人加固清单" aria-label="个人加固清单"></a><a class="toc-strip__dot" href="#%E4%BC%81%E4%B8%9A%E8%A7%86%E8%A7%92%EF%BC%9A%E5%BD%B1%E5%AD%90-AI-%E4%B8%8E%E7%BB%88%E7%AB%AF%E7%AE%A1%E6%8E%A7" data-toc-target="企业视角：影子-AI-与终端管控" data-title="05 · 企业视角：影子 AI 与终端管控" aria-label="企业视角：影子 AI 与终端管控"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E6%8A%80%E8%83%BD%E5%B8%82%E5%9C%BA%E6%8A%95%E6%AF%92%E3%80%81%E6%B2%BB%E7%90%86%E5%8F%98%E5%8C%96%E4%B8%8E%E5%90%8E%E7%BB%AD%E6%BC%8F%E6%B4%9E" data-toc-target="2026-09-补记：技能市场投毒、治理变化与后续漏洞" data-title="06 · 2026-09 补记：技能市场投毒、治理变化与后续漏洞" aria-label="2026-09 补记：技能市场投毒、治理变化与后续漏洞"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/个人AI基础设施与安全边界","title":"OpenClaw（原 Clawdbot）爆红之后：个人 AI 基础设施的安全边界","url":"/2026/02/04/agent-systems/%E4%B8%AA%E4%BA%BAAI%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD%E4%B8%8E%E5%AE%89%E5%85%A8%E8%BE%B9%E7%95%8C/","path":"langgraph-agent-engineering","index":16,"total":17,"next":null}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

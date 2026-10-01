@@ -1,0 +1,727 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>2026 年 9 月 Agent OS 主流技术框架与路线调研报告 · 飞轮之道</title>
+<meta name="description" content="截至 2026 年 9 月底，梳理自称 Agent OS 的五条技术路线，对比运行时、沙箱、协议、记忆、治理五组件的主流做法与产品现状，判断真正收敛的是 MCP/A2A 协议层与 microVM、OpenTelemetry 等基础设施实践，安全与授权仍是主要矛盾。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/30/agent-systems/Agent-OS%E4%B8%BB%E6%B5%81%E6%8A%80%E6%9C%AF%E6%A1%86%E6%9E%B6%E4%B8%8E%E8%B7%AF%E7%BA%BF%E8%B0%83%E7%A0%94-2026-09/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="2026 年 9 月 Agent OS 主流技术框架与路线调研报告 · 飞轮之道">
+<meta property="og:description" content="截至 2026 年 9 月底，梳理自称 Agent OS 的五条技术路线，对比运行时、沙箱、协议、记忆、治理五组件的主流做法与产品现状，判断真正收敛的是 MCP/A2A 协议层与 microVM、OpenTelemetry 等基础设施实践，安全与授权仍是主要矛盾。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/30/agent-systems/Agent-OS%E4%B8%BB%E6%B5%81%E6%8A%80%E6%9C%AF%E6%A1%86%E6%9E%B6%E4%B8%8E%E8%B7%AF%E7%BA%BF%E8%B0%83%E7%A0%94-2026-09/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1655720828018-edd2daec9349?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/Agent%E7%B3%BB%E7%BB%9F/">Agent 系统</a> / <a href="/paths/langgraph-agent-engineering/">生态与选型</a><a class="series-chip" href="/paths/langgraph-agent-engineering/" title="查看学习路径">第 11 / 17 篇</a>
+    </div>
+    <h1>2026 年 9 月 Agent OS 主流技术框架与路线调研报告</h1>
+    <p class="article-deck">截至 2026 年 9 月底，梳理自称 Agent OS 的五条技术路线，对比运行时、沙箱、协议、记忆、治理五组件的主流做法与产品现状…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>24 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/MCP/">#MCP</a><a class="article-meta__tag" href="/tags/%E8%A1%8C%E4%B8%9A%E6%B4%9E%E5%AF%9F/">#行业洞察</a><a class="article-meta__tag" href="/tags/Agent/">#Agent</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Agent OS 截至 2026-09 仍是五条路线的命名权之争，不是边界统一的产品类别；各路线共享运行时、沙箱、协议、记忆、治理五组件。</li><li>真正收敛的是协议层：MCP 成为工具层事实标准，A2A v1.0 成为 Agent 间协作标准；microVM 隔离与 OpenTelemetry GenAI 语义约定是趋同的基础设施实践。</li><li>OpenAI Agent Builder 关停、AutoGen 并入 Agent Framework、Google 产品线合并，押注单一平台的风险在上升，选型应优先看协议开放性与可迁移性。</li><li>安全与授权是最大的未解风险：MCPTox 平均攻击成功率 36.5%，Agent 能力的增长快于其安全与授权模型的成熟度。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h2><p>截至 2026 年 9 月，“Agent OS” 仍<strong>不是一个业界公认的、有统一边界的操作系统级产品类别</strong>，而是五条路线争夺同一命名权的战场：①模型厂商的 agent runtime&#x2F;harness；②云厂商的托管 agent 基础设施；③开源框架的“OS 化”演进；④以 MCP 为中心的协议中间层；⑤为 agent 设计的 OS 内核 &#x2F; 终端派。真实收敛发生在<strong>协议层与基础设施层</strong>：MCP（2026-07-28 规范，已捐 Linux Foundation 旗下 AAIF）与 A2A（v1.0.0，2026-03-12）成为事实标准，执行沙箱以 microVM 为“最小可接受隔离级别”，可观测性以 OpenTelemetry GenAI 语义约定为默认底座。</p>
+<p>本轮调研中，时间点最晚的证据为 2026-09-29（AWS 中国区 Bedrock AgentCore 可用性新闻、SOSP 2026 AgenticOS workshop），报告内容的时间基准为 2026 年 9 月底。</p>
+<p><strong>三条最值得记住的判断</strong>（详见分节）：</p>
+<ol>
+<li>选型已从“框架之争”变为<strong>三层分工</strong>：托管运行时（治理&#x2F;身份&#x2F;规模化）+ 代码优先框架（控制力）+ 安全沙箱（执行隔离）；从架构要素看则是五组件——运行时 + 沙箱 + 协议 + 记忆 + 治理。两种表述是同一事物的“按交付层看”与“按组件看”两个视角。</li>
+<li>最大结构性事件是<strong>统一收编 + 关停低代码画布</strong>：OpenAI Agent Builder 官方宣布 2026-11-30 关停，AutoGen 并入 Microsoft Agent Framework，Google 把 Agent Builder&#x2F;Agent Engine&#x2F;ADK 统一为 Gemini Enterprise Agent Platform。</li>
+<li><strong>安全是当前主要矛盾</strong>：MCPTox 实测平均攻击成功率 36.5%、对 o1-mini 最高 72.8%（AAAI-26），且能力更强的模型反而更易被攻破；OpenClaw&#x2F;ClawHub 技能生态爆发供应链攻击 ClawHavoc。</li>
+</ol>
+<p><strong>报告未覆盖的范围（已知局限）</strong>：浏览器&#x2F;Computer-Use 运行时、企业 RPA 的 agent 化、中国厂商中的百度&#x2F;智谱&#x2F;Kimi&#x2F;MiniMax、日韩欧厂商、EU AI Act 等监管一手材料、以及任何跨方案的成本与延迟基准——这些均为本轮调研的缺口，已在正文相应位置标注“需验证”。</p>
+<blockquote>
+<p>证据说明：本报告区分<strong>官方一手材料</strong>、<strong>基金会&#x2F;厂商自宣口径</strong>与<strong>第三方评测&#x2F;媒体转述</strong>三类来源。凡未能交叉确证的数字，均在文中明确标注“未能确证”。</p>
+</blockquote>
+<hr>
+<h2 id="一、五条技术路线：谁在自称-Agent-OS"><a href="#一、五条技术路线：谁在自称-Agent-OS" class="headerlink" title="一、五条技术路线：谁在自称 Agent OS"></a>一、五条技术路线：谁在自称 Agent OS</h2><p>需要先说明方法论限制：检索中<strong>没有任何单一权威来源系统性地把“Agent OS”归纳为几条路线</strong>；下述划分是基于多来源交叉归纳的结果，属本报告的分析框架，而非某来源原文。<strong>该划分并非互斥</strong>——它混用了“供应方类型 &#x2F; 部署形态 &#x2F; 抽象层”三种切分维度，因此路线之间必然重叠（例如 AWS AgentCore 同时属于路线 2 与路线 4 的落地载体）。更准确的理解方式是<strong>两个正交轴</strong>：横轴 &#x3D; 抽象层（协议 → 框架 → 运行时 → 内核&#x2F;OS），纵轴 &#x3D; 交付形态（自托管开源 → 托管云服务）。下述五条路线只是该平面上被厂商重点营销的五个点位。</p>
+<p><strong>操作性定义（本报告采用）</strong>：所谓 Agent OS，指把 AI agent 的运行要素——agent loop 调度、上下文&#x2F;记忆、工具接口、执行沙箱、身份与权限、可观测性——<strong>收敛为一套可复用、可替换、有明确接口边界的基础层</strong>的技术方案。这一定义不要求它真的是操作系统内核。</p>
+<h3 id="路线-1：模型厂商的-agent-runtime-harness（“托管-agent-loop”）"><a href="#路线-1：模型厂商的-agent-runtime-harness（“托管-agent-loop”）" class="headerlink" title="路线 1：模型厂商的 agent runtime &#x2F; harness（“托管 agent loop”）"></a>路线 1：模型厂商的 agent runtime &#x2F; harness（“托管 agent loop”）</h3><ul>
+<li><strong>代表</strong>：Anthropic <strong>Claude Managed Agents</strong>（2026-04-08 public beta）+ Claude Agent SDK；OpenAI <strong>Agents SDK + Responses API</strong>（Agent Builder 已宣布 2026-11-30 下线）；Google <strong>ADK 2.0 + Managed Agents</strong>（Google I&#x2F;O ‘26）。</li>
+<li><strong>官方口径</strong>：Anthropic 工程博客提出“<strong>拆解 brain 与 hands</strong>”，把 session &#x2F; harness &#x2F; sandbox 虚拟化为可独立替换的接口，使 container 变为 “cattle”（可弃置）。</li>
+<li>来源：Anthropic 官方 <a target="_blank" rel="noopener" href="https://www.anthropic.com/engineering/managed-agents">https://www.anthropic.com/engineering/managed-agents</a> ；第三方 <a target="_blank" rel="noopener" href="https://www.vibecodingacademy.ai/blog/claude-managed-agents-guide">https://www.vibecodingacademy.ai/blog/claude-managed-agents-guide</a> ；<a target="_blank" rel="noopener" href="https://virtualizationreview.com/articles/2026/05/19/google-io-26-fills-out-enterprise-agent-stack-with-managed-agents-adk-2,-d-,0.aspx">https://virtualizationreview.com/articles/2026/05/19/google-io-26-fills-out-enterprise-agent-stack-with-managed-agents-adk-2,-d-,0.aspx</a></li>
+</ul>
+<h3 id="路线-2：云厂商托管-agent-基础设施"><a href="#路线-2：云厂商托管-agent-基础设施" class="headerlink" title="路线 2：云厂商托管 agent 基础设施"></a>路线 2：云厂商托管 agent 基础设施</h3><ul>
+<li><strong>代表</strong>：AWS <strong>Bedrock AgentCore</strong>（Runtime&#x2F;Gateway&#x2F;Identity&#x2F;Memory，2025-10 GA，2026-09-29 中国区可用）；Google <strong>Gemini Enterprise Agent Platform</strong>（Cloud Next ‘26 由 Vertex AI Agent Builder 改名）；腾讯云 <strong>Cube 沙箱</strong>（2026-04 开源）。</li>
+<li><strong>官方口径</strong>：“不用自己拼 runtime、工具层、memory、identity”。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://aws.amazon.com/bedrock/agentcore">https://aws.amazon.com/bedrock/agentcore</a> ；<a target="_blank" rel="noopener" href="https://cloud.google.com/blog/products/ai-machine-learning/introducing-gemini-enterprise-agent-platform">https://cloud.google.com/blog/products/ai-machine-learning/introducing-gemini-enterprise-agent-platform</a> ；中国区 <a target="_blank" rel="noopener" href="https://www.prnasia.com/story/549909-1.shtml">https://www.prnasia.com/story/549909-1.shtml</a> ；Cube <a target="_blank" rel="noopener" href="https://www.infoq.cn/article/40UQ0beY3L25lo1rWVzb">https://www.infoq.cn/article/40UQ0beY3L25lo1rWVzb</a></li>
+</ul>
+<h3 id="路线-3：开源框架“OS-化”演进"><a href="#路线-3：开源框架“OS-化”演进" class="headerlink" title="路线 3：开源框架“OS 化”演进"></a>路线 3：开源框架“OS 化”演进</h3><ul>
+<li><strong>代表</strong>：<strong>OpenClaw</strong>（第三方称 2026-03 前后 star 超越 React，但<strong>具体 star 数未能确证</strong>，媒体报道数值从 248k 到 355k 互相矛盾）；学术侧 <strong>AIOS</strong>（AGI Research，把 LLM Agent OS 内核拆为 scheduler &#x2F; context &#x2F; memory &#x2F; tool &#x2F; access manager）。</li>
+<li>来源：AIOS 官方 <a target="_blank" rel="noopener" href="https://github.com/agiresearch/AIOS">https://github.com/agiresearch/AIOS</a> ；论文 <a target="_blank" rel="noopener" href="https://arxiv.org/html/2403.16971v5">https://arxiv.org/html/2403.16971v5</a> ；OpenClaw 媒体口径 <a target="_blank" rel="noopener" href="https://www.ayautomate.com/blog/openclaw-open-source-ai-agent">https://www.ayautomate.com/blog/openclaw-open-source-ai-agent</a></li>
+</ul>
+<h3 id="路线-4：以-MCP-工具协议为中心的中间层"><a href="#路线-4：以-MCP-工具协议为中心的中间层" class="headerlink" title="路线 4：以 MCP&#x2F;工具协议为中心的中间层"></a>路线 4：以 MCP&#x2F;工具协议为中心的中间层</h3><ul>
+<li><strong>代表</strong>：<strong>MCP</strong>、A2A&#x2F;ACP&#x2F;UCP；治理层 <strong>MCP Gateway</strong>（Gravitee、Snowflake、Stacklok 等）。</li>
+<li><strong>口径</strong>：“AI 的 USB-C”；第三方称 MCP 月 SDK 下载 <strong>9700 万</strong>、<strong>5800+ server</strong>（第三方博客口径，2026 年中），但<strong>官方</strong>口径为 <strong>&gt;10,000 个活跃公共 server、约 97M&#x2F;月 SDK 下载（Py+TS，2026-02&#x2F;03）</strong>——两者为不同时点、不同统计口径，<strong>均未能由独立权威源交叉确证</strong>。Datadog 称 MCP 工具调用自 2025Q4 增长 22 倍（未找到原始报告，<strong>需验证</strong>）。</li>
+<li>来源：协议地图 <a target="_blank" rel="noopener" href="https://www.digitalapplied.com/blog/ai-agent-protocol-ecosystem-map-2026-mcp-a2a-acp-ucp">https://www.digitalapplied.com/blog/ai-agent-protocol-ecosystem-map-2026-mcp-a2a-acp-ucp</a> ；Snowflake <a target="_blank" rel="noopener" href="https://www.snowflake.com/en/blog/engineering/enterprise-mcp-gateway-ai-agent-governance">https://www.snowflake.com/en/blog/engineering/enterprise-mcp-gateway-ai-agent-governance</a></li>
+</ul>
+<h3 id="路线-5：为-agent-设计的-OS-内核-虚拟机派"><a href="#路线-5：为-agent-设计的-OS-内核-虚拟机派" class="headerlink" title="路线 5：为 agent 设计的 OS 内核 &#x2F; 虚拟机派"></a>路线 5：为 agent 设计的 OS 内核 &#x2F; 虚拟机派</h3><ul>
+<li><strong>代表</strong>：学术 <strong>AgenticOS @ SOSP 2026</strong>（第 2 届 “OS Design for AI Agents” workshop，2026-09-29 布拉格，含 HARNESS workshop）；终端侧 <strong>HarmonyOS 7 &#x2F; 荣耀 Agentic OS</strong>（2026-06-24 MWC 上海）、阶跃星辰原生 Agent OS、openEuler 超节点 OS；企业侧阿里 <strong>ANOLISA</strong>（2026-03，仅中文媒体转述，<strong>无官方一手材料确证</strong>）。</li>
+<li><strong>官方&#x2F;媒体口径</strong>：“从应用的容器变成智能体的舞台”“60 年来最大一次 OS 范式重构”。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://os-for-agent.github.io/">https://os-for-agent.github.io</a> ；<a target="_blank" rel="noopener" href="https://sigops.org/s/conferences/sosp/2026/workshops.html">https://sigops.org/s/conferences/sosp/2026/workshops.html</a> ；荣耀 <a target="_blank" rel="noopener" href="https://www.honor.com/cn/news/honor-agentic-os">https://www.honor.com/cn/news/honor-agentic-os</a></li>
+</ul>
+<p><strong>小结</strong>：路线 1、2 是“托管”思路（把运行时变成云服务），路线 3、5 是“内核化”思路（把框架&#x2F;设备抽象成 OS），路线 4 是“协议化”思路（用标准而非 OS 来解耦）。三者在 2026 年的实际形态高度重叠——大多数所谓 Agent OS，本质是“运行时 + 沙箱 + 协议 + 记忆 + 治理”的组合。</p>
+<p><strong>本报告识别到的可能遗漏方向（本轮未充分取证，标记为待补）</strong>：</p>
+<ul>
+<li><strong>浏览器 &#x2F; Computer-Use 运行时</strong>：以浏览器为 agent 执行环境的一派（含 GUI 自动化），在架构上介于路线 2 与路线 5 之间，本轮仅间接接触到，<strong>需验证</strong>其在 2026-09 的代表方案。</li>
+<li><strong>企业 RPA 厂商的 agent 化</strong>：传统 RPA 平台向 agent 演进，可能与 Agent OS 直接竞争企业流程市场，<strong>本轮未覆盖</strong>。</li>
+<li><strong>中国厂商覆盖不全</strong>：仅覆盖腾讯、阿里、字节、华为&#x2F;荣耀、阶跃星辰；百度、智谱、Kimi、MiniMax 等<strong>本轮未检索</strong>。</li>
+<li><strong>非英语世界空白</strong>：日、韩、欧厂商方案本轮未覆盖。</li>
+</ul>
+<hr>
+<h2 id="二、关键架构组件的当前主流做法"><a href="#二、关键架构组件的当前主流做法" class="headerlink" title="二、关键架构组件的当前主流做法"></a>二、关键架构组件的当前主流做法</h2><h3 id="2-1-上下文与记忆：从“塞-prompt”到文件系统式与-OS-式分层"><a href="#2-1-上下文与记忆：从“塞-prompt”到文件系统式与-OS-式分层" class="headerlink" title="2.1 上下文与记忆：从“塞 prompt”到文件系统式与 OS 式分层"></a>2.1 上下文与记忆：从“塞 prompt”到文件系统式与 OS 式分层</h3><ul>
+<li><strong>文件系统式记忆</strong>成为主流：Anthropic memory tool + context editing（官方工程博客）。</li>
+<li><strong>压缩&#x2F;修剪&#x2F;分层</strong>为普遍工程实践：Manus 公开其上下文工程经验。</li>
+<li><strong>OS 式分层记忆</strong>：Letta 的 core memory ≈ RAM &#x2F; archival memory ≈ 磁盘。</li>
+<li>框架竞争格局：Mem0 &#x2F; Zep(Graphiti) &#x2F; Letta &#x2F; Cognee。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents</a> ；<a target="_blank" rel="noopener" href="https://manus.im/zh-tw/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus">https://manus.im/zh-tw/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus</a> ；<a target="_blank" rel="noopener" href="https://agentmarketcap.ai/blog/2026/04/11/agent-memory-architecture-production-2026">https://agentmarketcap.ai/blog/2026/04/11/agent-memory-architecture-production-2026</a></li>
+</ul>
+<h3 id="2-2-执行沙箱：microVM-是生产级下限（业界倾向，非成文规范）"><a href="#2-2-执行沙箱：microVM-是生产级下限（业界倾向，非成文规范）" class="headerlink" title="2.2 执行沙箱：microVM 是生产级下限（业界倾向，非成文规范）"></a>2.2 执行沙箱：microVM 是生产级下限（业界倾向，非成文规范）</h3><ul>
+<li>多个第三方评测与厂商工程文章倾向：<strong>Firecracker microVM 是生产级最小可接受隔离级别</strong>，配合 gVisor、容器与快照恢复（E2B 冷启动约 150ms）。</li>
+<li><strong>须注意</strong>：本判断来自厂商博客与第三方评测的<strong>趋同看法</strong>，而非任何标准组织的规范；容器派（含 K8s 生态）与 WASM&#x2F;WASI 派仍在大量使用，4.4 节列出的 WASM Component、Sysbox 即为并存的替代方案。</li>
+<li>代表产品：E2B、Modal、Daytona、Cloudflare、Blaxel（多按 CPU&#x2F;内存计价）；K8s 生态亦有 agent-sandbox&#x2F;CRD 类方案（<strong>需验证</strong>其在 2026-09 的成熟度）。</li>
+<li>注意：<strong>该类对比多来自厂商博客与第三方评测，非权威规范，需谨慎引用</strong>。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026">https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026</a> ；<a target="_blank" rel="noopener" href="https://northflank.com/blog/how-to-sandbox-ai-agents">https://northflank.com/blog/how-to-sandbox-ai-agents</a> ；<a target="_blank" rel="noopener" href="https://blog.logrocket.com/comparing-ai-agent-sandbox-platforms-e2b-modal-daytona-and-more">https://blog.logrocket.com/comparing-ai-agent-sandbox-platforms-e2b-modal-daytona-and-more</a></li>
+</ul>
+<h3 id="2-3-工具调用与权限治理：MCP-Gateway-Identity-风险分级审批"><a href="#2-3-工具调用与权限治理：MCP-Gateway-Identity-风险分级审批" class="headerlink" title="2.3 工具调用与权限治理：MCP + Gateway + Identity + 风险分级审批"></a>2.3 工具调用与权限治理：MCP + Gateway + Identity + 风险分级审批</h3><ul>
+<li>组合形式：MCP 作为工具接口 → MCP Gateway 作治理层 → Identity&#x2F;OAuth 作凭证层（AWS AgentCore Identity；PwC agent OS 用 MCP 做策略对齐访问）。</li>
+<li><strong>风险分级审批</strong>进入产品：Claude Code 的 YOLO classifier 分三档（放行 &#x2F; 软拒 &#x2F; 硬拒）。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://www.pwc.com/us/en/services/ai/agent-os.html">https://www.pwc.com/us/en/services/ai/agent-os.html</a> ；<a target="_blank" rel="noopener" href="https://m.36kr.com/p/3749464991187458">https://m.36kr.com/p/3749464991187458</a></li>
+</ul>
+<h3 id="2-4-多-agent-编排：Lead-agent-并行-sub-agent-上下文隔离"><a href="#2-4-多-agent-编排：Lead-agent-并行-sub-agent-上下文隔离" class="headerlink" title="2.4 多 agent 编排：Lead agent + 并行 sub-agent + 上下文隔离"></a>2.4 多 agent 编排：Lead agent + 并行 sub-agent + 上下文隔离</h3><ul>
+<li>一个被广泛推荐（但<strong>无行业统计支撑</strong>）的模式是 <strong>orchestrator &#x2F; sub-agent</strong> 两层结构，sub-agent 运行在独立子进程与独立文件系统中以隔离上下文（Anthropic research system 与 Claude Agent SDK subagents）。</li>
+<li>⚠️ 本报告<strong>未能找到独立量化数据</strong>证明“orchestrator&#x2F;sub-agent 已是工业主流”，只能说它被主要厂商作为推荐架构反复宣传。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://tech-insider.org/au/how-to-use-claude-agent-sdk-2026">https://tech-insider.org/au/how-to-use-claude-agent-sdk-2026</a> ；<a target="_blank" rel="noopener" href="https://arxiv.org/html/2604.14228v1">https://arxiv.org/html/2604.14228v1</a></li>
+</ul>
+<h3 id="2-5-可观测性：OpenTelemetry-GenAI-语义约定成为默认底座"><a href="#2-5-可观测性：OpenTelemetry-GenAI-语义约定成为默认底座" class="headerlink" title="2.5 可观测性：OpenTelemetry GenAI 语义约定成为默认底座"></a>2.5 可观测性：OpenTelemetry GenAI 语义约定成为默认底座</h3><ul>
+<li>LangChain、MLflow、Arize Phoenix、LangWatch 均已 OTel-native。</li>
+<li>来源：OpenTelemetry 官方 <a target="_blank" rel="noopener" href="https://opentelemetry.io/blog/2025/ai-agent-observability">https://opentelemetry.io/blog/2025/ai-agent-observability</a> ；<a target="_blank" rel="noopener" href="https://www.langchain.com/resources/agent-observability">https://www.langchain.com/resources/agent-observability</a></li>
+</ul>
+<h3 id="2-6-记忆与沙箱的补充说明"><a href="#2-6-记忆与沙箱的补充说明" class="headerlink" title="2.6 记忆与沙箱的补充说明"></a>2.6 记忆与沙箱的补充说明</h3><ul>
+<li>2.1 节的“文件系统式记忆成为主流”同样属于<strong>从厂商实践反推的倾向判断</strong>，而非行业统计；单一来源（Anthropic 工程博客）不足以支撑“主流”一词，此处按“主要厂商已采纳的做法”理解。</li>
+<li>2.3 节的风险分级审批（Claude Code YOLO classifier）为<strong>单一产品特性</strong>，不代表行业已普遍实现。</li>
+</ul>
+<hr>
+<h2 id="三、产品与框架现状对比（截至-2026-09）"><a href="#三、产品与框架现状对比（截至-2026-09）" class="headerlink" title="三、产品与框架现状对比（截至 2026-09）"></a>三、产品与框架现状对比（截至 2026-09）</h2><h3 id="3-1-模型厂商侧"><a href="#3-1-模型厂商侧" class="headerlink" title="3.1 模型厂商侧"></a>3.1 模型厂商侧</h3><table>
+<thead>
+<tr>
+<th>厂商</th>
+<th>代表方案</th>
+<th>核心抽象</th>
+<th>关键事实</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>OpenAI</td>
+<td>Agents SDK + Responses API</td>
+<td>Agents &#x2F; Handoffs &#x2F; Guardrails &#x2F; Sessions 四原语（2026-04 起沙箱化）</td>
+<td><strong>Agent Builder 与 Evals 官方宣布 2026-11-30 关停</strong>（官方公告）；引导迁移至 Agents SDK；Swarm 已于 2025-03 归档（<strong>第三方口径，需验证</strong>）</td>
+</tr>
+<tr>
+<td>Anthropic</td>
+<td>Claude Agent SDK（2026 初由 Claude Code SDK 更名，<strong>更名属第三方描述</strong>）</td>
+<td><code>query()</code> 循环 + hooks（PreToolUse&#x2F;PostToolUse）+ subagents + Agent Skills(SKILL.md)</td>
+<td>内置 file&#x2F;bash&#x2F;web 工具（官方文档）；第三方评测称其 MCP 原生开发体验最强（<strong>第三方观点，非事实陈述</strong>），但强绑定 Claude，不是通用框架</td>
+</tr>
+<tr>
+<td>Google</td>
+<td>Gemini Enterprise Agent Platform（4 月由 Agent Builder&#x2F;Agent Engine&#x2F;ADK 统一更名）；ADK 2.0</td>
+<td>ADK 四原语 agent &#x2F; tool &#x2F; runner &#x2F; session</td>
+<td>一等支持 MCP + A2A（官方）；“Preview 暴露面大、依赖重”为第三方评测观点（<strong>无一手来源</strong>）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>表内来源类型：除标注“第三方”外，其余为官方产品或官方博客。时间标注统一为 YYYY-MM。</p>
+</blockquote>
+<p>来源：<a target="_blank" rel="noopener" href="https://openai.com/index/introducing-agentkit">https://openai.com/index/introducing-agentkit</a> ；<a target="_blank" rel="noopener" href="https://community.openai.com/t/deprecation-notice-agent-builder/1382650">https://community.openai.com/t/deprecation-notice-agent-builder/1382650</a> ；<a target="_blank" rel="noopener" href="https://www.morphllm.com/ai-agent-framework">https://www.morphllm.com/ai-agent-framework</a> ；<a target="_blank" rel="noopener" href="https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview">https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview</a> ；<a target="_blank" rel="noopener" href="https://cloud.google.com/blog/products/ai-machine-learning/introducing-gemini-enterprise-agent-platform">https://cloud.google.com/blog/products/ai-machine-learning/introducing-gemini-enterprise-agent-platform</a></p>
+<h3 id="3-2-云与平台侧"><a href="#3-2-云与平台侧" class="headerlink" title="3.2 云与平台侧"></a>3.2 云与平台侧</h3><table>
+<thead>
+<tr>
+<th>厂商</th>
+<th>方案</th>
+<th>状态与要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>AWS</td>
+<td>Bedrock AgentCore（Runtime &#x2F; Gateway &#x2F; Identity &#x2F; Memory，新增持久 runtime instances）</td>
+<td>已 GA；2026-09-29 中国区可用</td>
+</tr>
+<tr>
+<td>Microsoft</td>
+<td>Agent Framework 1.0（2026-04-02 GA，合并 Semantic Kernel + AutoGen）；Foundry Agent Service（Hosted agent 有区域限制）；Copilot Studio</td>
+<td><strong>AutoGen 已并入并转入维护模式</strong></td>
+</tr>
+<tr>
+<td>阿里云</td>
+<td>百炼 + 开源 AgentScope &#x2F; OpenSandbox + ACS Agent Sandbox</td>
+<td>官方称 MicroVM 隔离最高 15000 沙箱&#x2F;分钟（<strong>厂商口径</strong>）</td>
+</tr>
+<tr>
+<td>字节</td>
+<td>Coze Studio &#x2F; Coze Loop</td>
+<td>已 <strong>Apache-2.0</strong> 开源，约 20.8k stars；短板为插件生态与多租户</td>
+</tr>
+<tr>
+<td>腾讯云</td>
+<td>ADP 4.0（企业级 AgentOps）+ 开源 Cube Sandbox</td>
+<td>Cube 兼容 E2B 接口，密钥沙箱“Agent 永不持有密钥”</td>
+</tr>
+</tbody></table>
+<p>来源：<a target="_blank" rel="noopener" href="https://aws.amazon.com/blogs/aws/runtime-instances-persistent-compute-for-production-ai-agents-on-amazon-bedrock-agentcore">https://aws.amazon.com/blogs/aws/runtime-instances-persistent-compute-for-production-ai-agents-on-amazon-bedrock-agentcore</a> ；<a target="_blank" rel="noopener" href="https://www.infoq.com/news/2026/08/agent-framework-harness-ga">https://www.infoq.com/news/2026/08/agent-framework-harness-ga</a> ；<a target="_blank" rel="noopener" href="https://github.com/agentscope-ai/agentscope">https://github.com/agentscope-ai/agentscope</a> ；<a target="_blank" rel="noopener" href="https://www.byteplus.com/en/blog/coze-open-sources-ai-agent-tools">https://www.byteplus.com/en/blog/coze-open-sources-ai-agent-tools</a> ；<a target="_blank" rel="noopener" href="https://adp.cloud.tencent.com/">https://adp.cloud.tencent.com</a></p>
+<h3 id="3-3-开源-独立框架"><a href="#3-3-开源-独立框架" class="headerlink" title="3.3 开源&#x2F;独立框架"></a>3.3 开源&#x2F;独立框架</h3><ul>
+<li><strong>LangGraph</strong>：有状态图 + checkpoint，最成熟的生产级编排；开源 + LangGraph Platform 托管（约 $35&#x2F;月或按节点计量）。</li>
+<li><strong>CrewAI</strong>：角色化协作，上手最快，但 MCP 原生支持滞后。</li>
+<li><strong>AutoGen</strong>：已并入 Microsoft Agent Framework，转维护模式。</li>
+<li><strong>Claude Agent SDK &#x2F; OpenAI Agents SDK &#x2F; Mastra &#x2F; Strands</strong>：原生支持 MCP。</li>
+<li>协议侧：<strong>MCP 是事实标准</strong>；<strong>A2A 一年内超 150 组织</strong>，深度嵌入 Google&#x2F;Microsoft&#x2F;AWS（数字为基金会自宣口径）。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://www.truefoundry.com/blog/langgraph-pricing">https://www.truefoundry.com/blog/langgraph-pricing</a> ；<a target="_blank" rel="noopener" href="https://www.linuxfoundation.org/press/a2a-protocol-surpasses-150-organizations-lands-in-major-cloud-platforms-and-sees-enterprise-production-use-in-first-year">https://www.linuxfoundation.org/press/a2a-protocol-surpasses-150-organizations-lands-in-major-cloud-platforms-and-sees-enterprise-production-use-in-first-year</a></li>
+</ul>
+<h3 id="3-4-选型分界线（三条）"><a href="#3-4-选型分界线（三条）" class="headerlink" title="3.4 选型分界线（三条）"></a>3.4 选型分界线（三条）</h3><ol>
+<li><strong>云绑定深度 vs 数据主权</strong>：已在单一云深度集成、看重身份&#x2F;治理&#x2F;规模化 → 该云托管运行时（AgentCore &#x2F; Foundry Agent Service &#x2F; Gemini Enterprise Agent Platform）；跨云、要数据主权或成本可控 → 开源自托管（LangGraph &#x2F; AgentScope &#x2F; Dify CE &#x2F; Coze Studio）。</li>
+<li><strong>交付速度 vs 控制力 vs 关停风险</strong>：弱代码团队要可视化快交付 → Coze &#x2F; Dify &#x2F; Copilot Studio &#x2F; 百炼，但须接受锁厂与平台关停风险（<strong>OpenAI Agent Builder 2026-11-30 关停即为反例</strong>）；要精细控制循环&#x2F;状态&#x2F;拓扑 → 代码优先框架（显式图选 LangGraph，角色协作选 CrewAI，Claude&#x2F;MCP 生态选 Claude Agent SDK，微软栈选 Agent Framework，Google 栈选 ADK）。</li>
+<li><strong>编排与安全执行解耦</strong>：把沙箱运行时（E2B &#x2F; Modal &#x2F; Daytona &#x2F; Cube Sandbox &#x2F; OpenSandbox）作为独立一层，<strong>不要与编排框架耦合</strong>。</li>
+</ol>
+<blockquote>
+<p>⚠️ 本节多数对比来源为厂商博客或第三方评测，“成熟度&#x2F;短板”判断带有主观色彩；GA 时点与区域限制建议以各厂官方文档为准。</p>
+</blockquote>
+<hr>
+<h2 id="三点五、实践维度：成本、延迟、锁定与合规"><a href="#三点五、实践维度：成本、延迟、锁定与合规" class="headerlink" title="三点五、实践维度：成本、延迟、锁定与合规"></a>三点五、实践维度：成本、延迟、锁定与合规</h2><p>上文偏重架构，但选型的实际成败常取决于四个被营销材料系统性忽略的维度。</p>
+<h3 id="成本"><a href="#成本" class="headerlink" title="成本"></a>成本</h3><ul>
+<li>本报告只检索到两处<strong>可引用</strong>的价格锚点：LangGraph Platform 约 $35&#x2F;月或按节点计量（第三方博客口径）；沙箱产品（E2B&#x2F;Modal&#x2F;Daytona）多按 CPU·内存·时长计价。</li>
+<li>托管运行时的成本模型（按 token、按 vCPU·s、按 agent 会话）与自托管的 TCO（GPU、运维、沙箱基础设施）<strong>缺乏公开可比数据</strong>，本报告<strong>未能确证</strong>任何跨方案成本对比。这是本轮调研最大的数据缺口，建议在具体 POC 中自建测算。</li>
+</ul>
+<h3 id="延迟"><a href="#延迟" class="headerlink" title="延迟"></a>延迟</h3><ul>
+<li>仅一处可用锚点：E2B 沙箱冷启动约 150ms（第三方口径）。</li>
+<li>Agent 端到端延迟主要由模型推理而非运行时基础设施决定；沙箱冷启动与快照恢复在交互式场景中是关键变量，但<strong>未找到跨厂商延迟基准</strong>。</li>
+</ul>
+<h3 id="供应商锁定与迁移风险"><a href="#供应商锁定与迁移风险" class="headerlink" title="供应商锁定与迁移风险"></a>供应商锁定与迁移风险</h3><ul>
+<li>2026 年最具说服力的证据不是论证而是<strong>事实</strong>：OpenAI Agent Builder 与 Evals 官方宣布 2026-11-30 关停；AutoGen 并入 Agent Framework 转维护模式；Google 三条产品线合并更名。<strong>低代码平台与已被整合的框架存在实质关停&#x2F;迁移成本</strong>。</li>
+<li>相对而言，协议层（MCP&#x2F;A2A）与沙箱层（兼容 E2B 接口者有 Cube Sandbox 等）的可迁移性更高；把编排逻辑写在开放协议上的自托管框架，迁移成本最低。</li>
+<li>⚠️ 各方案的<strong>具体迁移工作量无公开量化数据</strong>，<strong>未能确证</strong>。</li>
+</ul>
+<h3 id="合规与监管"><a href="#合规与监管" class="headerlink" title="合规与监管"></a>合规与监管</h3><ul>
+<li>⚠️ <strong>本报告在本轮检索中未能获得关于 EU AI Act 对 agent 系统具体适用条款的一手材料</strong>，“高风险系统”义务是否覆盖 agent 运行时&#x2F;沙箱，<strong>需另行验证</strong>。</li>
+<li>可确证的相邻动向：NIST 在沙箱隔离边界的讨论中被第三方文章引用（<strong>未能定位 NIST 原始文件</strong>，需验证）；FIDO Alliance 已于 2026-04-28 成立 Agentic Authentication TWG，属身份合规方向的实际动作。</li>
+<li><strong>结论</strong>：把合规当作选型硬约束的条件尚不成熟，因标准本身仍在制定中；但身份&#x2F;授权类标准（FIDO、IETF 草案）值得提前跟踪。</li>
+</ul>
+<hr>
+<h2 id="四、标准化协议与生态：MCP-与-A2A-的收敛与残留分裂"><a href="#四、标准化协议与生态：MCP-与-A2A-的收敛与残留分裂" class="headerlink" title="四、标准化协议与生态：MCP 与 A2A 的收敛与残留分裂"></a>四、标准化协议与生态：MCP 与 A2A 的收敛与残留分裂</h2><h3 id="4-1-MCP：事实上的工具层标准，已中立化治理"><a href="#4-1-MCP：事实上的工具层标准，已中立化治理" class="headerlink" title="4.1 MCP：事实上的工具层标准，已中立化治理"></a>4.1 MCP：事实上的工具层标准，已中立化治理</h3><ul>
+<li><strong>版本（可确证）</strong>：最新规范为 <strong>2026-07-28</strong>，是自 2024-11 发布以来最大一次修订（RC 自 2026-05-21）。核心变化：<strong>无状态协议核心</strong>（可在普通 HTTP 基础设施上水平扩展）、<strong>多轮往返请求 MRTR</strong>、<strong>OAuth 2.1 授权加固</strong>、可缓存列表结果；四大 Tier-1 SDK（TS&#x2F;Python&#x2F;Go&#x2F;C#）同日发布。Cloudflare 的工程博客也从边缘基础设施视角确认了“无状态化 + 可水平扩展”是本版规范的核心取向（<a target="_blank" rel="noopener" href="https://blog.cloudflare.com/mcp-v2">https://blog.cloudflare.com/mcp-v2</a>）。</li>
+<li><strong>治理（可确证）</strong>：Anthropic 于 <strong>2025-12-09</strong> 将 MCP 捐给 Linux Foundation 下的 <strong>Agentic AI Foundation（AAIF）</strong>，MCP 为创始项目（另有 Block 的 goose、OpenAI 的 AGENTS.md）。</li>
+<li><strong>扩展（可确证）</strong>：<strong>MCP Apps</strong>（2026-01-26，首个官方扩展，允许 server 返回 iframe 沙箱内的交互 UI）由 MCP 与 OpenAI 联合开发。</li>
+<li><strong>采纳</strong>：官方口径 &gt;10,000 个活跃公共 server、约 97M&#x2F;月 SDK 下载（Py+TS，2026-02&#x2F;03）；OpenAI 于 DevDay 2025-10 采纳；覆盖 ChatGPT、Gemini、Microsoft Copilot&#x2F;VS Code、GitHub、Cursor、Vercel 等。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://blog.modelcontextprotocol.io/posts/2026-07-28">https://blog.modelcontextprotocol.io/posts/2026-07-28</a> ；<a target="_blank" rel="noopener" href="https://blog.cloudflare.com/mcp-v2">https://blog.cloudflare.com/mcp-v2</a> ；<a target="_blank" rel="noopener" href="https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation">https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation</a> ；<a target="_blank" rel="noopener" href="https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation">https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation</a> ；<a target="_blank" rel="noopener" href="https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps">https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps</a></li>
+</ul>
+<h3 id="4-2-MCP-安全：当前生态的主要矛盾（可确证）"><a href="#4-2-MCP-安全：当前生态的主要矛盾（可确证）" class="headerlink" title="4.2 MCP 安全：当前生态的主要矛盾（可确证）"></a>4.2 MCP 安全：当前生态的主要矛盾（可确证）</h3><ul>
+<li><strong>MCPTox（AAAI-26）</strong>：在 45 个真实 server、20 个模型上测得<strong>平均攻击成功率 36.5%</strong>，对 o1-mini 最高 <strong>72.8%</strong>，且<strong>能力更强的模型反而更易被攻击</strong>。</li>
+<li><strong>OWASP 已发布 MCP Top 10</strong>（含 MCP03:2025 Tool Poisoning）。</li>
+<li><strong>CSA 记录 Cursor 的 CurXecute</strong>（CVE-2025-54135，CVSS 8.6）。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://arxiv.org/html/2508.14925v1">https://arxiv.org/html/2508.14925v1</a> ；<a target="_blank" rel="noopener" href="https://ojs.aaai.org/index.php/AAAI/article/view/40895">https://ojs.aaai.org/index.php/AAAI/article/view/40895</a> ；<a target="_blank" rel="noopener" href="https://owasp.org/www-project-mcp-top-10/2025/MCP03-2025%E2%80%93Tool-Poisoning">https://owasp.org/www-project-mcp-top-10/2025/MCP03-2025%E2%80%93Tool-Poisoning</a> ；<a target="_blank" rel="noopener" href="https://labs.cloudsecurityalliance.org/research/csa-research-note-mcp-tool-poisoning-auto-execution-20260701">https://labs.cloudsecurityalliance.org/research/csa-research-note-mcp-tool-poisoning-auto-execution-20260701</a></li>
+</ul>
+<h3 id="4-3-A2A：Google-提出、已捐基金会、有生产落地但“非普遍必需”"><a href="#4-3-A2A：Google-提出、已捐基金会、有生产落地但“非普遍必需”" class="headerlink" title="4.3 A2A：Google 提出、已捐基金会、有生产落地但“非普遍必需”"></a>4.3 A2A：Google 提出、已捐基金会、有生产落地但“非普遍必需”</h3><ul>
+<li><strong>治理（可确证）</strong>：由 <strong>Google</strong> 提出，<strong>2025-06 捐给 Linux Foundation</strong>（A2A Project）。</li>
+<li><strong>成熟度（可确证版本）</strong>：<strong>v1.0.0 于 2026-03-12</strong>，v1.0.1 于 2026-05-28。一周年（2026-04-09）宣布 <strong>&gt;150 组织</strong>支持、Google&#x2F;Microsoft&#x2F;AWS 深度集成、已有生产用例（<strong>属基金会自宣口径</strong>）。</li>
+<li><strong>分工（业界共识，非规范强制）</strong>：MCP &#x3D; agent ↔ 工具&#x2F;资源；A2A &#x3D; agent ↔ agent、跨代码库协作。<strong>注意批评声</strong>：不少 2025 demo 并不需要 A2A，其必要性被指抽象。</li>
+<li><strong>竞争协议被“收编”而非并存</strong>：IBM 的 <strong>ACP</strong> 于 2025-08 与 Google 的 <strong>A2A 合并</strong>入 Linux Foundation（LF AI &amp; Data）；ANP、AG-UI 属互补层。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://developers.googleblog.com/en/google-cloud-donates-a2a-to-linux-foundation">https://developers.googleblog.com/en/google-cloud-donates-a2a-to-linux-foundation</a> ；<a target="_blank" rel="noopener" href="https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents">https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents</a> ；<a target="_blank" rel="noopener" href="https://www.ibm.com/think/topics/agent-communication-protocol">https://www.ibm.com/think/topics/agent-communication-protocol</a></li>
+</ul>
+<h3 id="4-4-身份、支付与互操作标准"><a href="#4-4-身份、支付与互操作标准" class="headerlink" title="4.4 身份、支付与互操作标准"></a>4.4 身份、支付与互操作标准</h3><ul>
+<li><strong>支付&#x2F;身份（可确证）</strong>：Google 的 <strong>AP2</strong>（2025-09，typed mandates，三角色）已于 2026 <strong>捐给 FIDO Alliance</strong>；Mastercard 联合的 <strong>Verifiable Intent</strong>（AP2 兼容）同捐 FIDO；<strong>FIDO Alliance 于 2026-04-28 成立 Agentic Authentication TWG</strong>。另有 Shopify + Google 的 <strong>UCP</strong>（2026 初），与 AP2 分工（UCP 管“订什么&#x2F;向谁订”，AP2 管“谁授权 + 审计”）。</li>
+<li><strong>IETF（工作稿级，尚未成 RFC）</strong>：<code>draft-klrc-aiagent-auth-00</code>（2026-03，AWS&#x2F;Zscaler&#x2F;Ping 等作者，主张 agent 即 workload、用 WIMSE&#x2F;SPIFFE ID + 短期凭证）；以及 OAuth on-behalf-of、AAuth、<code>draft-ietf-oauth-spiffe-client-auth</code> 等。</li>
+<li><strong>W3C（社区组级）</strong>：<strong>AI Agent Protocol CG</strong>、<strong>AI Agent Memory Interoperability CG</strong>（1.0 charter 2026-06-19 通过）、WebAgents CG 互操作报告；2026-09-08&#x2F;09 与 GS1 合办 “E-Commerce for Humans and AI Agents” 研讨会。正式规范为<strong>预期 2026–2027</strong>，非既成事实。</li>
+<li><strong>沙箱&#x2F;代码执行</strong>：以 microVM &#x2F; WASM Component(WASI) &#x2F; Sysbox 为主，<strong>无跨厂商统一规范</strong>（此项“未能确证”存在标准）。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://blog.google/products-and-platforms/platforms/google-pay/agent-payments-protocol-fido-alliance">https://blog.google/products-and-platforms/platforms/google-pay/agent-payments-protocol-fido-alliance</a> ；<a target="_blank" rel="noopener" href="https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions">https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions</a> ；<a target="_blank" rel="noopener" href="https://shopify.engineering/UCP">https://shopify.engineering/UCP</a> ；<a target="_blank" rel="noopener" href="https://www.ietf.org/archive/id/draft-klrc-aiagent-auth-00.html">https://www.ietf.org/archive/id/draft-klrc-aiagent-auth-00.html</a> ；<a target="_blank" rel="noopener" href="https://www.w3.org/groups/cg/agentprotocol">https://www.w3.org/groups/cg/agentprotocol</a> ；<a target="_blank" rel="noopener" href="https://www.w3.org/community/ai-agent-memory-interop">https://www.w3.org/community/ai-agent-memory-interop</a></li>
+</ul>
+<h3 id="4-5-现实安全事件：技能-工具供应链攻击（可确证）"><a href="#4-5-现实安全事件：技能-工具供应链攻击（可确证）" class="headerlink" title="4.5 现实安全事件：技能&#x2F;工具供应链攻击（可确证）"></a>4.5 现实安全事件：技能&#x2F;工具供应链攻击（可确证）</h3><ul>
+<li><strong>ClawHavoc</strong>（2026 初）：OpenClaw &#x2F; ClawHub 技能生态供应链攻击，称 1,100+ 恶意技能；<strong>Bitdefender 称早期约 17% 技能含恶意载荷（第三方口径，原始报告未定位，需验证）</strong>；Snyk “ToxicSkills” 扫描 3,984 个技能，<strong>13.4% 恶意、36% 含提示注入</strong>。</li>
+<li>来源：<a target="_blank" rel="noopener" href="https://unit42.paloaltonetworks.com/openclaw-ai-supply-chain-risk">https://unit42.paloaltonetworks.com/openclaw-ai-supply-chain-risk</a> ；<a target="_blank" rel="noopener" href="https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub">https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub</a> ；<a target="_blank" rel="noopener" href="https://www.ibm.com/think/x-force/what-openclaw-reveals-about-agentic-ai-security-risks">https://www.ibm.com/think/x-force/what-openclaw-reveals-about-agentic-ai-security-risks</a></li>
+</ul>
+<hr>
+<h2 id="五、未收敛的争议点"><a href="#五、未收敛的争议点" class="headerlink" title="五、未收敛的争议点"></a>五、未收敛的争议点</h2><ol>
+<li><strong>“Agent OS 是否真需求、该如何定义”</strong>：批评方指它是“means everything and nothing”的 buzzword，各厂商都自称 Agent OS；辩护方（Data Science Dojo）认为它是真实架构模式而非具体产品。⚠️ 需注意：本报告所引“辩护方”来源本身带有推广性质，<strong>批评方亦未被指名到具体权威机构</strong>，此争议的权威取证<strong>仍需补充</strong>。<br>来源：<a target="_blank" rel="noopener" href="https://datasciencedojo.com/blog/agentic-os-architecture">https://datasciencedojo.com/blog/agentic-os-architecture</a> ；<a target="_blank" rel="noopener" href="https://www.requesty.ai/blog/the-rise-of-the-agent-operating-system">https://www.requesty.ai/blog/the-rise-of-the-agent-operating-system</a></li>
+<li><strong>“上下文工程 vs RAG”</strong>：2026 主流收敛为<strong>互补而非对立</strong>——context engineering 是更上层的策展学科，RAG 是其内部检索组件；但“long context 是否让 RAG 过时”的争论持续（position bias、成本、更新频率）。<br>来源：<a target="_blank" rel="noopener" href="https://atlan.com/know/context-engineering-vs-rag">https://atlan.com/know/context-engineering-vs-rag</a> ；<a target="_blank" rel="noopener" href="https://www.elastic.co/search-labs/blog/rag-vs-long-context-model-llm">https://www.elastic.co/search-labs/blog/rag-vs-long-context-model-llm</a></li>
+<li><strong>沙箱隔离粒度</strong>：容器（轻，但共享内核；有第三方文章引 NIST 指其边界不清，<strong>未定位 NIST 原始文件</strong>）vs microVM（强隔离，但有启动&#x2F;存储开销）。microVM 建设成本高是被反复提及的痛点。<br>来源：<a target="_blank" rel="noopener" href="https://www.infoq.cn/article/40UQ0beY3L25lo1rWVzb">https://www.infoq.cn/article/40UQ0beY3L25lo1rWVzb</a> ；<a target="_blank" rel="noopener" href="https://manveerc.substack.com/p/ai-agent-sandboxing-guide">https://manveerc.substack.com/p/ai-agent-sandboxing-guide</a></li>
+<li><strong>评估标准缺失 + “agent washing”</strong>：多个第三方来源称“怎么评估 agent 好不好，行业还没有标准”；有二次转述称 Gartner 2026 将 agentic AI 置于 hype peak，“agent washing” 真实存在（<strong>Gartner 原始报告未定位，需验证</strong>）。<br>来源：<a target="_blank" rel="noopener" href="https://pixelmoksha.com/blog/the-rise-of-agentic-ai-why-2026-is-being-called-the-agent-era">https://pixelmoksha.com/blog/the-rise-of-agentic-ai-why-2026-is-being-called-the-agent-era</a> ；<a target="_blank" rel="noopener" href="https://www.kore.ai/blog/ai-agents-in-2026-from-hype-to-enterprise-reality">https://www.kore.ai/blog/ai-agents-in-2026-from-hype-to-enterprise-reality</a></li>
+<li><strong>身份与授权的收敛点不明</strong>：AP2 与 UCP（Google 系）、FIDO 的 Verifiable Intent、IETF 的 OAuth&#x2F;SPIFFE 草案并存，<strong>谁最终胜出尚不明朗</strong>。</li>
+</ol>
+<hr>
+<h2 id="六、未能确证-建议谨慎引用的信息"><a href="#六、未能确证-建议谨慎引用的信息" class="headerlink" title="六、未能确证 &#x2F; 建议谨慎引用的信息"></a>六、未能确证 &#x2F; 建议谨慎引用的信息</h2><table>
+<thead>
+<tr>
+<th>说法</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>“全球企业级 Agent OS 渗透率 57%”、“89% 企业已上可观测性”（知乎引 Gartner 2026 Q1）</td>
+<td><strong>未能确证</strong>，未找到 Gartner 原始报告，来源可疑，不建议引用</td>
+</tr>
+<tr>
+<td>OpenClaw 具体 star 数（248k &#x2F; 280k &#x2F; 355k 说法不一）</td>
+<td><strong>未能确证</strong>，媒体与厂商转载互相矛盾，GitHub 官方页面未在检索中直接确证</td>
+</tr>
+<tr>
+<td>MCP “9700 万月下载、5800+ server、Datadog 22 倍增长”</td>
+<td>第三方&#x2F;厂商博客口径，<strong>未能交叉确证</strong>（注：官方口径为 &gt;10,000 活跃公共 server、约 97M&#x2F;月下载）</td>
+</tr>
+<tr>
+<td>阿里 ANOLISA、阶跃原生 Agent OS、openEuler 超节点 OS</td>
+<td>仅见中文媒体转述，<strong>无官方一手材料确证</strong>；另注：本报告正文写“阶跃星辰原生 Agent OS”，与媒体所称“STEPX Neo”可能为同一事物的不同表述，<strong>需验证</strong></td>
+</tr>
+<tr>
+<td>Bitdefender “约 17% 技能含恶意载荷”</td>
+<td>第三方安全厂商口径，未定位到 Bitdefender 原始报告，<strong>需验证</strong>；与 Snyk 的 13.4% 差异应源于扫描范围与方法不同</td>
+</tr>
+<tr>
+<td>Gartner 2026 将 agentic AI 置于 hype peak</td>
+<td>二次转述（pixelmoksha &#x2F; kore.ai 博客），<strong>未定位到 Gartner 原始 Hype Cycle 报告</strong>，需验证</td>
+</tr>
+<tr>
+<td>EU AI Act 对 agent 系统的适用条款</td>
+<td>本轮检索<strong>未能获得一手材料</strong>，需另行验证（详见 3.5 节）</td>
+</tr>
+<tr>
+<td>A2A “&gt;150 组织、生产用例”</td>
+<td>基金会自宣口径，属“参与方数量”而非独立审计的“实际生产流量”</td>
+</tr>
+<tr>
+<td>W3C 正式 agent Web 标准</td>
+<td>仅社区组（CG）阶段，“2026–2027 出规范”是预期而非既成事实</td>
+</tr>
+<tr>
+<td>IETF agent 身份&#x2F;授权</td>
+<td>全部为 Internet-Draft，无 RFC，可能改稿或废弃</td>
+</tr>
+<tr>
+<td>沙箱&#x2F;代码执行跨厂商标准</td>
+<td><strong>未能确证</strong>存在</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="七、核心结论"><a href="#七、核心结论" class="headerlink" title="七、核心结论"></a>七、核心结论</h2><ol>
+<li><strong>“Agent OS” 截至 2026-09 仍是命名权之争，而非成熟产品类别</strong>。五条路线（模型厂商 runtime、云托管基础设施、开源框架 OS 化、协议中间层、OS 内核&#x2F;终端派）共享同一套组件：运行时 + 沙箱 + 协议 + 记忆 + 治理。</li>
+<li><strong>真正收敛的是协议层</strong>：MCP（2026-07-28 规范，AAIF&#x2F;Linux Foundation 治理）成为工具层事实标准，A2A v1.0.0 成为 agent 间协作标准，ACP 被合并收编。需注意两点限定：其一，“事实标准”指的是生态采纳广度，而非规范强制力；其二，厂商私有的工具接口仍在头部产品内部存在（如 Claude Agent SDK 强绑定 Claude 生态），只是<strong>对外的新增工具集成已普遍以 MCP 为入口</strong>。</li>
+<li><strong>工程共识集中在基础设施层（但多为趋同实践，非成文规范）</strong>：microVM 作为生产级隔离下限、文件系统式&#x2F;分层记忆、orchestrator + sub-agent 上下文隔离、OpenTelemetry GenAI 语义约定作可观测性底座。这些是主要厂商的趋同做法，<strong>没有标准组织背书</strong>。</li>
+<li><strong>最大变化是格局收编</strong>：OpenAI 砍掉低代码画布（Agent Builder 2026-11-30 关停）、AutoGen 并入 Agent Framework、Google 三产品线合并——<strong>“选择平台”的长期风险显著上升</strong>，选型应优先考虑协议开放性与可迁移性。</li>
+<li><strong>最大未被解决的风险是安全与治理</strong>：MCPTox 平均 36.5% 攻击成功率（对 o1-mini 最高 72.8%）、ClawHavoc 事件、OWASP MCP Top 10、FIDO&#x2F;IETF 身份标准尚未定型——<strong>2026 年的 Agent OS 能力增长快于其安全与授权模型成熟度</strong>。</li>
+<li><strong>建议的落地姿态</strong>：编排层用代码优先框架（保留可迁移性）+ 沙箱独立解耦（不绑编排）+ 协议层锁定 MCP&#x2F;A2A + 记忆与可观测性按开放标准实现；避免把核心资产押在会被关停的厂商低代码平台上。</li>
+<li><strong>成本与合规是本报告的空白</strong>：所有公开材料都缺跨方案成本&#x2F;延迟基准，且 EU AI Act 对 agent 的适用条款本轮未取得一手材料。<strong>任何基于本报告的预算与合规决策都必须用自有 POC 与法律意见补足</strong>。</li>
+</ol>
+<hr>
+<h2 id="参考来源汇总"><a href="#参考来源汇总" class="headerlink" title="参考来源汇总"></a>参考来源汇总</h2><p><strong>官方一手材料</strong></p>
+<ul>
+<li>Anthropic Managed Agents: <a target="_blank" rel="noopener" href="https://www.anthropic.com/engineering/managed-agents">https://www.anthropic.com/engineering/managed-agents</a></li>
+<li>Anthropic 上下文工程: <a target="_blank" rel="noopener" href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents</a></li>
+<li>Anthropic 捐赠 MCP &#x2F; 成立 AAIF: <a target="_blank" rel="noopener" href="https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation">https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation</a></li>
+<li>MCP 2026-07-28 规范: <a target="_blank" rel="noopener" href="https://blog.modelcontextprotocol.io/posts/2026-07-28">https://blog.modelcontextprotocol.io/posts/2026-07-28</a></li>
+<li>MCP Apps: <a target="_blank" rel="noopener" href="https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps">https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps</a></li>
+<li>OpenAI AgentKit: <a target="_blank" rel="noopener" href="https://openai.com/index/introducing-agentkit">https://openai.com/index/introducing-agentkit</a></li>
+<li>OpenAI Agent Builder 关停公告: <a target="_blank" rel="noopener" href="https://community.openai.com/t/deprecation-notice-agent-builder/1382650">https://community.openai.com/t/deprecation-notice-agent-builder/1382650</a></li>
+<li>AWS Bedrock AgentCore: <a target="_blank" rel="noopener" href="https://aws.amazon.com/bedrock/agentcore">https://aws.amazon.com/bedrock/agentcore</a></li>
+<li>Google Gemini Enterprise Agent Platform: <a target="_blank" rel="noopener" href="https://cloud.google.com/blog/products/ai-machine-learning/introducing-gemini-enterprise-agent-platform">https://cloud.google.com/blog/products/ai-machine-learning/introducing-gemini-enterprise-agent-platform</a></li>
+<li>Google 捐赠 A2A: <a target="_blank" rel="noopener" href="https://developers.googleblog.com/en/google-cloud-donates-a2a-to-linux-foundation">https://developers.googleblog.com/en/google-cloud-donates-a2a-to-linux-foundation</a></li>
+<li>AP2 捐赠 FIDO: <a target="_blank" rel="noopener" href="https://blog.google/products-and-platforms/platforms/google-pay/agent-payments-protocol-fido-alliance">https://blog.google/products-and-platforms/platforms/google-pay/agent-payments-protocol-fido-alliance</a></li>
+<li>FIDO Agentic Authentication TWG: <a target="_blank" rel="noopener" href="https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions">https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions</a></li>
+<li>Linux Foundation AAIF 成立: <a target="_blank" rel="noopener" href="https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation">https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation</a></li>
+<li>Linux Foundation A2A 项目: <a target="_blank" rel="noopener" href="https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents">https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents</a></li>
+<li>A2A 一周年: <a target="_blank" rel="noopener" href="https://www.linuxfoundation.org/press/a2a-protocol-surpasses-150-organizations-lands-in-major-cloud-platforms-and-sees-enterprise-production-use-in-first-year">https://www.linuxfoundation.org/press/a2a-protocol-surpasses-150-organizations-lands-in-major-cloud-platforms-and-sees-enterprise-production-use-in-first-year</a></li>
+<li>OWASP MCP Top 10: <a target="_blank" rel="noopener" href="https://owasp.org/www-project-mcp-top-10/2025/MCP03-2025%E2%80%93Tool-Poisoning">https://owasp.org/www-project-mcp-top-10/2025/MCP03-2025%E2%80%93Tool-Poisoning</a></li>
+<li>OpenTelemetry agent 可观测性: <a target="_blank" rel="noopener" href="https://opentelemetry.io/blog/2025/ai-agent-observability">https://opentelemetry.io/blog/2025/ai-agent-observability</a></li>
+<li>W3C AI Agent Protocol CG: <a target="_blank" rel="noopener" href="https://www.w3.org/groups/cg/agentprotocol">https://www.w3.org/groups/cg/agentprotocol</a></li>
+<li>W3C AI Agent Memory Interop CG: <a target="_blank" rel="noopener" href="https://www.w3.org/community/ai-agent-memory-interop">https://www.w3.org/community/ai-agent-memory-interop</a></li>
+<li>AIOS 开源项目: <a target="_blank" rel="noopener" href="https://github.com/agiresearch/AIOS">https://github.com/agiresearch/AIOS</a></li>
+<li>AgenticOS @ SOSP 2026: <a target="_blank" rel="noopener" href="https://os-for-agent.github.io/">https://os-for-agent.github.io</a></li>
+<li>SOSP 2026 workshops: <a target="_blank" rel="noopener" href="https://sigops.org/s/conferences/sosp/2026/workshops.html">https://sigops.org/s/conferences/sosp/2026/workshops.html</a></li>
+<li>荣耀 Agentic OS: <a target="_blank" rel="noopener" href="https://www.honor.com/cn/news/honor-agentic-os">https://www.honor.com/cn/news/honor-agentic-os</a></li>
+<li>腾讯云 ADP: <a target="_blank" rel="noopener" href="https://adp.cloud.tencent.com/">https://adp.cloud.tencent.com</a></li>
+<li>Shopify UCP: <a target="_blank" rel="noopener" href="https://shopify.engineering/UCP">https://shopify.engineering/UCP</a></li>
+<li>IETF draft-klrc-aiagent-auth-00: <a target="_blank" rel="noopener" href="https://www.ietf.org/archive/id/draft-klrc-aiagent-auth-00.html">https://www.ietf.org/archive/id/draft-klrc-aiagent-auth-00.html</a></li>
+</ul>
+<p><strong>安全研究</strong></p>
+<ul>
+<li>MCPTox (arXiv): <a target="_blank" rel="noopener" href="https://arxiv.org/html/2508.14925v1">https://arxiv.org/html/2508.14925v1</a></li>
+<li>MCPTox (AAAI): <a target="_blank" rel="noopener" href="https://ojs.aaai.org/index.php/AAAI/article/view/40895">https://ojs.aaai.org/index.php/AAAI/article/view/40895</a></li>
+<li>CSA CurXecute 研究: <a target="_blank" rel="noopener" href="https://labs.cloudsecurityalliance.org/research/csa-research-note-mcp-tool-poisoning-auto-execution-20260701">https://labs.cloudsecurityalliance.org/research/csa-research-note-mcp-tool-poisoning-auto-execution-20260701</a></li>
+<li>Unit42 OpenClaw 供应链风险: <a target="_blank" rel="noopener" href="https://unit42.paloaltonetworks.com/openclaw-ai-supply-chain-risk">https://unit42.paloaltonetworks.com/openclaw-ai-supply-chain-risk</a></li>
+<li>Snyk ToxicSkills: <a target="_blank" rel="noopener" href="https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub">https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub</a></li>
+<li>IBM X-Force: <a target="_blank" rel="noopener" href="https://www.ibm.com/think/x-force/what-openclaw-reveals-about-agentic-ai-security-risks">https://www.ibm.com/think/x-force/what-openclaw-reveals-about-agentic-ai-security-risks</a></li>
+</ul>
+<p><strong>第三方评测与行业分析（含需谨慎引用者）</strong></p>
+<ul>
+<li>协议生态地图: <a target="_blank" rel="noopener" href="https://www.digitalapplied.com/blog/ai-agent-protocol-ecosystem-map-2026-mcp-a2a-acp-ucp">https://www.digitalapplied.com/blog/ai-agent-protocol-ecosystem-map-2026-mcp-a2a-acp-ucp</a></li>
+<li>MCP 采纳统计（口径需谨慎）: <a target="_blank" rel="noopener" href="https://www.digitalapplied.com/blog/mcp-adoption-statistics-2026-model-context-protocol">https://www.digitalapplied.com/blog/mcp-adoption-statistics-2026-model-context-protocol</a></li>
+<li>Agent 记忆架构: <a target="_blank" rel="noopener" href="https://agentmarketcap.ai/blog/2026/04/11/agent-memory-architecture-production-2026">https://agentmarketcap.ai/blog/2026/04/11/agent-memory-architecture-production-2026</a></li>
+<li>沙箱隔离模式: <a target="_blank" rel="noopener" href="https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026">https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026</a></li>
+<li>沙箱平台对比: <a target="_blank" rel="noopener" href="https://blog.logrocket.com/comparing-ai-agent-sandbox-platforms-e2b-modal-daytona-and-more">https://blog.logrocket.com/comparing-ai-agent-sandbox-platforms-e2b-modal-daytona-and-more</a></li>
+<li>AIOS 论文: <a target="_blank" rel="noopener" href="https://arxiv.org/html/2403.16971v5">https://arxiv.org/html/2403.16971v5</a></li>
+<li>多 agent 编排论文: <a target="_blank" rel="noopener" href="https://arxiv.org/html/2604.14228v1">https://arxiv.org/html/2604.14228v1</a></li>
+<li>Agentic OS 架构讨论: <a target="_blank" rel="noopener" href="https://datasciencedojo.com/blog/agentic-os-architecture">https://datasciencedojo.com/blog/agentic-os-architecture</a></li>
+<li>上下文工程 vs RAG: <a target="_blank" rel="noopener" href="https://atlan.com/know/context-engineering-vs-rag">https://atlan.com/know/context-engineering-vs-rag</a></li>
+<li>LangGraph 定价: <a target="_blank" rel="noopener" href="https://www.truefoundry.com/blog/langgraph-pricing">https://www.truefoundry.com/blog/langgraph-pricing</a></li>
+<li>PwC agent OS: <a target="_blank" rel="noopener" href="https://www.pwc.com/us/en/services/ai/agent-os.html">https://www.pwc.com/us/en/services/ai/agent-os.html</a></li>
+<li>Snowflake MCP Gateway: <a target="_blank" rel="noopener" href="https://www.snowflake.com/en/blog/engineering/enterprise-mcp-gateway-ai-agent-governance">https://www.snowflake.com/en/blog/engineering/enterprise-mcp-gateway-ai-agent-governance</a></li>
+<li>Manus 上下文工程: <a target="_blank" rel="noopener" href="https://manus.im/zh-tw/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus">https://manus.im/zh-tw/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus</a></li>
+<li>腾讯云 Cube Sandbox 开源（媒体）: <a target="_blank" rel="noopener" href="https://www.infoq.cn/article/40UQ0beY3L25lo1rWVzb">https://www.infoq.cn/article/40UQ0beY3L25lo1rWVzb</a></li>
+<li>阿里 AgentScope: <a target="_blank" rel="noopener" href="https://github.com/agentscope-ai/agentscope">https://github.com/agentscope-ai/agentscope</a></li>
+<li>Coze 开源（媒体）: <a target="_blank" rel="noopener" href="https://www.byteplus.com/en/blog/coze-open-sources-ai-agent-tools">https://www.byteplus.com/en/blog/coze-open-sources-ai-agent-tools</a></li>
+<li>微软 Agent Framework GA: <a target="_blank" rel="noopener" href="https://www.infoq.com/news/2026/08/agent-framework-harness-ga">https://www.infoq.com/news/2026/08/agent-framework-harness-ga</a></li>
+<li>36氪 Harness 文章: <a target="_blank" rel="noopener" href="https://m.36kr.com/p/3749464991187458">https://m.36kr.com/p/3749464991187458</a></li>
+<li>AWS 中国区 AgentCore（PR）: <a target="_blank" rel="noopener" href="https://www.prnasia.com/story/549909-1.shtml">https://www.prnasia.com/story/549909-1.shtml</a></li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/05/27/agent-systems/%E5%A4%9AAgent%E5%8D%8F%E4%BD%9C%E7%B3%BB%E7%BB%9F%E6%8E%A8%E8%8D%90/">2026 多 Agent 框架选型：以设备智能诊断为例</a></h3>
+        <p>从多 Agent 的真实收益与代价出发，梳理四种协作拓扑在设备诊断中的用法，对照 7 个主流框架截至 2026-05 的能力与成熟度…</p>
+        <a class="btn primary" href="/2026/05/27/agent-systems/%E5%A4%9AAgent%E5%8D%8F%E4%BD%9C%E7%B3%BB%E7%BB%9F%E6%8E%A8%E8%8D%90/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/08/27/technical-docs/AI-Native%E6%8E%A5%E5%8F%A3%E6%96%87%E6%A1%A3%E4%B8%8E%E8%B0%83%E8%AF%95/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：AI Native 接口文档与调试指南</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E6%91%98%E8%A6%81" data-toc-target="摘要"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">摘要</span></a><a class="toc-level-2" href="#%E4%B8%80%E3%80%81%E4%BA%94%E6%9D%A1%E6%8A%80%E6%9C%AF%E8%B7%AF%E7%BA%BF%EF%BC%9A%E8%B0%81%E5%9C%A8%E8%87%AA%E7%A7%B0-Agent-OS" data-toc-target="一、五条技术路线：谁在自称-Agent-OS"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">一、五条技术路线：谁在自称 Agent OS</span></a><a class="toc-level-3" href="#%E8%B7%AF%E7%BA%BF-1%EF%BC%9A%E6%A8%A1%E5%9E%8B%E5%8E%82%E5%95%86%E7%9A%84-agent-runtime-harness%EF%BC%88%E2%80%9C%E6%89%98%E7%AE%A1-agent-loop%E2%80%9D%EF%BC%89" data-toc-target="路线-1：模型厂商的-agent-runtime-harness（“托管-agent-loop”）"><span class="toc-text">路线 1：模型厂商的 agent runtime / harness（“托管 agent loop”）</span></a><a class="toc-level-3" href="#%E8%B7%AF%E7%BA%BF-2%EF%BC%9A%E4%BA%91%E5%8E%82%E5%95%86%E6%89%98%E7%AE%A1-agent-%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD" data-toc-target="路线-2：云厂商托管-agent-基础设施"><span class="toc-text">路线 2：云厂商托管 agent 基础设施</span></a><a class="toc-level-3" href="#%E8%B7%AF%E7%BA%BF-3%EF%BC%9A%E5%BC%80%E6%BA%90%E6%A1%86%E6%9E%B6%E2%80%9COS-%E5%8C%96%E2%80%9D%E6%BC%94%E8%BF%9B" data-toc-target="路线-3：开源框架“OS-化”演进"><span class="toc-text">路线 3：开源框架“OS 化”演进</span></a><a class="toc-level-3" href="#%E8%B7%AF%E7%BA%BF-4%EF%BC%9A%E4%BB%A5-MCP-%E5%B7%A5%E5%85%B7%E5%8D%8F%E8%AE%AE%E4%B8%BA%E4%B8%AD%E5%BF%83%E7%9A%84%E4%B8%AD%E9%97%B4%E5%B1%82" data-toc-target="路线-4：以-MCP-工具协议为中心的中间层"><span class="toc-text">路线 4：以 MCP/工具协议为中心的中间层</span></a><a class="toc-level-3" href="#%E8%B7%AF%E7%BA%BF-5%EF%BC%9A%E4%B8%BA-agent-%E8%AE%BE%E8%AE%A1%E7%9A%84-OS-%E5%86%85%E6%A0%B8-%E8%99%9A%E6%8B%9F%E6%9C%BA%E6%B4%BE" data-toc-target="路线-5：为-agent-设计的-OS-内核-虚拟机派"><span class="toc-text">路线 5：为 agent 设计的 OS 内核 / 虚拟机派</span></a><a class="toc-level-2" href="#%E4%BA%8C%E3%80%81%E5%85%B3%E9%94%AE%E6%9E%B6%E6%9E%84%E7%BB%84%E4%BB%B6%E7%9A%84%E5%BD%93%E5%89%8D%E4%B8%BB%E6%B5%81%E5%81%9A%E6%B3%95" data-toc-target="二、关键架构组件的当前主流做法"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">二、关键架构组件的当前主流做法</span></a><a class="toc-level-3" href="#2-1-%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B8%8E%E8%AE%B0%E5%BF%86%EF%BC%9A%E4%BB%8E%E2%80%9C%E5%A1%9E-prompt%E2%80%9D%E5%88%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%BC%8F%E4%B8%8E-OS-%E5%BC%8F%E5%88%86%E5%B1%82" data-toc-target="2-1-上下文与记忆：从“塞-prompt”到文件系统式与-OS-式分层"><span class="toc-text">2.1 上下文与记忆：从“塞 prompt”到文件系统式与 OS 式分层</span></a><a class="toc-level-3" href="#2-2-%E6%89%A7%E8%A1%8C%E6%B2%99%E7%AE%B1%EF%BC%9AmicroVM-%E6%98%AF%E7%94%9F%E4%BA%A7%E7%BA%A7%E4%B8%8B%E9%99%90%EF%BC%88%E4%B8%9A%E7%95%8C%E5%80%BE%E5%90%91%EF%BC%8C%E9%9D%9E%E6%88%90%E6%96%87%E8%A7%84%E8%8C%83%EF%BC%89" data-toc-target="2-2-执行沙箱：microVM-是生产级下限（业界倾向，非成文规范）"><span class="toc-text">2.2 执行沙箱：microVM 是生产级下限（业界倾向，非成文规范）</span></a><a class="toc-level-3" href="#2-3-%E5%B7%A5%E5%85%B7%E8%B0%83%E7%94%A8%E4%B8%8E%E6%9D%83%E9%99%90%E6%B2%BB%E7%90%86%EF%BC%9AMCP-Gateway-Identity-%E9%A3%8E%E9%99%A9%E5%88%86%E7%BA%A7%E5%AE%A1%E6%89%B9" data-toc-target="2-3-工具调用与权限治理：MCP-Gateway-Identity-风险分级审批"><span class="toc-text">2.3 工具调用与权限治理：MCP + Gateway + Identity + 风险分级审批</span></a><a class="toc-level-3" href="#2-4-%E5%A4%9A-agent-%E7%BC%96%E6%8E%92%EF%BC%9ALead-agent-%E5%B9%B6%E8%A1%8C-sub-agent-%E4%B8%8A%E4%B8%8B%E6%96%87%E9%9A%94%E7%A6%BB" data-toc-target="2-4-多-agent-编排：Lead-agent-并行-sub-agent-上下文隔离"><span class="toc-text">2.4 多 agent 编排：Lead agent + 并行 sub-agent + 上下文隔离</span></a><a class="toc-level-3" href="#2-5-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%EF%BC%9AOpenTelemetry-GenAI-%E8%AF%AD%E4%B9%89%E7%BA%A6%E5%AE%9A%E6%88%90%E4%B8%BA%E9%BB%98%E8%AE%A4%E5%BA%95%E5%BA%A7" data-toc-target="2-5-可观测性：OpenTelemetry-GenAI-语义约定成为默认底座"><span class="toc-text">2.5 可观测性：OpenTelemetry GenAI 语义约定成为默认底座</span></a><a class="toc-level-3" href="#2-6-%E8%AE%B0%E5%BF%86%E4%B8%8E%E6%B2%99%E7%AE%B1%E7%9A%84%E8%A1%A5%E5%85%85%E8%AF%B4%E6%98%8E" data-toc-target="2-6-记忆与沙箱的补充说明"><span class="toc-text">2.6 记忆与沙箱的补充说明</span></a><a class="toc-level-2" href="#%E4%B8%89%E3%80%81%E4%BA%A7%E5%93%81%E4%B8%8E%E6%A1%86%E6%9E%B6%E7%8E%B0%E7%8A%B6%E5%AF%B9%E6%AF%94%EF%BC%88%E6%88%AA%E8%87%B3-2026-09%EF%BC%89" data-toc-target="三、产品与框架现状对比（截至-2026-09）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">三、产品与框架现状对比（截至 2026-09）</span></a><a class="toc-level-3" href="#3-1-%E6%A8%A1%E5%9E%8B%E5%8E%82%E5%95%86%E4%BE%A7" data-toc-target="3-1-模型厂商侧"><span class="toc-text">3.1 模型厂商侧</span></a><a class="toc-level-3" href="#3-2-%E4%BA%91%E4%B8%8E%E5%B9%B3%E5%8F%B0%E4%BE%A7" data-toc-target="3-2-云与平台侧"><span class="toc-text">3.2 云与平台侧</span></a><a class="toc-level-3" href="#3-3-%E5%BC%80%E6%BA%90-%E7%8B%AC%E7%AB%8B%E6%A1%86%E6%9E%B6" data-toc-target="3-3-开源-独立框架"><span class="toc-text">3.3 开源/独立框架</span></a><a class="toc-level-3" href="#3-4-%E9%80%89%E5%9E%8B%E5%88%86%E7%95%8C%E7%BA%BF%EF%BC%88%E4%B8%89%E6%9D%A1%EF%BC%89" data-toc-target="3-4-选型分界线（三条）"><span class="toc-text">3.4 选型分界线（三条）</span></a><a class="toc-level-2" href="#%E4%B8%89%E7%82%B9%E4%BA%94%E3%80%81%E5%AE%9E%E8%B7%B5%E7%BB%B4%E5%BA%A6%EF%BC%9A%E6%88%90%E6%9C%AC%E3%80%81%E5%BB%B6%E8%BF%9F%E3%80%81%E9%94%81%E5%AE%9A%E4%B8%8E%E5%90%88%E8%A7%84" data-toc-target="三点五、实践维度：成本、延迟、锁定与合规"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">三点五、实践维度：成本、延迟、锁定与合规</span></a><a class="toc-level-3" href="#%E6%88%90%E6%9C%AC" data-toc-target="成本"><span class="toc-text">成本</span></a><a class="toc-level-3" href="#%E5%BB%B6%E8%BF%9F" data-toc-target="延迟"><span class="toc-text">延迟</span></a><a class="toc-level-3" href="#%E4%BE%9B%E5%BA%94%E5%95%86%E9%94%81%E5%AE%9A%E4%B8%8E%E8%BF%81%E7%A7%BB%E9%A3%8E%E9%99%A9" data-toc-target="供应商锁定与迁移风险"><span class="toc-text">供应商锁定与迁移风险</span></a><a class="toc-level-3" href="#%E5%90%88%E8%A7%84%E4%B8%8E%E7%9B%91%E7%AE%A1" data-toc-target="合规与监管"><span class="toc-text">合规与监管</span></a><a class="toc-level-2" href="#%E5%9B%9B%E3%80%81%E6%A0%87%E5%87%86%E5%8C%96%E5%8D%8F%E8%AE%AE%E4%B8%8E%E7%94%9F%E6%80%81%EF%BC%9AMCP-%E4%B8%8E-A2A-%E7%9A%84%E6%94%B6%E6%95%9B%E4%B8%8E%E6%AE%8B%E7%95%99%E5%88%86%E8%A3%82" data-toc-target="四、标准化协议与生态：MCP-与-A2A-的收敛与残留分裂"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">四、标准化协议与生态：MCP 与 A2A 的收敛与残留分裂</span></a><a class="toc-level-3" href="#4-1-MCP%EF%BC%9A%E4%BA%8B%E5%AE%9E%E4%B8%8A%E7%9A%84%E5%B7%A5%E5%85%B7%E5%B1%82%E6%A0%87%E5%87%86%EF%BC%8C%E5%B7%B2%E4%B8%AD%E7%AB%8B%E5%8C%96%E6%B2%BB%E7%90%86" data-toc-target="4-1-MCP：事实上的工具层标准，已中立化治理"><span class="toc-text">4.1 MCP：事实上的工具层标准，已中立化治理</span></a><a class="toc-level-3" href="#4-2-MCP-%E5%AE%89%E5%85%A8%EF%BC%9A%E5%BD%93%E5%89%8D%E7%94%9F%E6%80%81%E7%9A%84%E4%B8%BB%E8%A6%81%E7%9F%9B%E7%9B%BE%EF%BC%88%E5%8F%AF%E7%A1%AE%E8%AF%81%EF%BC%89" data-toc-target="4-2-MCP-安全：当前生态的主要矛盾（可确证）"><span class="toc-text">4.2 MCP 安全：当前生态的主要矛盾（可确证）</span></a><a class="toc-level-3" href="#4-3-A2A%EF%BC%9AGoogle-%E6%8F%90%E5%87%BA%E3%80%81%E5%B7%B2%E6%8D%90%E5%9F%BA%E9%87%91%E4%BC%9A%E3%80%81%E6%9C%89%E7%94%9F%E4%BA%A7%E8%90%BD%E5%9C%B0%E4%BD%86%E2%80%9C%E9%9D%9E%E6%99%AE%E9%81%8D%E5%BF%85%E9%9C%80%E2%80%9D" data-toc-target="4-3-A2A：Google-提出、已捐基金会、有生产落地但“非普遍必需”"><span class="toc-text">4.3 A2A：Google 提出、已捐基金会、有生产落地但“非普遍必需”</span></a><a class="toc-level-3" href="#4-4-%E8%BA%AB%E4%BB%BD%E3%80%81%E6%94%AF%E4%BB%98%E4%B8%8E%E4%BA%92%E6%93%8D%E4%BD%9C%E6%A0%87%E5%87%86" data-toc-target="4-4-身份、支付与互操作标准"><span class="toc-text">4.4 身份、支付与互操作标准</span></a><a class="toc-level-3" href="#4-5-%E7%8E%B0%E5%AE%9E%E5%AE%89%E5%85%A8%E4%BA%8B%E4%BB%B6%EF%BC%9A%E6%8A%80%E8%83%BD-%E5%B7%A5%E5%85%B7%E4%BE%9B%E5%BA%94%E9%93%BE%E6%94%BB%E5%87%BB%EF%BC%88%E5%8F%AF%E7%A1%AE%E8%AF%81%EF%BC%89" data-toc-target="4-5-现实安全事件：技能-工具供应链攻击（可确证）"><span class="toc-text">4.5 现实安全事件：技能/工具供应链攻击（可确证）</span></a><a class="toc-level-2" href="#%E4%BA%94%E3%80%81%E6%9C%AA%E6%94%B6%E6%95%9B%E7%9A%84%E4%BA%89%E8%AE%AE%E7%82%B9" data-toc-target="五、未收敛的争议点"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">五、未收敛的争议点</span></a><a class="toc-level-2" href="#%E5%85%AD%E3%80%81%E6%9C%AA%E8%83%BD%E7%A1%AE%E8%AF%81-%E5%BB%BA%E8%AE%AE%E8%B0%A8%E6%85%8E%E5%BC%95%E7%94%A8%E7%9A%84%E4%BF%A1%E6%81%AF" data-toc-target="六、未能确证-建议谨慎引用的信息"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">六、未能确证 / 建议谨慎引用的信息</span></a><a class="toc-level-2" href="#%E4%B8%83%E3%80%81%E6%A0%B8%E5%BF%83%E7%BB%93%E8%AE%BA" data-toc-target="七、核心结论"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">七、核心结论</span></a><a class="toc-level-2" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90%E6%B1%87%E6%80%BB" data-toc-target="参考来源汇总"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">参考来源汇总</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/langgraph-agent-engineering/" style="--rail: 65%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">11 / 17</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E6%91%98%E8%A6%81" data-toc-target="摘要" data-title="01 · 摘要" aria-label="摘要"></a><a class="toc-strip__dot" href="#%E4%B8%80%E3%80%81%E4%BA%94%E6%9D%A1%E6%8A%80%E6%9C%AF%E8%B7%AF%E7%BA%BF%EF%BC%9A%E8%B0%81%E5%9C%A8%E8%87%AA%E7%A7%B0-Agent-OS" data-toc-target="一、五条技术路线：谁在自称-Agent-OS" data-title="02 · 一、五条技术路线：谁在自称 Agent OS" aria-label="一、五条技术路线：谁在自称 Agent OS"></a><a class="toc-strip__dot" href="#%E4%BA%8C%E3%80%81%E5%85%B3%E9%94%AE%E6%9E%B6%E6%9E%84%E7%BB%84%E4%BB%B6%E7%9A%84%E5%BD%93%E5%89%8D%E4%B8%BB%E6%B5%81%E5%81%9A%E6%B3%95" data-toc-target="二、关键架构组件的当前主流做法" data-title="03 · 二、关键架构组件的当前主流做法" aria-label="二、关键架构组件的当前主流做法"></a><a class="toc-strip__dot" href="#%E4%B8%89%E3%80%81%E4%BA%A7%E5%93%81%E4%B8%8E%E6%A1%86%E6%9E%B6%E7%8E%B0%E7%8A%B6%E5%AF%B9%E6%AF%94%EF%BC%88%E6%88%AA%E8%87%B3-2026-09%EF%BC%89" data-toc-target="三、产品与框架现状对比（截至-2026-09）" data-title="04 · 三、产品与框架现状对比（截至 2026-09）" aria-label="三、产品与框架现状对比（截至 2026-09）"></a><a class="toc-strip__dot" href="#%E4%B8%89%E7%82%B9%E4%BA%94%E3%80%81%E5%AE%9E%E8%B7%B5%E7%BB%B4%E5%BA%A6%EF%BC%9A%E6%88%90%E6%9C%AC%E3%80%81%E5%BB%B6%E8%BF%9F%E3%80%81%E9%94%81%E5%AE%9A%E4%B8%8E%E5%90%88%E8%A7%84" data-toc-target="三点五、实践维度：成本、延迟、锁定与合规" data-title="05 · 三点五、实践维度：成本、延迟、锁定与合规" aria-label="三点五、实践维度：成本、延迟、锁定与合规"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E3%80%81%E6%A0%87%E5%87%86%E5%8C%96%E5%8D%8F%E8%AE%AE%E4%B8%8E%E7%94%9F%E6%80%81%EF%BC%9AMCP-%E4%B8%8E-A2A-%E7%9A%84%E6%94%B6%E6%95%9B%E4%B8%8E%E6%AE%8B%E7%95%99%E5%88%86%E8%A3%82" data-toc-target="四、标准化协议与生态：MCP-与-A2A-的收敛与残留分裂" data-title="06 · 四、标准化协议与生态：MCP 与 A2A 的收敛与残留分裂" aria-label="四、标准化协议与生态：MCP 与 A2A 的收敛与残留分裂"></a><a class="toc-strip__dot" href="#%E4%BA%94%E3%80%81%E6%9C%AA%E6%94%B6%E6%95%9B%E7%9A%84%E4%BA%89%E8%AE%AE%E7%82%B9" data-toc-target="五、未收敛的争议点" data-title="07 · 五、未收敛的争议点" aria-label="五、未收敛的争议点"></a><a class="toc-strip__dot" href="#%E5%85%AD%E3%80%81%E6%9C%AA%E8%83%BD%E7%A1%AE%E8%AF%81-%E5%BB%BA%E8%AE%AE%E8%B0%A8%E6%85%8E%E5%BC%95%E7%94%A8%E7%9A%84%E4%BF%A1%E6%81%AF" data-toc-target="六、未能确证-建议谨慎引用的信息" data-title="08 · 六、未能确证 / 建议谨慎引用的信息" aria-label="六、未能确证 / 建议谨慎引用的信息"></a><a class="toc-strip__dot" href="#%E4%B8%83%E3%80%81%E6%A0%B8%E5%BF%83%E7%BB%93%E8%AE%BA" data-toc-target="七、核心结论" data-title="09 · 七、核心结论" aria-label="七、核心结论"></a><a class="toc-strip__dot" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90%E6%B1%87%E6%80%BB" data-toc-target="参考来源汇总" data-title="10 · 参考来源汇总" aria-label="参考来源汇总"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"agent-systems/Agent-OS主流技术框架与路线调研-2026-09","title":"2026 年 9 月 Agent OS 主流技术框架与路线调研报告","url":"/2026/09/30/agent-systems/Agent-OS%E4%B8%BB%E6%B5%81%E6%8A%80%E6%9C%AF%E6%A1%86%E6%9E%B6%E4%B8%8E%E8%B7%AF%E7%BA%BF%E8%B0%83%E7%A0%94-2026-09/","path":"langgraph-agent-engineering","index":10,"total":17,"next":{"title":"2026 多 Agent 框架选型：以设备智能诊断为例","url":"/2026/05/27/agent-systems/%E5%A4%9AAgent%E5%8D%8F%E4%BD%9C%E7%B3%BB%E7%BB%9F%E6%8E%A8%E8%8D%90/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

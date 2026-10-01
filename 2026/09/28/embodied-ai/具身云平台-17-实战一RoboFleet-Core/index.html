@@ -1,0 +1,763 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 17 章 实战一：RoboFleet Core——机器人云平台最小内核 · 飞轮之道</title>
+<meta name="description" content="p01 是全书六个工程的地基：接入、身份、影子、遥测、三信号在线判定、任务租约。它用约 1200 行 Python（含测试）实现了第 8、10 章的核心机制，可以在一台笔记本上单进程运行，也可以接真实 MQTT broker 多进程运行。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-17-%E5%AE%9E%E6%88%98%E4%B8%80RoboFleet-Core/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 17 章 实战一：RoboFleet Core——机器人云平台最小内核 · 飞轮之道">
+<meta property="og:description" content="p01 是全书六个工程的地基：接入、身份、影子、遥测、三信号在线判定、任务租约。它用约 1200 行 Python（含测试）实现了第 8、10 章的核心机制，可以在一台笔记本上单进程运行，也可以接真实 MQTT broker 多进程运行。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-17-%E5%AE%9E%E6%88%98%E4%B8%80RoboFleet-Core/">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Suitable_Technologies_Beam_telepresence_robot.jpg/1280px-Suitable_Technologies_Beam_telepresence_robot.jpg">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">实战</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 18 / 28 篇</a>
+    </div>
+    <h1>第 17 章 实战一：RoboFleet Core——机器人云平台最小内核</h1>
+    <p class="article-deck">p01 是全书六个工程的地基：接入、身份、影子、遥测、三信号在线判定、任务租约。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>9 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/MQTT/">#MQTT</a><a class="article-meta__tag" href="/tags/%E6%9C%BA%E5%99%A8%E4%BA%BA%E4%BA%91%E5%B9%B3%E5%8F%B0/">#机器人云平台</a><a class="article-meta__tag" href="/tags/%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE/">#实战项目</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>业务与传输解耦：同一业务代码跑在内存总线与 MQTT 上。</li><li>可注入时钟：时间相关逻辑的确定性测试。</li><li>两道防线互为兜底：在线判定 + 任务租约。</li><li>简化点即产品化清单：面试讲项目的关键一页。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：p01 是全书六个工程的地基：接入、身份、影子、遥测、三信号在线判定、任务租约。它用约 1200 行 Python（含测试）实现了第 8、10 章的核心机制，可以在一台笔记本上单进程运行，也可以接真实 MQTT broker 多进程运行。本章带你读懂它、跑通它、改造它。<br><strong>代码位置</strong>：<code>code/p01-robofleet-core</code>｜<strong>对应理论</strong>：第 8 章（接入、身份、孪生）、第 10 章（任务与租约）｜<strong>建议学时</strong>：6 小时</p>
+</blockquote>
+<h2 id="17-1-目标与验收"><a href="#17-1-目标与验收" class="headerlink" title="17.1 目标与验收"></a>17.1 目标与验收</h2><h3 id="17-1-1-六项能力"><a href="#17-1-1-六项能力" class="headerlink" title="17.1.1 六项能力"></a>17.1.1 六项能力</h3><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>验收方式</th>
+<th>对应测试</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>注册激活，未激活设备的上行被拒</td>
+<td>伪造设备的遥测被丢弃并计数</td>
+<td><code>test_unactivated_uplink_rejected</code></td>
+</tr>
+<tr>
+<td>影子收敛</td>
+<td>改期望态 → delta 下发 → 端侧应用 → 回报一致</td>
+<td><code>test_shadow_converges_via_delta</code></td>
+</tr>
+<tr>
+<td>三信号在线判定</td>
+<td>ONLINE → ZOMBIE（假死）→ OFFLINE（遗嘱）</td>
+<td><code>test_online_then_zombie_then_offline</code></td>
+</tr>
+<tr>
+<td>任务全生命周期</td>
+<td>ACCEPTED → RUNNING → SUCCEEDED</td>
+<td><code>test_task_success_path</code></td>
+</tr>
+<tr>
+<td>租约回收</td>
+<td>假死机器人的任务被回收，迟到事件被忽略</td>
+<td><code>test_lease_reclaims_hung_robot_and_ignores_late_events</code></td>
+</tr>
+<tr>
+<td>真实 MQTT 端到端</td>
+<td>mosquitto 上完成上线、影子、任务、遗嘱</td>
+<td><code>test_e2e_real_mqtt</code></td>
+</tr>
+<tr>
+<td>并发与不可信上行</td>
+<td>并发派单只成一单；非对象载荷、非法任务状态、非数值电量被拒</td>
+<td><code>test_robustness</code></td>
+</tr>
+</tbody></table>
+<p>交付前验收：<strong>28 项测试全部通过</strong>（含连接真实 mosquitto 的端到端；2026-09-28 在本地 <code>python:3.12-slim</code> + <code>eclipse-mosquitto:2</code> 容器中复验），并完成了“服务端进程 + 仿真机器人进程 + HTTP 派单 + 进程被杀后遗嘱下线”的多进程联调。</p>
+<h2 id="17-2-架构"><a href="#17-2-架构" class="headerlink" title="17.2 架构"></a>17.2 架构</h2><h3 id="17-2-1-模块关系"><a href="#17-2-1-模块关系" class="headerlink" title="17.2.1 模块关系"></a>17.2.1 模块关系</h3><pre class="mermaid">flowchart LR
+  API["api.py&lt;br/&gt;FastAPI 北向接口"] --&gt; SVC["service.py&lt;br/&gt;FleetService"]
+  SVC --&gt; STORE["store.py&lt;br/&gt;SQLite"]
+  SVC &lt;--&gt;|"publish / subscribe"| BUS["bus.py&lt;br/&gt;InMemoryBus | MqttBus"]
+  SIM["sim_robot.py&lt;br/&gt;SimRobot × N"] &lt;--&gt; BUS
+  CLK["clock.py&lt;br/&gt;Clock | ManualClock"] -.-&gt; SVC &amp; SIM
+  PROTO["protocol.py&lt;br/&gt;ECL v1"] -.-&gt; SVC &amp; SIM
+  H["harness.py&lt;br/&gt;单进程试验台"] --&gt; SVC &amp; SIM &amp; BUS</pre>
+
+
+<h3 id="17-2-2-三个设计选择"><a href="#17-2-2-三个设计选择" class="headerlink" title="17.2.2 三个设计选择"></a>17.2.2 三个设计选择</h3><ol>
+<li><strong>业务与传输解耦</strong>：<code>FleetService</code> 只依赖“能 publish&#x2F;subscribe 的总线”，测试用内存总线、生产用 MQTT，业务代码一行不改；</li>
+<li><strong>可注入时钟</strong>：在线判定与租约都依赖时间，<code>ManualClock</code> 让“等 10 秒”变成一行 <code>advance(10)</code>，测试在毫秒内确定性完成；</li>
+<li><strong>仿真机器人遵守与真机相同的协议</strong>：p06 的 ROS 2 云桥与 <code>SimRobot</code> 说同一种 ECL v1，云端分不出二者——这正是“端云契约”的意义。</li>
+</ol>
+<h2 id="17-3-快速开始"><a href="#17-3-快速开始" class="headerlink" title="17.3 快速开始"></a>17.3 快速开始</h2><h3 id="17-3-1-三种运行方式"><a href="#17-3-1-三种运行方式" class="headerlink" title="17.3.1 三种运行方式"></a>17.3.1 三种运行方式</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cd</span> code/p01-robofleet-core</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">pip install -r ../requirements.txt</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># ① 单进程剧本（无需 broker，约 1 秒）</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">python -m robofleet.demo</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># ② 测试（开发 broker 在跑时自动加跑真实端到端）</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">pytest -q</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="comment"># ③ 生产形态：真实 MQTT + HTTP + 多进程（端口见 code/ports.env：broker 23010、API 23030）</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">(<span class="built_in">cd</span> .. &amp;&amp; make broker-up)                      <span class="comment"># Docker 起 mosquitto；或本机 mosquitto -p 23010 &amp;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">python -m robofleet.server &amp;                   <span class="comment"># 默认 --mqtt-port 23010 --http-port 23030，只监听 127.0.0.1</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">python -m robofleet.run_sim --n 3 &amp;            <span class="comment"># 默认 --api http://localhost:23030</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">curl localhost:23030/fleet/overview</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">curl -X POST localhost:23030/robots/sim-001/tasks -H <span class="string">&#x27;content-type: application/json&#x27;</span> -d <span class="string">&#x27;&#123;&quot;type&quot;:&quot;move_to&quot;,&quot;params&quot;:&#123;&quot;target&quot;:&quot;P3&quot;&#125;&#125;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p>本书所有工程的宿主机端口都在 <code>code/ports.env</code> 中登记（前缀 23，独占 23000–23999），不使用 1883、8000 这类出厂默认值——同一台开发机上往往同时跑着别的项目的 broker 与 Web 服务，默认端口最容易撞车。容器内仍用协议默认端口，compose 只在宿主机侧映射。</p>
+<h2 id="17-4-代码导读"><a href="#17-4-代码导读" class="headerlink" title="17.4 代码导读"></a>17.4 代码导读</h2><h3 id="17-4-1-总线：队列泵与遗嘱"><a href="#17-4-1-总线：队列泵与遗嘱" class="headerlink" title="17.4.1 总线：队列泵与遗嘱"></a>17.4.1 总线：队列泵与遗嘱</h3><p><code>InMemoryBus</code> 有两个值得细看的设计。其一，<strong>投递走队列泵</strong>：处理器里再发布的消息进入队列尾部，而不是递归调用——这保证了“先发先达”的顺序与真实 broker 一致，也避免了深递归。其二，<strong>模拟 broker 的遗嘱</strong>：<code>set_will</code> 登记遗嘱，<code>drop</code> 模拟异常断开并由“broker”代发，于是断电场景可以在单进程里测试。</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="18"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">_pump</span>(<span class="params">self</span>) -&gt; <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="keyword">with</span> <span class="variable language_">self</span>._lock:</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">        <span class="keyword">if</span> <span class="variable language_">self</span>._pumping:</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">            <span class="keyword">return</span>                      <span class="comment"># 已有泵在工作：新消息排队即可</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="variable language_">self</span>._pumping = <span class="literal">True</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="keyword">while</span> <span class="literal">True</span>:</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">            <span class="keyword">with</span> <span class="variable language_">self</span>._lock:</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">                <span class="keyword">if</span> <span class="keyword">not</span> <span class="variable language_">self</span>._q:</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                    <span class="keyword">break</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">                t, p, h = <span class="variable language_">self</span>._q.popleft()</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">            <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">                h(t, p)</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">            <span class="keyword">except</span> Exception <span class="keyword">as</span> e:      <span class="comment"># 单个处理器异常不能拖垮总线</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">                <span class="variable language_">self</span>.handler_errors.append(<span class="string">f&quot;<span class="subst">&#123;t&#125;</span>: <span class="subst">&#123;e!r&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="keyword">finally</span>:</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        <span class="keyword">with</span> <span class="variable language_">self</span>._lock:</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">            <span class="variable language_">self</span>._pumping = <span class="literal">False</span></span></span></code></pre></div></div></figure>
+
+<p><code>MqttBus</code> 的要点是：遗嘱必须在 <code>connect</code> 之前设置；断线重连后在 <code>on_connect</code> 中恢复全部订阅；<code>crash()</code> 直接关闭套接字而不发 DISCONNECT，让 broker 代发遗嘱——端到端测试用它验证遗嘱链路。</p>
+<h3 id="17-4-2-服务：上行入口的守门"><a href="#17-4-2-服务：上行入口的守门" class="headerlink" title="17.4.2 服务：上行入口的守门"></a>17.4.2 服务：上行入口的守门</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">_on_message</span>(<span class="params">self, t: <span class="built_in">str</span>, p: <span class="built_in">dict</span></span>) -&gt; <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    parsed = parse_topic(t)</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> parsed:</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">        <span class="keyword">return</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    rid, kind = parsed</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="keyword">if</span> kind <span class="keyword">in</span> DOWN_KINDS:              <span class="comment"># 自己发出的下行消息</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="keyword">return</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> <span class="variable language_">self</span>._accepts_uplink(rid):   <span class="comment"># 未注册/未激活/已退役 → 丢弃并计数</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="variable language_">self</span>.rejected_msgs += <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="keyword">return</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    handler = &#123;...&#125;.get(kind)</span></span></code></pre></div></div></figure>
+
+<p>所有上行消息先过“是否是在营设备”这道门。计数器 <code>rejected_msgs</code> 是一个很好的安全信号：它突然升高，说明有设备在用未激活或已吊销的身份尝试接入。</p>
+<h3 id="17-4-3-仿真机器人：故障注入接口"><a href="#17-4-3-仿真机器人：故障注入接口" class="headerlink" title="17.4.3 仿真机器人：故障注入接口"></a>17.4.3 仿真机器人：故障注入接口</h3><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>模拟</th>
+<th>云端应看到</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>inject_fault(301)</code></td>
+<td>关节过热错误码</td>
+<td>事件 + 遥测 <code>error_code</code> 与关节温度异常</td>
+</tr>
+<tr>
+<td><code>set_liveliness(False)</code></td>
+<td>机内关键节点失活</td>
+<td>DEGRADED</td>
+</tr>
+<tr>
+<td><code>hang()</code></td>
+<td>业务线程卡死，连接仍在</td>
+<td>ZOMBIE + 在途任务被回收</td>
+</tr>
+<tr>
+<td><code>crash()</code></td>
+<td>断电</td>
+<td>遗嘱 → OFFLINE</td>
+</tr>
+</tbody></table>
+<h2 id="17-5-剧本八幕"><a href="#17-5-剧本八幕" class="headerlink" title="17.5 剧本八幕"></a>17.5 剧本八幕</h2><h3 id="17-5-1-实际输出（节选）"><a href="#17-5-1-实际输出（节选）" class="headerlink" title="17.5.1 实际输出（节选）"></a>17.5.1 实际输出（节选）</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="16"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">=== ① 三台机器人上线（三信号判定） ===</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">&#123;&quot;robots&quot;: 3, &quot;by_online_state&quot;: &#123;&quot;ONLINE&quot;: 3&#125;, &quot;tasks_by_state&quot;: &#123;&#125;, &quot;active_tasks&quot;: 0, &quot;rejected_uplink_msgs&quot;: 0&#125;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">=== ② 影子：改期望态 → delta 下发 → 端侧回报 → 收敛 ===</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">&#123;&quot;desired_ver&quot;: 1, &quot;delta&quot;: &#123;&#125;, &quot;converged&quot;: true&#125;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">=== ③ 巡检任务全流程 ===</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">&#123;&quot;state&quot;: &quot;SUCCEEDED&quot;, &quot;stage&quot;: &quot;report&quot;, &quot;progress&quot;: 1.0&#125;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">=== ④ 假死机器人：任务被租约回收 + 在线状态 ZOMBIE ===</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">&#123;&quot;reclaimed&quot;: [&quot;…&quot;], &quot;task_state&quot;: &quot;RECLAIMED&quot;, &quot;online_state&quot;: &quot;ZOMBIE&quot;&#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">=== ⑤ 断电机器人：遗嘱消息 → OFFLINE ===</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">&#123;&quot;amr-003&quot;: &quot;OFFLINE&quot;&#125;</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">=== ⑥ 向离线机器人派单被拒绝 ===</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">robot is OFFLINE</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">=== ⑦ 未注册设备的上行消息被丢弃并计数 ===</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">&#123;&quot;rejected_uplink_msgs&quot;: 1&#125;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">=== ⑧ 机队总览 ===</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">&#123;&quot;robots&quot;: 3, &quot;by_online_state&quot;: &#123;&quot;ONLINE&quot;: 1, &quot;ZOMBIE&quot;: 1, &quot;OFFLINE&quot;: 1&#125;, &quot;tasks_by_state&quot;: &#123;&quot;RECLAIMED&quot;: 1, &quot;SUCCEEDED&quot;: 1&#125;, …&#125;</span></span></code></pre></div></div></figure>
+
+<h3 id="17-5-2-第④幕的时序"><a href="#17-5-2-第④幕的时序" class="headerlink" title="17.5.2 第④幕的时序"></a>17.5.2 第④幕的时序</h3><pre class="mermaid">---
+title: "第④幕：假死机器人——在线判定与租约回收两道防线"
+---
+sequenceDiagram
+  participant S as FleetService
+  participant B as InMemoryBus
+  participant R as amr-002&lt;br/&gt;(SimRobot)
+  S-&gt;&gt;B: task/cmd &#123;move_to, lease_s=8&#125;
+  B-&gt;&gt;R: 下发
+  R-&gt;&gt;B: task/event ACCEPTED（续租至 t+8）
+  B-&gt;&gt;S: 更新任务
+  Note over R: hang()：业务线程卡死&lt;br/&gt;连接仍在，broker 看不出异常
+  Note over S,R: ⋯ 8 秒无任何事件 ⋯
+  S-&gt;&gt;S: reap_expired()：lease_until &lt; now
+  S-&gt;&gt;S: 任务 → RECLAIMED（记事件，可改派）
+  Note over S,R: ⋯ 超过 stale_s=10 秒无遥测 ⋯
+  S-&gt;&gt;S: online_state()：连接在但遥测不新鲜 → ZOMBIE
+  Note over S: ZOMBIE 设备不再被派单；&lt;br/&gt;恢复后的迟到事件被忽略（状态机单向）</pre>
+
+
+<p>两道防线互为兜底：即使在线判定漏判，租约也会在到期后回收任务；即使租约设得太长，在线判定也会阻止新任务派给假死设备。</p>
+<h2 id="17-6-测试地图"><a href="#17-6-测试地图" class="headerlink" title="17.6 测试地图"></a>17.6 测试地图</h2><h3 id="17-6-1-28-项测试与机制对应"><a href="#17-6-1-28-项测试与机制对应" class="headerlink" title="17.6.1 28 项测试与机制对应"></a>17.6.1 28 项测试与机制对应</h3><table>
+<thead>
+<tr>
+<th>测试文件</th>
+<th>用例</th>
+<th>验证的机制</th>
+<th>书中章节</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>test_bus</td>
+<td>通配匹配、队列泵顺序与重入、遗嘱与保留消息、处理器异常隔离</td>
+<td>总线语义</td>
+<td>8</td>
+</tr>
+<tr>
+<td>test_online</td>
+<td>在线→假死→离线、活性丢失→DEGRADED、未激活被拒、错误密钥</td>
+<td>三信号判定、准入</td>
+<td>8</td>
+</tr>
+<tr>
+<td>test_shadow</td>
+<td>delta 收敛、白名单拦截、重连补发、改上报频率生效</td>
+<td>影子三要义</td>
+<td>8</td>
+</tr>
+<tr>
+<td>test_tasks</td>
+<td>成功路径、忙时拒绝、电量前置、租约回收+迟到忽略、维护&#x2F;离线拒派、长阶段续租</td>
+<td>任务状态机与租约</td>
+<td>10</td>
+</tr>
+<tr>
+<td>test_api</td>
+<td>注册&#x2F;冲突&#x2F;错误密钥&#x2F;激活&#x2F;影子&#x2F;派单&#x2F;总览&#x2F;404&#x2F;参数校验</td>
+<td>北向接口</td>
+<td>7、8</td>
+</tr>
+<tr>
+<td>test_e2e_mqtt</td>
+<td>真实 broker 上的上线、影子、任务、遗嘱；broker 不可达时限时报错</td>
+<td>端到端</td>
+<td>8</td>
+</tr>
+<tr>
+<td>test_robustness</td>
+<td>并发派单原子性、非对象载荷与非法任务状态拒收、空阶段不覆盖、遥测按云端计数裁剪、API 参数边界</td>
+<td>并发与信任边界（验收新增）</td>
+<td>8、10</td>
+</tr>
+</tbody></table>
+<h3 id="17-6-2-一个值得模仿的测试"><a href="#17-6-2-一个值得模仿的测试" class="headerlink" title="17.6.2 一个值得模仿的测试"></a>17.6.2 一个值得模仿的测试</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">test_long_stage_keeps_lease_alive</span>(<span class="params">h</span>):</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    h.add_robot(<span class="string">&quot;r1&quot;</span>, stage_s=<span class="number">12.0</span>)          <span class="comment"># 单阶段 12 秒 &gt; 租约 8 秒</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    h.run(<span class="number">2</span>)</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    t = h.svc.create_task(<span class="string">&quot;r1&quot;</span>, <span class="string">&quot;move_to&quot;</span>, lease_s=<span class="number">8</span>)</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    reaped = h.run(<span class="number">30</span>)</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="keyword">assert</span> t[<span class="string">&quot;task_id&quot;</span>] <span class="keyword">not</span> <span class="keyword">in</span> reaped        <span class="comment"># 续租心跳使其存活</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="keyword">assert</span> h.svc.get_task(t[<span class="string">&quot;task_id&quot;</span>])[<span class="string">&quot;state&quot;</span>] == <span class="string">&quot;SUCCEEDED&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>它验证的是一个很容易被忽视的边界：<strong>阶段时长超过租约</strong>。没有周期性续租心跳，长距离移动任务会被误回收——这类“机制正确但参数组合出错”的问题，只有显式的边界测试才能发现。</p>
+<h2 id="17-7-故障注入实验"><a href="#17-7-故障注入实验" class="headerlink" title="17.7 故障注入实验"></a>17.7 故障注入实验</h2><h3 id="17-7-1-六个实验"><a href="#17-7-1-六个实验" class="headerlink" title="17.7.1 六个实验"></a>17.7.1 六个实验</h3><table>
+<thead>
+<tr>
+<th>#</th>
+<th>实验</th>
+<th>预期</th>
+<th>思考题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>把 <code>stale_s</code> 调到 2 秒，<code>report_hz</code> 保持 1</td>
+<td>偶发 ZOMBIE 抖动</td>
+<td>新鲜度阈值与上报频率应该是什么关系？</td>
+</tr>
+<tr>
+<td>2</td>
+<td>让端侧只在阶段切换时发事件（去掉续租心跳）</td>
+<td>长阶段任务被误回收</td>
+<td>续租周期如何取值？</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>patch_desired</code> 下发 <code>report_hz: 100</code></td>
+<td>端侧接受（没有范围校验）</td>
+<td>端侧校验应该放在哪里？（参考 p06）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>对同一台机器人连续派两单</td>
+<td>第二单 409 busy</td>
+<td>如果两个调度器并发派单呢？（提示：数据库约束）</td>
+</tr>
+<tr>
+<td>5</td>
+<td>用真实 mosquitto，<code>kill -9</code> 仿真进程</td>
+<td>遗嘱触发 OFFLINE</td>
+<td><code>kill -15</code> 呢？为什么结果可能不同？</td>
+</tr>
+<tr>
+<td>6</td>
+<td>退役一台机器人后让它继续发遥测</td>
+<td>被拒绝并计数</td>
+<td>还应联动哪些动作？（证书吊销、影子冻结）</td>
+</tr>
+</tbody></table>
+<h2 id="17-8-扩展练习"><a href="#17-8-扩展练习" class="headerlink" title="17.8 扩展练习"></a>17.8 扩展练习</h2><h3 id="17-8-1-从最小内核走向生产"><a href="#17-8-1-从最小内核走向生产" class="headerlink" title="17.8.1 从最小内核走向生产"></a>17.8.1 从最小内核走向生产</h3><ol>
+<li><strong>漫游宽限</strong>（第 5 章）：短暂离线在 N 秒内恢复不产生离线事件；</li>
+<li><strong>调度器</strong>（第 10 章）：按评分函数自动选机器人派单；</li>
+<li><strong>资源锁</strong>（第 10 章）：带 TTL 与持有者心跳的电梯锁；</li>
+<li><strong>存储替换</strong>：<code>Store</code> 换成 PostgreSQL，并用唯一约束防止并发派单；</li>
+<li><strong>可观测</strong>：为每个任务生成 trace_id 的 OTel span（第 11 章）；</li>
+<li><strong>ACL</strong>：给 mosquitto 配置按用户名限制主题的 ACL（第 8 章）。</li>
+</ol>
+<h2 id="17-9-玩具与生产"><a href="#17-9-玩具与生产" class="headerlink" title="17.9 玩具与生产"></a>17.9 玩具与生产</h2><h3 id="17-9-1-简化点即产品化清单"><a href="#17-9-1-简化点即产品化清单" class="headerlink" title="17.9.1 简化点即产品化清单"></a>17.9.1 简化点即产品化清单</h3><table>
+<thead>
+<tr>
+<th>简化点</th>
+<th>生产做法</th>
+<th>章节</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>共享密钥激活</td>
+<td>产线证书 + mTLS + 证书吊销</td>
+<td>8、16</td>
+</tr>
+<tr>
+<td>单进程 SQLite</td>
+<td>PostgreSQL 主数据 + Redis 热影子 + ClickHouse 时序</td>
+<td>7</td>
+</tr>
+<tr>
+<td>进程内租约回收线程</td>
+<td>Temporal 工作流或分布式定时器</td>
+<td>10</td>
+</tr>
+<tr>
+<td>单个 mosquitto</td>
+<td>EMQX 集群、持久会话、主题 ACL、规则引擎</td>
+<td>8</td>
+</tr>
+<tr>
+<td>仿真机器人</td>
+<td>p06 的 ROS 2 云桥 + 真机</td>
+<td>5、22</td>
+</tr>
+<tr>
+<td>无认证的 HTTP API</td>
+<td>Higress 网关：OIDC、限流、多租户</td>
+<td>7</td>
+</tr>
+</tbody></table>
+<p><strong>每一个简化点都有明确的产品化答案</strong>——这张表是你在面试中讲这个项目时最有说服力的一页。</p>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车联网平台组件</th>
+<th>p01 对应</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>TSP 设备接入</td>
+<td>MqttBus + <code>_on_message</code> 守门</td>
+<td>同构</td>
+</tr>
+<tr>
+<td>车辆影子</td>
+<td><code>patch_desired</code> &#x2F; <code>_on_reported</code></td>
+<td>同构</td>
+</tr>
+<tr>
+<td>车辆在线判定</td>
+<td><code>online_state</code> 三信号</td>
+<td>新增机内活性</td>
+</tr>
+<tr>
+<td>远控指令超时</td>
+<td>任务租约 + <code>reap_expired</code></td>
+<td>同构</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑（来自构建-p01-的过程）"><a href="#⚠️-一线踩坑（来自构建-p01-的过程）" class="headerlink" title="⚠️ 一线踩坑（来自构建 p01 的过程）"></a>⚠️ 一线踩坑（来自构建 p01 的过程）</h2><ul>
+<li><strong>用接收时间还是设备时间判新鲜度</strong>：设备时钟漂移会让新鲜度判断失真，p01 统一用云端接收时刻。</li>
+<li><strong>处理器异常拖垮总线</strong>：一个订阅者抛异常导致后续消息全部丢失，队列泵中逐个隔离异常。</li>
+<li><strong>遗嘱在连接后设置</strong>：遗嘱不会生效，必须在 <code>connect</code> 之前。</li>
+</ul>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>讲一下你的机器人平台项目。（量级 → 架构图 → 三个设计选择 → 两道防线 → 简化点与产品化）</li>
+<li>为什么在线判定和租约都需要？（互为兜底：判定防派错，租约防卡死）</li>
+<li>你怎么测试依赖时间的逻辑？（可注入时钟，确定性步进）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>业务与传输解耦</strong>：同一业务代码跑在内存总线与 MQTT 上。</li>
+<li><strong>可注入时钟</strong>：时间相关逻辑的确定性测试。</li>
+<li><strong>两道防线互为兜底</strong>：在线判定 + 任务租约。</li>
+<li><strong>简化点即产品化清单</strong>：面试讲项目的关键一页。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-16-%E5%AE%89%E5%85%A8%E4%B8%8E%E5%90%88%E8%A7%84/">第 16 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-18-%E5%AE%9E%E6%88%98%E4%BA%8COTA%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83%E5%BC%95%E6%93%8E/">第 18 章 实战二：OTA 灰度发布引擎</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-18-%E5%AE%9E%E6%88%98%E4%BA%8COTA%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83%E5%BC%95%E6%93%8E/">第 18 章 实战二：OTA 灰度发布引擎——让坏模型永远到不了全量</a></h3>
+        <p>p02 实现了第 9 章 OTA 2.0 的核心：签名制品、多维兼容矩阵、端侧双槽 Agent、以作业质量为门禁的灰度环…</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-18-%E5%AE%9E%E6%88%98%E4%BA%8COTA%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83%E5%BC%95%E6%93%8E/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-16-%E5%AE%89%E5%85%A8%E4%B8%8E%E5%90%88%E8%A7%84/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 16 章 安全与合规：从芯片到 Agent 的纵深防御</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 13 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#17-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="17-1-目标与验收"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">17.1 目标与验收</span></a><a class="toc-level-3" href="#17-1-1-%E5%85%AD%E9%A1%B9%E8%83%BD%E5%8A%9B" data-toc-target="17-1-1-六项能力"><span class="toc-text">17.1.1 六项能力</span></a><a class="toc-level-2" href="#17-2-%E6%9E%B6%E6%9E%84" data-toc-target="17-2-架构"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">17.2 架构</span></a><a class="toc-level-3" href="#17-2-1-%E6%A8%A1%E5%9D%97%E5%85%B3%E7%B3%BB" data-toc-target="17-2-1-模块关系"><span class="toc-text">17.2.1 模块关系</span></a><a class="toc-level-3" href="#17-2-2-%E4%B8%89%E4%B8%AA%E8%AE%BE%E8%AE%A1%E9%80%89%E6%8B%A9" data-toc-target="17-2-2-三个设计选择"><span class="toc-text">17.2.2 三个设计选择</span></a><a class="toc-level-2" href="#17-3-%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B" data-toc-target="17-3-快速开始"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">17.3 快速开始</span></a><a class="toc-level-3" href="#17-3-1-%E4%B8%89%E7%A7%8D%E8%BF%90%E8%A1%8C%E6%96%B9%E5%BC%8F" data-toc-target="17-3-1-三种运行方式"><span class="toc-text">17.3.1 三种运行方式</span></a><a class="toc-level-2" href="#17-4-%E4%BB%A3%E7%A0%81%E5%AF%BC%E8%AF%BB" data-toc-target="17-4-代码导读"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">17.4 代码导读</span></a><a class="toc-level-3" href="#17-4-1-%E6%80%BB%E7%BA%BF%EF%BC%9A%E9%98%9F%E5%88%97%E6%B3%B5%E4%B8%8E%E9%81%97%E5%98%B1" data-toc-target="17-4-1-总线：队列泵与遗嘱"><span class="toc-text">17.4.1 总线：队列泵与遗嘱</span></a><a class="toc-level-3" href="#17-4-2-%E6%9C%8D%E5%8A%A1%EF%BC%9A%E4%B8%8A%E8%A1%8C%E5%85%A5%E5%8F%A3%E7%9A%84%E5%AE%88%E9%97%A8" data-toc-target="17-4-2-服务：上行入口的守门"><span class="toc-text">17.4.2 服务：上行入口的守门</span></a><a class="toc-level-3" href="#17-4-3-%E4%BB%BF%E7%9C%9F%E6%9C%BA%E5%99%A8%E4%BA%BA%EF%BC%9A%E6%95%85%E9%9A%9C%E6%B3%A8%E5%85%A5%E6%8E%A5%E5%8F%A3" data-toc-target="17-4-3-仿真机器人：故障注入接口"><span class="toc-text">17.4.3 仿真机器人：故障注入接口</span></a><a class="toc-level-2" href="#17-5-%E5%89%A7%E6%9C%AC%E5%85%AB%E5%B9%95" data-toc-target="17-5-剧本八幕"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">17.5 剧本八幕</span></a><a class="toc-level-3" href="#17-5-1-%E5%AE%9E%E9%99%85%E8%BE%93%E5%87%BA%EF%BC%88%E8%8A%82%E9%80%89%EF%BC%89" data-toc-target="17-5-1-实际输出（节选）"><span class="toc-text">17.5.1 实际输出（节选）</span></a><a class="toc-level-3" href="#17-5-2-%E7%AC%AC%E2%91%A3%E5%B9%95%E7%9A%84%E6%97%B6%E5%BA%8F" data-toc-target="17-5-2-第④幕的时序"><span class="toc-text">17.5.2 第④幕的时序</span></a><a class="toc-level-2" href="#17-6-%E6%B5%8B%E8%AF%95%E5%9C%B0%E5%9B%BE" data-toc-target="17-6-测试地图"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">17.6 测试地图</span></a><a class="toc-level-3" href="#17-6-1-28-%E9%A1%B9%E6%B5%8B%E8%AF%95%E4%B8%8E%E6%9C%BA%E5%88%B6%E5%AF%B9%E5%BA%94" data-toc-target="17-6-1-28-项测试与机制对应"><span class="toc-text">17.6.1 28 项测试与机制对应</span></a><a class="toc-level-3" href="#17-6-2-%E4%B8%80%E4%B8%AA%E5%80%BC%E5%BE%97%E6%A8%A1%E4%BB%BF%E7%9A%84%E6%B5%8B%E8%AF%95" data-toc-target="17-6-2-一个值得模仿的测试"><span class="toc-text">17.6.2 一个值得模仿的测试</span></a><a class="toc-level-2" href="#17-7-%E6%95%85%E9%9A%9C%E6%B3%A8%E5%85%A5%E5%AE%9E%E9%AA%8C" data-toc-target="17-7-故障注入实验"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">17.7 故障注入实验</span></a><a class="toc-level-3" href="#17-7-1-%E5%85%AD%E4%B8%AA%E5%AE%9E%E9%AA%8C" data-toc-target="17-7-1-六个实验"><span class="toc-text">17.7.1 六个实验</span></a><a class="toc-level-2" href="#17-8-%E6%89%A9%E5%B1%95%E7%BB%83%E4%B9%A0" data-toc-target="17-8-扩展练习"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">17.8 扩展练习</span></a><a class="toc-level-3" href="#17-8-1-%E4%BB%8E%E6%9C%80%E5%B0%8F%E5%86%85%E6%A0%B8%E8%B5%B0%E5%90%91%E7%94%9F%E4%BA%A7" data-toc-target="17-8-1-从最小内核走向生产"><span class="toc-text">17.8.1 从最小内核走向生产</span></a><a class="toc-level-2" href="#17-9-%E7%8E%A9%E5%85%B7%E4%B8%8E%E7%94%9F%E4%BA%A7" data-toc-target="17-9-玩具与生产"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">17.9 玩具与生产</span></a><a class="toc-level-3" href="#17-9-1-%E7%AE%80%E5%8C%96%E7%82%B9%E5%8D%B3%E4%BA%A7%E5%93%81%E5%8C%96%E6%B8%85%E5%8D%95" data-toc-target="17-9-1-简化点即产品化清单"><span class="toc-text">17.9.1 简化点即产品化清单</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91%EF%BC%88%E6%9D%A5%E8%87%AA%E6%9E%84%E5%BB%BA-p01-%E7%9A%84%E8%BF%87%E7%A8%8B%EF%BC%89" data-toc-target="⚠️-一线踩坑（来自构建-p01-的过程）"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">⚠️ 一线踩坑（来自构建 p01 的过程）</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 64%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">18 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#17-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="17-1-目标与验收" data-title="01 · 17.1 目标与验收" aria-label="17.1 目标与验收"></a><a class="toc-strip__dot" href="#17-2-%E6%9E%B6%E6%9E%84" data-toc-target="17-2-架构" data-title="02 · 17.2 架构" aria-label="17.2 架构"></a><a class="toc-strip__dot" href="#17-3-%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B" data-toc-target="17-3-快速开始" data-title="03 · 17.3 快速开始" aria-label="17.3 快速开始"></a><a class="toc-strip__dot" href="#17-4-%E4%BB%A3%E7%A0%81%E5%AF%BC%E8%AF%BB" data-toc-target="17-4-代码导读" data-title="04 · 17.4 代码导读" aria-label="17.4 代码导读"></a><a class="toc-strip__dot" href="#17-5-%E5%89%A7%E6%9C%AC%E5%85%AB%E5%B9%95" data-toc-target="17-5-剧本八幕" data-title="05 · 17.5 剧本八幕" aria-label="17.5 剧本八幕"></a><a class="toc-strip__dot" href="#17-6-%E6%B5%8B%E8%AF%95%E5%9C%B0%E5%9B%BE" data-toc-target="17-6-测试地图" data-title="06 · 17.6 测试地图" aria-label="17.6 测试地图"></a><a class="toc-strip__dot" href="#17-7-%E6%95%85%E9%9A%9C%E6%B3%A8%E5%85%A5%E5%AE%9E%E9%AA%8C" data-toc-target="17-7-故障注入实验" data-title="07 · 17.7 故障注入实验" aria-label="17.7 故障注入实验"></a><a class="toc-strip__dot" href="#17-8-%E6%89%A9%E5%B1%95%E7%BB%83%E4%B9%A0" data-toc-target="17-8-扩展练习" data-title="08 · 17.8 扩展练习" aria-label="17.8 扩展练习"></a><a class="toc-strip__dot" href="#17-9-%E7%8E%A9%E5%85%B7%E4%B8%8E%E7%94%9F%E4%BA%A7" data-toc-target="17-9-玩具与生产" data-title="09 · 17.9 玩具与生产" aria-label="17.9 玩具与生产"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="10 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91%EF%BC%88%E6%9D%A5%E8%87%AA%E6%9E%84%E5%BB%BA-p01-%E7%9A%84%E8%BF%87%E7%A8%8B%EF%BC%89" data-toc-target="⚠️-一线踩坑（来自构建-p01-的过程）" data-title="11 · ⚠️ 一线踩坑（来自构建 p01 的过程）" aria-label="⚠️ 一线踩坑（来自构建 p01 的过程）"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="12 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="13 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-17-实战一RoboFleet-Core","title":"第 17 章 实战一：RoboFleet Core——机器人云平台最小内核","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-17-%E5%AE%9E%E6%88%98%E4%B8%80RoboFleet-Core/","path":"embodied-cloud-book","index":17,"total":28,"next":{"title":"第 18 章 实战二：OTA 灰度发布引擎——让坏模型永远到不了全量","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-18-%E5%AE%9E%E6%88%98%E4%BA%8COTA%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83%E5%BC%95%E6%93%8E/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,737 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Nacos 3.x：从服务注册到 MCP / A2A 注册中心 · 飞轮之道</title>
+<meta name="description" content="Nacos 3.x 相对 2.x 的变化与升级清单、Spring Cloud Alibaba 最小正确配置、注册失败决策树、MCP 与 A2A 注册中心的用法边界及生产部署建议。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/10/21/technical-docs/Nacos%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%B2%BB%E7%90%86/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Nacos 3.x：从服务注册到 MCP / A2A 注册中心 · 飞轮之道">
+<meta property="og:description" content="Nacos 3.x 相对 2.x 的变化与升级清单、Spring Cloud Alibaba 最小正确配置、注册失败决策树、MCP 与 A2A 注册中心的用法边界及生产部署建议。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/10/21/technical-docs/Nacos%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%B2%BB%E7%90%86/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/self-hosted-ai-infra/">入口与容器</a><a class="series-chip" href="/paths/self-hosted-ai-infra/" title="查看学习路径">第 3 / 8 篇</a>
+    </div>
+    <h1>Nacos 3.x：从服务注册到 MCP / A2A 注册中心</h1>
+    <p class="article-deck">Nacos 3.x 相对 2.x 的变化与升级清单、Spring Cloud Alibaba 最小正确配置、注册失败决策树、MCP 与 A2A 注册中心的用法边界及生产部署建议。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>16 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/MCP/">#MCP</a><a class="article-meta__tag" href="/tags/Nacos/">#Nacos</a><a class="article-meta__tag" href="/tags/Spring-Cloud-Alibaba/">#Spring Cloud Alibaba</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>3.x 服务端要求 JDK 17，控制台独立到 8080，控制台与 Admin API 默认开启鉴权，密钥必须自己配置。</li><li>Spring Boot 3 下用 spring.config.import 接入配置中心，bootstrap.yml 默认不再加载。</li><li>排查注册失败先找 register finished 日志，再按连不上、没触发、注册错位置、注册了但调不通四类分流。</li><li>MCP / A2A Registry 解决的是目录、版本与元数据治理，不替代网关的鉴权与流量控制。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p>Nacos 3.0.0 于 2025-04-25 GA，3.1.0 于 2025 年 9 月下旬发布。这一代有两条主线：一条是把 2.x 积累的安全与运维问题做了一次「破坏性收口」（JDK 17、鉴权默认开启、API 重新分类、控制台独立部署）；另一条是把 Nacos 从微服务注册中心扩展成 AI 资源的注册中心（MCP Registry、A2A Registry）。</p>
+<p>本文写于 3.1.0 发布后不久，面向两类读者：正在把 2.x 升级到 3.x 的团队，以及在 Spring Cloud Alibaba 里接 Nacos 却「服务注册不上」的开发者。内容依次是：3.x 的变化与升级清单、最小正确配置、注册失败决策树、MCP &#x2F; A2A 注册中心的用法与边界、生产部署建议。</p>
+<h2 id="3-x-相对-2-x-改了什么"><a href="#3-x-相对-2-x-改了什么" class="headerlink" title="3.x 相对 2.x 改了什么"></a>3.x 相对 2.x 改了什么</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>2.x</th>
+<th>3.x</th>
+<th>升级影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>运行时</td>
+<td>服务端 JDK 8+</td>
+<td>服务端 JDK 17、Spring Boot 3.4；Java 客户端仍支持 JDK 8</td>
+<td>服务端镜像或主机要换 JDK，业务应用不必</td>
+</tr>
+<tr>
+<td>端口</td>
+<td>控制台与服务同在 8848（<code>/nacos</code>）</td>
+<td>服务端 8848，控制台独立为 8080（<code>nacos.console.port</code>）；gRPC 9848 &#x2F; 9849 不变</td>
+<td>反代、防火墙、书签里的控制台地址要改</td>
+</tr>
+<tr>
+<td>部署形态</td>
+<td>一体</td>
+<td><code>nacos.deployment.type</code>：<code>merged</code>（默认）&#x2F; <code>server</code> &#x2F; <code>console</code>，控制台可单独部署</td>
+<td>可以只把控制台放进运维网段</td>
+</tr>
+<tr>
+<td>鉴权</td>
+<td>默认全部关闭</td>
+<td>拆成三类：控制台 API 与 Admin API 默认开启，客户端 API（<code>nacos.core.auth.enabled</code>）默认仍关闭</td>
+<td>token 密钥、服务身份键值必须显式配置，否则启动脚本会报错</td>
+</tr>
+<tr>
+<td>API</td>
+<td>v1 &#x2F; v2 OpenAPI</td>
+<td>按用途重新分类：<code>/nacos/v3/client/...</code>（客户端）、<code>/nacos/v3/admin/...</code>（运维），另有独立的控制台 API；旧 API 标记废弃</td>
+<td>调用旧运维 API 的脚本要迁移</td>
+</tr>
+<tr>
+<td>默认命名空间</td>
+<td><code>public</code> 的 ID 是空字符串</td>
+<td><code>public</code> 的 ID 就是 <code>public</code></td>
+<td>默认开启兼容模式双向同步，见下文</td>
+</tr>
+<tr>
+<td>默认账号</td>
+<td>2.4.0 起不再内置默认密码</td>
+<td>同左，首次打开控制台先初始化 <code>nacos</code> 管理员密码</td>
+<td>从老版本升上来的库里可能仍是历史默认密码</td>
+</tr>
+<tr>
+<td>AI 能力</td>
+<td>无</td>
+<td>3.0 MCP 管理；3.0.1 官方 MCP Registry API；3.1 A2A Registry</td>
+<td>新增能力，按需开启</td>
+</tr>
+</tbody></table>
+<h3 id="鉴权的三个开关与两组密钥"><a href="#鉴权的三个开关与两组密钥" class="headerlink" title="鉴权的三个开关与两组密钥"></a>鉴权的三个开关与两组密钥</h3><p>3.1 默认配置（<code>conf/application.properties</code>）中与鉴权相关的部分：</p>
+<figure class="highlight properties cb" data-lang="properties" data-label="Properties" data-ext="txt" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">nacos.core.auth.system.type</span>=<span class="string">nacos</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 客户端 API（服务注册、配置读取）鉴权，默认关闭</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">nacos.core.auth.enabled</span>=<span class="string">false</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># Admin API 与控制台 API 鉴权，默认开启</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">nacos.core.auth.admin.enabled</span>=<span class="string">true</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">nacos.core.auth.console.enabled</span>=<span class="string">true</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># 以下三项默认留空，必须自行填写</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">nacos.core.auth.plugin.nacos.token.secret.key</span>=<span class="string"></span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">nacos.core.auth.server.identity.key</span>=<span class="string"></span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">nacos.core.auth.server.identity.value</span>=<span class="string"></span></span></span></code></pre></div></div></figure>
+
+<ul>
+<li><code>token.secret.key</code> 是签发登录 token 的密钥，要求 Base64 编码、原始长度不少于 32 字节。用 <code>openssl rand -base64 32</code> 生成，集群内所有节点必须一致。不要使用文档注释里的示例值，也不要沿用网上教程里的固定串。</li>
+<li><code>server.identity.key/value</code> 用于节点间请求的身份识别，同样集群内一致、不可泄露。</li>
+<li>生产环境建议把客户端 API 鉴权也打开（<code>nacos.core.auth.enabled=true</code>），并为每个应用建独立账号、只授予所需命名空间的读写权限。打开之前先确认所有客户端都配置了用户名密码，否则会在同一时刻集体注册失败。</li>
+</ul>
+<p>默认账号必须处理：新部署首次访问 <code>http://&lt;控制台&gt;:8080/</code> 会要求为 <code>nacos</code> 用户设置密码；从 2.3 及更早版本升级上来的数据库，<code>users</code> 表里的 <code>nacos</code> 用户可能仍是早年公开的默认密码，升级后第一件事是改掉它。</p>
+<h3 id="2-x-→-3-1-升级清单"><a href="#2-x-→-3-1-升级清单" class="headerlink" title="2.x → 3.1 升级清单"></a>2.x → 3.1 升级清单</h3><ol>
+<li><strong>JDK</strong>：服务端节点换 JDK 17；自建镜像的基础镜像同步更换。</li>
+<li><strong>数据库</strong>：用新发行包的 <code>conf/mysql-schema.sql</code> 与现有库对比补齐缺失的表，再执行升级手册中的增量语句。从 2.1 及以后升级，至少要给 <code>his_config_info</code> 增加 <code>publish_type</code>、<code>gray_name</code>、<code>ext_info</code> 三列；从 2.0 升级还要给配置相关表增加 <code>encrypted_data_key</code> 列。<strong>先改库，再启动新版本。</strong></li>
+<li><strong>配置键改名</strong>：<code>server.port</code> → <code>nacos.server.main.port</code>，<code>server.servlet.contextPath</code> → <code>nacos.server.contextPath</code>。直接拿 2.x 的 <code>application.properties</code> 覆盖会让这些设置静默失效。</li>
+<li><strong>鉴权密钥</strong>：按上一节填好 token 密钥与服务身份键值。</li>
+<li><strong>控制台入口</strong>：控制台改到 8080，更新反向代理与防火墙；如需隔离，可单独部署 <code>console</code> 形态。</li>
+<li><strong>运维脚本</strong>：调用 <code>/nacos/v1/...</code> 运维接口的脚本迁移到 v3 Admin API（或官方的 maintainer SDK）。3.1 的默认配置中，旧客户端 API 的兼容开关默认开启，旧 Admin &#x2F; 控制台 API 的兼容开关默认关闭。</li>
+<li><strong>客户端</strong>：2.x 与 3.x 客户端都能连 3.x 服务端；1.x 客户端依赖已废弃的 v1 HTTP API，升级服务端之前先把业务侧客户端升到 2.x 以上。</li>
+<li><strong>命名空间</strong>：3.x 启动时会把空 ID 命名空间与 <code>public</code> 做兼容同步（<code>nacos.config.namespace.compatible.mode</code>，默认开启），首次启动可能较慢，看日志确认迁移完成后再放量。</li>
+<li><strong>集群</strong>：逐台滚动升级；如果在 3.0.0 上已经登记过 MCP 服务，升级到 3.0.1 及以上需要先用社区提供的迁移工具把旧 MCP 数据迁到 <code>public</code> 命名空间。</li>
+</ol>
+<h2 id="Spring-Cloud-Alibaba-最小正确配置"><a href="#Spring-Cloud-Alibaba-最小正确配置" class="headerlink" title="Spring Cloud Alibaba 最小正确配置"></a>Spring Cloud Alibaba 最小正确配置</h2><h3 id="版本对应"><a href="#版本对应" class="headerlink" title="版本对应"></a>版本对应</h3><p>截至本文写作时的两条主线：</p>
+<table>
+<thead>
+<tr>
+<th>Spring Cloud Alibaba</th>
+<th>Spring Cloud</th>
+<th>Spring Boot</th>
+<th>内置 nacos-client</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2025.0.0.0（2025-10-17）</td>
+<td>2025.0</td>
+<td>3.5.x</td>
+<td>3.0.3</td>
+</tr>
+<tr>
+<td>2023.0.3.4</td>
+<td>2023.0</td>
+<td>3.2.x</td>
+<td>2.4.3</td>
+</tr>
+</tbody></table>
+<p>两条线都能连接 3.x 服务端。Spring Boot 与 SCA 版本不匹配时，常见表现是启动期的类找不到或自动配置冲突，先对齐版本，再谈注册问题。</p>
+<h3 id="依赖"><a href="#依赖" class="headerlink" title="依赖"></a>依赖</h3><figure class="highlight xml cb cb--long" data-lang="xml" data-label="XML" data-ext="xml" data-lines="29"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="tag">&lt;<span class="name">dependencyManagement</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.alibaba.cloud<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-cloud-alibaba-dependencies<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="tag">&lt;<span class="name">version</span>&gt;</span>2025.0.0.0<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="tag">&lt;<span class="name">type</span>&gt;</span>pom<span class="tag">&lt;/<span class="name">type</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="tag">&lt;<span class="name">scope</span>&gt;</span>import<span class="tag">&lt;/<span class="name">scope</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="tag">&lt;/<span class="name">dependencyManagement</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="comment">&lt;!-- 服务注册与发现：只引 config 不引它，能连上 Nacos 但永远不会注册 --&gt;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.alibaba.cloud<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-cloud-starter-alibaba-nacos-discovery<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="comment">&lt;!-- 配置中心，不用可省略 --&gt;</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.alibaba.cloud<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-cloud-starter-alibaba-nacos-config<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">  <span class="comment">&lt;!-- 通过服务名调用（@LoadBalanced / OpenFeign）时需要客户端负载均衡 --&gt;</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.cloud<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-cloud-starter-loadbalancer<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx"><span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span></span></code></pre></div></div></figure>
+
+<p>同时需要按 Spring Cloud 官方方式导入对应版本的 <code>spring-cloud-dependencies</code> BOM。</p>
+<h3 id="application-yml"><a href="#application-yml" class="headerlink" title="application.yml"></a>application.yml</h3><figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">spring:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">application:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">name:</span> <span class="string">order-service</span>                 <span class="comment"># 即注册的服务名</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">config:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">import:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="comment"># 生产去掉 optional: 让配置中心不可达时启动失败，而不是带着默认值上线</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">optional:nacos:order-service.yaml?group=DEFAULT_GROUP&amp;refreshEnabled=true</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">cloud:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="attr">nacos:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="attr">server-addr:</span> <span class="number">10.0</span><span class="number">.0</span><span class="number">.21</span><span class="string">:8848,10.0.0.22:8848,10.0.0.23:8848</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="attr">username:</span> <span class="string">order-service</span>           <span class="comment"># 每个应用独立账号</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="attr">password:</span> <span class="string">$&#123;NACOS_PASSWORD&#125;</span>       <span class="comment"># 从环境变量或密钥系统注入</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="attr">discovery:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="attr">namespace:</span> <span class="string">dev</span>                  <span class="comment"># 命名空间 ID，不是显示名称</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        <span class="attr">group:</span> <span class="string">DEFAULT_GROUP</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="attr">config:</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        <span class="attr">namespace:</span> <span class="string">dev</span></span></span></code></pre></div></div></figure>
+
+<p>几个要点：</p>
+<ul>
+<li>Spring Cloud 2020.0 起（Spring Boot 3 对应的版本都在其后），<code>bootstrap.yml</code> 默认不再加载，写在里面的 Nacos 配置等于没写。统一放进 <code>application.yml</code>，配置中心用 <code>spring.config.import</code> 接入。没有写 <code>spring.config.import</code> 又引入了 config starter，启动会直接报缺少该属性的错误。</li>
+<li><code>namespace</code> 填的是命名空间 <strong>ID</strong>。控制台新建命名空间时可以自定义 ID，建议直接用 <code>dev</code> &#x2F; <code>test</code> &#x2F; <code>prod</code> 这类可读 ID，从根源上避免「填了名称」的问题。3.x 中默认命名空间的 ID 是 <code>public</code>。</li>
+<li>客户端除了 8848 还要能连 gRPC 端口，端口号 &#x3D; 主端口 + 1000（默认 9848）。9849 与 7848 是集群节点之间用的，客户端不需要。</li>
+<li>自动注册发生在 Web 容器启动完成之后。不是 Web 应用（例如 <code>spring.main.web-application-type=none</code> 的批处理服务）不会自动注册。</li>
+</ul>
+<h2 id="注册失败决策树"><a href="#注册失败决策树" class="headerlink" title="注册失败决策树"></a>注册失败决策树</h2><p>一次真实排查的起点是这样的日志：Tomcat 已启动，Nacos 客户端打印了 <code>serverAddr</code> 和 <code>namespace</code>，也创建了 naming rpc client，但之后再无动静，控制台里看不到服务。这类问题的关键是先找「成功标志」，再分流。</p>
+<p>SCA 注册成功时会打印一行形如：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">nacos registry, DEFAULT_GROUP order-service 10.0.0.31:8080 register finished</span></span></code></pre></div></div></figure>
+
+<p>Nacos 客户端自身的日志默认在 <code>${user.home}/logs/nacos/</code> 下（如 <code>naming.log</code>、<code>remote.log</code>），应用日志里看不到异常时去这里找。</p>
+<pre class="mermaid">flowchart TD
+    A[控制台看不到服务] --&gt; B&#123;应用日志有&lt;br/&gt;register finished 吗&#125;
+    B --&gt;|有| C&#123;控制台当前命名空间与分组&lt;br/&gt;是否与日志一致&#125;
+    C --&gt;|不一致| C1[切换命名空间 / 分组查看&lt;br/&gt;核对 namespace 填的是 ID]
+    C --&gt;|一致| C2[按服务名直接查询实例列表&lt;br/&gt;确认是否已被剔除]
+    B --&gt;|没有| D&#123;有连接类报错吗&lt;br/&gt;Client not connected / 超时&#125;
+    D --&gt;|有| D1[检查 server-addr 与 gRPC 端口&lt;br/&gt;主端口 +1000 是否可达]
+    D --&gt;|没有| E&#123;有 403 / user not found&lt;br/&gt;等鉴权报错吗&#125;
+    E --&gt;|有| E1[服务端开了客户端鉴权&lt;br/&gt;补用户名密码或授权命名空间]
+    E --&gt;|没有| F&#123;注册流程是否被触发&#125;
+    F --&gt; F1[缺 discovery 依赖]
+    F --&gt; F2[配置写在 bootstrap.yml 未加载]
+    F --&gt; F3[register-enabled 或 discovery.enabled 为 false]
+    F --&gt; F4[非 Web 应用不会自动注册]
+    A2[控制台能看到但调用失败] --&gt; G&#123;注册的 IP 能从调用方访问吗&#125;
+    G --&gt;|不能| G1[容器内网 IP / 多网卡选错&lt;br/&gt;设置 discovery.ip 或 network-interface]
+    G --&gt;|能| G2[查负载均衡依赖与健康状态]</pre>
+
+
+<h3 id="分支说明与验证命令"><a href="#分支说明与验证命令" class="headerlink" title="分支说明与验证命令"></a>分支说明与验证命令</h3><p><strong>1. 连不上（Client not connected、请求超时）</strong></p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">nc -vz 10.0.0.21 8848</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">nc -vz 10.0.0.21 9848</span></span></code></pre></div></div></figure>
+
+<p>最隐蔽的是 Docker 端口映射：把服务端映射成 <code>18848:8848</code> 时，客户端会按 <code>18848 + 1000 = 19848</code> 去连 gRPC，所以必须同时映射 <code>19848:9848</code>。只映射 8848 的结果是 HTTP 探活正常、gRPC 连接失败。</p>
+<p><strong>2. 鉴权拒绝</strong></p>
+<p>服务端开启了客户端 API 鉴权，而应用没配置 <code>username</code> &#x2F; <code>password</code>，或账号没有该命名空间的权限。用同一账号手动登录并查询验证：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s -X POST <span class="string">&#x27;http://10.0.0.21:8848/nacos/v3/auth/user/login&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  -d <span class="string">&#x27;username=order-service&#x27;</span> -d <span class="string">&#x27;password=*_ChangeMe_*&#x27;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># 取返回的 accessToken 后</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">curl -s <span class="string">&#x27;http://10.0.0.21:8848/nacos/v3/client/ns/instance/list?serviceName=order-service&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  -H <span class="string">&#x27;accessToken: &lt;token&gt;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>3. 注册流程没有被触发</strong></p>
+<p>没有报错、也没有 <code>register finished</code>，通常是下面四种之一：没引 <code>spring-cloud-starter-alibaba-nacos-discovery</code>；配置写在未加载的 <code>bootstrap.yml</code> 里；显式关闭了 <code>spring.cloud.nacos.discovery.register-enabled</code> 或 <code>enabled</code>；应用不是 Web 应用。<code>@EnableDiscoveryClient</code> 在新版本中不是必需的，加不加都不是这类问题的原因。</p>
+<p><strong>4. 注册了但在别的位置</strong></p>
+<p>日志里有 <code>register finished</code>，控制台却看不到，先看控制台左上角当前选中的命名空间，以及日志中的分组。<code>namespace</code> 填成了显示名称时，实例可能被注册到一个控制台列表里不存在的命名空间 ID 下，于是「注册成功、控制台看不到」。</p>
+<p><strong>5. 能看到但调不通</strong></p>
+<p>应用跑在容器里时，默认注册的往往是容器网桥 IP，其他主机上的调用方访问不到；多网卡主机可能选中了错误的网卡。显式指定：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">spring:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">cloud:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">nacos:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">discovery:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">ip:</span> <span class="number">10.0</span><span class="number">.0</span><span class="number">.31</span>              <span class="comment"># 或 network-interface: eth0</span></span></span></code></pre></div></div></figure>
+
+<h2 id="MCP-Registry-与-A2A-Registry"><a href="#MCP-Registry-与-A2A-Registry" class="headerlink" title="MCP Registry 与 A2A Registry"></a>MCP Registry 与 A2A Registry</h2><h3 id="它解决什么问题"><a href="#它解决什么问题" class="headerlink" title="它解决什么问题"></a>它解决什么问题</h3><p>当团队里的 MCP Server 和 Agent 从几个变成几十个，会出现和微服务早期一样的问题：地址写死在各个客户端配置里、版本升级要逐个通知、工具描述改一个字就要重新发布、测试和生产混在一起。Nacos 3.x 把这些问题放回它擅长的模型里解决：命名空间隔离环境，版本管理支持灰度，元数据集中存放且可以动态修改。</p>
+<h3 id="MCP-Registry"><a href="#MCP-Registry" class="headerlink" title="MCP Registry"></a>MCP Registry</h3><p>3.0 起，Nacos 可以登记 MCP Server 的元数据：名称、版本、协议类型（stdio、SSE、streamable HTTP）、访问端点，以及工具列表与描述。工具描述、启停状态可以在控制台动态修改，不必重新发布 MCP Server。3.0.1 起支持多命名空间与多版本管理（可将某个版本设为最新版，便于灰度）。</p>
+<p>MCP Server 进入 Nacos 的几种方式：</p>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>做法</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>控制台手工登记</td>
+<td>填写端点或 stdio 启动配置、工具定义</td>
+<td>第三方或存量 MCP Server</td>
+</tr>
+<tr>
+<td>Spring AI Alibaba 自动注册</td>
+<td>引入 <code>spring-ai-alibaba-starter-nacos-mcp-server</code>，配置 <code>spring.ai.alibaba.mcp.nacos.server-addr</code>、<code>namespace</code>、<code>username</code>、<code>password</code>、<code>registry.enabled=true</code></td>
+<td>Java 自研 MCP Server</td>
+</tr>
+<tr>
+<td>Python 自动注册</td>
+<td><code>nacos-mcp-wrapper-python</code>，用 <code>NacosMCP</code> 代替原生 server，<code>NacosSettings</code> 中设置 <code>SERVER_ADDR</code>、<code>NAMESPACE</code>、<code>USERNAME</code>、<code>PASSWORD</code></td>
+<td>Python 自研 MCP Server</td>
+</tr>
+<tr>
+<td>导入（3.1）</td>
+<td>JSON 文件导入，或从官方 MCP Registry 一键导入</td>
+<td>复用社区已有的 MCP Server</td>
+</tr>
+</tbody></table>
+<p>消费侧常用 <code>nacos-mcp-router</code>，它本身是一个 MCP Server，有两种模式：</p>
+<ul>
+<li><strong>router 模式</strong>（默认）：向大模型暴露 <code>search_mcp_server</code>、<code>add_mcp_server</code>、<code>use_tool</code> 三个工具，让 Agent 按任务在 Nacos 中检索并调用合适的 MCP Server，而不是把几十个 Server 的工具一次性塞进上下文；</li>
+<li><strong>proxy 模式</strong>（<code>MODE=proxy</code>）：把 stdio 或 SSE 协议的 MCP Server 转换成 streamable HTTP 对外提供。</li>
+</ul>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">export</span> NACOS_ADDR=10.0.0.21:8848</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">export</span> NACOS_USERNAME=mcp-router</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">export</span> NACOS_PASSWORD=<span class="string">&#x27;*_ChangeMe_*&#x27;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">uvx nacos-mcp-router@latest</span></span></code></pre></div></div></figure>
+
+<p>此外，Nacos 可以按官方 MCP Registry 规范对外提供标准的注册表 API（如 <code>/v0/servers</code>，具体路径以所用版本文档为准），供兼容该协议的客户端直接查询。这部分需要额外端口与资源，默认关闭：</p>
+<figure class="highlight properties cb" data-lang="properties" data-label="Properties" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">nacos.ai.mcp.registry.enabled</span>=<span class="string">true</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">nacos.ai.mcp.registry.port</span>=<span class="string">9080</span></span></span></code></pre></div></div></figure>
+
+<p>3.1 已跟进官方注册表协议 2025-09-16 版本。这个协议仍处于 v0 阶段、演进很快，对接它的客户端要固定版本并关注变更。</p>
+<h3 id="A2A-Registry（3-1-新增）"><a href="#A2A-Registry（3-1-新增）" class="headerlink" title="A2A Registry（3.1 新增）"></a>A2A Registry（3.1 新增）</h3><p>A2A 协议中，每个 Agent 用 AgentCard 描述自己：名称、描述、版本、服务地址、协议版本、技能列表（skills）、提供方等。Nacos 3.1 把 AgentCard 作为一等资源管理，<strong>AgentCard 与 Agent 的服务端点分开登记</strong>，通过「名称 + 版本」关联，同一命名空间内 Agent 名称必须唯一。</p>
+<p>登记与发现的方式：</p>
+<ul>
+<li><strong>控制台</strong>：Agent 管理 → Agent 列表 → 创建 Agent，填写 AgentCard。</li>
+<li><strong>Admin API</strong>：</li>
+</ul>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 发布 AgentCard</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">curl -X POST <span class="string">&#x27;http://10.0.0.21:8848/nacos/v3/admin/ai/a2a&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -H <span class="string">&#x27;accessToken: &lt;token&gt;&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  -d <span class="string">&#x27;namespaceId=public&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  --data-urlencode <span class="string">&#x27;agentCard=&#123;&quot;name&quot;:&quot;invoice-agent&quot;,&quot;version&quot;:&quot;1.0.0&quot;,&quot;description&quot;:&quot;发票识别与校验&quot;,&quot;url&quot;:&quot;http://10.0.0.41:8080/a2a&quot;,&quot;protocolVersion&quot;:&quot;0.3.0&quot;,&quot;skills&quot;:[]&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># 按名称精确查询</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">curl <span class="string">&#x27;http://10.0.0.21:8848/nacos/v3/admin/ai/a2a?namespaceId=public&amp;agentName=invoice-agent&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  -H <span class="string">&#x27;accessToken: &lt;token&gt;&#x27;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="comment"># 模糊搜索</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">curl <span class="string">&#x27;http://10.0.0.21:8848/nacos/v3/admin/ai/a2a/list?namespaceId=public&amp;agentName=invoice&amp;search=blur&amp;pageNo=1&amp;pageSize=20&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  -H <span class="string">&#x27;accessToken: &lt;token&gt;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<ul>
+<li><strong>Java SDK</strong>：<code>AiFactory.createAiService(properties)</code> 得到 <code>AiService</code>，用 <code>releaseAgentCard</code> 发布、<code>registerAgentEndpoint</code> 登记端点、<code>getAgentCard</code> &#x2F; <code>subscribeAgentCard</code> 发现与订阅（可用的最低客户端版本以官方文档为准）。</li>
+<li><strong>Spring AI Alibaba</strong>：<code>spring-ai-alibaba-starter-a2a-server</code>、<code>spring-ai-alibaba-starter-a2a-registry</code>、<code>spring-ai-alibaba-starter-a2a-client</code>，配置前缀 <code>spring.ai.alibaba.a2a.nacos.*</code>（<code>server-addr</code>、<code>username</code>、<code>password</code>、<code>discovery.enabled</code>）。</li>
+</ul>
+<h3 id="适用边界"><a href="#适用边界" class="headerlink" title="适用边界"></a>适用边界</h3><table>
+<thead>
+<tr>
+<th>适合</th>
+<th>不适合或需要额外措施</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MCP Server &#x2F; Agent 数量多，需要统一目录、版本与环境隔离</td>
+<td>只有两三个 MCP Server，静态配置更简单</td>
+</tr>
+<tr>
+<td>已有 Nacos 集群和 Java &#x2F; Spring 技术栈，希望复用运维体系</td>
+<td>需要调用鉴权、限流、审计：Nacos 只管注册与元数据，调用链路要交给网关</td>
+</tr>
+<tr>
+<td>需要不发版就调整工具描述、启停某个工具</td>
+<td>把「谁能改工具描述」当成小事：描述会直接进入大模型上下文，能改描述就能影响 Agent 行为，控制台权限必须收紧</td>
+</tr>
+<tr>
+<td>内网 Agent 之间相互发现</td>
+<td>跨组织公开发布：AgentCard 中的 url 与技能描述需要单独做信息脱敏与访问控制</td>
+</tr>
+</tbody></table>
+<p><strong>反例</strong>：把 MCP Registry 当成 MCP 网关，期望它帮你做认证与流量转发。它存的是「去哪里找、长什么样」，真正的调用仍是客户端直连 MCP Server，或经 <code>nacos-mcp-router</code>、网关代理。</p>
+<h2 id="生产部署建议"><a href="#生产部署建议" class="headerlink" title="生产部署建议"></a>生产部署建议</h2><h3 id="拓扑"><a href="#拓扑" class="headerlink" title="拓扑"></a>拓扑</h3><ul>
+<li><strong>集群规模</strong>：3 个节点起步，奇数个。节点间 Raft（7848）与集群 gRPC（9849）只在节点之间开放。</li>
+<li><strong>数据源</strong>：外置 MySQL，并由数据库侧负责高可用（主从切换、备份）；嵌入式 Derby 只用于单机试用。</li>
+<li><strong>入口</strong>：客户端配置完整的节点列表，或经负载均衡访问。经负载均衡时，8848 与 9848 必须同时转发，且对外端口保持「主端口 + 1000」的关系。</li>
+<li><strong>控制台</strong>：只对运维网段开放 8080，或用 <code>console</code> 形态单独部署在运维网络里。</li>
+<li><strong>绝不暴露公网</strong>：Nacos 历史上出现过多次鉴权绕过类漏洞，注册中心与配置中心只应存在于内网。</li>
+</ul>
+<h3 id="容器化配置要点"><a href="#容器化配置要点" class="headerlink" title="容器化配置要点"></a>容器化配置要点</h3><p>以官方镜像为例（单机形态，集群改为 <code>MODE=cluster</code> 并设置 <code>NACOS_SERVERS</code>）：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="19"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">services:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">nacos:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">nacos/nacos-server:v3.1.0</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">restart:</span> <span class="string">unless-stopped</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">environment:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="attr">MODE:</span> <span class="string">standalone</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="attr">SPRING_DATASOURCE_PLATFORM:</span> <span class="string">mysql</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">MYSQL_SERVICE_HOST:</span> <span class="string">mysql</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="attr">MYSQL_SERVICE_DB_NAME:</span> <span class="string">nacos</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="attr">MYSQL_SERVICE_USER:</span> <span class="string">nacos</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="attr">MYSQL_SERVICE_PASSWORD:</span> <span class="string">&quot;*_ChangeMe_*&quot;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="attr">NACOS_AUTH_ENABLE:</span> <span class="string">&quot;true&quot;</span>                  <span class="comment"># 同时开启客户端 API 鉴权</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="attr">NACOS_AUTH_TOKEN:</span> <span class="string">&quot;*_ChangeMe_*&quot;</span>           <span class="comment"># openssl rand -base64 32 生成</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="attr">NACOS_AUTH_IDENTITY_KEY:</span> <span class="string">&quot;*_ChangeMe_*&quot;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="attr">NACOS_AUTH_IDENTITY_VALUE:</span> <span class="string">&quot;*_ChangeMe_*&quot;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;10.0.0.21:8848:8848&quot;</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;10.0.0.21:9848:9848&quot;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;10.0.0.21:8080:8080&quot;</span>                    <span class="comment"># 控制台，只绑内网地址</span></span></span></code></pre></div></div></figure>
+
+<p>数据库需预先执行对应版本的 <code>mysql-schema.sql</code>。首次启动后立即登录控制台初始化 <code>nacos</code> 管理员密码，再为各应用建独立账号与命名空间权限。</p>
+<h3 id="上线前自检"><a href="#上线前自检" class="headerlink" title="上线前自检"></a>上线前自检</h3><ul>
+<li><input disabled="" type="checkbox"> token 密钥与服务身份键值已替换为随机值，且集群内一致；</li>
+<li><input disabled="" type="checkbox"> <code>nacos</code> 管理员密码已初始化或修改，不存在历史默认密码；</li>
+<li><input disabled="" type="checkbox"> 客户端 API 鉴权已开启，每个应用独立账号、最小权限；</li>
+<li><input disabled="" type="checkbox"> 8848 &#x2F; 9848 可从应用网段访问，7848 &#x2F; 9849 仅节点间可达，8080 仅运维网段可达；</li>
+<li><input disabled="" type="checkbox"> MySQL 有备份与恢复演练；</li>
+<li><input disabled="" type="checkbox"> 用一个测试服务走通注册、发现、配置下发、配置变更推送全流程。</li>
+</ul>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>升级到 Nacos 3.x 的主要成本在鉴权与 API 收口：密钥必须自己配置，控制台换了端口，旧运维接口要迁移。业务侧的注册问题大多与版本无关，先找 <code>register finished</code>，再按连不上、没触发、注册错位置、注册了调不通四类分流即可。MCP 与 A2A Registry 是 3.x 最大的增量，适合 Agent 数量多、需要统一治理的团队；它负责目录与元数据，调用安全仍要交给网关与权限体系。</p>
+<h2 id="2026-09-补记：3-2-的-AI-Registry-三件套与-3-3-RC"><a href="#2026-09-补记：3-2-的-AI-Registry-三件套与-3-3-RC" class="headerlink" title="2026-09 补记：3.2 的 AI Registry 三件套与 3.3 RC"></a>2026-09 补记：3.2 的 AI Registry 三件套与 3.3 RC</h2><ul>
+<li><strong>3.2.0（2026-03-27）</strong>：新增 Skill Registry 与 Prompt Registry，与 MCP Registry 合称 AI Registry 三件套，Agent 可用的技能与提示词也纳入版本化、可灰度的集中管理；新增 OIDC &#x2F; OAuth2 鉴权插件，可对接企业统一身份。同一版本起，v1 &#x2F; v2 旧 API 移出主发行包，需要时通过独立的 <code>nacos-api-legacy-adapter</code> 恢复，仍依赖旧 API 的 1.x 客户端要在这之前完成升级。3.2 的库表新增了 AI 相关表（如 <code>ai_resource</code>、<code>ai_resource_version</code>），升级前同样要先执行增量 SQL。</li>
+<li><strong>3.2.4（2026-08-27）</strong>：当前推荐的生产稳定线。滚动升级到该版本前，需确认所有节点的 <code>nacos.core.auth.server.identity.key/value</code> 一致；此版本起已废弃的 v3 接口默认返回 410，可用兼容开关临时恢复。</li>
+<li><strong>3.3.0-RC（2026-09-21）</strong>：提供协议中立的 Agent 注册，不再只围绕 A2A。按官方镜像说明，3.3 起客户端 API 鉴权默认开启（未设置 <code>NACOS_AUTH_ENABLE</code> 时即为开启），未配置账号的客户端会直接注册失败，这是升级 3.3 时注册失败决策树中「鉴权拒绝」分支最可能的来源。</li>
+<li><strong>2.x</strong>：仍在维护（2.5.4），暂不需要 AI 能力、又受 JDK 版本约束的存量系统可以继续留在 2.5 线，但应开启鉴权并替换所有默认密钥。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/02/06/technical-docs/Dify%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97/">Dify 1.12 私有化部署与排障实录</a></h3>
+        <p>4C6G 家用服务器上以「内网穿透 → Nginx Proxy Manager → Dify 1.12.1」部署：必改 .env 项、pgv…</p>
+        <a class="btn primary" href="/2026/02/06/technical-docs/Dify%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/01/13/technical-docs/Docker%E5%AE%B9%E5%99%A8%E5%8C%96%E9%83%A8%E7%BD%B2%E5%AE%9E%E8%B7%B5/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Docker 部署常见坑：挂载权限、容器代理与数据库远程访问</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 7 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#3-x-%E7%9B%B8%E5%AF%B9-2-x-%E6%94%B9%E4%BA%86%E4%BB%80%E4%B9%88" data-toc-target="3-x-相对-2-x-改了什么"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">3.x 相对 2.x 改了什么</span></a><a class="toc-level-3" href="#%E9%89%B4%E6%9D%83%E7%9A%84%E4%B8%89%E4%B8%AA%E5%BC%80%E5%85%B3%E4%B8%8E%E4%B8%A4%E7%BB%84%E5%AF%86%E9%92%A5" data-toc-target="鉴权的三个开关与两组密钥"><span class="toc-text">鉴权的三个开关与两组密钥</span></a><a class="toc-level-3" href="#2-x-%E2%86%92-3-1-%E5%8D%87%E7%BA%A7%E6%B8%85%E5%8D%95" data-toc-target="2-x-→-3-1-升级清单"><span class="toc-text">2.x → 3.1 升级清单</span></a><a class="toc-level-2" href="#Spring-Cloud-Alibaba-%E6%9C%80%E5%B0%8F%E6%AD%A3%E7%A1%AE%E9%85%8D%E7%BD%AE" data-toc-target="Spring-Cloud-Alibaba-最小正确配置"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">Spring Cloud Alibaba 最小正确配置</span></a><a class="toc-level-3" href="#%E7%89%88%E6%9C%AC%E5%AF%B9%E5%BA%94" data-toc-target="版本对应"><span class="toc-text">版本对应</span></a><a class="toc-level-3" href="#%E4%BE%9D%E8%B5%96" data-toc-target="依赖"><span class="toc-text">依赖</span></a><a class="toc-level-3" href="#application-yml" data-toc-target="application-yml"><span class="toc-text">application.yml</span></a><a class="toc-level-2" href="#%E6%B3%A8%E5%86%8C%E5%A4%B1%E8%B4%A5%E5%86%B3%E7%AD%96%E6%A0%91" data-toc-target="注册失败决策树"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">注册失败决策树</span></a><a class="toc-level-3" href="#%E5%88%86%E6%94%AF%E8%AF%B4%E6%98%8E%E4%B8%8E%E9%AA%8C%E8%AF%81%E5%91%BD%E4%BB%A4" data-toc-target="分支说明与验证命令"><span class="toc-text">分支说明与验证命令</span></a><a class="toc-level-2" href="#MCP-Registry-%E4%B8%8E-A2A-Registry" data-toc-target="MCP-Registry-与-A2A-Registry"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">MCP Registry 与 A2A Registry</span></a><a class="toc-level-3" href="#%E5%AE%83%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98" data-toc-target="它解决什么问题"><span class="toc-text">它解决什么问题</span></a><a class="toc-level-3" href="#MCP-Registry" data-toc-target="MCP-Registry"><span class="toc-text">MCP Registry</span></a><a class="toc-level-3" href="#A2A-Registry%EF%BC%883-1-%E6%96%B0%E5%A2%9E%EF%BC%89" data-toc-target="A2A-Registry（3-1-新增）"><span class="toc-text">A2A Registry（3.1 新增）</span></a><a class="toc-level-3" href="#%E9%80%82%E7%94%A8%E8%BE%B9%E7%95%8C" data-toc-target="适用边界"><span class="toc-text">适用边界</span></a><a class="toc-level-2" href="#%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E5%BB%BA%E8%AE%AE" data-toc-target="生产部署建议"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">生产部署建议</span></a><a class="toc-level-3" href="#%E6%8B%93%E6%89%91" data-toc-target="拓扑"><span class="toc-text">拓扑</span></a><a class="toc-level-3" href="#%E5%AE%B9%E5%99%A8%E5%8C%96%E9%85%8D%E7%BD%AE%E8%A6%81%E7%82%B9" data-toc-target="容器化配置要点"><span class="toc-text">容器化配置要点</span></a><a class="toc-level-3" href="#%E4%B8%8A%E7%BA%BF%E5%89%8D%E8%87%AA%E6%A3%80" data-toc-target="上线前自检"><span class="toc-text">上线前自检</span></a><a class="toc-level-2" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">总结</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A3-2-%E7%9A%84-AI-Registry-%E4%B8%89%E4%BB%B6%E5%A5%97%E4%B8%8E-3-3-RC" data-toc-target="2026-09-补记：3-2-的-AI-Registry-三件套与-3-3-RC"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">2026-09 补记：3.2 的 AI Registry 三件套与 3.3 RC</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/self-hosted-ai-infra/" style="--rail: 38%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">3 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#3-x-%E7%9B%B8%E5%AF%B9-2-x-%E6%94%B9%E4%BA%86%E4%BB%80%E4%B9%88" data-toc-target="3-x-相对-2-x-改了什么" data-title="01 · 3.x 相对 2.x 改了什么" aria-label="3.x 相对 2.x 改了什么"></a><a class="toc-strip__dot" href="#Spring-Cloud-Alibaba-%E6%9C%80%E5%B0%8F%E6%AD%A3%E7%A1%AE%E9%85%8D%E7%BD%AE" data-toc-target="Spring-Cloud-Alibaba-最小正确配置" data-title="02 · Spring Cloud Alibaba 最小正确配置" aria-label="Spring Cloud Alibaba 最小正确配置"></a><a class="toc-strip__dot" href="#%E6%B3%A8%E5%86%8C%E5%A4%B1%E8%B4%A5%E5%86%B3%E7%AD%96%E6%A0%91" data-toc-target="注册失败决策树" data-title="03 · 注册失败决策树" aria-label="注册失败决策树"></a><a class="toc-strip__dot" href="#MCP-Registry-%E4%B8%8E-A2A-Registry" data-toc-target="MCP-Registry-与-A2A-Registry" data-title="04 · MCP Registry 与 A2A Registry" aria-label="MCP Registry 与 A2A Registry"></a><a class="toc-strip__dot" href="#%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E5%BB%BA%E8%AE%AE" data-toc-target="生产部署建议" data-title="05 · 生产部署建议" aria-label="生产部署建议"></a><a class="toc-strip__dot" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结" data-title="06 · 总结" aria-label="总结"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A3-2-%E7%9A%84-AI-Registry-%E4%B8%89%E4%BB%B6%E5%A5%97%E4%B8%8E-3-3-RC" data-toc-target="2026-09-补记：3-2-的-AI-Registry-三件套与-3-3-RC" data-title="07 · 2026-09 补记：3.2 的 AI Registry 三件套与 3.3 RC" aria-label="2026-09 补记：3.2 的 AI Registry 三件套与 3.3 RC"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/Nacos服务注册与微服务治理","title":"Nacos 3.x：从服务注册到 MCP / A2A 注册中心","url":"/2025/10/21/technical-docs/Nacos%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%B2%BB%E7%90%86/","path":"self-hosted-ai-infra","index":2,"total":8,"next":{"title":"Dify 1.12 私有化部署与排障实录","url":"/2026/02/06/technical-docs/Dify%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

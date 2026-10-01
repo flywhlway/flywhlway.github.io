@@ -1,0 +1,656 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>车联网服务治理演进：从 Spring Cloud 治理到服务网格 · 飞轮之道</title>
+<meta name="description" content="车联网平台服务数量膨胀后，如何用 Sentinel、Spring Cloud Gateway 与 Nacos 补齐优雅上下线、限流熔断、全链路灰度与调用授权，并以可量化的方式评估何时、在哪里引入 Istio 服务网格。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2023/03/21/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-01-%E6%9C%8D%E5%8A%A1%E6%B2%BB%E7%90%86/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="车联网服务治理演进：从 Spring Cloud 治理到服务网格 · 飞轮之道">
+<meta property="og:description" content="车联网平台服务数量膨胀后，如何用 Sentinel、Spring Cloud Gateway 与 Nacos 补齐优雅上下线、限流熔断、全链路灰度与调用授权，并以可量化的方式评估何时、在哪里引入 Istio 服务网格。">
+<meta property="og:url" content="https://flywhlway.github.io/2023/03/21/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-01-%E6%9C%8D%E5%8A%A1%E6%B2%BB%E7%90%86/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">平台规划</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 2 / 9 篇</a>
+    </div>
+    <h1>车联网服务治理演进：从 Spring Cloud 治理到服务网格</h1>
+    <p class="article-deck">车联网平台服务数量膨胀后，如何用 Sentinel、Spring Cloud Gateway 与 Nacos 补齐优雅上下线、限流熔断、全链路灰度与调用授权…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>13 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a><a class="article-meta__tag" href="/tags/%E8%BD%A6%E8%81%94%E7%BD%91/">#车联网</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>2023 年以 SDK 治理为主线：Sentinel 负责限流熔断，治理规则平台化并持久化到配置中心，为日后切换执行面保留路径。</li><li>优雅下线的关键是等过客户端负载均衡缓存：Spring Cloud LoadBalancer 默认缓存 35 秒，preStop 必须先摘流量再停进程。</li><li>车联网灰度优先按车辆维度（VIN 白名单、车型、车端软件版本）切分，标签必须同时透传 HTTP、消息与线程池。</li><li>服务网格先在多语言新业务域试点，MQTT 与消息长连接不进 Sidecar；网格的熔断不等于业务降级。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="问题：服务变多之后，稳定性从哪里漏"><a href="#问题：服务变多之后，稳定性从哪里漏" class="headerlink" title="问题：服务变多之后，稳定性从哪里漏"></a>问题：服务变多之后，稳定性从哪里漏</h2><p>车联网平台的服务数量在两年内从几十个涨到数百个，调用关系随之变成网状。典型的一次事故链路是这样的：冬季早高峰远程空调指令集中下发，指令服务依赖的车辆状态查询变慢，调用方的 Feign 线程被慢请求占满，连带影响同一线程池里的其他调用，最终 App 侧大面积超时。事后复盘，暴露的不是某个服务的缺陷，而是治理能力的缺位：</p>
+<ul>
+<li><strong>没有统一的流量防护。</strong> 限流逻辑散落在个别服务里，阈值靠经验填写；熔断依赖 Hystrix，而 Hystrix 自 2018 年起进入维护状态，Spring Cloud 2020.0 已移除对它的支持，存量服务无法随框架升级。</li>
+<li><strong>发布只能全量。</strong> 新版本上线即全部流量切换，出问题只能整体回滚，回滚期间的影响面就是全部用户和车辆。</li>
+<li><strong>下线不优雅。</strong> 滚动发布时，调用方仍会把请求打到已停止的实例，每次发布都伴随一小段报错。</li>
+<li><strong>调用关系不可控。</strong> 任何服务拿到地址就能调用任何接口，依赖关系只能靠链路追踪事后还原。</li>
+</ul>
+<p>治理目标据此定为五项：服务上下线对调用方无感；限流、熔断、降级体系化；支持网关级到全链路的灰度；服务间调用可授权；依赖关系可分析、可观测。</p>
+<h2 id="路线选择：SDK-治理还是服务网格"><a href="#路线选择：SDK-治理还是服务网格" class="headerlink" title="路线选择：SDK 治理还是服务网格"></a>路线选择：SDK 治理还是服务网格</h2><p>2023 年初摆在面前的有两条路。一条是在 Spring Cloud 体系内补齐能力，以 Sentinel 替换 Hystrix；另一条是直接引入 Istio，把治理能力下沉到 Sidecar。</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>SDK 治理（Sentinel + Spring Cloud）</th>
+<th>服务网格（Istio 1.17，Sidecar 模式）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>语言栈</td>
+<td>绑定 Java，Go 需另接 Sentinel Go</td>
+<td>语言无关</td>
+</tr>
+<tr>
+<td>治理粒度</td>
+<td>方法级、热点参数级，可带业务降级逻辑</td>
+<td>请求级，按路由、Header、目标服务</td>
+</tr>
+<tr>
+<td>限流能力</td>
+<td>QPS、并发线程数、热点参数、集群限流、系统自适应保护</td>
+<td>本地限流需 EnvoyFilter，全局限流需外接限流服务</td>
+</tr>
+<tr>
+<td>熔断语义</td>
+<td>慢调用比例、异常比例，可执行 fallback</td>
+<td>连接池上限 + 异常实例驱逐，不含业务降级</td>
+</tr>
+<tr>
+<td>升级成本</td>
+<td>改依赖、改配置，随应用发布</td>
+<td>升级控制面与 Sidecar，应用无感</td>
+</tr>
+<tr>
+<td>资源开销</td>
+<td>进程内，可忽略</td>
+<td>官方数据：每 1,000 RPS 约 0.35 vCPU、40 MB；P90 增加约 2.65 ms</td>
+</tr>
+<tr>
+<td>团队储备</td>
+<td>充足</td>
+<td>需补 Envoy、xDS 排障能力</td>
+</tr>
+</tbody></table>
+<p>结论是<strong>以 SDK 治理为主线，服务网格在新业务域试点</strong>。理由有三：存量服务以 Java 为主，SDK 改造可以随日常迭代完成；车联网链路里大量治理需求是方法级、参数级的（例如按 VIN 限流、查询失败时返回缓存快照），这些恰好是网格给不了的；网格的资源与运维成本需要在真实流量下实测，而不是凭厂商数据决策。</p>
+<p>但主线选择 SDK，不等于把规则写死在代码里。<strong>治理规则平台化</strong>是本方案的关键约束：规则统一存放在配置中心、由治理控制台管理并版本化，SDK 只是执行面之一。将来某些服务切到网格，规则的管理方式不变，变的只是下发目标。</p>
+<h2 id="目标架构"><a href="#目标架构" class="headerlink" title="目标架构"></a>目标架构</h2><pre class="mermaid">flowchart LR
+  subgraph CP["治理控制面"]
+    D["治理控制台&lt;br/&gt;规则编辑 / 审批 / 版本"]
+    N["Nacos&lt;br/&gt;注册中心 + 规则存储"]
+  end
+  subgraph DP["执行面"]
+    G["Spring Cloud Gateway&lt;br/&gt;Sentinel 网关适配"]
+    S1["Java 服务&lt;br/&gt;Sentinel SDK"]
+    S2["Go 服务&lt;br/&gt;Sentinel Go"]
+    M["网格试点域&lt;br/&gt;Istio Sidecar"]
+  end
+  subgraph OB["可观测"]
+    T["链路追踪"]
+    P["指标与告警"]
+  end
+  D --&gt;|推送规则| N
+  N --&gt;|监听变更| G
+  N --&gt;|监听变更| S1
+  N --&gt;|监听变更| S2
+  D -.-&gt;|转换为 Istio 配置| M
+  G --&gt; S1 --&gt; S2
+  G --&gt; M
+  G --&gt; T
+  S1 --&gt; T
+  S2 --&gt; T
+  M --&gt; T
+  G --&gt; P
+  S1 --&gt; P
+  S2 --&gt; P
+  M --&gt; P</pre>
+
+
+<p>版本基线：Spring Cloud Alibaba 2021.0.x 系列、Nacos 2.x（gRPC 长连接推送）、Sentinel 1.8.6。Sentinel 2.0 在 2023 年 2 月刚发布 alpha，方向是对接 OpenSergo 治理规范，生产暂不采用，但规则模型设计时预留映射。</p>
+<h2 id="能力一：优雅上下线"><a href="#能力一：优雅上下线" class="headerlink" title="能力一：优雅上下线"></a>能力一：优雅上下线</h2><p>滚动发布时报错的根因，是调用方的实例列表比注册中心更新得慢。Nacos 2.x 会把实例变更推送到客户端，但 Spring Cloud LoadBalancer 自身还有一层缓存，默认 TTL 为 35 秒；旧版 Ribbon 的列表刷新周期默认是 30 秒。实例已经停了，调用方在缓存过期前仍会选中它。</p>
+<p>下线顺序必须是「先摘流量、等缓存过期、再停进程」：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="20"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># Deployment 片段：preStop 先把实例标记为 DOWN，再等待调用方缓存过期</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">spec:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">template:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">spec:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">terminationGracePeriodSeconds:</span> <span class="number">60</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="attr">containers:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">app</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">          <span class="attr">lifecycle:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">            <span class="attr">preStop:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">              <span class="attr">exec:</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">                <span class="attr">command:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">                  <span class="bullet">-</span> <span class="string">sh</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">                  <span class="bullet">-</span> <span class="string">-c</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">                  <span class="bullet">-</span> <span class="string">|</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="string">                    curl -s -X POST -H &#x27;Content-Type: application/json&#x27; \</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="string">                      -d &#x27;&#123;&quot;status&quot;:&quot;DOWN&quot;&#125;&#x27; http://127.0.0.1:8081/actuator/serviceregistry</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="string">                    sleep 15</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="string"></span>          <span class="attr">readinessProbe:</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">            <span class="attr">httpGet:</span> &#123; <span class="attr">path:</span> <span class="string">/actuator/health/readiness</span>, <span class="attr">port:</span> <span class="number">8081</span> &#125;</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">            <span class="attr">periodSeconds:</span> <span class="number">5</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># application.yml：缩短负载均衡缓存，开启 Web 容器优雅停机</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">server:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">shutdown:</span> <span class="string">graceful</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">spring:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">lifecycle:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">timeout-per-shutdown-phase:</span> <span class="string">20s</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">cloud:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attr">loadbalancer:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="attr">cache:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="attr">ttl:</span> <span class="string">5s</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">management:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="attr">endpoints:</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">web:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="attr">exposure:</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        <span class="attr">include:</span> <span class="string">health,serviceregistry</span></span></span></code></pre></div></div></figure>
+
+<p>时间预算要能对上：preStop 等待（15 秒）必须大于缓存 TTL（5 秒）加推送延迟；优雅停机（20 秒）要覆盖最长的在途请求；<code>terminationGracePeriodSeconds</code>（60 秒）要大于两者之和，否则进程会被强杀。上线方向则反过来：就绪探针通过后才注册，冷启动的 Java 服务配合 Sentinel 的预热流控（Warm Up）逐步放量，避免 JIT 未完成时被满额流量打垮。</p>
+<h2 id="能力二：限流、熔断与降级"><a href="#能力二：限流、熔断与降级" class="headerlink" title="能力二：限流、熔断与降级"></a>能力二：限流、熔断与降级</h2><h3 id="规则分层"><a href="#规则分层" class="headerlink" title="规则分层"></a>规则分层</h3><table>
+<thead>
+<tr>
+<th>层次</th>
+<th>位置</th>
+<th>规则类型</th>
+<th>车联网示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>入口</td>
+<td>网关</td>
+<td>路由与 API 分组限流、热点参数限流</td>
+<td>开放 API 按调用方 AppKey 限流；远程控制按 VIN 限流</td>
+</tr>
+<tr>
+<td>服务</td>
+<td>服务提供方</td>
+<td>QPS 或并发线程数限流</td>
+<td>车辆状态查询单实例并发上限</td>
+</tr>
+<tr>
+<td>依赖</td>
+<td>服务调用方</td>
+<td>慢调用比例、异常比例熔断</td>
+<td>调用地图服务慢时熔断并返回缓存位置</td>
+</tr>
+<tr>
+<td>兜底</td>
+<td>全局</td>
+<td>系统自适应保护（按 CPU、平均 RT、入口并发）</td>
+<td>突发流量下保护实例不被打死</td>
+</tr>
+</tbody></table>
+<h3 id="阈值怎么定"><a href="#阈值怎么定" class="headerlink" title="阈值怎么定"></a>阈值怎么定</h3><p>阈值拍脑袋是原先限流「要么误杀、要么形同虚设」的根源。评估方法固定为三步：</p>
+<ol>
+<li><strong>单实例压测找拐点</strong>：逐步加压，记录 P99 开始陡升时的 QPS，记为拐点容量 C。</li>
+<li><strong>阈值取拐点的 70%–80%</strong>：给 GC、突发和邻居干扰留余量；集群阈值等于单实例阈值乘以实例数，并随扩缩容自动调整，或直接使用单机模式。</li>
+<li><strong>慢依赖用并发数而非 QPS 限流</strong>：根据利特尔法则，并发数 ≈ QPS × RT。某接口目标 2,000 QPS、正常 RT 50 ms，稳态并发约 100；当下游变慢、RT 升到 500 ms 时，同样的 QPS 需要 1,000 个并发，按 QPS 限流拦不住线程耗尽，按并发数限流则可以。</li>
+</ol>
+<h3 id="关键规则示例"><a href="#关键规则示例" class="headerlink" title="关键规则示例"></a>关键规则示例</h3><figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;resource&quot;</span><span class="punctuation">:</span> <span class="string">&quot;GET:/vehicles/&#123;vin&#125;/status&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">&quot;grade&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">&quot;count&quot;</span><span class="punctuation">:</span> <span class="number">200</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">&quot;slowRatioThreshold&quot;</span><span class="punctuation">:</span> <span class="number">0.5</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">&quot;minRequestAmount&quot;</span><span class="punctuation">:</span> <span class="number">20</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attr">&quot;statIntervalMs&quot;</span><span class="punctuation">:</span> <span class="number">10000</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="attr">&quot;timeWindow&quot;</span><span class="punctuation">:</span> <span class="number">30</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="punctuation">]</span></span></span></code></pre></div></div></figure>
+
+<p>这是一条慢调用比例熔断规则：10 秒统计窗口内请求数不少于 20，且 RT 超过 200 ms 的请求占比超过 50% 时，熔断 30 秒。熔断期间调用方执行降级逻辑：返回缓存中的最近车辆状态，并附带数据时间戳，由 App 提示「数据更新于 x 分钟前」。</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;resource&quot;</span><span class="punctuation">:</span> <span class="string">&quot;remoteControl&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">&quot;grade&quot;</span><span class="punctuation">:</span> <span class="number">1</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">&quot;paramIdx&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">&quot;count&quot;</span><span class="punctuation">:</span> <span class="number">2</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">&quot;durationInSec&quot;</span><span class="punctuation">:</span> <span class="number">5</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="punctuation">]</span></span></span></code></pre></div></div></figure>
+
+<p>这是一条热点参数规则：第 0 个参数为 VIN，同一辆车 5 秒内最多接受 2 条远程控制请求。它挡住的是 App 重复点击和脚本刷接口，而不影响其他车辆。</p>
+<h3 id="规则持久化"><a href="#规则持久化" class="headerlink" title="规则持久化"></a>规则持久化</h3><p>Sentinel 控制台默认把规则推到应用内存，应用重启即丢失，这在生产上不可接受。改造为推模式：控制台把规则写入 Nacos 配置，应用通过 Nacos 数据源监听变更。配置以 <code>&lt;应用名&gt;-&lt;规则类型&gt;-rules</code> 命名，每次变更保留历史版本，高风险规则（如入口限流阈值下调）走审批。</p>
+<h2 id="能力三：从网关灰度到全链路灰度"><a href="#能力三：从网关灰度到全链路灰度" class="headerlink" title="能力三：从网关灰度到全链路灰度"></a>能力三：从网关灰度到全链路灰度</h2><p>车联网的灰度与互联网应用有一个显著差异：大量请求由车辆发起或以车辆为对象，因此<strong>灰度维度优先按车辆划分</strong>——VIN 白名单、车型、车端软件版本，其次才是用户与百分比。一辆车的请求要么全在灰度链路，要么全在基线链路，否则同一辆车的状态会在两个版本间来回跳。</p>
+<pre class="mermaid">sequenceDiagram
+  participant App as App / 车端
+  participant GW as 网关
+  participant A as 服务 A（灰度版）
+  participant MQ as 消息队列
+  participant B as 服务 B（仅基线版）
+  App-&gt;&gt;GW: 请求（携带 VIN）
+  GW-&gt;&gt;GW: 匹配灰度规则，写入 x-release-tag=canary
+  GW-&gt;&gt;A: 按实例元数据 version=canary 路由
+  A-&gt;&gt;B: Feign 调用透传 x-release-tag
+  Note over B: 无灰度实例，回落基线
+  A-&gt;&gt;MQ: 消息头写入 release-tag
+  MQ-&gt;&gt;A: 灰度消费者只消费带标签消息</pre>
+
+
+<p>实现要点：</p>
+<ul>
+<li><strong>实例打标</strong>：灰度实例在 Nacos 元数据中声明 <code>version=canary</code>。</li>
+<li><strong>路由选择</strong>：网关与各服务的负载均衡器按请求标签过滤实例列表，无匹配实例时回落基线，而不是报错。</li>
+<li><strong>标签透传</strong>：HTTP 调用由 Feign 拦截器透传；异步线程池使用可传递的线程上下文（如 TransmittableThreadLocal）；消息在消息头携带标签，灰度版消费者只处理带标签消息，基线消费者过滤掉灰度消息。三者缺一，灰度流量就会泄漏到基线，或基线流量进入灰度版。</li>
+<li><strong>数据兼容</strong>：灰度期间两个版本共用数据库，表结构只做向后兼容的扩展（先加字段、后迁移、最后删旧字段），消息格式只增不改。</li>
+</ul>
+<h2 id="能力四：服务间调用授权"><a href="#能力四：服务间调用授权" class="headerlink" title="能力四：服务间调用授权"></a>能力四：服务间调用授权</h2><p>Sentinel 的授权规则可以按调用来源做黑白名单，来源从请求头解析。它足以约束「谁不该调用谁」的内部约定，但请求头可以伪造，只在可信网络内有效，不能作为安全边界。真正的服务身份需要双向 TLS 与基于身份的授权策略，这正是服务网格的强项，也是网格试点要重点验证的能力。</p>
+<h2 id="服务网格：试点范围与评估方法"><a href="#服务网格：试点范围与评估方法" class="headerlink" title="服务网格：试点范围与评估方法"></a>服务网格：试点范围与评估方法</h2><h3 id="为什么试点，而不是全面推开"><a href="#为什么试点，而不是全面推开" class="headerlink" title="为什么试点，而不是全面推开"></a>为什么试点，而不是全面推开</h3><p>按 Istio 官方性能文档，Sidecar 每处理 1,000 RPS 约消耗 0.35 vCPU 与 40 MB 内存，P90 延迟增加约 2.65 ms；开启命名空间隔离的大型命名空间中，单个 Sidecar 内存约 50 MB。以平台 800 个 Pod、东西向合计 3 万 RPS 估算：流量相关 CPU 约 10.5 vCPU，Sidecar 基础内存约 40 GB，再加上控制面。这笔成本本身不算高，真正的门槛是排障能力：出现 503 时要能区分是应用、Sidecar 还是 xDS 配置下发的问题。</p>
+<h3 id="试点范围"><a href="#试点范围" class="headerlink" title="试点范围"></a>试点范围</h3><ul>
+<li><strong>纳入</strong>：新建的多语言业务域（例如用 Go、Python 实现的诊断算法服务）及其直接调用的少量 Java 服务。它们没有历史 SDK 包袱，最能体现网格价值。</li>
+<li><strong>不纳入</strong>：MQTT 接入集群、Kafka 生产与消费、数据库连接。这些都是长连接或非 HTTP 协议，Sidecar 只能做四层透传，却会增加一跳和一种故障模式。用 <code>traffic.sidecar.istio.io/excludeOutboundPorts</code> 等注解把相关端口排除在拦截之外。</li>
+</ul>
+<h3 id="语义差异与迁移陷阱"><a href="#语义差异与迁移陷阱" class="headerlink" title="语义差异与迁移陷阱"></a>语义差异与迁移陷阱</h3><figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="22"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 网格中的「熔断」：连接池上限 + 异常实例驱逐，不包含业务降级</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">apiVersion:</span> <span class="string">networking.istio.io/v1beta1</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">kind:</span> <span class="string">DestinationRule</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">metadata:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">name:</span> <span class="string">diag-engine</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">spec:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">host:</span> <span class="string">diag-engine.diag.svc.cluster.local</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">trafficPolicy:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="attr">connectionPool:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="attr">http:</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        <span class="attr">http2MaxRequests:</span> <span class="number">500</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        <span class="attr">maxRequestsPerConnection:</span> <span class="number">100</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">outlierDetection:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="attr">consecutive5xxErrors:</span> <span class="number">5</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="attr">interval:</span> <span class="string">10s</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="attr">baseEjectionTime:</span> <span class="string">30s</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="attr">maxEjectionPercent:</span> <span class="number">50</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">  <span class="attr">subsets:</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">stable</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">      <span class="attr">labels:</span> &#123; <span class="attr">version:</span> <span class="string">v1</span> &#125;</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">canary</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="attr">labels:</span> &#123; <span class="attr">version:</span> <span class="string">v2</span> &#125;</span></span></code></pre></div></div></figure>
+
+<ul>
+<li><strong>熔断不等于降级。</strong> 网格能把请求挡在门外，但「返回缓存快照」这样的业务降级仍要写在应用里。</li>
+<li><strong>限流体系要统一。</strong> Istio 没有一等公民的限流 API，本地限流靠 EnvoyFilter，全局限流需外接限流服务。Sentinel 提供了实现 Envoy 限流协议的 Token Server 模块，可以让网格与 SDK 共用同一套规则管理。</li>
+<li><strong>双注册中心过渡。</strong> 网格内按 Kubernetes Service 发现，存量服务按 Nacos 发现，过渡期通过 ServiceEntry 或同步组件互相暴露，并明确每个服务的「主注册源」。</li>
+<li><strong>启动与退出顺序。</strong> Java 应用启动时 Sidecar 可能尚未就绪，需开启 <code>holdApplicationUntilProxyStarts</code>；Job 类工作负载结束后 Sidecar 不会自动退出，需要在任务末尾调用 pilot-agent 的退出接口。</li>
+<li><strong>追踪头仍需应用透传。</strong> Sidecar 能生成 span，但无法把入站请求与出站请求关联起来，应用仍要透传追踪头。</li>
+</ul>
+<h3 id="试点的退出条件"><a href="#试点的退出条件" class="headerlink" title="试点的退出条件"></a>试点的退出条件</h3><p>试点三个月后以数据决定是否扩大：Sidecar 引入的 P99 增量低于 5 ms；试点域内因网格配置导致的故障为零；团队能在 30 分钟内定位一次注入的网格层故障。任何一条不满足，就维持 SDK 主线。</p>
+<h2 id="反例与风险"><a href="#反例与风险" class="headerlink" title="反例与风险"></a>反例与风险</h2><ul>
+<li><strong>只限流不降级。</strong> 被限流的请求直接报错，用户体验比变慢更差。每条限流与熔断规则都要配套一个可接受的降级结果。</li>
+<li><strong>多层重试叠加。</strong> 网关重试 3 次、服务 A 重试 3 次、Sidecar 再重试 3 次，下游故障时请求被放大到 27 倍。重试只允许在一层配置，并设置重试预算。</li>
+<li><strong>规则无版本、无审批。</strong> 一次误操作把入口阈值调低一个数量级，效果等同于主动宕机。</li>
+<li><strong>灰度只透传 HTTP。</strong> 消息链路不带标签，灰度版本产生的消息被基线消费者处理，或者反过来。</li>
+<li><strong>把网格当成治理的全部。</strong> 网格解决的是通信层问题，接口设计不合理、同步调用链过长，任何网格都救不了。</li>
+</ul>
+<h2 id="度量"><a href="#度量" class="headerlink" title="度量"></a>度量</h2><p>治理是否见效，只看四个指标：核心链路限流熔断规则覆盖率；发布导致的故障数与回滚耗时；灰度发布占全部发布的比例；故障平均恢复时间（MTTR）。</p>
+<h2 id="2026-回看：规则平台化是对的，Sidecar-已不是网格的默认形态"><a href="#2026-回看：规则平台化是对的，Sidecar-已不是网格的默认形态" class="headerlink" title="2026 回看：规则平台化是对的，Sidecar 已不是网格的默认形态"></a>2026 回看：规则平台化是对的，Sidecar 已不是网格的默认形态</h2><h3 id="经受住时间的判断"><a href="#经受住时间的判断" class="headerlink" title="经受住时间的判断"></a>经受住时间的判断</h3><ul>
+<li><strong>治理规则与执行面解耦。</strong> 这是整套方案里价值最大的一条。执行面后来确实在变化，但规则管理、审批与版本化的流程可以原样沿用。</li>
+<li><strong>优雅上下线、按车辆维度灰度、标签多通道透传。</strong> 这些与具体框架无关，无论 SDK 还是网格都绕不过去。</li>
+<li><strong>网格的熔断不等于业务降级、重试只配一层。</strong> 三年里各种执行面都没有改变这个事实。</li>
+</ul>
+<h3 id="需要修正的判断"><a href="#需要修正的判断" class="headerlink" title="需要修正的判断"></a>需要修正的判断</h3><ul>
+<li><strong>Sidecar 试点路线。</strong> Istio Ambient 模式在 1.24（2024 年 11 月）GA：节点级 ztunnel 提供四层 mTLS 与身份授权，七层能力按需部署 waypoint。当年评估的 Sidecar 资源开销、启动顺序、Job 退出等问题，大部分在 Ambient 下不再存在；Kubernetes 原生 Sidecar 容器也在 1.33（2025 年 4 月）GA，解决了 Job 场景的退出问题。今天做同样的试点，会直接选 Ambient。</li>
+<li><strong>网格配置契约。</strong> Gateway API 在 v1.1（2024 年 5 月）把服务网格支持（GAMMA）纳入标准通道，今天灰度路由会写成 HTTPRoute 权重规则，而不是 Istio 私有的 VirtualService。</li>
+<li><strong>对 Sentinel 演进的预期。</strong> 当年预期 Sentinel 2.0 与 OpenSergo 会成为治理标准，实际上 2.0 一直停留在 alpha，1.8.x 仍以约一年一个版本的节奏维护（1.8.10 发布于 2026 年 5 月）。进程内限流熔断依然有效，但不宜再把治理标准化押在它身上。</li>
+</ul>
+<h3 id="今天会怎么做"><a href="#今天会怎么做" class="headerlink" title="今天会怎么做"></a>今天会怎么做</h3><ul>
+<li><strong>四层默认加密、七层按需治理</strong>：全集群启用 Ambient，服务身份与调用授权全部由网格提供，替代基于请求头的来源授权；只有需要七层路由与限流的服务域部署 waypoint。</li>
+<li><strong>进程内只保留业务相关的保护</strong>：热点参数限流（按 VIN）、业务降级逻辑留在应用内，通用的连接池、异常驱逐、重试交给网格。</li>
+<li><strong>把大模型调用纳入治理</strong>：车联网平台开始调用大模型做诊断解释、客服与运营分析，这类调用按 token 计量、延迟以秒计，需要在 AI 网关上做按 token 的限流与配额，而不是沿用按 QPS 的规则。</li>
+<li><strong>注册中心收敛</strong>：Nacos 3.x（2025 年 4 月 GA）同时承担服务注册与 MCP、A2A 注册，平台对内的「服务目录」与对智能体开放的「工具目录」用同一套治理规则管理。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2023/04/11/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-02-%E4%BA%91%E8%BE%B9%E5%8D%8F%E5%90%8C%E4%B8%8E%E7%AE%97%E5%8A%9B%E4%B8%8B%E6%B2%89/">车云协同计算：云端管控面下发、车端数据面执行</a></h3>
+        <p>把驾驶行为、故障预警、电子围栏等计算下沉到车端中央计算单元：云端管控面负责规则与算法的版本、签名、灰度和期望状态…</p>
+        <a class="btn primary" href="/2023/04/11/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-02-%E4%BA%91%E8%BE%B9%E5%8D%8F%E5%90%8C%E4%B8%8E%E7%AE%97%E5%8A%9B%E4%B8%8B%E6%B2%89/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2023/03/07/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-00-%E5%9F%BA%E7%A1%80%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E8%A7%84%E5%88%92/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：车联网云原生基础平台规划：分层、边界与演进路线</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 11 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E9%97%AE%E9%A2%98%EF%BC%9A%E6%9C%8D%E5%8A%A1%E5%8F%98%E5%A4%9A%E4%B9%8B%E5%90%8E%EF%BC%8C%E7%A8%B3%E5%AE%9A%E6%80%A7%E4%BB%8E%E5%93%AA%E9%87%8C%E6%BC%8F" data-toc-target="问题：服务变多之后，稳定性从哪里漏"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">问题：服务变多之后，稳定性从哪里漏</span></a><a class="toc-level-2" href="#%E8%B7%AF%E7%BA%BF%E9%80%89%E6%8B%A9%EF%BC%9ASDK-%E6%B2%BB%E7%90%86%E8%BF%98%E6%98%AF%E6%9C%8D%E5%8A%A1%E7%BD%91%E6%A0%BC" data-toc-target="路线选择：SDK-治理还是服务网格"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">路线选择：SDK 治理还是服务网格</span></a><a class="toc-level-2" href="#%E7%9B%AE%E6%A0%87%E6%9E%B6%E6%9E%84" data-toc-target="目标架构"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">目标架构</span></a><a class="toc-level-2" href="#%E8%83%BD%E5%8A%9B%E4%B8%80%EF%BC%9A%E4%BC%98%E9%9B%85%E4%B8%8A%E4%B8%8B%E7%BA%BF" data-toc-target="能力一：优雅上下线"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">能力一：优雅上下线</span></a><a class="toc-level-2" href="#%E8%83%BD%E5%8A%9B%E4%BA%8C%EF%BC%9A%E9%99%90%E6%B5%81%E3%80%81%E7%86%94%E6%96%AD%E4%B8%8E%E9%99%8D%E7%BA%A7" data-toc-target="能力二：限流、熔断与降级"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">能力二：限流、熔断与降级</span></a><a class="toc-level-3" href="#%E8%A7%84%E5%88%99%E5%88%86%E5%B1%82" data-toc-target="规则分层"><span class="toc-text">规则分层</span></a><a class="toc-level-3" href="#%E9%98%88%E5%80%BC%E6%80%8E%E4%B9%88%E5%AE%9A" data-toc-target="阈值怎么定"><span class="toc-text">阈值怎么定</span></a><a class="toc-level-3" href="#%E5%85%B3%E9%94%AE%E8%A7%84%E5%88%99%E7%A4%BA%E4%BE%8B" data-toc-target="关键规则示例"><span class="toc-text">关键规则示例</span></a><a class="toc-level-3" href="#%E8%A7%84%E5%88%99%E6%8C%81%E4%B9%85%E5%8C%96" data-toc-target="规则持久化"><span class="toc-text">规则持久化</span></a><a class="toc-level-2" href="#%E8%83%BD%E5%8A%9B%E4%B8%89%EF%BC%9A%E4%BB%8E%E7%BD%91%E5%85%B3%E7%81%B0%E5%BA%A6%E5%88%B0%E5%85%A8%E9%93%BE%E8%B7%AF%E7%81%B0%E5%BA%A6" data-toc-target="能力三：从网关灰度到全链路灰度"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">能力三：从网关灰度到全链路灰度</span></a><a class="toc-level-2" href="#%E8%83%BD%E5%8A%9B%E5%9B%9B%EF%BC%9A%E6%9C%8D%E5%8A%A1%E9%97%B4%E8%B0%83%E7%94%A8%E6%8E%88%E6%9D%83" data-toc-target="能力四：服务间调用授权"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">能力四：服务间调用授权</span></a><a class="toc-level-2" href="#%E6%9C%8D%E5%8A%A1%E7%BD%91%E6%A0%BC%EF%BC%9A%E8%AF%95%E7%82%B9%E8%8C%83%E5%9B%B4%E4%B8%8E%E8%AF%84%E4%BC%B0%E6%96%B9%E6%B3%95" data-toc-target="服务网格：试点范围与评估方法"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">服务网格：试点范围与评估方法</span></a><a class="toc-level-3" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%95%E7%82%B9%EF%BC%8C%E8%80%8C%E4%B8%8D%E6%98%AF%E5%85%A8%E9%9D%A2%E6%8E%A8%E5%BC%80" data-toc-target="为什么试点，而不是全面推开"><span class="toc-text">为什么试点，而不是全面推开</span></a><a class="toc-level-3" href="#%E8%AF%95%E7%82%B9%E8%8C%83%E5%9B%B4" data-toc-target="试点范围"><span class="toc-text">试点范围</span></a><a class="toc-level-3" href="#%E8%AF%AD%E4%B9%89%E5%B7%AE%E5%BC%82%E4%B8%8E%E8%BF%81%E7%A7%BB%E9%99%B7%E9%98%B1" data-toc-target="语义差异与迁移陷阱"><span class="toc-text">语义差异与迁移陷阱</span></a><a class="toc-level-3" href="#%E8%AF%95%E7%82%B9%E7%9A%84%E9%80%80%E5%87%BA%E6%9D%A1%E4%BB%B6" data-toc-target="试点的退出条件"><span class="toc-text">试点的退出条件</span></a><a class="toc-level-2" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">反例与风险</span></a><a class="toc-level-2" href="#%E5%BA%A6%E9%87%8F" data-toc-target="度量"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">度量</span></a><a class="toc-level-2" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E8%A7%84%E5%88%99%E5%B9%B3%E5%8F%B0%E5%8C%96%E6%98%AF%E5%AF%B9%E7%9A%84%EF%BC%8CSidecar-%E5%B7%B2%E4%B8%8D%E6%98%AF%E7%BD%91%E6%A0%BC%E7%9A%84%E9%BB%98%E8%AE%A4%E5%BD%A2%E6%80%81" data-toc-target="2026-回看：规则平台化是对的，Sidecar-已不是网格的默认形态"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">2026 回看：规则平台化是对的，Sidecar 已不是网格的默认形态</span></a><a class="toc-level-3" href="#%E7%BB%8F%E5%8F%97%E4%BD%8F%E6%97%B6%E9%97%B4%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="经受住时间的判断"><span class="toc-text">经受住时间的判断</span></a><a class="toc-level-3" href="#%E9%9C%80%E8%A6%81%E4%BF%AE%E6%AD%A3%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="需要修正的判断"><span class="toc-text">需要修正的判断</span></a><a class="toc-level-3" href="#%E4%BB%8A%E5%A4%A9%E4%BC%9A%E6%80%8E%E4%B9%88%E5%81%9A" data-toc-target="今天会怎么做"><span class="toc-text">今天会怎么做</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 22%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">2 / 9</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E9%97%AE%E9%A2%98%EF%BC%9A%E6%9C%8D%E5%8A%A1%E5%8F%98%E5%A4%9A%E4%B9%8B%E5%90%8E%EF%BC%8C%E7%A8%B3%E5%AE%9A%E6%80%A7%E4%BB%8E%E5%93%AA%E9%87%8C%E6%BC%8F" data-toc-target="问题：服务变多之后，稳定性从哪里漏" data-title="01 · 问题：服务变多之后，稳定性从哪里漏" aria-label="问题：服务变多之后，稳定性从哪里漏"></a><a class="toc-strip__dot" href="#%E8%B7%AF%E7%BA%BF%E9%80%89%E6%8B%A9%EF%BC%9ASDK-%E6%B2%BB%E7%90%86%E8%BF%98%E6%98%AF%E6%9C%8D%E5%8A%A1%E7%BD%91%E6%A0%BC" data-toc-target="路线选择：SDK-治理还是服务网格" data-title="02 · 路线选择：SDK 治理还是服务网格" aria-label="路线选择：SDK 治理还是服务网格"></a><a class="toc-strip__dot" href="#%E7%9B%AE%E6%A0%87%E6%9E%B6%E6%9E%84" data-toc-target="目标架构" data-title="03 · 目标架构" aria-label="目标架构"></a><a class="toc-strip__dot" href="#%E8%83%BD%E5%8A%9B%E4%B8%80%EF%BC%9A%E4%BC%98%E9%9B%85%E4%B8%8A%E4%B8%8B%E7%BA%BF" data-toc-target="能力一：优雅上下线" data-title="04 · 能力一：优雅上下线" aria-label="能力一：优雅上下线"></a><a class="toc-strip__dot" href="#%E8%83%BD%E5%8A%9B%E4%BA%8C%EF%BC%9A%E9%99%90%E6%B5%81%E3%80%81%E7%86%94%E6%96%AD%E4%B8%8E%E9%99%8D%E7%BA%A7" data-toc-target="能力二：限流、熔断与降级" data-title="05 · 能力二：限流、熔断与降级" aria-label="能力二：限流、熔断与降级"></a><a class="toc-strip__dot" href="#%E8%83%BD%E5%8A%9B%E4%B8%89%EF%BC%9A%E4%BB%8E%E7%BD%91%E5%85%B3%E7%81%B0%E5%BA%A6%E5%88%B0%E5%85%A8%E9%93%BE%E8%B7%AF%E7%81%B0%E5%BA%A6" data-toc-target="能力三：从网关灰度到全链路灰度" data-title="06 · 能力三：从网关灰度到全链路灰度" aria-label="能力三：从网关灰度到全链路灰度"></a><a class="toc-strip__dot" href="#%E8%83%BD%E5%8A%9B%E5%9B%9B%EF%BC%9A%E6%9C%8D%E5%8A%A1%E9%97%B4%E8%B0%83%E7%94%A8%E6%8E%88%E6%9D%83" data-toc-target="能力四：服务间调用授权" data-title="07 · 能力四：服务间调用授权" aria-label="能力四：服务间调用授权"></a><a class="toc-strip__dot" href="#%E6%9C%8D%E5%8A%A1%E7%BD%91%E6%A0%BC%EF%BC%9A%E8%AF%95%E7%82%B9%E8%8C%83%E5%9B%B4%E4%B8%8E%E8%AF%84%E4%BC%B0%E6%96%B9%E6%B3%95" data-toc-target="服务网格：试点范围与评估方法" data-title="08 · 服务网格：试点范围与评估方法" aria-label="服务网格：试点范围与评估方法"></a><a class="toc-strip__dot" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险" data-title="09 · 反例与风险" aria-label="反例与风险"></a><a class="toc-strip__dot" href="#%E5%BA%A6%E9%87%8F" data-toc-target="度量" data-title="10 · 度量" aria-label="度量"></a><a class="toc-strip__dot" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E8%A7%84%E5%88%99%E5%B9%B3%E5%8F%B0%E5%8C%96%E6%98%AF%E5%AF%B9%E7%9A%84%EF%BC%8CSidecar-%E5%B7%B2%E4%B8%8D%E6%98%AF%E7%BD%91%E6%A0%BC%E7%9A%84%E9%BB%98%E8%AE%A4%E5%BD%A2%E6%80%81" data-toc-target="2026-回看：规则平台化是对的，Sidecar-已不是网格的默认形态" data-title="11 · 2026 回看：规则平台化是对的，Sidecar 已不是网格的默认形态" aria-label="2026 回看：规则平台化是对的，Sidecar 已不是网格的默认形态"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-01-服务治理","title":"车联网服务治理演进：从 Spring Cloud 治理到服务网格","url":"/2023/03/21/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-01-%E6%9C%8D%E5%8A%A1%E6%B2%BB%E7%90%86/","path":"cloud-native-platform","index":1,"total":9,"next":{"title":"车云协同计算：云端管控面下发、车端数据面执行","url":"/2023/04/11/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-02-%E4%BA%91%E8%BE%B9%E5%8D%8F%E5%90%8C%E4%B8%8E%E7%AE%97%E5%8A%9B%E4%B8%8B%E6%B2%89/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

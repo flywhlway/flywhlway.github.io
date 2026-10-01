@@ -1,0 +1,687 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 14 章 仿真、世界模型与评测平台 · 飞轮之道</title>
+<meta name="description" content="仿真在具身智能里同时扮演训练场、考场和数据工厂。平台工程师不需要精通物理引擎，但必须知道：仿真分什么时候可信、仿真 farm 怎么建、合成数据怎么管、世界模型能帮什么忙。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-14-%E4%BB%BF%E7%9C%9F%E4%B8%96%E7%95%8C%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AF%84%E6%B5%8B%E5%B9%B3%E5%8F%B0/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 14 章 仿真、世界模型与评测平台 · 飞轮之道">
+<meta property="og:description" content="仿真在具身智能里同时扮演训练场、考场和数据工厂。平台工程师不需要精通物理引擎，但必须知道：仿真分什么时候可信、仿真 farm 怎么建、合成数据怎么管、世界模型能帮什么忙。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-14-%E4%BB%BF%E7%9C%9F%E4%B8%96%E7%95%8C%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AF%84%E6%B5%8B%E5%B9%B3%E5%8F%B0/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518314916381-77a37c2a49ae?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">平台架构</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 15 / 28 篇</a>
+    </div>
+    <h1>第 14 章 仿真、世界模型与评测平台</h1>
+    <p class="article-deck">仿真在具身智能里同时扮演训练场、考场和数据工厂。平台工程师不需要精通物理引擎，但必须知道：仿真分什么时候可信、仿真 farm 怎么建、合成数据怎么管、世界模型能帮什么忙。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>9 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E6%A8%A1%E5%9E%8B%E8%AF%84%E6%B5%8B/">#模型评测</a><a class="article-meta__tag" href="/tags/%E4%BB%BF%E7%9C%9F/">#仿真</a><a class="article-meta__tag" href="/tags/%E4%B8%96%E7%95%8C%E6%A8%A1%E5%9E%8B/">#世界模型</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>仿真三身份：训练场、考场、数据工厂，按用途选工具。</li><li>Sim2Real 四条沟：视觉、物理、时延、传感器。</li><li>相关性决定角色：高相关做门禁，低相关只冒烟。</li><li>场景包：版本化、只增不改、与模型解耦。</li><li>仿真 farm：分片、种子、共池不共队列。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：仿真在具身智能里同时扮演训练场、考场和数据工厂。平台工程师不需要精通物理引擎，但必须知道：仿真分什么时候可信、仿真 farm 怎么建、合成数据怎么管、世界模型能帮什么忙。<br><strong>对应代码</strong>：p03（<code>source=synthetic</code> 进入数据集清单）、p02（仿真评测作为门禁前置）｜<strong>建议学时</strong>：4 小时</p>
+</blockquote>
+<h2 id="14-1-仿真的三种身份"><a href="#14-1-仿真的三种身份" class="headerlink" title="14.1 仿真的三种身份"></a>14.1 仿真的三种身份</h2><h3 id="14-1-1-训练场、考场、数据工厂"><a href="#14-1-1-训练场、考场、数据工厂" class="headerlink" title="14.1.1 训练场、考场、数据工厂"></a>14.1.1 训练场、考场、数据工厂</h3><table>
+<thead>
+<tr>
+<th>身份</th>
+<th>做什么</th>
+<th>关键指标</th>
+<th>车联网对应</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>训练场</td>
+<td>强化学习、大规模并行试错（运动控制尤其依赖）</td>
+<td>吞吐（每秒仿真步数）、并行度</td>
+<td>—</td>
+</tr>
+<tr>
+<td>考场</td>
+<td>候选模型的闭环评测（第 13 章 L2）</td>
+<td><strong>仿真分与真机分的相关性</strong></td>
+<td>智驾仿真回灌、SIL</td>
+</tr>
+<tr>
+<td>数据工厂</td>
+<td>合成演示、域随机化扩增、世界模型生成</td>
+<td>数据有效性（对真机成功率的增益）</td>
+<td>合成场景数据</td>
+</tr>
+</tbody></table>
+<p>三种身份对仿真器的要求不同，<strong>按用途选工具、按用途建平台</strong>，而不是“选一个最好的仿真器”。</p>
+<h2 id="14-2-2026-年工具谱系"><a href="#14-2-2026-年工具谱系" class="headerlink" title="14.2 2026 年工具谱系"></a>14.2 2026 年工具谱系</h2><h3 id="14-2-1-选型速查"><a href="#14-2-1-选型速查" class="headerlink" title="14.2.1 选型速查"></a>14.2.1 选型速查</h3><table>
+<thead>
+<tr>
+<th>工具</th>
+<th>定位</th>
+<th>适合</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Isaac Sim &#x2F; Isaac Lab</td>
+<td>NVIDIA 的高保真仿真与机器人学习框架；Isaac Lab-Arena 面向策略评测</td>
+<td>视觉密集的操作任务、大规模并行 RL、评测</td>
+</tr>
+<tr>
+<td>Newton</td>
+<td>由 Disney Research、Google DeepMind、NVIDIA 发起的 GPU 物理引擎，Linux 基金会托管，基于 Warp 并以 MuJoCo Warp 为主要后端</td>
+<td>可微、GPU 加速的物理仿真</td>
+</tr>
+<tr>
+<td>MuJoCo &#x2F; MJX</td>
+<td>高精度刚体与接触动力学</td>
+<td>运动控制、接触丰富的操作</td>
+</tr>
+<tr>
+<td>Gazebo</td>
+<td>与 ROS 2 深度集成</td>
+<td>系统级集成测试、导航、CI 中的“机器人替身”</td>
+</tr>
+<tr>
+<td>Cosmos（Predict&#x2F;Transfer 2.5、Reason 2）</td>
+<td>世界模型：生成未来视频、做视觉域迁移、具身推理</td>
+<td>合成数据扩增、评测场景生成</td>
+</tr>
+</tbody></table>
+<h3 id="14-2-2-平台团队的现实选择"><a href="#14-2-2-平台团队的现实选择" class="headerlink" title="14.2.2 平台团队的现实选择"></a>14.2.2 平台团队的现实选择</h3><p>一个典型组合是：<strong>Gazebo 做系统集成 CI</strong>（验证 ROS 2 节点、云桥、任务链路——p06 的全家桶在 CI 中可以接入 Gazebo 机器人替身）；<strong>Isaac Lab 或 MuJoCo 做策略训练与评测</strong>；<strong>世界模型做数据扩增</strong>。平台要做的是把它们都变成“可排队、可并行、结果入库”的批处理任务。</p>
+<h2 id="14-3-Sim2Real-四条沟"><a href="#14-3-Sim2Real-四条沟" class="headerlink" title="14.3 Sim2Real 四条沟"></a>14.3 Sim2Real 四条沟</h2><h3 id="14-3-1-四条沟与对策"><a href="#14-3-1-四条沟与对策" class="headerlink" title="14.3.1 四条沟与对策"></a>14.3.1 四条沟与对策</h3><pre class="mermaid">flowchart LR
+  subgraph Gaps["Sim2Real 四条沟"]
+    G1["视觉沟"]
+    G2["物理沟"]
+    G3["时延沟"]
+    G4["传感器沟"]
+  end
+  G1 --&gt; F1["视觉域随机化 · 真实纹理资产 · 世界模型迁移"]
+  G2 --&gt; F2["物理参数随机化 · 系统辨识（采集任务）"]
+  G3 --&gt; F3["时延注入（取端侧实测 P50/P99）"]
+  G4 --&gt; F4["噪声模型 · 丢帧注入"]
+  F1 &amp; F2 &amp; F3 &amp; F4 --&gt; CAL["相关性校准：检验对策是否有效"]</pre>
+
+
+<table>
+<thead>
+<tr>
+<th>沟</th>
+<th>表现</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>视觉沟</td>
+<td>渲染的光照、材质、反光与真实不同</td>
+<td>视觉域随机化、真实纹理资产、世界模型做视觉迁移</td>
+</tr>
+<tr>
+<td>物理沟</td>
+<td>摩擦、质量、刚度、接触参数不准</td>
+<td>物理参数随机化、<strong>系统辨识</strong>（用真机数据反推参数）</td>
+</tr>
+<tr>
+<td>时延沟</td>
+<td>仿真里观测与执行零时延，真机有推理与通信时延</td>
+<td><strong>时延注入</strong>：在仿真中加入与真机一致的时延分布——最常被遗漏</td>
+</tr>
+<tr>
+<td>传感器沟</td>
+<td>真实传感器有噪声、丢帧、畸变</td>
+<td>传感器噪声模型、丢帧注入</td>
+</tr>
+</tbody></table>
+<h3 id="14-3-2-域随机化的直觉"><a href="#14-3-2-域随机化的直觉" class="headerlink" title="14.3.2 域随机化的直觉"></a>14.3.2 域随机化的直觉</h3><p>与其追求仿真与真实“一模一样”，不如让仿真的变化范围<strong>大到把真实世界包含在内</strong>：光照、颜色、质量、摩擦、时延都在一个范围内随机。模型在“千变万化”的仿真里学会稳健，真实世界只是其中一个样本。代价是训练更难、需要更多样本——这又回到了平台的算力与编排。</p>
+<h3 id="14-3-3-系统辨识是一种采集任务"><a href="#14-3-3-系统辨识是一种采集任务" class="headerlink" title="14.3.3 系统辨识是一种采集任务"></a>14.3.3 系统辨识是一种采集任务</h3><p>系统辨识需要让真机执行特定的激励动作并记录响应——它本质上是一个<strong>采集任务</strong>，应当通过 Fleet 任务面下发（第 10 章）、数据进入数据引擎（第 12 章）、辨识结果作为仿真资产的版本化参数。平台把“标定、辨识、仿真参数”串成一条可追溯的链。</p>
+<h2 id="14-4-仿真评测平台化"><a href="#14-4-仿真评测平台化" class="headerlink" title="14.4 仿真评测平台化"></a>14.4 仿真评测平台化</h2><h3 id="14-4-1-场景包"><a href="#14-4-1-场景包" class="headerlink" title="14.4.1 场景包"></a>14.4.1 场景包</h3><p>评测的单位是<strong>场景包</strong>：一组版本化的场景定义（布局、物体、初始状态、随机化范围、成功判据）+ 机器人资产（URDF&#x2F;USD）+ 仿真参数。场景包与模型解耦发布：模型更新频繁，场景包按月演进，且只增不改。</p>
+<h3 id="14-4-2-相关性校准：仿真分凭什么可信"><a href="#14-4-2-相关性校准：仿真分凭什么可信" class="headerlink" title="14.4.2 相关性校准：仿真分凭什么可信"></a>14.4.2 相关性校准：仿真分凭什么可信</h3><p>仿真分本身没有意义，<strong>只有和真机分相关，它才是一个有效的考场</strong>。做法：取一批历史模型（已有真机灰度数据），在每个场景包上跑仿真评测，计算仿真成功率与真机成功率的相关系数。</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">calibrate</span>(<span class="params">scene_pack: <span class="built_in">str</span>, sim_scores: <span class="built_in">list</span>[<span class="built_in">float</span>], real_scores: <span class="built_in">list</span>[<span class="built_in">float</span>], min_models: <span class="built_in">int</span> = <span class="number">6</span></span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;场景包相关性校准：高相关 → 可作门禁；低相关 → 只做冒烟测试&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="keyword">if</span> <span class="built_in">len</span>(sim_scores) &lt; min_models:</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="keyword">return</span> &#123;<span class="string">&quot;scene_pack&quot;</span>: scene_pack, <span class="string">&quot;role&quot;</span>: <span class="string">&quot;smoke&quot;</span>, <span class="string">&quot;reason&quot;</span>: <span class="string">&quot;not enough calibrated models&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    r = <span class="built_in">float</span>(np.corrcoef(sim_scores, real_scores)[<span class="number">0</span>, <span class="number">1</span>])</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    role = <span class="string">&quot;gate&quot;</span> <span class="keyword">if</span> r &gt;= <span class="number">0.8</span> <span class="keyword">else</span> <span class="string">&quot;signal&quot;</span> <span class="keyword">if</span> r &gt;= <span class="number">0.5</span> <span class="keyword">else</span> <span class="string">&quot;smoke&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;scene_pack&quot;</span>: scene_pack, <span class="string">&quot;pearson_r&quot;</span>: <span class="built_in">round</span>(r, <span class="number">3</span>), <span class="string">&quot;role&quot;</span>: role&#125;</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="comment"># 例：6 个历史模型在某场景包上的仿真分与灰度真机分</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="built_in">print</span>(calibrate(<span class="string">&quot;pick-carton-v3&quot;</span>, [<span class="number">0.71</span>, <span class="number">0.75</span>, <span class="number">0.80</span>, <span class="number">0.84</span>, <span class="number">0.86</span>, <span class="number">0.90</span>], [<span class="number">0.88</span>, <span class="number">0.90</span>, <span class="number">0.91</span>, <span class="number">0.93</span>, <span class="number">0.94</span>, <span class="number">0.955</span>]))</span></span></code></pre></div></div></figure>
+
+<p><strong>场景包的角色由相关性决定</strong>：高相关（例如 r ≥ 0.8）才能进入门禁；中等相关作为参考信号；低相关只做冒烟测试（能跑通、不撞墙）。仿真团队的 KPI 因此从“逼真度”变成“预测准确度”——这是本章最重要的一个观念转变。</p>
+<h3 id="14-4-3-评测结果入库"><a href="#14-4-3-评测结果入库" class="headerlink" title="14.4.3 评测结果入库"></a>14.4.3 评测结果入库</h3><p>每次评测记录：模型版本、场景包版本、仿真器版本、随机种子、逐场景结果、失败视频片段索引。结果进入模型注册表（第 13 章），失败片段可被检索，并可作为数据引擎的输入。</p>
+<h2 id="14-5-仿真-farm"><a href="#14-5-仿真-farm" class="headerlink" title="14.5 仿真 farm"></a>14.5 仿真 farm</h2><h3 id="14-5-1-架构"><a href="#14-5-1-架构" class="headerlink" title="14.5.1 架构"></a>14.5.1 架构</h3><pre class="mermaid">---
+title: "仿真评测 farm：批处理 GPU 平台"
+---
+flowchart LR
+  CI(["评测 CI&lt;br/&gt;（第 13 章）"])
+  SCH["评测调度器&lt;br/&gt;（队列·优先级·配额）"]
+  subgraph GPU["GPU 池（K8s）"]
+    W["仿真 Worker × N&lt;br/&gt;（Isaac Lab / MuJoCo / Gazebo）"]
+  end
+  SP[("场景包库&lt;br/&gt;（版本化·只增不改）")]
+  AR[("制品库&lt;br/&gt;（发布制品）")]
+  RS[("结果库&lt;br/&gt;（逐场景结果·失败片段索引）")]
+  CAL["相关性校准服务"]
+  CI --&gt;|"提交评测（模型 × 场景包列表）"| SCH
+  SCH --&gt;|"分片派发（每片 = 场景子集 × 种子）"| W
+  W -.-&gt;|"拉取场景包"| SP
+  W -.-&gt;|"拉取发布制品（评测对象即发布对象）"| AR
+  W --&gt;|"写入结果"| RS
+  RS --&gt;|"定期重算相关性，更新场景包角色"| CAL
+  SCH --&gt;|"汇总 → 门禁结论"| CI</pre>
+
+
+<h3 id="14-5-2-三个工程要点"><a href="#14-5-2-三个工程要点" class="headerlink" title="14.5.2 三个工程要点"></a>14.5.2 三个工程要点</h3><ol>
+<li><strong>评测对象即发布对象</strong>：仿真 Worker 加载的是签名制品与端侧同款运行时（第 13 章案例的教训）；</li>
+<li><strong>分片与种子</strong>：一次评测拆成大量“场景子集 × 随机种子”的分片并行执行，失败分片可重试，结果可复现；</li>
+<li><strong>共池不共队列</strong>：渲染型仿真与训练争抢 GPU，按队列与配额隔离，评测队列优先（评测排队直接拖慢飞轮转速）。</li>
+</ol>
+<h2 id="14-6-合成数据"><a href="#14-6-合成数据" class="headerlink" title="14.6 合成数据"></a>14.6 合成数据</h2><h3 id="14-6-1-两条纪律"><a href="#14-6-1-两条纪律" class="headerlink" title="14.6.1 两条纪律"></a>14.6.1 两条纪律</h3><ol>
+<li><strong>来源打标</strong>：所有合成数据在清单中标记 <code>source=synthetic</code>（以及生成器与版本），数据集卡片展示真实与合成的配比；</li>
+<li><strong>真机可得观测</strong>：合成数据只能包含真机上也能获得的观测。仿真里“上帝视角”的信息（物体精确位姿、被遮挡的内部状态）如果泄漏进训练输入，模型在真机上会失效。</li>
+</ol>
+<h3 id="14-6-2-标注免费的红利"><a href="#14-6-2-标注免费的红利" class="headerlink" title="14.6.2 标注免费的红利"></a>14.6.2 标注免费的红利</h3><p>仿真里的分割、深度、位姿、接触力都是“免费”的精确标签，这是合成数据最大的价值：用于训练辅助任务、评估感知模块、生成难以在真机上安全采集的场景（跌落、碰撞前兆）。配比多少合适没有通用答案——<strong>用评测结果决定配比</strong>，并把配比实验纳入实验追踪。</p>
+<h2 id="14-7-世界模型"><a href="#14-7-世界模型" class="headerlink" title="14.7 世界模型"></a>14.7 世界模型</h2><h3 id="14-7-1-平台视角的三种用法"><a href="#14-7-1-平台视角的三种用法" class="headerlink" title="14.7.1 平台视角的三种用法"></a>14.7.1 平台视角的三种用法</h3><table>
+<thead>
+<tr>
+<th>用法</th>
+<th>做什么</th>
+<th>平台关注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>视觉域迁移</td>
+<td>把仿真画面转成逼真画面，或把白天转成夜晚</td>
+<td>生成数据的标签是否仍然有效</td>
+</tr>
+<tr>
+<td>未来预测与数据扩增</td>
+<td>从一个起始状态生成多种可能的后续视频</td>
+<td>生成内容的物理合理性、成本</td>
+</tr>
+<tr>
+<td>策略评测</td>
+<td>在生成的“想象世界”中评估策略</td>
+<td>与真机的相关性校准（同 14.4.2）</td>
+</tr>
+</tbody></table>
+<p>NVIDIA 已计划把 Cosmos 3 接入 LeRobot 工作流，世界模型正在从研究工具变成数据平台的一个“生成器插件”。平台接入它时，把它当作又一个数据来源：打标、计量、评估有效性、进入血缘。</p>
+<h2 id="14-8-Real2Sim：把事故搬进仿真"><a href="#14-8-Real2Sim：把事故搬进仿真" class="headerlink" title="14.8 Real2Sim：把事故搬进仿真"></a>14.8 Real2Sim：把事故搬进仿真</h2><h3 id="14-8-1-流程"><a href="#14-8-1-流程" class="headerlink" title="14.8.1 流程"></a>14.8.1 流程</h3><p>线上事故 → 取证包（第 11 章：遥测、片段、版本、标定）→ 重建场景（布局、物体、初始状态）→ 生成场景包（加入随机化）→ 进入评测集的“回归”分组 → 以后每个候选模型都要通过这道题。这是车联网“事故场景库”的直接迁移，也是<strong>让同一个错误不犯第二次</strong>的机制。</p>
+<h2 id="14-9-L3-孪生与站点沙盘"><a href="#14-9-L3-孪生与站点沙盘" class="headerlink" title="14.9 L3 孪生与站点沙盘"></a>14.9 L3 孪生与站点沙盘</h2><h3 id="14-9-1-容量推演"><a href="#14-9-1-容量推演" class="headerlink" title="14.9.1 容量推演"></a>14.9.1 容量推演</h3><p>站点的仿真孪生（第 8 章 L3）可以回答运营问题：增加 10 台机器人，吞吐能提升多少？电梯会不会成为瓶颈？充电桩够不够？这类推演对仿真精度要求不高（任务级而不是动作级），却能直接支持采购与布局决策，是仿真在运营侧最容易落地的价值。</p>
+<h2 id="14-10-成本账"><a href="#14-10-成本账" class="headerlink" title="14.10 成本账"></a>14.10 成本账</h2><h3 id="14-10-1-什么时候仿真划算"><a href="#14-10-1-什么时候仿真划算" class="headerlink" title="14.10.1 什么时候仿真划算"></a>14.10.1 什么时候仿真划算</h3><table>
+<thead>
+<tr>
+<th>情况</th>
+<th>仿真的价值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>真机试错有损坏风险或安全风险</td>
+<td>高</td>
+</tr>
+<tr>
+<td>需要大规模并行试错（运动控制 RL）</td>
+<td>高</td>
+</tr>
+<tr>
+<td>视觉外观是主要难点、仿真渲染差距大</td>
+<td>中（需要世界模型或真实资产辅助）</td>
+</tr>
+<tr>
+<td>任务高度依赖难以建模的接触与柔性物体</td>
+<td>低（真机数据更划算）</td>
+</tr>
+</tbody></table>
+<p>平台要持续记录两个数：<strong>单位仿真评测成本</strong>与<strong>场景包相关性</strong>。低相关的场景包即使很便宜也在浪费钱。</p>
+<h2 id="14-11-案例推演：仿真分很高，真机一塌糊涂"><a href="#14-11-案例推演：仿真分很高，真机一塌糊涂" class="headerlink" title="14.11 案例推演：仿真分很高，真机一塌糊涂"></a>14.11 案例推演：仿真分很高，真机一塌糊涂</h2><h3 id="14-11-1-现象"><a href="#14-11-1-现象" class="headerlink" title="14.11.1 现象"></a>14.11.1 现象</h3><p>一个新模型在仿真评测中成功率比基线高 8 个百分点，灰度环 1 的真机成功率反而下降。</p>
+<h3 id="14-11-2-分析"><a href="#14-11-2-分析" class="headerlink" title="14.11.2 分析"></a>14.11.2 分析</h3><table>
+<thead>
+<tr>
+<th>检查</th>
+<th>发现</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>场景包相关性</td>
+<td>该任务使用的场景包从未做过相关性校准，历史数据显示相关系数仅 0.3</td>
+</tr>
+<tr>
+<td>时延</td>
+<td>场景包没有注入推理时延；新模型动作头去噪步数更多，真机时延更高</td>
+</tr>
+<tr>
+<td>观测</td>
+<td>训练中混入的一批合成数据含有物体精确位姿通道（上帝视角泄漏）</td>
+</tr>
+</tbody></table>
+<h3 id="14-11-3-平台动作"><a href="#14-11-3-平台动作" class="headerlink" title="14.11.3 平台动作"></a>14.11.3 平台动作</h3><ol>
+<li>未校准的场景包降级为冒烟测试，不得参与门禁；</li>
+<li>所有场景包强制时延注入，时延分布取自端侧遥测的实测 P50&#x2F;P99；</li>
+<li>数据集清单的合成数据来源增加“观测通道白名单”校验；</li>
+<li>仿真团队的季度目标改为“核心场景包相关系数达到 0.8”。</li>
+</ol>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车联网</th>
+<th>仿真与评测</th>
+<th>迁移方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>智驾仿真平台</td>
+<td>仿真三种身份</td>
+<td>改造</td>
+</tr>
+<tr>
+<td>SIL 测试</td>
+<td>Gazebo 机器人替身进 CI</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>仿真里程与路测对齐</td>
+<td>场景包相关性校准</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>事故场景库</td>
+<td>Real2Sim 回归分组</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>仿真集群</td>
+<td>仿真 farm（批处理 GPU 平台）</td>
+<td>直用</td>
+</tr>
+<tr>
+<td>合成数据管理</td>
+<td>来源打标 + 观测白名单</td>
+<td>改造</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>把仿真分当真机分</strong>：未校准的场景包进入门禁。对策：相关性决定场景包角色。</li>
+<li><strong>忘了时延沟</strong>：仿真零时延，真机卡顿。对策：场景包强制时延注入。</li>
+<li><strong>上帝视角泄漏</strong>：合成数据含真机不可得的观测。对策：观测通道白名单。</li>
+<li><strong>一个仿真器打天下</strong>：渲染型与接触型需求被迫妥协。对策：按用途选工具，平台统一编排。</li>
+</ul>
+<h2 id="🛠️-动手练习"><a href="#🛠️-动手练习" class="headerlink" title="🛠️ 动手练习"></a>🛠️ 动手练习</h2><ol>
+<li>用 14.4.2 的校准函数，为三个假想场景包设计“仿真分 vs 真机分”数据，观察角色如何变化，并说明需要多少个历史模型才能得到可靠的相关系数。</li>
+<li>为 p06 的全家桶设计一个 CI 流水线：Gazebo 中的机器人替身 + 云端 p01 + 一次任务下发的冒烟测试。</li>
+<li>为一次线上事故写出 Real2Sim 的场景包定义（布局、物体、初始状态、随机化范围、成功判据）。</li>
+</ol>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>仿真在具身智能中有哪三种用途？各自的关键指标？（训练场&#x2F;吞吐、考场&#x2F;相关性、数据工厂&#x2F;有效性）</li>
+<li>怎么判断仿真评测结果可信？（相关性校准，场景包角色分级）</li>
+<li>Sim2Real 有哪些差距？最常被忽略的是哪一个？（视觉、物理、时延、传感器；时延）</li>
+<li>合成数据的治理要点？（来源打标、配比实验、观测白名单）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>仿真三身份</strong>：训练场、考场、数据工厂，按用途选工具。</li>
+<li><strong>Sim2Real 四条沟</strong>：视觉、物理、时延、传感器。</li>
+<li><strong>相关性决定角色</strong>：高相关做门禁，低相关只冒烟。</li>
+<li><strong>场景包</strong>：版本化、只增不改、与模型解耦。</li>
+<li><strong>仿真 farm</strong>：分片、种子、共池不共队列。</li>
+<li><strong>上帝视角泄漏</strong>：合成数据只含真机可得观测。</li>
+<li><strong>Real2Sim 回归</strong>：同一个错误不犯第二次。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-13-%E6%A8%A1%E5%9E%8B%E5%B7%A5%E5%8E%82VLA%E8%AE%AD%E7%BB%83%E8%AF%84%E6%B5%8B%E5%8F%91%E5%B8%83/">第 13 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-15-%E5%85%B7%E8%BA%ABAgent%E5%B9%B3%E5%8F%B0/">第 15 章 具身 Agent 平台</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-15-%E5%85%B7%E8%BA%ABAgent%E5%B9%B3%E5%8F%B0/">第 15 章 具身 Agent 平台：慢脑、技能、记忆与安全笼</a></h3>
+        <p>把你在企业多 Agent 平台上的经验，迁移到“会指挥机器人”的 Agent 上。</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-15-%E5%85%B7%E8%BA%ABAgent%E5%B9%B3%E5%8F%B0/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-13-%E6%A8%A1%E5%9E%8B%E5%B7%A5%E5%8E%82VLA%E8%AE%AD%E7%BB%83%E8%AF%84%E6%B5%8B%E5%8F%91%E5%B8%83/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 13 章 模型工厂：VLA 训练、评测与发布</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 16 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#14-1-%E4%BB%BF%E7%9C%9F%E7%9A%84%E4%B8%89%E7%A7%8D%E8%BA%AB%E4%BB%BD" data-toc-target="14-1-仿真的三种身份"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">14.1 仿真的三种身份</span></a><a class="toc-level-3" href="#14-1-1-%E8%AE%AD%E7%BB%83%E5%9C%BA%E3%80%81%E8%80%83%E5%9C%BA%E3%80%81%E6%95%B0%E6%8D%AE%E5%B7%A5%E5%8E%82" data-toc-target="14-1-1-训练场、考场、数据工厂"><span class="toc-text">14.1.1 训练场、考场、数据工厂</span></a><a class="toc-level-2" href="#14-2-2026-%E5%B9%B4%E5%B7%A5%E5%85%B7%E8%B0%B1%E7%B3%BB" data-toc-target="14-2-2026-年工具谱系"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">14.2 2026 年工具谱系</span></a><a class="toc-level-3" href="#14-2-1-%E9%80%89%E5%9E%8B%E9%80%9F%E6%9F%A5" data-toc-target="14-2-1-选型速查"><span class="toc-text">14.2.1 选型速查</span></a><a class="toc-level-3" href="#14-2-2-%E5%B9%B3%E5%8F%B0%E5%9B%A2%E9%98%9F%E7%9A%84%E7%8E%B0%E5%AE%9E%E9%80%89%E6%8B%A9" data-toc-target="14-2-2-平台团队的现实选择"><span class="toc-text">14.2.2 平台团队的现实选择</span></a><a class="toc-level-2" href="#14-3-Sim2Real-%E5%9B%9B%E6%9D%A1%E6%B2%9F" data-toc-target="14-3-Sim2Real-四条沟"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">14.3 Sim2Real 四条沟</span></a><a class="toc-level-3" href="#14-3-1-%E5%9B%9B%E6%9D%A1%E6%B2%9F%E4%B8%8E%E5%AF%B9%E7%AD%96" data-toc-target="14-3-1-四条沟与对策"><span class="toc-text">14.3.1 四条沟与对策</span></a><a class="toc-level-3" href="#14-3-2-%E5%9F%9F%E9%9A%8F%E6%9C%BA%E5%8C%96%E7%9A%84%E7%9B%B4%E8%A7%89" data-toc-target="14-3-2-域随机化的直觉"><span class="toc-text">14.3.2 域随机化的直觉</span></a><a class="toc-level-3" href="#14-3-3-%E7%B3%BB%E7%BB%9F%E8%BE%A8%E8%AF%86%E6%98%AF%E4%B8%80%E7%A7%8D%E9%87%87%E9%9B%86%E4%BB%BB%E5%8A%A1" data-toc-target="14-3-3-系统辨识是一种采集任务"><span class="toc-text">14.3.3 系统辨识是一种采集任务</span></a><a class="toc-level-2" href="#14-4-%E4%BB%BF%E7%9C%9F%E8%AF%84%E6%B5%8B%E5%B9%B3%E5%8F%B0%E5%8C%96" data-toc-target="14-4-仿真评测平台化"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">14.4 仿真评测平台化</span></a><a class="toc-level-3" href="#14-4-1-%E5%9C%BA%E6%99%AF%E5%8C%85" data-toc-target="14-4-1-场景包"><span class="toc-text">14.4.1 场景包</span></a><a class="toc-level-3" href="#14-4-2-%E7%9B%B8%E5%85%B3%E6%80%A7%E6%A0%A1%E5%87%86%EF%BC%9A%E4%BB%BF%E7%9C%9F%E5%88%86%E5%87%AD%E4%BB%80%E4%B9%88%E5%8F%AF%E4%BF%A1" data-toc-target="14-4-2-相关性校准：仿真分凭什么可信"><span class="toc-text">14.4.2 相关性校准：仿真分凭什么可信</span></a><a class="toc-level-3" href="#14-4-3-%E8%AF%84%E6%B5%8B%E7%BB%93%E6%9E%9C%E5%85%A5%E5%BA%93" data-toc-target="14-4-3-评测结果入库"><span class="toc-text">14.4.3 评测结果入库</span></a><a class="toc-level-2" href="#14-5-%E4%BB%BF%E7%9C%9F-farm" data-toc-target="14-5-仿真-farm"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">14.5 仿真 farm</span></a><a class="toc-level-3" href="#14-5-1-%E6%9E%B6%E6%9E%84" data-toc-target="14-5-1-架构"><span class="toc-text">14.5.1 架构</span></a><a class="toc-level-3" href="#14-5-2-%E4%B8%89%E4%B8%AA%E5%B7%A5%E7%A8%8B%E8%A6%81%E7%82%B9" data-toc-target="14-5-2-三个工程要点"><span class="toc-text">14.5.2 三个工程要点</span></a><a class="toc-level-2" href="#14-6-%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE" data-toc-target="14-6-合成数据"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">14.6 合成数据</span></a><a class="toc-level-3" href="#14-6-1-%E4%B8%A4%E6%9D%A1%E7%BA%AA%E5%BE%8B" data-toc-target="14-6-1-两条纪律"><span class="toc-text">14.6.1 两条纪律</span></a><a class="toc-level-3" href="#14-6-2-%E6%A0%87%E6%B3%A8%E5%85%8D%E8%B4%B9%E7%9A%84%E7%BA%A2%E5%88%A9" data-toc-target="14-6-2-标注免费的红利"><span class="toc-text">14.6.2 标注免费的红利</span></a><a class="toc-level-2" href="#14-7-%E4%B8%96%E7%95%8C%E6%A8%A1%E5%9E%8B" data-toc-target="14-7-世界模型"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">14.7 世界模型</span></a><a class="toc-level-3" href="#14-7-1-%E5%B9%B3%E5%8F%B0%E8%A7%86%E8%A7%92%E7%9A%84%E4%B8%89%E7%A7%8D%E7%94%A8%E6%B3%95" data-toc-target="14-7-1-平台视角的三种用法"><span class="toc-text">14.7.1 平台视角的三种用法</span></a><a class="toc-level-2" href="#14-8-Real2Sim%EF%BC%9A%E6%8A%8A%E4%BA%8B%E6%95%85%E6%90%AC%E8%BF%9B%E4%BB%BF%E7%9C%9F" data-toc-target="14-8-Real2Sim：把事故搬进仿真"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">14.8 Real2Sim：把事故搬进仿真</span></a><a class="toc-level-3" href="#14-8-1-%E6%B5%81%E7%A8%8B" data-toc-target="14-8-1-流程"><span class="toc-text">14.8.1 流程</span></a><a class="toc-level-2" href="#14-9-L3-%E5%AD%AA%E7%94%9F%E4%B8%8E%E7%AB%99%E7%82%B9%E6%B2%99%E7%9B%98" data-toc-target="14-9-L3-孪生与站点沙盘"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">14.9 L3 孪生与站点沙盘</span></a><a class="toc-level-3" href="#14-9-1-%E5%AE%B9%E9%87%8F%E6%8E%A8%E6%BC%94" data-toc-target="14-9-1-容量推演"><span class="toc-text">14.9.1 容量推演</span></a><a class="toc-level-2" href="#14-10-%E6%88%90%E6%9C%AC%E8%B4%A6" data-toc-target="14-10-成本账"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">14.10 成本账</span></a><a class="toc-level-3" href="#14-10-1-%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%BB%BF%E7%9C%9F%E5%88%92%E7%AE%97" data-toc-target="14-10-1-什么时候仿真划算"><span class="toc-text">14.10.1 什么时候仿真划算</span></a><a class="toc-level-2" href="#14-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E4%BB%BF%E7%9C%9F%E5%88%86%E5%BE%88%E9%AB%98%EF%BC%8C%E7%9C%9F%E6%9C%BA%E4%B8%80%E5%A1%8C%E7%B3%8A%E6%B6%82" data-toc-target="14-11-案例推演：仿真分很高，真机一塌糊涂"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">14.11 案例推演：仿真分很高，真机一塌糊涂</span></a><a class="toc-level-3" href="#14-11-1-%E7%8E%B0%E8%B1%A1" data-toc-target="14-11-1-现象"><span class="toc-text">14.11.1 现象</span></a><a class="toc-level-3" href="#14-11-2-%E5%88%86%E6%9E%90" data-toc-target="14-11-2-分析"><span class="toc-text">14.11.2 分析</span></a><a class="toc-level-3" href="#14-11-3-%E5%B9%B3%E5%8F%B0%E5%8A%A8%E4%BD%9C" data-toc-target="14-11-3-平台动作"><span class="toc-text">14.11.3 平台动作</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">13</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习"><i class="toc-num" aria-hidden="true">14</i><span class="toc-text">🛠️ 动手练习</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">15</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">16</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 54%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">15 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#14-1-%E4%BB%BF%E7%9C%9F%E7%9A%84%E4%B8%89%E7%A7%8D%E8%BA%AB%E4%BB%BD" data-toc-target="14-1-仿真的三种身份" data-title="01 · 14.1 仿真的三种身份" aria-label="14.1 仿真的三种身份"></a><a class="toc-strip__dot" href="#14-2-2026-%E5%B9%B4%E5%B7%A5%E5%85%B7%E8%B0%B1%E7%B3%BB" data-toc-target="14-2-2026-年工具谱系" data-title="02 · 14.2 2026 年工具谱系" aria-label="14.2 2026 年工具谱系"></a><a class="toc-strip__dot" href="#14-3-Sim2Real-%E5%9B%9B%E6%9D%A1%E6%B2%9F" data-toc-target="14-3-Sim2Real-四条沟" data-title="03 · 14.3 Sim2Real 四条沟" aria-label="14.3 Sim2Real 四条沟"></a><a class="toc-strip__dot" href="#14-4-%E4%BB%BF%E7%9C%9F%E8%AF%84%E6%B5%8B%E5%B9%B3%E5%8F%B0%E5%8C%96" data-toc-target="14-4-仿真评测平台化" data-title="04 · 14.4 仿真评测平台化" aria-label="14.4 仿真评测平台化"></a><a class="toc-strip__dot" href="#14-5-%E4%BB%BF%E7%9C%9F-farm" data-toc-target="14-5-仿真-farm" data-title="05 · 14.5 仿真 farm" aria-label="14.5 仿真 farm"></a><a class="toc-strip__dot" href="#14-6-%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE" data-toc-target="14-6-合成数据" data-title="06 · 14.6 合成数据" aria-label="14.6 合成数据"></a><a class="toc-strip__dot" href="#14-7-%E4%B8%96%E7%95%8C%E6%A8%A1%E5%9E%8B" data-toc-target="14-7-世界模型" data-title="07 · 14.7 世界模型" aria-label="14.7 世界模型"></a><a class="toc-strip__dot" href="#14-8-Real2Sim%EF%BC%9A%E6%8A%8A%E4%BA%8B%E6%95%85%E6%90%AC%E8%BF%9B%E4%BB%BF%E7%9C%9F" data-toc-target="14-8-Real2Sim：把事故搬进仿真" data-title="08 · 14.8 Real2Sim：把事故搬进仿真" aria-label="14.8 Real2Sim：把事故搬进仿真"></a><a class="toc-strip__dot" href="#14-9-L3-%E5%AD%AA%E7%94%9F%E4%B8%8E%E7%AB%99%E7%82%B9%E6%B2%99%E7%9B%98" data-toc-target="14-9-L3-孪生与站点沙盘" data-title="09 · 14.9 L3 孪生与站点沙盘" aria-label="14.9 L3 孪生与站点沙盘"></a><a class="toc-strip__dot" href="#14-10-%E6%88%90%E6%9C%AC%E8%B4%A6" data-toc-target="14-10-成本账" data-title="10 · 14.10 成本账" aria-label="14.10 成本账"></a><a class="toc-strip__dot" href="#14-11-%E6%A1%88%E4%BE%8B%E6%8E%A8%E6%BC%94%EF%BC%9A%E4%BB%BF%E7%9C%9F%E5%88%86%E5%BE%88%E9%AB%98%EF%BC%8C%E7%9C%9F%E6%9C%BA%E4%B8%80%E5%A1%8C%E7%B3%8A%E6%B6%82" data-toc-target="14-11-案例推演：仿真分很高，真机一塌糊涂" data-title="11 · 14.11 案例推演：仿真分很高，真机一塌糊涂" aria-label="14.11 案例推演：仿真分很高，真机一塌糊涂"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="12 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="13 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%9B%A0%EF%B8%8F-%E5%8A%A8%E6%89%8B%E7%BB%83%E4%B9%A0" data-toc-target="🛠️-动手练习" data-title="14 · 🛠️ 动手练习" aria-label="🛠️ 动手练习"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="15 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="16 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-14-仿真世界模型与评测平台","title":"第 14 章 仿真、世界模型与评测平台","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-14-%E4%BB%BF%E7%9C%9F%E4%B8%96%E7%95%8C%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AF%84%E6%B5%8B%E5%B9%B3%E5%8F%B0/","path":"embodied-cloud-book","index":14,"total":28,"next":{"title":"第 15 章 具身 Agent 平台：慢脑、技能、记忆与安全笼","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-15-%E5%85%B7%E8%BA%ABAgent%E5%B9%B3%E5%8F%B0/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

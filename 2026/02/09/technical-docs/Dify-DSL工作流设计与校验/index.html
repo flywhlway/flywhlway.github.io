@@ -1,0 +1,1145 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Dify DSL 工作流设计与校验：Schema 硬约束与导入预检 · 飞轮之道</title>
+<meta name="description" content="对照 Dify 1.12.1 源码整理 DSL 0.5.0 的 Schema 硬约束：导入各阶段各校验什么、节点与容器的字段规则、导出时被改写的内容，并给出本地 lint 与「导入预检 → 再导出」的闭环脚本。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/02/09/technical-docs/Dify-DSL%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%A0%A1%E9%AA%8C/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Dify DSL 工作流设计与校验：Schema 硬约束与导入预检 · 飞轮之道">
+<meta property="og:description" content="对照 Dify 1.12.1 源码整理 DSL 0.5.0 的 Schema 硬约束：导入各阶段各校验什么、节点与容器的字段规则、导出时被改写的内容，并给出本地 lint 与「导入预检 → 再导出」的闭环脚本。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/02/09/technical-docs/Dify-DSL%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%A0%A1%E9%AA%8C/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/self-hosted-ai-infra/">Dify 平台</a><a class="series-chip" href="/paths/self-hosted-ai-infra/" title="查看学习路径">第 5 / 8 篇</a>
+    </div>
+    <h1>Dify DSL 工作流设计与校验：Schema 硬约束与导入预检</h1>
+    <p class="article-deck">对照 Dify 1.12.1 源码整理 DSL 0.5.0 的 Schema 硬约束：导入各阶段各校验什么、节点与容器的字段规则、导出时被改写的内容…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>24 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E5%B7%A5%E4%BD%9C%E6%B5%81/">#工作流</a><a class="article-meta__tag" href="/tags/Dify/">#Dify</a><a class="article-meta__tag" href="/tags/DSL/">#DSL</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>导入只校验顶层结构、变量定义和节点类型名；节点字段写错要到画布渲染、发布或运行时才暴露，所以导入成功不等于可用。</li><li>if-else 只写 cases；数值比较运算符是 ≠ ≥ ≤ 这类 Unicode 符号；LLM 节点必须带 context；环境变量条目用 name 而不是 variable。</li><li>1.12 的控制台接口用 Cookie 鉴权，所有需要登录的请求都要带与 csrf_token Cookie 一致的 X-CSRF-Token 头，登录密码要 Base64。</li><li>最终入库的 DSL 应是「导入 → 画布保存 → 再导出」得到的那一份，而不是生成器的原始输出。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="导入成功，为什么还会打不开"><a href="#导入成功，为什么还会打不开" class="headerlink" title="导入成功，为什么还会打不开"></a>导入成功，为什么还会打不开</h2><p>用 LLM 或脚本生成 Dify DSL，最常见的挫败是：导入提示成功，一点开应用就白屏，或者能打开但运行第一步就报字段错误。原因是 Dify 的校验分散在五个阶段，导入只覆盖了最前面的一小段。以下对照 1.12.1 的 <code>api/services/app_dsl_service.py</code> 与 <code>workflow_service.py</code> 整理：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>校验内容</th>
+<th>典型报错或现象</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>导入</td>
+<td>YAML 必须是映射；<code>version</code> 必须是字符串；缺 <code>kind</code> 自动补 <code>app</code>；必须有 <code>app</code> 段；<code>workflow</code> &#x2F; <code>advanced-chat</code> 必须有 <code>workflow</code> 字典；环境变量与会话变量逐条构造；<code>dependencies</code> 逐条解析</td>
+<td><code>Missing app data in YAML content</code>、<code>missing name</code>、<code>Invalid version type</code></td>
+</tr>
+<tr>
+<td>草稿同步（导入时同步执行）</td>
+<td>每个节点的 <code>data.type</code> 必须是合法枚举值；开始节点与触发器节点不能共存；<code>features</code> 结构校验</td>
+<td><code>&#39;xxx&#39; is not a valid NodeType</code>、<code>Start node and trigger nodes cannot coexist in the same workflow</code></td>
+</tr>
+<tr>
+<td>画布渲染</td>
+<td>前端按自己的数据结构读取节点，容器、条件分支、句柄对不上就崩</td>
+<td>白屏、<code>client-side exception</code></td>
+</tr>
+<tr>
+<td>发布</td>
+<td>模型是否存在、凭据是否可用、图结构</td>
+<td><code>Model xxx not found for provider xxx</code></td>
+</tr>
+<tr>
+<td>运行</td>
+<td>每个节点的 <code>data</code> 用对应的 Pydantic 模型校验</td>
+<td>缺字段、类型不符、输出校验失败</td>
+</tr>
+</tbody></table>
+<p>换句话说，节点内部字段写错，导入阶段几乎不会报。生成 DSL 的正确目标不是「能导入」，而是「导入后画布能打开、发布能通过、单步能跑」。</p>
+<p>导入接口的返回状态与 HTTP 码：</p>
+<table>
+<thead>
+<tr>
+<th>status</th>
+<th>HTTP</th>
+<th>含义</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>completed</code></td>
+<td>200</td>
+<td>版本一致，已写入</td>
+<td>进入画布核对</td>
+</tr>
+<tr>
+<td><code>completed-with-warnings</code></td>
+<td>200</td>
+<td>DSL 次版本号低于实例</td>
+<td>已写入，重点检查老版本字段</td>
+</tr>
+<tr>
+<td><code>pending</code></td>
+<td>202</td>
+<td>DSL 版本高于实例，或主版本号低于实例</td>
+<td>10 分钟内调用 confirm 才会写入</td>
+</tr>
+<tr>
+<td><code>failed</code></td>
+<td>400</td>
+<td>结构错误</td>
+<td>按 <code>error</code> 修正</td>
+</tr>
+</tbody></table>
+<h2 id="版本号与跨版本导入"><a href="#版本号与跨版本导入" class="headerlink" title="版本号与跨版本导入"></a>版本号与跨版本导入</h2><p>DSL 版本号与 Dify 版本的对应关系（到本文写作时的 1.12）：</p>
+<table>
+<thead>
+<tr>
+<th>Dify 版本</th>
+<th>DSL version</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.0–1.2</td>
+<td>0.1.5</td>
+</tr>
+<tr>
+<td>1.3</td>
+<td>0.2.0</td>
+</tr>
+<tr>
+<td>1.4–1.6</td>
+<td>0.3.0</td>
+</tr>
+<tr>
+<td>1.7</td>
+<td>0.3.1</td>
+</tr>
+<tr>
+<td>1.8–1.9</td>
+<td>0.4.0</td>
+</tr>
+<tr>
+<td>1.10–1.12</td>
+<td>0.5.0</td>
+</tr>
+</tbody></table>
+<p>兼容判定只比较版本号：高于实例一律 <code>pending</code>；主版本号低于实例也是 <code>pending</code>；次版本号低于实例是 <code>completed-with-warnings</code>；其余 <code>completed</code>。另有一条特殊逻辑：版本不高于 0.1.5 且没写 <code>dependencies</code> 时，导入会按节点里引用的模型供应商和工具自动推断「最新版」插件依赖。社区里大量模板停留在 0.1.x，导入 1.12 时会得到警告和一串待安装插件，这是预期行为。</p>
+<p>生成器应当把 <code>version</code> 固定写成目标实例的版本（1.12 为 <code>&quot;0.5.0&quot;</code>），不要为了「新」写更高的版本号。</p>
+<h2 id="顶层骨架"><a href="#顶层骨架" class="headerlink" title="顶层骨架"></a>顶层骨架</h2><figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="18"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">version:</span> <span class="string">&quot;0.5.0&quot;</span>           <span class="comment"># 字符串；写成 0.5 会被解析成浮点数，导入直接失败</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">kind:</span> <span class="string">app</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">app:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">name:</span> <span class="string">示例工作流</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">mode:</span> <span class="string">workflow</span>            <span class="comment"># workflow / advanced-chat / chat / agent-chat / completion</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">icon:</span> <span class="string">&quot;🤖&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">icon_background:</span> <span class="string">&quot;#FFEAD5&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">description:</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">use_icon_as_answer_icon:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">dependencies:</span> []            <span class="comment"># 插件依赖；不确定哈希时留空，导入后手动安装</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">workflow:</span>                   <span class="comment"># chat / agent-chat / completion 用 model_config 代替 workflow</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="attr">environment_variables:</span> []</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="attr">conversation_variables:</span> []  <span class="comment"># 仅 advanced-chat 有意义</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="attr">features:</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="attr">graph:</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="attr">nodes:</span> []</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="attr">edges:</span> []</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    <span class="attr">viewport:</span> &#123;<span class="attr">x:</span> <span class="number">0</span>, <span class="attr">y:</span> <span class="number">0</span>, <span class="attr">zoom:</span> <span class="number">1</span>&#125;</span></span></code></pre></div></div></figure>
+
+<h2 id="Schema-硬约束"><a href="#Schema-硬约束" class="headerlink" title="Schema 硬约束"></a>Schema 硬约束</h2><h3 id="顶层与变量"><a href="#顶层与变量" class="headerlink" title="顶层与变量"></a>顶层与变量</h3><ul>
+<li><code>version</code> 必须是字符串。YAML 里 <code>0.5.0</code> 本身是字符串，<code>0.5</code> 却是浮点数，稳妥做法是始终加引号。</li>
+<li>带 <code>app_id</code> 的覆盖导入只允许 <code>workflow</code> 与 <code>advanced-chat</code> 应用。</li>
+<li>环境变量与会话变量每条必须有 <code>name</code>、<code>value_type</code>、<code>value</code>，<code>value</code> 不能是 <code>null</code>。用 <code>variable:</code> 代替 <code>name:</code> 会直接导入失败（<code>missing name</code>）。建议同时写 <code>id</code>（UUID）与 <code>description</code>，与导出格式保持一致。</li>
+<li>环境变量界面上可选的类型是 <code>string</code>、<code>number</code>、<code>secret</code>。<code>secret</code> 在导出时（不勾选包含密钥）值会被清空，导入后要重新填写。</li>
+<li><code>dependencies</code> 的条目格式为 <code>type: marketplace</code> + <code>value.marketplace_plugin_unique_identifier: 组织/插件:版本@哈希</code>。哈希对不上会被标为缺失依赖；手写 DSL 时宁可留空，在插件页手动安装。</li>
+</ul>
+<h3 id="节点与边"><a href="#节点与边" class="headerlink" title="节点与边"></a>节点与边</h3><ul>
+<li>节点外层：<code>id</code>（字符串，纯数字 ID 要加引号）、<code>type</code>、<code>position</code>、<code>data</code>。普通节点外层 <code>type</code> 一律是 <code>custom</code>，真正的节点类型写在 <code>data.type</code>；迭代与循环的起始节点外层分别是 <code>custom-iteration-start</code>、<code>custom-loop-start</code>；画布注释是 <code>custom-note</code>。</li>
+<li><code>data.title</code> 必填，所有节点的数据模型都以它为必需字段。</li>
+<li>边：<code>source</code>、<code>target</code> 必须指向存在的节点；<code>targetHandle</code> 为 <code>target</code>；<code>sourceHandle</code> 普通节点为 <code>source</code>，条件分支节点为对应的 <code>case_id</code>，ELSE 分支固定为 <code>false</code>，问题分类器为分类 <code>id</code>，开启失败分支的节点另有 <code>fail-branch</code>。</li>
+<li>不在容器里的节点<strong>不需要</strong> <code>isInIteration: false</code> 之类的字段，官方导出的外部节点也没有。容器内的节点才有硬性要求，见下面的片段。</li>
+</ul>
+<p>迭代容器的最小正确结构（循环同理，把 iteration 换成 loop、<code>isInIteration</code> &#x2F; <code>iteration_id</code> 换成 <code>isInLoop</code> &#x2F; <code>loop_id</code>）：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="39"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">nodes:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;it1&quot;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="attr">type:</span> <span class="string">iteration</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="attr">title:</span> <span class="string">逐条处理</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="attr">start_node_id:</span> <span class="string">it1start</span>          <span class="comment"># 必须指向下面的起始节点</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">iterator_selector:</span> [<span class="string">&quot;prep&quot;</span>, <span class="string">&quot;items&quot;</span>]</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="attr">output_selector:</span> [<span class="string">&quot;it1_work&quot;</span>, <span class="string">&quot;text&quot;</span>]</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="attr">is_parallel:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="attr">parallel_nums:</span> <span class="number">4</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="attr">error_handle_mode:</span> <span class="string">continue-on-error</span>   <span class="comment"># terminated / continue-on-error / remove-abnormal-output</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;it1start&quot;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="attr">type:</span> <span class="string">custom-iteration-start</span>       <span class="comment"># 外层类型不是 custom</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="attr">parentId:</span> <span class="string">&quot;it1&quot;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="attr">draggable:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="attr">selectable:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    <span class="attr">data:</span> &#123;<span class="attr">type:</span> <span class="string">iteration-start</span>, <span class="attr">title:</span> <span class="string">&quot;&quot;</span>, <span class="attr">isInIteration:</span> <span class="literal">true</span>&#125;</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">&quot;it1_work&quot;</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="attr">parentId:</span> <span class="string">&quot;it1&quot;</span>                    <span class="comment"># 容器内节点都要有 parentId</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">      <span class="attr">type:</span> <span class="string">template-transform</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">      <span class="attr">title:</span> <span class="string">单条格式化</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">      <span class="attr">isInIteration:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">      <span class="attr">iteration_id:</span> <span class="string">&quot;it1&quot;</span>              <span class="comment"># 与 parentId 一致</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">      <span class="attr">template:</span> <span class="string">&quot;<span class="template-variable">&#123;&#123; item &#125;&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">      <span class="attr">variables:</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">        <span class="bullet">-</span> <span class="attr">variable:</span> <span class="string">item</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">          <span class="attr">value_selector:</span> [<span class="string">&quot;it1&quot;</span>, <span class="string">&quot;item&quot;</span>]   <span class="comment"># 当前元素；序号用 [&quot;it1&quot;, &quot;index&quot;]</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"><span class="attr">edges:</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">source:</span> <span class="string">it1start</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">    <span class="attr">target:</span> <span class="string">it1_work</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    <span class="attr">sourceHandle:</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">    <span class="attr">targetHandle:</span> <span class="string">target</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    <span class="attr">type:</span> <span class="string">custom</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">    <span class="attr">zIndex:</span> <span class="number">1002</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">    <span class="attr">data:</span> &#123;<span class="attr">sourceType:</span> <span class="string">iteration-start</span>, <span class="attr">targetType:</span> <span class="string">template-transform</span>, <span class="attr">isInIteration:</span> <span class="literal">true</span>, <span class="attr">iteration_id:</span> <span class="string">&quot;it1&quot;</span>&#125;</span></span></code></pre></div></div></figure>
+
+<p>循环节点的循环变量通过 <code>[循环节点ID, 变量label]</code> 引用，退出条件写在 <code>break_conditions</code>，也可以在循环体里放一个 <code>loop-end</code> 节点提前退出。</p>
+<h3 id="节点类型对照（1-12-1）"><a href="#节点类型对照（1-12-1）" class="headerlink" title="节点类型对照（1.12.1）"></a>节点类型对照（1.12.1）</h3><p><code>data.type</code> 的合法值来自 <code>api/core/workflow/enums.py</code> 的 <code>NodeType</code>，写错任何一个字符都会在草稿同步阶段导入失败：</p>
+<table>
+<thead>
+<tr>
+<th>data.type</th>
+<th>界面名称</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>start</code> &#x2F; <code>end</code> &#x2F; <code>answer</code></td>
+<td>开始 &#x2F; 结束 &#x2F; 直接回复</td>
+<td><code>answer</code> 只用于 advanced-chat</td>
+</tr>
+<tr>
+<td><code>llm</code>、<code>agent</code></td>
+<td>LLM、Agent</td>
+<td></td>
+</tr>
+<tr>
+<td><code>knowledge-retrieval</code></td>
+<td>知识检索</td>
+<td>数据集 ID 导出时默认加密，见后文</td>
+</tr>
+<tr>
+<td><code>if-else</code>、<code>question-classifier</code></td>
+<td>条件分支、问题分类器</td>
+<td>分支靠边的 <code>sourceHandle</code> 区分</td>
+</tr>
+<tr>
+<td><code>code</code>、<code>template-transform</code></td>
+<td>代码执行、模板转换</td>
+<td></td>
+</tr>
+<tr>
+<td><code>http-request</code>、<code>tool</code></td>
+<td>HTTP 请求、工具</td>
+<td></td>
+</tr>
+<tr>
+<td><code>variable-aggregator</code>、<code>variable-assigner</code></td>
+<td>变量聚合器</td>
+<td>后者是聚合器的<strong>旧名</strong>，不是变量赋值</td>
+</tr>
+<tr>
+<td><code>assigner</code></td>
+<td>变量赋值</td>
+<td>当前版本写 <code>version: &#39;2&#39;</code> 与 <code>items</code> 列表</td>
+</tr>
+<tr>
+<td><code>iteration</code> &#x2F; <code>iteration-start</code></td>
+<td>迭代及其起始节点</td>
+<td></td>
+</tr>
+<tr>
+<td><code>loop</code> &#x2F; <code>loop-start</code> &#x2F; <code>loop-end</code></td>
+<td>循环、起始、退出循环</td>
+<td></td>
+</tr>
+<tr>
+<td><code>parameter-extractor</code>、<code>document-extractor</code>、<code>list-operator</code></td>
+<td>参数提取、文档提取、列表操作</td>
+<td></td>
+</tr>
+<tr>
+<td><code>trigger-schedule</code>、<code>trigger-webhook</code>、<code>trigger-plugin</code></td>
+<td>定时、Webhook、插件事件触发器</td>
+<td>1.10 起，仅 workflow 模式</td>
+</tr>
+<tr>
+<td><code>datasource</code>、<code>knowledge-index</code></td>
+<td>数据源、知识库写入</td>
+<td>属于知识流水线（1.9 起），不用于普通应用</td>
+</tr>
+</tbody></table>
+<h3 id="常用节点的字段约束"><a href="#常用节点的字段约束" class="headerlink" title="常用节点的字段约束"></a>常用节点的字段约束</h3><table>
+<thead>
+<tr>
+<th>节点</th>
+<th>必备字段</th>
+<th>易错点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>llm</code></td>
+<td><code>model.provider</code>、<code>model.name</code>、<code>model.mode</code>、<code>prompt_template</code>、<code>context</code></td>
+<td>1.x 的 provider 形如 <code>langgenius/openai/openai</code>，写 <code>openai</code> 会找不到模型；<code>context</code> 没有默认值，不用也要写 <code>&#123;enabled: false&#125;</code>；结构化输出用 <code>structured_output_enabled: true</code> + <code>structured_output.schema</code>，前提是所选模型支持</td>
+</tr>
+<tr>
+<td><code>if-else</code></td>
+<td><code>cases[].case_id</code>、<code>logical_operator</code>、<code>conditions[]</code></td>
+<td>顶层 <code>conditions</code> 是已弃用字段，只写 <code>cases</code>；每个条件含 <code>id</code>、<code>varType</code>、<code>variable_selector</code>、<code>comparison_operator</code>、<code>value</code></td>
+</tr>
+<tr>
+<td>条件运算符</td>
+<td>—</td>
+<td>合法值：<code>contains</code>、<code>not contains</code>、<code>start with</code>、<code>end with</code>、<code>is</code>、<code>is not</code>、<code>empty</code>、<code>not empty</code>、<code>in</code>、<code>not in</code>、<code>all of</code>、<code>=</code>、<code>≠</code>、<code>&gt;</code>、<code>&lt;</code>、<code>≥</code>、<code>≤</code>、<code>null</code>、<code>not null</code>、<code>exists</code>、<code>not exists</code>。写 <code>!=</code>、<code>&gt;=</code>、<code>starts with</code> 都不合法</td>
+</tr>
+<tr>
+<td><code>code</code></td>
+<td><code>code_language</code>、<code>code</code>、<code>variables</code>、<code>outputs</code></td>
+<td>语言只有 <code>python3</code>、<code>javascript</code>；输出类型只有 string &#x2F; number &#x2F; object &#x2F; boolean 及对应的 <code>array[...]</code>；声明的每个输出键都必须出现在返回值里，否则报 <code>Output xxx is missing.</code>；数组元素类型必须一致</td>
+</tr>
+<tr>
+<td><code>tool</code></td>
+<td><code>provider_id</code>、<code>provider_name</code>、<code>provider_type</code>、<code>tool_name</code>、<code>tool_label</code>、<code>tool_configurations</code>、<code>tool_parameters</code></td>
+<td>插件工具的 provider 形如 <code>langgenius/tavily/tavily</code>，<code>provider_type: builtin</code>；<code>tool_parameters</code> 每项是 <code>&#123;type, value&#125;</code>，<code>mixed</code> 对应含引用的字符串，<code>variable</code> 对应选择器列表，<code>constant</code> 对应常量；当前导出带 <code>tool_node_version: &#39;2&#39;</code></td>
+</tr>
+<tr>
+<td><code>http-request</code></td>
+<td><code>method</code>、<code>url</code>、<code>authorization</code>、<code>headers</code>、<code>params</code></td>
+<td><code>headers</code> 与 <code>params</code> 是 <code>键:值</code> 按行分隔的<strong>字符串</strong>；鉴权写 <code>&#123;type: api-key, config: &#123;type: bearer, api_key: ...&#125;&#125;</code>；body 的 <code>data</code> 是 <code>[&#123;type: text, value: ...&#125;]</code> 列表；1 MB 的上限作用在响应体</td>
+</tr>
+<tr>
+<td><code>assigner</code></td>
+<td><code>version: &#39;2&#39;</code>、<code>items[]</code></td>
+<td>每项含 <code>variable_selector</code>、<code>operation</code>（如 <code>over-write</code>、<code>append</code>、<code>+=</code>）、<code>input_type</code>（<code>variable</code> &#x2F; <code>constant</code>）、<code>value</code></td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td><code>outputs[]</code></td>
+<td>每项 <code>variable</code>、<code>value_selector</code>、<code>value_type</code></td>
+</tr>
+</tbody></table>
+<h3 id="变量引用"><a href="#变量引用" class="headerlink" title="变量引用"></a>变量引用</h3><ul>
+<li>文本里（提示词、URL、模板以外的字符串）用 <code>&#123;&#123;#节点ID.变量#&#125;&#125;</code>，系统变量 <code>&#123;&#123;#sys.query#&#125;&#125;</code>、<code>&#123;&#123;#sys.workflow_run_id#&#125;&#125;</code>，环境变量 <code>&#123;&#123;#env.NAME#&#125;&#125;</code>，会话变量 <code>&#123;&#123;#conversation.name#&#125;&#125;</code>。</li>
+<li>选择器字段（<code>*_selector</code>）用列表：<code>[&quot;节点ID&quot;, &quot;变量&quot;]</code>、<code>[&quot;env&quot;, &quot;NAME&quot;]</code>、<code>[&quot;sys&quot;, &quot;files&quot;]</code>。</li>
+<li>模板转换节点的 <code>template</code> 是 Jinja2，里面引用的是本节点 <code>variables</code> 里声明的名字，不是 <code>&#123;&#123;#...#&#125;&#125;</code>。</li>
+<li>引用的节点 ID 必须真实存在。改节点 ID 时，文本引用与选择器要一起改，这是手工编辑 DSL 最容易漏的地方。</li>
+</ul>
+<h2 id="生成方法：让实例自己提供上下文"><a href="#生成方法：让实例自己提供上下文" class="headerlink" title="生成方法：让实例自己提供上下文"></a>生成方法：让实例自己提供上下文</h2><p>让 LLM 凭记忆写 DSL，字段与插件标识必然漂移。更可靠的做法是把实例里的真实信息喂给它：</p>
+<ol>
+<li><strong>母版</strong>：从自己的实例导出一两个结构相近、能正常运行的应用，作为 few-shot 母版。它们带着与实例完全一致的字段形态与插件标识。</li>
+<li><strong>可用能力清单</strong>：用控制台接口拉取已安装插件与可用模型，只允许生成器使用清单里的 provider、tool_name。</li>
+<li><strong>约束清单</strong>：把上一节的硬约束原样放进提示词。</li>
+<li><strong>目标版本</strong>：明确写 <code>version: &quot;0.5.0&quot;</code>。</li>
+</ol>
+<p>用到的控制台接口（前缀 <code>/console/api</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>用途</th>
+<th>方法与路径</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>登录</td>
+<td><code>POST /login</code>，JSON <code>email</code>、<code>password</code>（Base64）、<code>remember_me</code></td>
+</tr>
+<tr>
+<td>应用列表</td>
+<td><code>GET /apps?page=1&amp;limit=100</code>（<code>limit</code> 上限 100）</td>
+</tr>
+<tr>
+<td>导出 DSL</td>
+<td><code>GET /apps/&#123;app_id&#125;/export?include_secret=false</code>，返回 <code>&#123;&quot;data&quot;: &quot;&lt;yaml&gt;&quot;&#125;</code></td>
+</tr>
+<tr>
+<td>导入</td>
+<td><code>POST /apps/imports</code>，<code>mode</code> 为 <code>yaml-content</code> 或 <code>yaml-url</code>，可带 <code>app_id</code> 覆盖</td>
+</tr>
+<tr>
+<td>确认导入</td>
+<td><code>POST /apps/imports/&#123;import_id&#125;/confirm</code></td>
+</tr>
+<tr>
+<td>依赖检查</td>
+<td><code>GET /apps/imports/&#123;app_id&#125;/check-dependencies</code>，返回 <code>leaked_dependencies</code></td>
+</tr>
+<tr>
+<td>已装插件</td>
+<td><code>GET /workspaces/current/plugin/list</code></td>
+</tr>
+<tr>
+<td>可用模型</td>
+<td><code>GET /workspaces/current/models/model-types/llm</code></td>
+</tr>
+</tbody></table>
+<p>1.12 的控制台鉴权有两个脚本必须处理的细节：登录成功后令牌只放在 Cookie 里（响应体只有 <code>&#123;&quot;result&quot;: &quot;success&quot;&#125;</code>），不再返回 <code>access_token</code>；此后<strong>每一个</strong>需要登录的请求（包括 GET 导出）都要带 <code>X-CSRF-Token</code> 头，值等于 <code>csrf_token</code> Cookie。实例配置为 https 且没设 <code>COOKIE_DOMAIN</code> 时，Cookie 名会带 <code>__Host-</code> 前缀。</p>
+<h2 id="校验闭环：lint-→-导入预检-→-画布-→-再导出"><a href="#校验闭环：lint-→-导入预检-→-画布-→-再导出" class="headerlink" title="校验闭环：lint → 导入预检 → 画布 → 再导出"></a>校验闭环：lint → 导入预检 → 画布 → 再导出</h2><pre class="mermaid">flowchart LR
+  G["生成 DSL"] --&gt; L&#123;"dsl_lint.py"&#125;
+  L --&gt;|有错| G
+  L --&gt;|通过| I&#123;"导入预检 App"&#125;
+  I --&gt;|failed / pending| G
+  I --&gt;|completed| C&#123;"画布打开并保存一次"&#125;
+  C --&gt;|白屏 / 报错| G
+  C --&gt;|正常| E["再导出"]
+  E --&gt; D["与生成稿做差异对比"]
+  D --&gt;|"差异回灌生成器"| G
+  E --&gt; R["导出稿入库"]</pre>
+
+
+<h3 id="本地静态检查"><a href="#本地静态检查" class="headerlink" title="本地静态检查"></a>本地静态检查</h3><p>下面的脚本覆盖本文列出的结构约束：节点类型、容器结构、条件运算符、边的句柄、变量引用、变量定义。用 1.12.1 仓库 <code>api/tests/fixtures/workflow/</code> 里的官方导出样例验证过，真实导出全部通过；少数手写测试样例因 provider 写成 <code>openai</code>、工具参数用了简写而被指出，正是它要拦的问题。</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="183"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:3"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">#!/usr/bin/env python3</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="string">&quot;&quot;&quot;dsl_lint.py：Dify 1.12.1（DSL 0.5.0）工作流 DSL 的本地静态检查。</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="string">用法：python3 dsl_lint.py app.yml   # 通过返回 0，有问题返回 1</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="string">只覆盖导入与画布渲染阶段最常见的硬约束，不替代导入预检。</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="string">&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">import</span> re</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="keyword">import</span> sys</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">import</span> yaml</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">NODE_TYPES = &#123;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="string">&quot;start&quot;</span>, <span class="string">&quot;end&quot;</span>, <span class="string">&quot;answer&quot;</span>, <span class="string">&quot;llm&quot;</span>, <span class="string">&quot;knowledge-retrieval&quot;</span>, <span class="string">&quot;if-else&quot;</span>, <span class="string">&quot;code&quot;</span>,</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="string">&quot;template-transform&quot;</span>, <span class="string">&quot;question-classifier&quot;</span>, <span class="string">&quot;http-request&quot;</span>, <span class="string">&quot;tool&quot;</span>,</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="string">&quot;variable-aggregator&quot;</span>, <span class="string">&quot;variable-assigner&quot;</span>, <span class="string">&quot;assigner&quot;</span>, <span class="string">&quot;loop&quot;</span>, <span class="string">&quot;loop-start&quot;</span>,</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="string">&quot;loop-end&quot;</span>, <span class="string">&quot;iteration&quot;</span>, <span class="string">&quot;iteration-start&quot;</span>, <span class="string">&quot;parameter-extractor&quot;</span>,</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="string">&quot;document-extractor&quot;</span>, <span class="string">&quot;list-operator&quot;</span>, <span class="string">&quot;agent&quot;</span>,</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    <span class="string">&quot;trigger-webhook&quot;</span>, <span class="string">&quot;trigger-schedule&quot;</span>, <span class="string">&quot;trigger-plugin&quot;</span>,</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">TRIGGERS = &#123;<span class="string">&quot;trigger-webhook&quot;</span>, <span class="string">&quot;trigger-schedule&quot;</span>, <span class="string">&quot;trigger-plugin&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">OUTER_TYPES = &#123;<span class="string">&quot;custom&quot;</span>, <span class="string">&quot;custom-iteration-start&quot;</span>, <span class="string">&quot;custom-loop-start&quot;</span>, <span class="string">&quot;custom-note&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">OPERATORS = &#123;</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="string">&quot;contains&quot;</span>, <span class="string">&quot;not contains&quot;</span>, <span class="string">&quot;start with&quot;</span>, <span class="string">&quot;end with&quot;</span>, <span class="string">&quot;is&quot;</span>, <span class="string">&quot;is not&quot;</span>,</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    <span class="string">&quot;empty&quot;</span>, <span class="string">&quot;not empty&quot;</span>, <span class="string">&quot;in&quot;</span>, <span class="string">&quot;not in&quot;</span>, <span class="string">&quot;all of&quot;</span>,</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="string">&quot;=&quot;</span>, <span class="string">&quot;≠&quot;</span>, <span class="string">&quot;&gt;&quot;</span>, <span class="string">&quot;&lt;&quot;</span>, <span class="string">&quot;≥&quot;</span>, <span class="string">&quot;≤&quot;</span>, <span class="string">&quot;null&quot;</span>, <span class="string">&quot;not null&quot;</span>, <span class="string">&quot;exists&quot;</span>, <span class="string">&quot;not exists&quot;</span>,</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">CODE_TYPES = &#123;</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    <span class="string">&quot;string&quot;</span>, <span class="string">&quot;number&quot;</span>, <span class="string">&quot;object&quot;</span>, <span class="string">&quot;boolean&quot;</span>,</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    <span class="string">&quot;array[string]&quot;</span>, <span class="string">&quot;array[number]&quot;</span>, <span class="string">&quot;array[object]&quot;</span>, <span class="string">&quot;array[boolean]&quot;</span>,</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">REF = re.<span class="built_in">compile</span>(<span class="string">r&quot;\&#123;\&#123;#([\w-]+)\.[\w.]+#\&#125;\&#125;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">ROOTS = &#123;<span class="string">&quot;sys&quot;</span>, <span class="string">&quot;env&quot;</span>, <span class="string">&quot;conversation&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">walk</span>(<span class="params">obj, key=<span class="literal">None</span></span>):</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;递归产出 (键名, 值)，用于扫描字符串引用与 *_selector。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(obj, <span class="built_in">dict</span>):</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">        <span class="keyword">for</span> k, v <span class="keyword">in</span> obj.items():</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">            <span class="keyword">yield</span> <span class="keyword">from</span> walk(v, k)</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">    <span class="keyword">elif</span> <span class="built_in">isinstance</span>(obj, <span class="built_in">list</span>):</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">        <span class="keyword">if</span> key <span class="keyword">and</span> key.endswith(<span class="string">&quot;_selector&quot;</span>) <span class="keyword">and</span> <span class="built_in">len</span>(obj) &gt;= <span class="number">2</span> <span class="keyword">and</span> <span class="built_in">all</span>(<span class="built_in">isinstance</span>(x, <span class="built_in">str</span>) <span class="keyword">for</span> x <span class="keyword">in</span> obj):</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">            <span class="keyword">yield</span> key, obj</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">        <span class="keyword">else</span>:</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">            <span class="keyword">for</span> v <span class="keyword">in</span> obj:</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">                <span class="keyword">yield</span> <span class="keyword">from</span> walk(v, key)</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">    <span class="keyword">else</span>:</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">        <span class="keyword">yield</span> key, obj</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">lint</span>(<span class="params">doc</span>):</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">    errs = []</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">    err = errs.append</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> <span class="built_in">isinstance</span>(doc.get(<span class="string">&quot;version&quot;</span>), <span class="built_in">str</span>):</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">        err(<span class="string">&#x27;version 必须是字符串，例如 &quot;0.5.0&quot;&#x27;</span>)</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">    <span class="keyword">if</span> doc.get(<span class="string">&quot;kind&quot;</span>) != <span class="string">&quot;app&quot;</span>:</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">        err(<span class="string">&quot;kind 必须是 app&quot;</span>)</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">    mode = (doc.get(<span class="string">&quot;app&quot;</span>) <span class="keyword">or</span> &#123;&#125;).get(<span class="string">&quot;mode&quot;</span>)</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">    <span class="keyword">if</span> mode <span class="keyword">not</span> <span class="keyword">in</span> &#123;<span class="string">&quot;workflow&quot;</span>, <span class="string">&quot;advanced-chat&quot;</span>, <span class="string">&quot;chat&quot;</span>, <span class="string">&quot;agent-chat&quot;</span>, <span class="string">&quot;completion&quot;</span>&#125;:</span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">        err(<span class="string">f&quot;app.mode 非法：<span class="subst">&#123;mode&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">    <span class="keyword">if</span> mode <span class="keyword">not</span> <span class="keyword">in</span> &#123;<span class="string">&quot;workflow&quot;</span>, <span class="string">&quot;advanced-chat&quot;</span>&#125;:</span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">        <span class="keyword">return</span> errs</span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">    wf = doc.get(<span class="string">&quot;workflow&quot;</span>) <span class="keyword">or</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">    <span class="keyword">for</span> key <span class="keyword">in</span> (<span class="string">&quot;environment_variables&quot;</span>, <span class="string">&quot;conversation_variables&quot;</span>):</span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">        <span class="keyword">for</span> v <span class="keyword">in</span> wf.get(key) <span class="keyword">or</span> []:</span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">            missing = [f <span class="keyword">for</span> f <span class="keyword">in</span> (<span class="string">&quot;name&quot;</span>, <span class="string">&quot;value_type&quot;</span>, <span class="string">&quot;value&quot;</span>) <span class="keyword">if</span> v.get(f) <span class="keyword">is</span> <span class="literal">None</span>]</span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx">            <span class="keyword">if</span> missing:</span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;key&#125;</span> 条目缺少 <span class="subst">&#123;missing&#125;</span>：<span class="subst">&#123;v&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">    graph = wf.get(<span class="string">&quot;graph&quot;</span>) <span class="keyword">or</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">    by_id = &#123;&#125;</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">    <span class="keyword">for</span> n <span class="keyword">in</span> graph.get(<span class="string">&quot;nodes&quot;</span>) <span class="keyword">or</span> []:</span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">        nid = n.get(<span class="string">&quot;id&quot;</span>)</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">        <span class="keyword">if</span> <span class="keyword">not</span> <span class="built_in">isinstance</span>(nid, <span class="built_in">str</span>):</span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">            err(<span class="string">f&quot;节点 id 必须是字符串（纯数字要加引号）：<span class="subst">&#123;nid!r&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">            <span class="keyword">continue</span></span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">        <span class="keyword">if</span> nid <span class="keyword">in</span> by_id:</span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">            err(<span class="string">f&quot;节点 id 重复：<span class="subst">&#123;nid&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">        by_id[nid] = n</span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">        <span class="keyword">if</span> n.get(<span class="string">&quot;type&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> OUTER_TYPES:</span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">            err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: 外层 type 非法：<span class="subst">&#123;n.get(<span class="string">&#x27;type&#x27;</span>)&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx">        <span class="keyword">if</span> n.get(<span class="string">&quot;type&quot;</span>) == <span class="string">&quot;custom-note&quot;</span>:</span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx">            <span class="keyword">continue</span></span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">        d = n.get(<span class="string">&quot;data&quot;</span>) <span class="keyword">or</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">        <span class="keyword">if</span> d.get(<span class="string">&quot;type&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> NODE_TYPES:</span></span>
+<span class="cb-line" data-ln="86"><span class="cb-tx">            err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: data.type 非法：<span class="subst">&#123;d.get(<span class="string">&#x27;type&#x27;</span>)&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="87"><span class="cb-tx">        <span class="keyword">if</span> <span class="string">&quot;title&quot;</span> <span class="keyword">not</span> <span class="keyword">in</span> d:</span></span>
+<span class="cb-line" data-ln="88"><span class="cb-tx">            err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: 缺少 data.title&quot;</span>)</span></span>
+<span class="cb-line" data-ln="89"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="90"><span class="cb-tx">    real = &#123;k: v <span class="keyword">for</span> k, v <span class="keyword">in</span> by_id.items() <span class="keyword">if</span> v.get(<span class="string">&quot;type&quot;</span>) != <span class="string">&quot;custom-note&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="91"><span class="cb-tx">    types = &#123;(n.get(<span class="string">&quot;data&quot;</span>) <span class="keyword">or</span> &#123;&#125;).get(<span class="string">&quot;type&quot;</span>) <span class="keyword">for</span> n <span class="keyword">in</span> real.values()&#125;</span></span>
+<span class="cb-line" data-ln="92"><span class="cb-tx">    <span class="keyword">if</span> <span class="string">&quot;start&quot;</span> <span class="keyword">in</span> types <span class="keyword">and</span> types &amp; TRIGGERS:</span></span>
+<span class="cb-line" data-ln="93"><span class="cb-tx">        err(<span class="string">&quot;开始节点与触发器节点不能共存&quot;</span>)</span></span>
+<span class="cb-line" data-ln="94"><span class="cb-tx">    <span class="keyword">if</span> mode != <span class="string">&quot;workflow&quot;</span> <span class="keyword">and</span> types &amp; TRIGGERS:</span></span>
+<span class="cb-line" data-ln="95"><span class="cb-tx">        err(<span class="string">&quot;触发器节点只能用于 workflow 模式&quot;</span>)</span></span>
+<span class="cb-line" data-ln="96"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="97"><span class="cb-tx">    known = <span class="built_in">set</span>(real) | ROOTS</span></span>
+<span class="cb-line" data-ln="98"><span class="cb-tx">    <span class="keyword">for</span> nid, n <span class="keyword">in</span> real.items():</span></span>
+<span class="cb-line" data-ln="99"><span class="cb-tx">        d = n.get(<span class="string">&quot;data&quot;</span>) <span class="keyword">or</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="100"><span class="cb-tx">        t = d.get(<span class="string">&quot;type&quot;</span>)</span></span>
+<span class="cb-line" data-ln="101"><span class="cb-tx">        <span class="comment"># 容器：迭代与循环</span></span></span>
+<span class="cb-line" data-ln="102"><span class="cb-tx">        <span class="keyword">if</span> t <span class="keyword">in</span> (<span class="string">&quot;iteration&quot;</span>, <span class="string">&quot;loop&quot;</span>):</span></span>
+<span class="cb-line" data-ln="103"><span class="cb-tx">            s = real.get(d.get(<span class="string">&quot;start_node_id&quot;</span>))</span></span>
+<span class="cb-line" data-ln="104"><span class="cb-tx">            <span class="keyword">if</span> <span class="keyword">not</span> s <span class="keyword">or</span> (s.get(<span class="string">&quot;data&quot;</span>) <span class="keyword">or</span> &#123;&#125;).get(<span class="string">&quot;type&quot;</span>) != <span class="string">f&quot;<span class="subst">&#123;t&#125;</span>-start&quot;</span> <span class="keyword">or</span> s.get(<span class="string">&quot;parentId&quot;</span>) != nid:</span></span>
+<span class="cb-line" data-ln="105"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: start_node_id 必须指向 parentId 为 <span class="subst">&#123;nid&#125;</span> 的 <span class="subst">&#123;t&#125;</span>-start 节点&quot;</span>)</span></span>
+<span class="cb-line" data-ln="106"><span class="cb-tx">        parent = n.get(<span class="string">&quot;parentId&quot;</span>)</span></span>
+<span class="cb-line" data-ln="107"><span class="cb-tx">        <span class="keyword">if</span> parent:</span></span>
+<span class="cb-line" data-ln="108"><span class="cb-tx">            ptype = ((real.get(parent) <span class="keyword">or</span> &#123;&#125;).get(<span class="string">&quot;data&quot;</span>) <span class="keyword">or</span> &#123;&#125;).get(<span class="string">&quot;type&quot;</span>)</span></span>
+<span class="cb-line" data-ln="109"><span class="cb-tx">            <span class="keyword">if</span> ptype == <span class="string">&quot;iteration&quot;</span>:</span></span>
+<span class="cb-line" data-ln="110"><span class="cb-tx">                <span class="keyword">if</span> <span class="keyword">not</span> d.get(<span class="string">&quot;isInIteration&quot;</span>) <span class="keyword">or</span> (t != <span class="string">&quot;iteration-start&quot;</span> <span class="keyword">and</span> d.get(<span class="string">&quot;iteration_id&quot;</span>) != parent):</span></span>
+<span class="cb-line" data-ln="111"><span class="cb-tx">                    err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: 迭代内节点需 isInIteration: true 且 iteration_id: &#x27;<span class="subst">&#123;parent&#125;</span>&#x27;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="112"><span class="cb-tx">            <span class="keyword">elif</span> ptype == <span class="string">&quot;loop&quot;</span>:</span></span>
+<span class="cb-line" data-ln="113"><span class="cb-tx">                <span class="keyword">if</span> <span class="keyword">not</span> d.get(<span class="string">&quot;isInLoop&quot;</span>) <span class="keyword">or</span> (t != <span class="string">&quot;loop-start&quot;</span> <span class="keyword">and</span> d.get(<span class="string">&quot;loop_id&quot;</span>) != parent):</span></span>
+<span class="cb-line" data-ln="114"><span class="cb-tx">                    err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: 循环内节点需 isInLoop: true 且 loop_id: &#x27;<span class="subst">&#123;parent&#125;</span>&#x27;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="115"><span class="cb-tx">            <span class="keyword">else</span>:</span></span>
+<span class="cb-line" data-ln="116"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: parentId 指向的不是迭代或循环节点&quot;</span>)</span></span>
+<span class="cb-line" data-ln="117"><span class="cb-tx">        <span class="comment"># 节点级约束</span></span></span>
+<span class="cb-line" data-ln="118"><span class="cb-tx">        <span class="keyword">if</span> t == <span class="string">&quot;llm&quot;</span>:</span></span>
+<span class="cb-line" data-ln="119"><span class="cb-tx">            <span class="keyword">if</span> <span class="string">&quot;/&quot;</span> <span class="keyword">not</span> <span class="keyword">in</span> <span class="built_in">str</span>((d.get(<span class="string">&quot;model&quot;</span>) <span class="keyword">or</span> &#123;&#125;).get(<span class="string">&quot;provider&quot;</span>, <span class="string">&quot;&quot;</span>)):</span></span>
+<span class="cb-line" data-ln="120"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: model.provider 应形如 langgenius/openai/openai&quot;</span>)</span></span>
+<span class="cb-line" data-ln="121"><span class="cb-tx">            <span class="keyword">if</span> <span class="string">&quot;context&quot;</span> <span class="keyword">not</span> <span class="keyword">in</span> d:</span></span>
+<span class="cb-line" data-ln="122"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: LLM 节点缺少 context（不用也要写 enabled: false）&quot;</span>)</span></span>
+<span class="cb-line" data-ln="123"><span class="cb-tx">        <span class="keyword">if</span> t == <span class="string">&quot;code&quot;</span>:</span></span>
+<span class="cb-line" data-ln="124"><span class="cb-tx">            <span class="keyword">if</span> d.get(<span class="string">&quot;code_language&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> (<span class="string">&quot;python3&quot;</span>, <span class="string">&quot;javascript&quot;</span>):</span></span>
+<span class="cb-line" data-ln="125"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: code_language 只能是 python3 或 javascript&quot;</span>)</span></span>
+<span class="cb-line" data-ln="126"><span class="cb-tx">            <span class="keyword">for</span> k, o <span class="keyword">in</span> (d.get(<span class="string">&quot;outputs&quot;</span>) <span class="keyword">or</span> &#123;&#125;).items():</span></span>
+<span class="cb-line" data-ln="127"><span class="cb-tx">                <span class="keyword">if</span> (o <span class="keyword">or</span> &#123;&#125;).get(<span class="string">&quot;type&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> CODE_TYPES:</span></span>
+<span class="cb-line" data-ln="128"><span class="cb-tx">                    err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: 输出 <span class="subst">&#123;k&#125;</span> 的类型非法：<span class="subst">&#123;(o <span class="keyword">or</span> &#123;&#125;</span>).get(&#x27;type&#x27;)&#125;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="129"><span class="cb-tx">        <span class="keyword">if</span> t == <span class="string">&quot;tool&quot;</span>:</span></span>
+<span class="cb-line" data-ln="130"><span class="cb-tx">            <span class="keyword">for</span> k, p <span class="keyword">in</span> (d.get(<span class="string">&quot;tool_parameters&quot;</span>) <span class="keyword">or</span> &#123;&#125;).items():</span></span>
+<span class="cb-line" data-ln="131"><span class="cb-tx">                <span class="keyword">if</span> <span class="keyword">not</span> <span class="built_in">isinstance</span>(p, <span class="built_in">dict</span>) <span class="keyword">or</span> p.get(<span class="string">&quot;type&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> (<span class="string">&quot;mixed&quot;</span>, <span class="string">&quot;variable&quot;</span>, <span class="string">&quot;constant&quot;</span>):</span></span>
+<span class="cb-line" data-ln="132"><span class="cb-tx">                    err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: tool_parameters.<span class="subst">&#123;k&#125;</span> 须为 &#123;&#123;type: mixed|variable|constant, value: ...&#125;&#125;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="133"><span class="cb-tx">        conds = []</span></span>
+<span class="cb-line" data-ln="134"><span class="cb-tx">        <span class="keyword">if</span> t == <span class="string">&quot;if-else&quot;</span>:</span></span>
+<span class="cb-line" data-ln="135"><span class="cb-tx">            <span class="keyword">if</span> <span class="keyword">not</span> d.get(<span class="string">&quot;cases&quot;</span>):</span></span>
+<span class="cb-line" data-ln="136"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: if-else 必须使用 cases 结构&quot;</span>)</span></span>
+<span class="cb-line" data-ln="137"><span class="cb-tx">            <span class="keyword">for</span> c <span class="keyword">in</span> d.get(<span class="string">&quot;cases&quot;</span>) <span class="keyword">or</span> []:</span></span>
+<span class="cb-line" data-ln="138"><span class="cb-tx">                conds += c.get(<span class="string">&quot;conditions&quot;</span>) <span class="keyword">or</span> []</span></span>
+<span class="cb-line" data-ln="139"><span class="cb-tx">        <span class="keyword">if</span> t == <span class="string">&quot;loop&quot;</span>:</span></span>
+<span class="cb-line" data-ln="140"><span class="cb-tx">            conds += d.get(<span class="string">&quot;break_conditions&quot;</span>) <span class="keyword">or</span> []</span></span>
+<span class="cb-line" data-ln="141"><span class="cb-tx">        <span class="keyword">for</span> c <span class="keyword">in</span> conds:</span></span>
+<span class="cb-line" data-ln="142"><span class="cb-tx">            <span class="keyword">if</span> c.get(<span class="string">&quot;comparison_operator&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> OPERATORS:</span></span>
+<span class="cb-line" data-ln="143"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: 比较运算符非法：<span class="subst">&#123;c.get(<span class="string">&#x27;comparison_operator&#x27;</span>)!r&#125;</span>（数值比较用 ≠ ≥ ≤）&quot;</span>)</span></span>
+<span class="cb-line" data-ln="144"><span class="cb-tx">        <span class="comment"># 变量引用</span></span></span>
+<span class="cb-line" data-ln="145"><span class="cb-tx">        <span class="keyword">for</span> key, val <span class="keyword">in</span> walk(d):</span></span>
+<span class="cb-line" data-ln="146"><span class="cb-tx">            <span class="keyword">if</span> <span class="built_in">isinstance</span>(val, <span class="built_in">str</span>):</span></span>
+<span class="cb-line" data-ln="147"><span class="cb-tx">                <span class="keyword">for</span> ref <span class="keyword">in</span> REF.findall(val):</span></span>
+<span class="cb-line" data-ln="148"><span class="cb-tx">                    <span class="keyword">if</span> ref <span class="keyword">not</span> <span class="keyword">in</span> known:</span></span>
+<span class="cb-line" data-ln="149"><span class="cb-tx">                        err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: 文本引用了不存在的节点 <span class="subst">&#123;ref&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="150"><span class="cb-tx">            <span class="keyword">elif</span> <span class="built_in">isinstance</span>(val, <span class="built_in">list</span>) <span class="keyword">and</span> val[<span class="number">0</span>] <span class="keyword">not</span> <span class="keyword">in</span> known:</span></span>
+<span class="cb-line" data-ln="151"><span class="cb-tx">                err(<span class="string">f&quot;<span class="subst">&#123;nid&#125;</span>: <span class="subst">&#123;key&#125;</span> 指向不存在的节点 <span class="subst">&#123;val[<span class="number">0</span>]&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="152"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="153"><span class="cb-tx">    <span class="keyword">for</span> e <span class="keyword">in</span> graph.get(<span class="string">&quot;edges&quot;</span>) <span class="keyword">or</span> []:</span></span>
+<span class="cb-line" data-ln="154"><span class="cb-tx">        s, t = e.get(<span class="string">&quot;source&quot;</span>), e.get(<span class="string">&quot;target&quot;</span>)</span></span>
+<span class="cb-line" data-ln="155"><span class="cb-tx">        <span class="keyword">if</span> s <span class="keyword">not</span> <span class="keyword">in</span> real <span class="keyword">or</span> t <span class="keyword">not</span> <span class="keyword">in</span> real:</span></span>
+<span class="cb-line" data-ln="156"><span class="cb-tx">            err(<span class="string">f&quot;边 <span class="subst">&#123;e.get(<span class="string">&#x27;id&#x27;</span>)&#125;</span> 指向不存在的节点：<span class="subst">&#123;s&#125;</span> -&gt; <span class="subst">&#123;t&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="157"><span class="cb-tx">            <span class="keyword">continue</span></span></span>
+<span class="cb-line" data-ln="158"><span class="cb-tx">        sd = real[s].get(<span class="string">&quot;data&quot;</span>) <span class="keyword">or</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="159"><span class="cb-tx">        <span class="keyword">if</span> sd.get(<span class="string">&quot;type&quot;</span>) == <span class="string">&quot;if-else&quot;</span>:</span></span>
+<span class="cb-line" data-ln="160"><span class="cb-tx">            ok = &#123;c.get(<span class="string">&quot;case_id&quot;</span>) <span class="keyword">for</span> c <span class="keyword">in</span> sd.get(<span class="string">&quot;cases&quot;</span>) <span class="keyword">or</span> []&#125; | &#123;<span class="string">&quot;false&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="161"><span class="cb-tx">        <span class="keyword">elif</span> sd.get(<span class="string">&quot;type&quot;</span>) == <span class="string">&quot;question-classifier&quot;</span>:</span></span>
+<span class="cb-line" data-ln="162"><span class="cb-tx">            ok = &#123;c.get(<span class="string">&quot;id&quot;</span>) <span class="keyword">for</span> c <span class="keyword">in</span> sd.get(<span class="string">&quot;classes&quot;</span>) <span class="keyword">or</span> []&#125;</span></span>
+<span class="cb-line" data-ln="163"><span class="cb-tx">        <span class="keyword">else</span>:</span></span>
+<span class="cb-line" data-ln="164"><span class="cb-tx">            ok = &#123;<span class="string">&quot;source&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="165"><span class="cb-tx">        <span class="keyword">if</span> sd.get(<span class="string">&quot;error_strategy&quot;</span>) == <span class="string">&quot;fail-branch&quot;</span>:</span></span>
+<span class="cb-line" data-ln="166"><span class="cb-tx">            ok |= &#123;<span class="string">&quot;fail-branch&quot;</span>, <span class="string">&quot;success-branch&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="167"><span class="cb-tx">        <span class="keyword">if</span> e.get(<span class="string">&quot;sourceHandle&quot;</span>, <span class="string">&quot;source&quot;</span>) <span class="keyword">not</span> <span class="keyword">in</span> ok:</span></span>
+<span class="cb-line" data-ln="168"><span class="cb-tx">            err(<span class="string">f&quot;边 <span class="subst">&#123;e.get(<span class="string">&#x27;id&#x27;</span>)&#125;</span>: sourceHandle=<span class="subst">&#123;e.get(<span class="string">&#x27;sourceHandle&#x27;</span>)!r&#125;</span> 不在 <span class="subst">&#123;<span class="built_in">sorted</span>(ok)&#125;</span> 中&quot;</span>)</span></span>
+<span class="cb-line" data-ln="169"><span class="cb-tx">    <span class="keyword">return</span> errs</span></span>
+<span class="cb-line" data-ln="170"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="171"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="172"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">main</span>():</span></span>
+<span class="cb-line" data-ln="173"><span class="cb-tx">    <span class="keyword">with</span> <span class="built_in">open</span>(sys.argv[<span class="number">1</span>], encoding=<span class="string">&quot;utf-8&quot;</span>) <span class="keyword">as</span> f:</span></span>
+<span class="cb-line" data-ln="174"><span class="cb-tx">        doc = yaml.safe_load(f)</span></span>
+<span class="cb-line" data-ln="175"><span class="cb-tx">    errs = lint(doc)</span></span>
+<span class="cb-line" data-ln="176"><span class="cb-tx">    <span class="keyword">for</span> e <span class="keyword">in</span> errs:</span></span>
+<span class="cb-line" data-ln="177"><span class="cb-tx">        <span class="built_in">print</span>(<span class="string">&quot;ERROR:&quot;</span>, e)</span></span>
+<span class="cb-line" data-ln="178"><span class="cb-tx">    <span class="built_in">print</span>(<span class="string">&quot;通过&quot;</span> <span class="keyword">if</span> <span class="keyword">not</span> errs <span class="keyword">else</span> <span class="string">f&quot;共 <span class="subst">&#123;<span class="built_in">len</span>(errs)&#125;</span> 处问题&quot;</span>)</span></span>
+<span class="cb-line" data-ln="179"><span class="cb-tx">    sys.exit(<span class="number">1</span> <span class="keyword">if</span> errs <span class="keyword">else</span> <span class="number">0</span>)</span></span>
+<span class="cb-line" data-ln="180"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="181"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="182"><span class="cb-tx"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span></span>
+<span class="cb-line" data-ln="183"><span class="cb-tx">    main()</span></span></code></pre></div></div></figure>
+
+<h3 id="导入预检与回导出"><a href="#导入预检与回导出" class="headerlink" title="导入预检与回导出"></a>导入预检与回导出</h3><p>预检不要每次新建应用：先在控制台建一个与 DSL 同模式的空应用当「预检 App」，脚本每次带 <code>app_id</code> 覆盖它的草稿。脚本依次做登录、导入（<code>pending</code> 时默认停下，由人确认版本差异）、依赖检查、导出、规范化差异对比：</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="84"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">#!/usr/bin/env python3</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="string">&quot;&quot;&quot;dsl_roundtrip.py：把 DSL 导入预检 App，检查依赖，再导出并与原稿做差异对比。</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="string"></span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="string">用法：</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="string">  export DIFY_ORIGIN=https://dify.example.com DIFY_EMAIL=you@example.com DIFY_PASSWORD=...</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="string">  python3 dsl_roundtrip.py app.yml --app-id &lt;预检 App 的 ID&gt; [--confirm]</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="string">预检 App 需事先在控制台建好，mode 与 DSL 一致；导入会覆盖它的草稿，不会新建 App。</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="string">&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">import</span> argparse</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">import</span> base64</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="keyword">import</span> difflib</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="keyword">import</span> os</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="keyword">import</span> sys</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="keyword">import</span> requests</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="keyword">import</span> yaml</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">BASE = os.environ[<span class="string">&quot;DIFY_ORIGIN&quot;</span>].rstrip(<span class="string">&quot;/&quot;</span>) + <span class="string">&quot;/console/api&quot;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">login</span>(<span class="params">s</span>):</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    pwd = base64.b64encode(os.environ[<span class="string">&quot;DIFY_PASSWORD&quot;</span>].encode()).decode()  <span class="comment"># 1.12 登录要求 Base64</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    r = s.post(<span class="string">f&quot;<span class="subst">&#123;BASE&#125;</span>/login&quot;</span>, json=&#123;<span class="string">&quot;email&quot;</span>: os.environ[<span class="string">&quot;DIFY_EMAIL&quot;</span>], <span class="string">&quot;password&quot;</span>: pwd,</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">                                      <span class="string">&quot;remember_me&quot;</span>: <span class="literal">True</span>&#125;, timeout=<span class="number">30</span>)</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="keyword">if</span> r.status_code != <span class="number">200</span> <span class="keyword">or</span> r.json().get(<span class="string">&quot;result&quot;</span>) != <span class="string">&quot;success&quot;</span>:</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        sys.exit(<span class="string">f&quot;登录失败：<span class="subst">&#123;r.status_code&#125;</span> <span class="subst">&#123;r.text[:<span class="number">200</span>]&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">    <span class="comment"># 令牌在 Cookie 里；https 且未设 COOKIE_DOMAIN 时名字带 __Host- 前缀</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    csrf = <span class="built_in">next</span>((c.value <span class="keyword">for</span> c <span class="keyword">in</span> s.cookies <span class="keyword">if</span> c.name.endswith(<span class="string">&quot;csrf_token&quot;</span>)), <span class="literal">None</span>)</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    <span class="keyword">if</span> <span class="keyword">not</span> csrf:</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">        sys.exit(<span class="string">&quot;没拿到 csrf_token：检查 DIFY_ORIGIN 的协议是否与 CONSOLE_*_URL 一致&quot;</span>)</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">    s.headers[<span class="string">&quot;X-CSRF-Token&quot;</span>] = csrf  <span class="comment"># 所有需要登录的接口都校验它，GET 也不例外</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">import_dsl</span>(<span class="params">s, content, app_id, confirm</span>):</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    r = s.post(<span class="string">f&quot;<span class="subst">&#123;BASE&#125;</span>/apps/imports&quot;</span>, json=&#123;<span class="string">&quot;mode&quot;</span>: <span class="string">&quot;yaml-content&quot;</span>, <span class="string">&quot;yaml_content&quot;</span>: content,</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">                                            <span class="string">&quot;app_id&quot;</span>: app_id&#125;, timeout=<span class="number">60</span>)</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    res = r.json()</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">    status = res.get(<span class="string">&quot;status&quot;</span>)</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">    <span class="keyword">if</span> status == <span class="string">&quot;pending&quot;</span>:</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">        <span class="keyword">if</span> <span class="keyword">not</span> confirm:</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">            sys.exit(<span class="string">f&quot;版本需确认：DSL <span class="subst">&#123;res.get(<span class="string">&#x27;imported_dsl_version&#x27;</span>)&#125;</span> / 实例 <span class="subst">&#123;res.get(<span class="string">&#x27;current_dsl_version&#x27;</span>)&#125;</span>，&quot;</span></span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">                     <span class="string">&quot;确认无误后加 --confirm（10 分钟内有效）&quot;</span>)</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">        res = s.post(<span class="string">f&quot;<span class="subst">&#123;BASE&#125;</span>/apps/imports/<span class="subst">&#123;res[<span class="string">&#x27;id&#x27;</span>]&#125;</span>/confirm&quot;</span>, timeout=<span class="number">60</span>).json()</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">        status = res.get(<span class="string">&quot;status&quot;</span>)</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">    <span class="keyword">if</span> status == <span class="string">&quot;failed&quot;</span>:</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">        sys.exit(<span class="string">f&quot;导入失败：<span class="subst">&#123;res.get(<span class="string">&#x27;error&#x27;</span>)&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">    <span class="built_in">print</span>(<span class="string">f&quot;导入状态：<span class="subst">&#123;status&#125;</span>，DSL 版本 <span class="subst">&#123;res.get(<span class="string">&#x27;imported_dsl_version&#x27;</span>)&#125;</span> -&gt; <span class="subst">&#123;res.get(<span class="string">&#x27;current_dsl_version&#x27;</span>)&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">    <span class="keyword">return</span> res[<span class="string">&quot;app_id&quot;</span>]</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">main</span>():</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">    ap = argparse.ArgumentParser()</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">    ap.add_argument(<span class="string">&quot;dsl&quot;</span>)</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">    ap.add_argument(<span class="string">&quot;--app-id&quot;</span>, required=<span class="literal">True</span>)</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">    ap.add_argument(<span class="string">&quot;--confirm&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>)</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">    args = ap.parse_args()</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">    <span class="keyword">with</span> <span class="built_in">open</span>(args.dsl, encoding=<span class="string">&quot;utf-8&quot;</span>) <span class="keyword">as</span> f:</span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">        content = f.read()</span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">    s = requests.Session()</span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">    login(s)</span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">    app_id = import_dsl(s, content, args.app_id, args.confirm)</span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">    deps = s.get(<span class="string">f&quot;<span class="subst">&#123;BASE&#125;</span>/apps/imports/<span class="subst">&#123;app_id&#125;</span>/check-dependencies&quot;</span>, timeout=<span class="number">30</span>).json()</span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">    <span class="keyword">for</span> d <span class="keyword">in</span> deps.get(<span class="string">&quot;leaked_dependencies&quot;</span>) <span class="keyword">or</span> []:</span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">        <span class="built_in">print</span>(<span class="string">&quot;缺少插件：&quot;</span>, d.get(<span class="string">&quot;value&quot;</span>))</span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">    exported = s.get(<span class="string">f&quot;<span class="subst">&#123;BASE&#125;</span>/apps/<span class="subst">&#123;app_id&#125;</span>/export&quot;</span>, params=&#123;<span class="string">&quot;include_secret&quot;</span>: <span class="string">&quot;false&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">                     timeout=<span class="number">60</span>).json()[<span class="string">&quot;data&quot;</span>]</span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">    out = args.dsl.rsplit(<span class="string">&quot;.&quot;</span>, <span class="number">1</span>)[<span class="number">0</span>] + <span class="string">&quot;.exported.yml&quot;</span></span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">    <span class="keyword">with</span> <span class="built_in">open</span>(out, <span class="string">&quot;w&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>) <span class="keyword">as</span> f:</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">        f.write(exported)</span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">    <span class="comment"># 规范化后再比，只看语义差异</span></span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">    <span class="keyword">def</span> <span class="title function_">norm</span>(<span class="params">text</span>):</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">        <span class="keyword">return</span> yaml.safe_dump(yaml.safe_load(text), allow_unicode=<span class="literal">True</span>, sort_keys=<span class="literal">True</span>).splitlines()</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">    diff = <span class="built_in">list</span>(difflib.unified_diff(norm(content), norm(exported), <span class="string">&quot;generated&quot;</span>, <span class="string">&quot;exported&quot;</span>, lineterm=<span class="string">&quot;&quot;</span>))</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">    <span class="built_in">print</span>(<span class="string">&quot;\n&quot;</span>.join(diff[:<span class="number">200</span>]) <span class="keyword">or</span> <span class="string">&quot;无差异&quot;</span>)</span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">    <span class="built_in">print</span>(<span class="string">f&quot;导出稿已保存：<span class="subst">&#123;out&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">    main()</span></span></code></pre></div></div></figure>
+
+<p>差异里常见的几类，含义各不相同：</p>
+<ul>
+<li><code>dependencies</code> 被补全：说明实例按节点反推出了插件依赖，把导出稿里的标识回灌到生成器的能力清单；</li>
+<li>知识检索节点的 <code>dataset_ids</code> 变成一串 Base64：导出加密，正常；</li>
+<li>触发器节点的调度配置、Webhook 地址、订阅 ID 被改写或清空：导出策略，见下一节；</li>
+<li>其余字段的增删：生成器的模板与实例不一致，按导出稿修正模板。</li>
+</ul>
+<h3 id="画布一步不能省"><a href="#画布一步不能省" class="headerlink" title="画布一步不能省"></a>画布一步不能省</h3><p>脚本只能覆盖导入与草稿同步两个阶段。画布渲染的校验在浏览器里，接口替代不了：打开预检 App，确认没有白屏、检查清单（Checklist）没有报错，随手拖动一个节点触发一次草稿保存，再跑一次 <code>dsl_roundtrip.py</code>（或直接在控制台导出）。<strong>入库的是这份经过画布保存后的导出稿</strong>，生成器的原始输出只算草稿。</p>
+<h2 id="导出与迁移时被改写的内容"><a href="#导出与迁移时被改写的内容" class="headerlink" title="导出与迁移时被改写的内容"></a>导出与迁移时被改写的内容</h2><table>
+<thead>
+<tr>
+<th>内容</th>
+<th>导出时的行为</th>
+<th>迁移时怎么办</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>secret</code> 类型环境变量</td>
+<td>不勾选包含密钥时值被清空</td>
+<td>导入后重填；DSL 里永远不放真实密钥</td>
+</tr>
+<tr>
+<td>工具与 Agent 节点的 <code>credential_id</code></td>
+<td>不勾选包含密钥时删除</td>
+<td>导入后在节点里重选凭据</td>
+</tr>
+<tr>
+<td>知识检索的 <code>dataset_ids</code></td>
+<td>默认按工作空间 AES 加密</td>
+<td>跨工作空间导入时解密失败的 ID 会被<strong>静默丢弃</strong>；源实例设 <code>DSL_EXPORT_ENCRYPT_DATASET_ID=false</code> 导出明文 UUID，目标实例里仍需存在同 ID 的知识库，否则重选</td>
+</tr>
+<tr>
+<td><code>trigger-schedule</code></td>
+<td>写入默认调度配置（每天 12:00 AM、UTC）</td>
+<td>导入后重新设置调度并发布</td>
+</tr>
+<tr>
+<td><code>trigger-webhook</code></td>
+<td>清空 <code>webhook_url</code> 与 <code>webhook_debug_url</code></td>
+<td>发布后使用新生成的地址</td>
+</tr>
+<tr>
+<td><code>trigger-plugin</code></td>
+<td>清空 <code>subscription_id</code></td>
+<td>重新订阅</td>
+</tr>
+</tbody></table>
+<p><code>yaml-url</code> 方式导入另有三点：<code>github.com/.../blob/...</code> 形式的链接会被自动改写为 <code>raw.githubusercontent.com</code>；抓取经 ssrf_proxy 发出，连接与读取超时都是 10 秒，网络受限的私有化实例常在这里失败；内容超过 10 MB 直接拒绝。</p>
+<h2 id="定时执行：Schedule-Trigger-与外部调度"><a href="#定时执行：Schedule-Trigger-与外部调度" class="headerlink" title="定时执行：Schedule Trigger 与外部调度"></a>定时执行：Schedule Trigger 与外部调度</h2><p>一个流传很广的说法是「开源版不能定时触发工作流，只能外部 cron 调 API」，这对 1.12 已经不成立：1.10 起 workflow 模式内置 Schedule、Webhook 与插件事件三类触发器。用定时触发器要注意：</p>
+<ul>
+<li>触发器只能用于 workflow 模式，且与开始节点互斥，一个工作流里二者只能选其一（草稿同步时就会校验）；</li>
+<li>调度配置支持可视化（hourly &#x2F; daily &#x2F; weekly &#x2F; monthly）与 cron 两种模式，时区单独设置，默认 UTC；</li>
+<li>只有<strong>发布后</strong>才生效；自托管实例依赖 worker_beat 上的轮询任务，对应 <code>ENABLE_WORKFLOW_SCHEDULE_POLLER_TASK</code>，默认开启；</li>
+<li>从 DSL 导入后调度会被重置，见上表。</li>
+</ul>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 触发器节点的 data 片段：每天 08:00（上海时间）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">data:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">type:</span> <span class="string">trigger-schedule</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">title:</span> <span class="string">每日</span> <span class="number">08</span><span class="string">:00</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">mode:</span> <span class="string">cron</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">cron_expression:</span> <span class="string">&quot;0 8 * * *&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">timezone:</span> <span class="string">Asia/Shanghai</span></span></span></code></pre></div></div></figure>
+
+<p>仍需要外部调度的场景只剩两类：advanced-chat 应用（没有触发器），以及调度逻辑依赖外部系统状态。这时用 Service API，以应用的 API Key 调用：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># workflow 应用；advanced-chat 应用改用 /v1/chat-messages</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">curl -s -X POST https://dify.example.com/v1/workflows/run \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -H <span class="string">&quot;Authorization: Bearer <span class="variable">$&#123;DIFY_APP_KEY&#125;</span>&quot;</span> \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  -H <span class="string">&quot;Content-Type: application/json&quot;</span> \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;inputs&quot;: &#123;&quot;topic&quot;: &quot;AI 行业日报&quot;&#125;, &quot;response_mode&quot;: &quot;blocking&quot;, &quot;user&quot;: &quot;scheduler&quot;&#125;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<h2 id="生成前对照的硬约束清单"><a href="#生成前对照的硬约束清单" class="headerlink" title="生成前对照的硬约束清单"></a>生成前对照的硬约束清单</h2><ul>
+<li><input disabled="" type="checkbox"> <code>version: &quot;0.5.0&quot;</code>（带引号，不高于实例版本），<code>kind: app</code>，<code>app.mode</code> 与目标一致</li>
+<li><input disabled="" type="checkbox"> 环境变量、会话变量每条都有 <code>name</code>、<code>value_type</code>、非空 <code>value</code>；DSL 中不含任何真实密钥</li>
+<li><input disabled="" type="checkbox"> 所有节点 ID 是唯一的字符串，外层 <code>type</code> 与 <code>data.type</code> 分层正确，<code>data.title</code> 齐全</li>
+<li><input disabled="" type="checkbox"> <code>data.type</code> 取自 1.12.1 枚举；<code>variable-assigner</code> 与 <code>assigner</code> 没有混用</li>
+<li><input disabled="" type="checkbox"> 开始节点与触发器节点不同时出现；触发器只出现在 workflow 模式</li>
+<li><input disabled="" type="checkbox"> 容器：<code>start_node_id</code> 指向 <code>*-start</code> 子节点，容器内节点都有 <code>parentId</code>、<code>isIn*</code>、<code>*_id</code></li>
+<li><input disabled="" type="checkbox"> 条件分支只用 <code>cases</code>，运算符在合法列表内，边的 <code>sourceHandle</code> 对应 <code>case_id</code> 或 <code>false</code></li>
+<li><input disabled="" type="checkbox"> LLM 节点带 <code>context</code>，provider 为三段式标识</li>
+<li><input disabled="" type="checkbox"> Code 节点声明的输出与返回值一一对应，数组长度不超过实例限制（默认 30）</li>
+<li><input disabled="" type="checkbox"> 所有 <code>&#123;&#123;#节点ID.变量#&#125;&#125;</code> 与选择器都指向存在的节点</li>
+<li><input disabled="" type="checkbox"> 通过 <code>dsl_lint.py</code> → 导入预检 → 画布保存 → 再导出，入库的是导出稿</li>
+</ul>
+<h2 id="附录：可参考的-DSL-模板库"><a href="#附录：可参考的-DSL-模板库" class="headerlink" title="附录：可参考的 DSL 模板库"></a>附录：可参考的 DSL 模板库</h2><p>以下仓库均已核实存在。社区模板大多写于 1.0 前后（抽查到的是 0.1.5），导入 1.12 会得到版本警告与自动推断的插件依赖；导入前先过一遍 lint，并审阅其中的代码节点与 HTTP 请求地址，DSL 里的代码会在你的沙箱里执行。</p>
+<table>
+<thead>
+<tr>
+<th>仓库</th>
+<th>内容</th>
+<th>适合拿来做什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>langgenius/dify</code> 的 <code>api/tests/fixtures/workflow/</code></td>
+<td>官方测试用的工作流 DSL，覆盖迭代、循环、条件分支、并行、工具调用、会话变量等</td>
+<td>最贴近真实 Schema 的最小样例，适合做生成器的结构母版</td>
+</tr>
+<tr>
+<td><code>svcvit/Awesome-Dify-Workflow</code></td>
+<td>按用途收集的 DSL 合集，中英双语说明</td>
+<td>找业务思路与提示词写法</td>
+</tr>
+<tr>
+<td><code>wwwzhouhui/dify-for-dsl</code></td>
+<td>中文社区维护的工作流脚本合集</td>
+<td>国内常见模型与插件的组合方式</td>
+</tr>
+<tr>
+<td><code>BannyLon/DifyAIA</code></td>
+<td>作者自建的 AI 应用 DSL，偏办公与文档生成场景</td>
+<td>参考文档类产出的编排</td>
+</tr>
+<tr>
+<td><code>green-dalii/diflowy</code></td>
+<td>Dify 工作流分享与托管平台的源码</td>
+<td>需要在团队内搭建模板分享站时参考</td>
+</tr>
+</tbody></table>
+<h2 id="2026-09-补记：1-13-之后的-DSL-变化"><a href="#2026-09-补记：1-13-之后的-DSL-变化" class="headerlink" title="2026-09 补记：1.13 之后的 DSL 变化"></a>2026-09 补记：1.13 之后的 DSL 变化</h2><ul>
+<li><strong>版本号</strong>：1.13–1.15 为 0.6.0，1.16–1.17 为 0.7.0。1.17.1 的兼容判定逻辑与本文一致，所以 0.5.0 的 DSL 导入 1.17.1 会得到 <code>completed-with-warnings</code>；反过来把 0.6.0 &#x2F; 0.7.0 的 DSL 导入 1.12 会进入 <code>pending</code>，强行确认后，新版本才有的节点无法运行。</li>
+<li><strong>新节点</strong>：Human Input（人工输入）节点作为正式功能随 1.13 发布，<code>data.type</code> 为 <code>human-input</code>。1.12.1 源码里已有这个类型的早期实现，但它不属于 1.12 的正式功能，所以本文的 lint 白名单没有收录；面向 1.13 以上生成 DSL 时要加进去。1.16 的 Dify Agent（Beta）带来 DSL 0.7.0。</li>
+<li><strong>接口</strong>：1.17.1 的控制台登录仍要求 Base64 密码，导入、确认、依赖检查三个接口路径不变，<code>dsl_roundtrip.py</code> 的调用方式不受影响。1.15 起官方另提供了 difyctl 命令行工具，本文没有评估它对 DSL 导入导出的支持。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/02/10/technical-docs/Dify%E6%B7%B1%E5%BA%A6%E7%A0%94%E7%A9%B6DSL%E5%AE%9E%E6%88%98/">Dify 深度研究工作流实战：DSL 全解与编排/执行分层</a></h3>
+        <p>一份可导入 Dify 1.12.1 的两轮检索深度研究工作流（规划→并行检索→反思补搜→带引用成文），逐节点解读与排障…</p>
+        <a class="btn primary" href="/2026/02/10/technical-docs/Dify%E6%B7%B1%E5%BA%A6%E7%A0%94%E7%A9%B6DSL%E5%AE%9E%E6%88%98/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/02/06/technical-docs/Dify%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Dify 1.12 私有化部署与排障实录</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 11 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%AF%BC%E5%85%A5%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%BC%9A%E6%89%93%E4%B8%8D%E5%BC%80" data-toc-target="导入成功，为什么还会打不开"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">导入成功，为什么还会打不开</span></a><a class="toc-level-2" href="#%E7%89%88%E6%9C%AC%E5%8F%B7%E4%B8%8E%E8%B7%A8%E7%89%88%E6%9C%AC%E5%AF%BC%E5%85%A5" data-toc-target="版本号与跨版本导入"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">版本号与跨版本导入</span></a><a class="toc-level-2" href="#%E9%A1%B6%E5%B1%82%E9%AA%A8%E6%9E%B6" data-toc-target="顶层骨架"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">顶层骨架</span></a><a class="toc-level-2" href="#Schema-%E7%A1%AC%E7%BA%A6%E6%9D%9F" data-toc-target="Schema-硬约束"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">Schema 硬约束</span></a><a class="toc-level-3" href="#%E9%A1%B6%E5%B1%82%E4%B8%8E%E5%8F%98%E9%87%8F" data-toc-target="顶层与变量"><span class="toc-text">顶层与变量</span></a><a class="toc-level-3" href="#%E8%8A%82%E7%82%B9%E4%B8%8E%E8%BE%B9" data-toc-target="节点与边"><span class="toc-text">节点与边</span></a><a class="toc-level-3" href="#%E8%8A%82%E7%82%B9%E7%B1%BB%E5%9E%8B%E5%AF%B9%E7%85%A7%EF%BC%881-12-1%EF%BC%89" data-toc-target="节点类型对照（1-12-1）"><span class="toc-text">节点类型对照（1.12.1）</span></a><a class="toc-level-3" href="#%E5%B8%B8%E7%94%A8%E8%8A%82%E7%82%B9%E7%9A%84%E5%AD%97%E6%AE%B5%E7%BA%A6%E6%9D%9F" data-toc-target="常用节点的字段约束"><span class="toc-text">常用节点的字段约束</span></a><a class="toc-level-3" href="#%E5%8F%98%E9%87%8F%E5%BC%95%E7%94%A8" data-toc-target="变量引用"><span class="toc-text">变量引用</span></a><a class="toc-level-2" href="#%E7%94%9F%E6%88%90%E6%96%B9%E6%B3%95%EF%BC%9A%E8%AE%A9%E5%AE%9E%E4%BE%8B%E8%87%AA%E5%B7%B1%E6%8F%90%E4%BE%9B%E4%B8%8A%E4%B8%8B%E6%96%87" data-toc-target="生成方法：让实例自己提供上下文"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">生成方法：让实例自己提供上下文</span></a><a class="toc-level-2" href="#%E6%A0%A1%E9%AA%8C%E9%97%AD%E7%8E%AF%EF%BC%9Alint-%E2%86%92-%E5%AF%BC%E5%85%A5%E9%A2%84%E6%A3%80-%E2%86%92-%E7%94%BB%E5%B8%83-%E2%86%92-%E5%86%8D%E5%AF%BC%E5%87%BA" data-toc-target="校验闭环：lint-→-导入预检-→-画布-→-再导出"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">校验闭环：lint → 导入预检 → 画布 → 再导出</span></a><a class="toc-level-3" href="#%E6%9C%AC%E5%9C%B0%E9%9D%99%E6%80%81%E6%A3%80%E6%9F%A5" data-toc-target="本地静态检查"><span class="toc-text">本地静态检查</span></a><a class="toc-level-3" href="#%E5%AF%BC%E5%85%A5%E9%A2%84%E6%A3%80%E4%B8%8E%E5%9B%9E%E5%AF%BC%E5%87%BA" data-toc-target="导入预检与回导出"><span class="toc-text">导入预检与回导出</span></a><a class="toc-level-3" href="#%E7%94%BB%E5%B8%83%E4%B8%80%E6%AD%A5%E4%B8%8D%E8%83%BD%E7%9C%81" data-toc-target="画布一步不能省"><span class="toc-text">画布一步不能省</span></a><a class="toc-level-2" href="#%E5%AF%BC%E5%87%BA%E4%B8%8E%E8%BF%81%E7%A7%BB%E6%97%B6%E8%A2%AB%E6%94%B9%E5%86%99%E7%9A%84%E5%86%85%E5%AE%B9" data-toc-target="导出与迁移时被改写的内容"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">导出与迁移时被改写的内容</span></a><a class="toc-level-2" href="#%E5%AE%9A%E6%97%B6%E6%89%A7%E8%A1%8C%EF%BC%9ASchedule-Trigger-%E4%B8%8E%E5%A4%96%E9%83%A8%E8%B0%83%E5%BA%A6" data-toc-target="定时执行：Schedule-Trigger-与外部调度"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">定时执行：Schedule Trigger 与外部调度</span></a><a class="toc-level-2" href="#%E7%94%9F%E6%88%90%E5%89%8D%E5%AF%B9%E7%85%A7%E7%9A%84%E7%A1%AC%E7%BA%A6%E6%9D%9F%E6%B8%85%E5%8D%95" data-toc-target="生成前对照的硬约束清单"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">生成前对照的硬约束清单</span></a><a class="toc-level-2" href="#%E9%99%84%E5%BD%95%EF%BC%9A%E5%8F%AF%E5%8F%82%E8%80%83%E7%9A%84-DSL-%E6%A8%A1%E6%9D%BF%E5%BA%93" data-toc-target="附录：可参考的-DSL-模板库"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">附录：可参考的 DSL 模板库</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A1-13-%E4%B9%8B%E5%90%8E%E7%9A%84-DSL-%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：1-13-之后的-DSL-变化"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">2026-09 补记：1.13 之后的 DSL 变化</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/self-hosted-ai-infra/" style="--rail: 63%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%AF%BC%E5%85%A5%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%BC%9A%E6%89%93%E4%B8%8D%E5%BC%80" data-toc-target="导入成功，为什么还会打不开" data-title="01 · 导入成功，为什么还会打不开" aria-label="导入成功，为什么还会打不开"></a><a class="toc-strip__dot" href="#%E7%89%88%E6%9C%AC%E5%8F%B7%E4%B8%8E%E8%B7%A8%E7%89%88%E6%9C%AC%E5%AF%BC%E5%85%A5" data-toc-target="版本号与跨版本导入" data-title="02 · 版本号与跨版本导入" aria-label="版本号与跨版本导入"></a><a class="toc-strip__dot" href="#%E9%A1%B6%E5%B1%82%E9%AA%A8%E6%9E%B6" data-toc-target="顶层骨架" data-title="03 · 顶层骨架" aria-label="顶层骨架"></a><a class="toc-strip__dot" href="#Schema-%E7%A1%AC%E7%BA%A6%E6%9D%9F" data-toc-target="Schema-硬约束" data-title="04 · Schema 硬约束" aria-label="Schema 硬约束"></a><a class="toc-strip__dot" href="#%E7%94%9F%E6%88%90%E6%96%B9%E6%B3%95%EF%BC%9A%E8%AE%A9%E5%AE%9E%E4%BE%8B%E8%87%AA%E5%B7%B1%E6%8F%90%E4%BE%9B%E4%B8%8A%E4%B8%8B%E6%96%87" data-toc-target="生成方法：让实例自己提供上下文" data-title="05 · 生成方法：让实例自己提供上下文" aria-label="生成方法：让实例自己提供上下文"></a><a class="toc-strip__dot" href="#%E6%A0%A1%E9%AA%8C%E9%97%AD%E7%8E%AF%EF%BC%9Alint-%E2%86%92-%E5%AF%BC%E5%85%A5%E9%A2%84%E6%A3%80-%E2%86%92-%E7%94%BB%E5%B8%83-%E2%86%92-%E5%86%8D%E5%AF%BC%E5%87%BA" data-toc-target="校验闭环：lint-→-导入预检-→-画布-→-再导出" data-title="06 · 校验闭环：lint → 导入预检 → 画布 → 再导出" aria-label="校验闭环：lint → 导入预检 → 画布 → 再导出"></a><a class="toc-strip__dot" href="#%E5%AF%BC%E5%87%BA%E4%B8%8E%E8%BF%81%E7%A7%BB%E6%97%B6%E8%A2%AB%E6%94%B9%E5%86%99%E7%9A%84%E5%86%85%E5%AE%B9" data-toc-target="导出与迁移时被改写的内容" data-title="07 · 导出与迁移时被改写的内容" aria-label="导出与迁移时被改写的内容"></a><a class="toc-strip__dot" href="#%E5%AE%9A%E6%97%B6%E6%89%A7%E8%A1%8C%EF%BC%9ASchedule-Trigger-%E4%B8%8E%E5%A4%96%E9%83%A8%E8%B0%83%E5%BA%A6" data-toc-target="定时执行：Schedule-Trigger-与外部调度" data-title="08 · 定时执行：Schedule Trigger 与外部调度" aria-label="定时执行：Schedule Trigger 与外部调度"></a><a class="toc-strip__dot" href="#%E7%94%9F%E6%88%90%E5%89%8D%E5%AF%B9%E7%85%A7%E7%9A%84%E7%A1%AC%E7%BA%A6%E6%9D%9F%E6%B8%85%E5%8D%95" data-toc-target="生成前对照的硬约束清单" data-title="09 · 生成前对照的硬约束清单" aria-label="生成前对照的硬约束清单"></a><a class="toc-strip__dot" href="#%E9%99%84%E5%BD%95%EF%BC%9A%E5%8F%AF%E5%8F%82%E8%80%83%E7%9A%84-DSL-%E6%A8%A1%E6%9D%BF%E5%BA%93" data-toc-target="附录：可参考的-DSL-模板库" data-title="10 · 附录：可参考的 DSL 模板库" aria-label="附录：可参考的 DSL 模板库"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A1-13-%E4%B9%8B%E5%90%8E%E7%9A%84-DSL-%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：1-13-之后的-DSL-变化" data-title="11 · 2026-09 补记：1.13 之后的 DSL 变化" aria-label="2026-09 补记：1.13 之后的 DSL 变化"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/Dify-DSL工作流设计与校验","title":"Dify DSL 工作流设计与校验：Schema 硬约束与导入预检","url":"/2026/02/09/technical-docs/Dify-DSL%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%A0%A1%E9%AA%8C/","path":"self-hosted-ai-infra","index":4,"total":8,"next":{"title":"Dify 深度研究工作流实战：DSL 全解与编排/执行分层","url":"/2026/02/10/technical-docs/Dify%E6%B7%B1%E5%BA%A6%E7%A0%94%E7%A9%B6DSL%E5%AE%9E%E6%88%98/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,1337 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>架构师的模型微调决策手册：何时微调、怎么做、如何验收 · 飞轮之道</title>
+<meta name="description" content="面向企业 Agent 平台的微调决策手册：四级手段阶梯、托管与自建取舍、成本模型、诊断工单数据飞轮，以及 bge-m3 检索微调、Qwen LoRA-SFT、DPO 三个实战与验收门禁。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/07/14/technical-docs/%E6%A8%A1%E5%9E%8B%E5%BE%AE%E8%B0%83%E4%B8%8E%E5%AE%9A%E5%88%B6%E8%83%BD%E5%8A%9B/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="架构师的模型微调决策手册：何时微调、怎么做、如何验收 · 飞轮之道">
+<meta property="og:description" content="面向企业 Agent 平台的微调决策手册：四级手段阶梯、托管与自建取舍、成本模型、诊断工单数据飞轮，以及 bge-m3 检索微调、Qwen LoRA-SFT、DPO 三个实战与验收门禁。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/07/14/technical-docs/%E6%A8%A1%E5%9E%8B%E5%BE%AE%E8%B0%83%E4%B8%8E%E5%AE%9A%E5%88%B6%E8%83%BD%E5%8A%9B/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/self-hosted-ai-infra/">模型</a><a class="series-chip" href="/paths/self-hosted-ai-infra/" title="查看学习路径">第 8 / 8 篇</a>
+    </div>
+    <h1>架构师的模型微调决策手册：何时微调、怎么做、如何验收</h1>
+    <p class="article-deck">面向企业 Agent 平台的微调决策手册：四级手段阶梯、托管与自建取舍、成本模型、诊断工单数据飞轮…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>29 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E6%A8%A1%E5%9E%8B%E5%BE%AE%E8%B0%83/">#模型微调</a><a class="article-meta__tag" href="/tags/LoRA/">#LoRA</a><a class="article-meta__tag" href="/tags/DPO/">#DPO</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>先穷尽提示词与 RAG，再考虑微调；微调教的是技能和格式，不是会过期的知识。</li><li>微调的主要成本在数据与评估，不在 GPU；立项前必须先有黄金集和确定性评分器。</li><li>检索微调（bge-m3）性价比最高、风险最低，应最先做；结构化输出用 LoRA-SFT；DPO 只在 SFT 之后做。</li><li>2026 年托管微调在收缩（OpenAI 自助微调分阶段关闭），企业的长期能力应落在开放权重模型、自有数据管线和自有评分器上。</li><li>验收只认生产同款部署形态下的黄金集指标；LoRA 产物走注册表、灰度和一键回退，大模型 API 永远是兜底。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="这份手册回答什么"><a href="#这份手册回答什么" class="headerlink" title="这份手册回答什么"></a>这份手册回答什么</h2><p>企业 Agent 平台做到一定阶段，总会有人提出「我们要不要微调一个自己的模型」。这个问题拆开是三个：</p>
+<ol>
+<li><strong>何时微调</strong>：问题是否真的需要改权重，还是提示词、检索、上下文工程没做到位；</li>
+<li><strong>怎么做</strong>：选哪种方法、哪个基座、哪个框架，数据从哪里来；</li>
+<li><strong>如何验收</strong>：用什么裁判、什么门槛判定成功，上线后如何回退。</li>
+</ol>
+<p>本文以车联网智能诊断平台为例贯穿全文：Java 微服务负责工单、车辆与权限，Python 执行面负责检索与模型编排。围绕它有三个典型的「想微调」诉求，分别对应三个实战：</p>
+<table>
+<thead>
+<tr>
+<th>诉求</th>
+<th>问题本质</th>
+<th>方法</th>
+<th>实战</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>「搜不到相关维修案例」</td>
+<td>向量模型不懂领域术语</td>
+<td>Embedding 对比学习微调</td>
+<td>实战一：bge-m3</td>
+</tr>
+<tr>
+<td>「根因假设的 JSON 经常不合法、根因码乱编」</td>
+<td>格式与任务技能不稳</td>
+<td>LoRA-SFT</td>
+<td>实战二：Qwen 结构化输出</td>
+</tr>
+<tr>
+<td>「结论对，但证据链东拼西凑」</td>
+<td>输出质量偏好</td>
+<td>DPO</td>
+<td>实战三：偏好优化</td>
+</tr>
+</tbody></table>
+<h2 id="一、何时微调"><a href="#一、何时微调" class="headerlink" title="一、何时微调"></a>一、何时微调</h2><p>判断顺序是：先证明便宜手段已经用尽，再证明问题属于「改权重能解决」的类型，最后算清楚托管与自建、成本与收益。</p>
+<h3 id="1-1-四级手段阶梯"><a href="#1-1-四级手段阶梯" class="headerlink" title="1.1 四级手段阶梯"></a>1.1 四级手段阶梯</h3><p>处理「模型在我的领域表现不好」，按成本从低到高升级，每级都要有「已经榨干」的证据才进入下一级：</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>手段</th>
+<th>周期</th>
+<th>进入下一级的证据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L1</td>
+<td>提示词工程：系统提示、少样本、结构化输出约束</td>
+<td>小时级</td>
+<td>5 组以上提示词变体在黄金集上的差距小于 2 个百分点</td>
+</tr>
+<tr>
+<td>L2</td>
+<td>RAG 与上下文工程：检索、重排、上下文压缩</td>
+<td>天级</td>
+<td>检索指标（如 recall@5）已达标，但生成质量仍不达标；或检索本身卡在领域术语上</td>
+</tr>
+<tr>
+<td>L3</td>
+<td>微调：Embedding 微调 → LoRA-SFT → 偏好优化</td>
+<td>周级</td>
+<td>SFT 数据的边际收益递减，且任务有可自动判定的提升空间</td>
+</tr>
+<tr>
+<td>L4</td>
+<td>强化学习：GRPO 等可验证奖励方法</td>
+<td>月级</td>
+<td>绝大多数企业场景到不了这一级，见 2.3 节的立项六问</td>
+</tr>
+</tbody></table>
+<p>注意 L2 的第二个出口：如果检索召回差是因为向量模型不认识「P0A1F」「绝缘电阻缓降」这类领域表达，那么 Embedding 微调属于 L2 的修补，应当比 LLM 微调更早做。</p>
+<h3 id="1-2-触发条件与反面清单"><a href="#1-2-触发条件与反面清单" class="headerlink" title="1.2 触发条件与反面清单"></a>1.2 触发条件与反面清单</h3><p>至少满足下表中的两条，才值得为 LLM 微调立项：</p>
+<table>
+<thead>
+<tr>
+<th>触发条件</th>
+<th>判据</th>
+<th>诊断场景对照</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>格式稳定性刚需</td>
+<td>结构化输出在提示词约束下合法率仍低于 98%</td>
+<td>「信号摘要 → 根因假设 JSON」</td>
+</tr>
+<tr>
+<td>领域语义鸿沟</td>
+<td>通用模型对领域术语的理解或检索系统性偏差</td>
+<td>故障码、工况描述的检索</td>
+</tr>
+<tr>
+<td>延迟或成本约束</td>
+<td>高频调用下大模型 API 的延迟或单价不可接受</td>
+<td>快诊链路一次请求内多次调用</td>
+</tr>
+<tr>
+<td>风格一致性</td>
+<td>输出风格需要长期稳定，提示词难以维持</td>
+<td>诊断报告措辞规范</td>
+</tr>
+<tr>
+<td>数据不出域</td>
+<td>合规要求必须私有化部署</td>
+<td>车辆数据本地化</td>
+</tr>
+<tr>
+<td>蒸馏降本</td>
+<td>大模型能做好，希望小模型学会</td>
+<td>长期形态</td>
+</tr>
+</tbody></table>
+<p>出现以下任一情况，先别微调：</p>
+<ul>
+<li><strong>知识频繁更新</strong>：新车型、新故障码每月都在增加。微调进权重的知识会过期，应该放在 RAG 里。</li>
+<li><strong>任务边界模糊</strong>：说不清「好输出」长什么样，就构造不出训练对。</li>
+<li><strong>没有评估集</strong>：没有裁判，微调前后无法比较，先建黄金集。</li>
+<li><strong>数据少于 300 条且无法合成扩增</strong>。</li>
+<li><strong>理由只是「别人都在微调」</strong>：用 1.5 节的成本模型对话。</li>
+</ul>
+<h3 id="1-3-按问题类型选方法"><a href="#1-3-按问题类型选方法" class="headerlink" title="1.3 按问题类型选方法"></a>1.3 按问题类型选方法</h3><pre class="mermaid">flowchart TD
+    A[领域效果不达标] --&gt; B&#123;问题出在哪&#125;
+    B --&gt;|检索找不对| C[Embedding 微调&lt;br/&gt;成本最低，最先做]
+    C --&gt; C2&#123;召回对了但排序差&#125;
+    C2 --&gt;|是| C3[配套微调 reranker&lt;br/&gt;用新向量模型重挖难负例]
+    B --&gt;|不会做或格式不稳| D&#123;需要注入新知识吗&#125;
+    D --&gt;|是| R[回到 RAG&lt;br/&gt;SFT 教技能不教知识]
+    D --&gt;|否| E[LoRA-SFT&lt;br/&gt;7B-9B 级基座起步]
+    B --&gt;|会做但不够好| F[DPO&lt;br/&gt;前提：已有 SFT 模型和偏好对]
+    B --&gt;|多步推理策略要探索&lt;br/&gt;且奖励可自动判定| G[GRPO / RLVR&lt;br/&gt;先过立项六问]</pre>
+
+
+<h3 id="1-4-托管微调还是自建：2026-年的新约束"><a href="#1-4-托管微调还是自建：2026-年的新约束" class="headerlink" title="1.4 托管微调还是自建：2026 年的新约束"></a>1.4 托管微调还是自建：2026 年的新约束</h3><p>托管微调（把数据交给模型厂商、训练结果留在厂商平台）省掉了 GPU 与框架运维，但 2026 年上半年出现了一个必须纳入决策的变化。OpenAI 在官方弃用页面公布了自助微调平台的收缩时间表（2026-05-07 通知）：</p>
+<table>
+<thead>
+<tr>
+<th>日期</th>
+<th>变化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2026-05-07</td>
+<td>此前从未运行过微调的组织，不能再创建微调任务</td>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>过去 60 天内没有调用过微调模型的组织，不能再创建微调任务</td>
+</tr>
+<tr>
+<td>2027-01-06</td>
+<td>现有活跃客户也不能再创建新的微调任务；已有微调模型的推理保留到其基座模型下线为止</td>
+</tr>
+</tbody></table>
+<p>同一页面在 2026-04-22 公布的旧快照下线计划中，<code>o4-mini-2025-04-16</code> 以及基于 <code>gpt-3.5-turbo</code>、<code>gpt-4</code>、<code>gpt-4.1-nano-2025-04-14</code> 等基座的微调版本将于 2026-10-23 下线。而强化微调（RFT，2024-12 以研究预览形式推出，2025-05 对 o4-mini 开放）按官方指南目前只支持 o4-mini。此外，2026-06-03 公布的 Evals 平台弃用计划把评分器（graders）也纳入了迁移范围。</p>
+<p>这对架构决策的含义：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>托管微调</th>
+<th>开放权重模型 + 自建</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>启动成本</td>
+<td>低，上传数据即可</td>
+<td>需要 GPU、框架与部署能力</td>
+</tr>
+<tr>
+<td>产物归属</td>
+<td>权重不可导出，生命周期跟随厂商基座</td>
+<td>adapter 与合并权重自有，可长期保存和复现</td>
+</tr>
+<tr>
+<td>平台风险</td>
+<td>已出现分阶段关闭的先例</td>
+<td>框架可替换，基座可重选</td>
+</tr>
+<tr>
+<td>适合</td>
+<td>短期验证、非核心任务、已在用且有迁移预案的存量</td>
+<td>核心业务能力、需要私有化、需要长期迭代</td>
+</tr>
+</tbody></table>
+<p>结论：<strong>微调的长期资产是数据管线、黄金集和评分器，而不是某个平台上的某个模型</strong>。数据和评分器可以在任何基座上重跑，这也是后文把评分器写成独立模块的原因。</p>
+<h3 id="1-5-成本模型"><a href="#1-5-成本模型" class="headerlink" title="1.5 成本模型"></a>1.5 成本模型</h3><p>以实战二的规模（8B 级基座 LoRA，约 1500 条训练数据，3 个 epoch）为例，按资源类别估算全生命周期成本。数字是立项估算的起点，首轮实测后应回填校准：</p>
+<table>
+<thead>
+<tr>
+<th>成本项</th>
+<th>估算</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>数据构造</td>
+<td>40–80 人时</td>
+<td>大头：合成、过滤、终审，按 1500 条 × 2–3 分钟终审计</td>
+</tr>
+<tr>
+<td>合成与评审调用</td>
+<td>约 1500 次生成 + 1500 次评审</td>
+<td>按所用 API 的 token 单价折算</td>
+</tr>
+<tr>
+<td>训练算力</td>
+<td>单卡 24GB，每轮 2–6 GPU 小时 × 2–3 轮</td>
+<td>LoRA 与 QLoRA 差异见 2.1 节</td>
+</tr>
+<tr>
+<td>评估</td>
+<td>黄金集全量 × 3 个模型 × 2–3 轮</td>
+<td>基座、微调版、大模型 API 对照</td>
+</tr>
+<tr>
+<td>持续成本</td>
+<td>每季度约为首次的 30%–50%</td>
+<td>数据增量、重训、回归评估，最常被低估</td>
+</tr>
+</tbody></table>
+<p>收益侧的算法：<code>月度节省 = 日均调用量 × 30 × (API 单次成本 − 自建单次成本) − 自建推理的固定成本</code>。只有当这个数字为正，且格式与命中率达到 1.2 节的门槛时，「省钱」才成立；否则微调的价值只能来自数据不出域或延迟。</p>
+<h3 id="1-6-立项五问"><a href="#1-6-立项五问" class="headerlink" title="1.6 立项五问"></a>1.6 立项五问</h3><p>每个微调项目在 ADR 里回答以下五个问题，任何一个答不上来就不开工：</p>
+<ol>
+<li><strong>裁判是谁</strong>：用哪个评估集、哪些指标判定成败，当前基线是多少？</li>
+<li><strong>数据从哪来</strong>：来源是否合规、是否脱敏，管线能否重跑，与评估集是否隔离？</li>
+<li><strong>何时止损</strong>：什么信号出现就停止投入（例如两轮迭代提升不足 2 个百分点）？</li>
+<li><strong>如何上线与回滚</strong>：LoRA 怎么部署、怎么灰度、怎么一键切回大模型 API？</li>
+<li><strong>谁来维护</strong>：季度重训的负责人和预算在哪里？</li>
+</ol>
+<h2 id="二、方法速览：架构师需要知道的部分"><a href="#二、方法速览：架构师需要知道的部分" class="headerlink" title="二、方法速览：架构师需要知道的部分"></a>二、方法速览：架构师需要知道的部分</h2><p>数学推导按需查论文，这里只保留影响选型、预算和风险判断的结论。</p>
+<h3 id="2-1-SFT-与-LoRA-QLoRA"><a href="#2-1-SFT-与-LoRA-QLoRA" class="headerlink" title="2.1 SFT 与 LoRA &#x2F; QLoRA"></a>2.1 SFT 与 LoRA &#x2F; QLoRA</h3><p>SFT 用「输入 → 期望输出」对继续训练，教模型「这类输入产出这类输出」。LoRA 冻结原权重，只训练一对低秩矩阵（秩 r 通常 8–64），可训练参数降到原模型的 1% 以下；QLoRA 把冻结的底模量化到 4 bit 再训练 LoRA。LLaMA-Factory README 给出的显存估算：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>7B</th>
+<th>14B</th>
+<th>30B</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LoRA（16 bit）</td>
+<td>16GB</td>
+<td>32GB</td>
+<td>64GB</td>
+</tr>
+<tr>
+<td>QLoRA（4 bit）</td>
+<td>6GB</td>
+<td>12GB</td>
+<td>24GB</td>
+</tr>
+</tbody></table>
+<p>工程要点：</p>
+<ul>
+<li>LoRA 产物是几十到几百 MB 的 adapter，可以独立分发、按请求切换（vLLM multi-LoRA），这是「一个基座 + 多个技能」部署形态的基础。</li>
+<li>24GB 卡上 8B 级模型用 16 bit LoRA 即可，显存不够时才上 QLoRA。QLoRA 训练更慢，而且合并 adapter 时不能使用量化后的底模（LLaMA-Factory 合并示例中有明确提示），要多走一步。</li>
+<li><code>lora_target: all</code>（所有线性层）是当前主流默认值；r 从 8–16 起步，输出结构复杂再调大。</li>
+<li><strong>SFT 教技能与格式，不教知识</strong>。硬灌进去的知识会以幻觉的形式出现。</li>
+<li>灾难性遗忘的首要原因是学习率过大、epoch 过多：LoRA 从 1e-4、2–3 个 epoch 起步，盯住验证集 loss。</li>
+</ul>
+<h3 id="2-2-DPO-及其变体"><a href="#2-2-DPO-及其变体" class="headerlink" title="2.2 DPO 及其变体"></a>2.2 DPO 及其变体</h3><p>SFT 解决「会不会」，DPO 解决「好不好」。它把 RLHF 中「训练奖励模型 + PPO」的流程化简为一个直接在偏好对（同一输入的好输出与差输出）上优化的损失，工程难度接近 SFT。</p>
+<ul>
+<li>必须建立在 SFT 模型之上。</li>
+<li>偏好对的好坏差距要明显且维度单一，模糊的偏好会把模型教坏。</li>
+<li><code>beta</code> 从 0.1 起步，控制偏离参考模型的程度；学习率比 SFT 低一个数量级（5e-6 级）；百到千级偏好对即可见效。</li>
+<li>LLaMA-Factory 用 <code>pref_loss</code> 切换 <code>sigmoid</code>（标准 DPO）、<code>orpo</code>、<code>simpo</code> 等，其中 ORPO 和 SimPO 不需要参考模型。</li>
+</ul>
+<h3 id="2-3-GRPO-与-RLVR：读懂，并能论证「暂时不上」"><a href="#2-3-GRPO-与-RLVR：读懂，并能论证「暂时不上」" class="headerlink" title="2.3 GRPO 与 RLVR：读懂，并能论证「暂时不上」"></a>2.3 GRPO 与 RLVR：读懂，并能论证「暂时不上」</h3><p>RLVR（可验证奖励强化学习）的奖励来自确定性判定器：答案对不对、格式是否合法、测试是否通过。GRPO 最早在 DeepSeekMath 论文（2024-02）中提出，因 DeepSeek-R1（2025-01-20）而普及：对同一问题采样一组回答，用组内相对好坏作为优势信号，省掉 PPO 需要的价值模型。R1 论文还有一个对企业最重要的结论：把大模型的推理能力蒸馏进小模型，效果好于直接对小模型做强化学习。</p>
+<p>开源侧，TRL 提供 <code>GRPOTrainer</code>，verl 面向大规模 RL 训练，Unsloth 主打单卡低显存。工具已经不是门槛，门槛在立项条件。立项六问：</p>
+<ol>
+<li>任务成败能否自动、低成本、防投机地判定？（否 → 不做）</li>
+<li>SFT 的数据红利是否已经吃完？（否 → 回去做数据）</li>
+<li>是否有千级以上、难度有梯度的问题集？（否 → 不做）</li>
+<li>预算能否承受 SFT 的 10–100 倍算力和数周迭代？</li>
+<li>团队能否诊断奖励欺骗、熵塌缩这类训练失败？</li>
+<li>蒸馏现成的推理模型能否达到八成效果？（能 → 蒸馏）</li>
+</ol>
+<p>诊断场景的现状通常是：第 1 问部分满足（根因码可以对账），第 2、3 问不满足。结论是暂不上 RL，但<strong>把确定性评分器和问题集当作长期资产持续积累</strong>：后文的 <code>grader.py</code> 同时服务于验收、偏好对筛选，将来也可以直接作为 RL 的奖励函数。</p>
+<h3 id="2-4-Embedding-微调"><a href="#2-4-Embedding-微调" class="headerlink" title="2.4 Embedding 微调"></a>2.4 Embedding 微调</h3><p>向量模型的训练目标是把相关的拉近、不相关的推远（对比学习）。领域微调用「查询、正例、难负例」三元组继续训练。<strong>难负例是效果的关键</strong>：拿菜谱当诊断查询的负例，模型不用学就能区分；同故障域、不同根因的案例才会逼模型学会细粒度差别。</p>
+<ul>
+<li>性价比最高：bge-m3 约 5.7 亿参数，单卡数小时即可完成一轮，收益直接作用于整条 RAG 链路。</li>
+<li>batch 越大，批内免费负例越多，这是典型的「显存换效果」。</li>
+<li>温度参数（0.02 级）先别动，先动数据。</li>
+<li>微调后的向量模型必须和 reranker 一起评估，只换向量模型可能让整条链路变差。</li>
+</ul>
+<h2 id="三、工具链与环境"><a href="#三、工具链与环境" class="headerlink" title="三、工具链与环境"></a>三、工具链与环境</h2><p>选型原则是 LLM 微调用一个主框架加一个备选，向量模型用官方库，本地只做数据与冒烟、不在无 CUDA 的机器上硬跑正式训练。</p>
+<h3 id="3-1-框架选型"><a href="#3-1-框架选型" class="headerlink" title="3.1 框架选型"></a>3.1 框架选型</h3><p>以下版本为 2026-07 时点在 PyPI 上的最新发布：</p>
+<table>
+<thead>
+<tr>
+<th>框架</th>
+<th>版本</th>
+<th>定位</th>
+<th>本文用法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LLaMA-Factory</td>
+<td>0.9.5</td>
+<td>一站式 SFT &#x2F; DPO &#x2F; KTO &#x2F; PPO，YAML 驱动，自带合并导出</td>
+<td>LLM 微调主框架</td>
+</tr>
+<tr>
+<td>ms-swift</td>
+<td>4.4.1</td>
+<td>ModelScope 生态的一站式框架，国产模型跟进快</td>
+<td>主框架不支持某基座时的备选</td>
+</tr>
+<tr>
+<td>TRL</td>
+<td>1.8.0</td>
+<td>Hugging Face 的训练原语库，LLaMA-Factory 的底座之一</td>
+<td>读懂 DPO &#x2F; GRPO 实现</td>
+</tr>
+<tr>
+<td>Unsloth</td>
+<td>2026.7.x</td>
+<td>单卡提速、省显存</td>
+<td>LLaMA-Factory 中 <code>use_unsloth: true</code> 启用</td>
+</tr>
+<tr>
+<td>verl</td>
+<td>0.8.0</td>
+<td>大规模 RL 训练框架</td>
+<td>仅在通过立项六问后评估</td>
+</tr>
+<tr>
+<td>FlagEmbedding</td>
+<td>1.4.0</td>
+<td>bge 系列官方训练与推理库</td>
+<td>向量模型微调</td>
+</tr>
+<tr>
+<td>mlx-lm</td>
+<td>0.31.3</td>
+<td>Apple Silicon 上的推理与 LoRA 训练</td>
+<td>本地冒烟</td>
+</tr>
+</tbody></table>
+<p>淘汰条件写进选型记录：主框架停止维护，或对主流新基座的支持滞后超过 3 个月，就切换备选。</p>
+<h3 id="3-2-本地与云端分工"><a href="#3-2-本地与云端分工" class="headerlink" title="3.2 本地与云端分工"></a>3.2 本地与云端分工</h3><p>Apple Silicon 笔记本没有 CUDA，bitsandbytes 量化、FlashAttention、vLLM GPU 推理都用不了，但统一内存足够做数据管线和小规模冒烟：</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>做什么</th>
+<th>工具</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本地（Apple Silicon）</td>
+<td>数据管线开发（占七成工作量）、50 条样本的 LoRA 冒烟、合并产物的推理抽检</td>
+<td>Python、mlx-lm、Ollama</td>
+</tr>
+<tr>
+<td>云端（单卡 24GB 及以上 CUDA）</td>
+<td>正式训练、vLLM 部署与压测</td>
+<td>LLaMA-Factory、FlagEmbedding、vLLM</td>
+</tr>
+</tbody></table>
+<p>冒烟的目的只有一个：在花 GPU 钱之前，确认数据格式、对话模板、loss 走向没有低级错误。</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 本地冒烟：mlx-lm 要求 data 目录下有 train.jsonl（可选 valid.jsonl），支持 &#123;&quot;messages&quot;: [...]&#125; 对话格式</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">pip install mlx-lm</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">mlx_lm.lora --model Qwen/Qwen3-4B-Instruct-2507 --train --data ./smoke \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --iters 100 --batch-size 2 --num-layers 8 --mask-prompt</span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 云端：LLaMA-Factory 0.9.5 要求 Python 3.11+</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">git <span class="built_in">clone</span> --depth 1 https://github.com/hiyouga/LlamaFactory.git</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">cd</span> LlamaFactory &amp;&amp; pip install -e . &amp;&amp; pip install -r requirements/metrics.txt</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">llamafactory-cli version</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">pip install -U FlagEmbedding</span></span></code></pre></div></div></figure>
+
+<p>每次实验记录<strong>环境指纹</strong>：框架版本或 commit、基座模型版本、数据版本哈希、训练配置哈希。没有指纹的结果不进对比表。</p>
+<h2 id="四、数据飞轮：诊断工单-→-训练数据"><a href="#四、数据飞轮：诊断工单-→-训练数据" class="headerlink" title="四、数据飞轮：诊断工单 → 训练数据"></a>四、数据飞轮：诊断工单 → 训练数据</h2><p>微调七成的工作量在这里。这条管线跑通之后，工单系统就从「记录」变成「训练数据来源」，上线后的采纳与驳回又会回流成下一轮偏好数据，形成飞轮。</p>
+<h3 id="4-1-三种数据形态"><a href="#4-1-三种数据形态" class="headerlink" title="4.1 三种数据形态"></a>4.1 三种数据形态</h3><p><strong>SFT 数据（LLaMA-Factory Alpaca 格式）</strong>。固定指令放在 <code>system</code> 列，推理时作为系统提示原样使用；案例信息放在 <code>instruction</code> 列作为用户消息。这样训练与推理的提示结构完全一致：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span><span class="attr">&quot;system&quot;</span><span class="punctuation">:</span> <span class="string">&quot;你是设备诊断专家。根据信号摘要输出 RootCauseHypothesis JSON，不得输出其他内容。&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"> <span class="attr">&quot;instruction&quot;</span><span class="punctuation">:</span> <span class="string">&quot;故障码: P0A1F(激活, 3次/24h), U0111(间歇) | 信号: 驻车工况母线电压波动±8V, 绝缘电阻 7 日由 2.1MΩ 降至 0.9MΩ | 环境: 连续降雨地区, 车龄 26 个月&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"> <span class="attr">&quot;output&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&#123;\&quot;root_cause_candidates\&quot;: [&#123;\&quot;cause_code\&quot;: \&quot;RC-HV-0312\&quot;, \&quot;description\&quot;: \&quot;高压系统绝缘性能退化，疑似电池包密封失效导致潮气侵入\&quot;, \&quot;confidence\&quot;: 0.78, \&quot;evidence\&quot;: [\&quot;绝缘电阻 7 日缓降至 0.9MΩ\&quot;, \&quot;P0A1F 高频激活\&quot;, \&quot;高湿环境暴露\&quot;], \&quot;next_actions\&quot;: [\&quot;绝缘检测仪分段定位\&quot;, \&quot;检查电池包透气阀密封\&quot;]&#125;], \&quot;severity\&quot;: \&quot;HIGH\&quot;, \&quot;insufficient_evidence\&quot;: false&#125;&quot;</span><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p>对应的 <code>data/dataset_info.json</code> 登记：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;diag_sft_v1&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;file_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;diag_sft_v1.jsonl&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">&quot;columns&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;system&quot;</span><span class="punctuation">:</span> <span class="string">&quot;system&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;prompt&quot;</span><span class="punctuation">:</span> <span class="string">&quot;instruction&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;response&quot;</span><span class="punctuation">:</span> <span class="string">&quot;output&quot;</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;diag_dpo_v1&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">&quot;file_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;diag_dpo_v1.jsonl&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attr">&quot;ranking&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="attr">&quot;columns&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;system&quot;</span><span class="punctuation">:</span> <span class="string">&quot;system&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;prompt&quot;</span><span class="punctuation">:</span> <span class="string">&quot;instruction&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;chosen&quot;</span><span class="punctuation">:</span> <span class="string">&quot;chosen&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;rejected&quot;</span><span class="punctuation">:</span> <span class="string">&quot;rejected&quot;</span><span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><strong>偏好数据</strong>：同一输入的 <code>chosen</code> 与 <code>rejected</code>，差距维度要单一（例如「证据链来自输入且支撑结论」对「证据与输入无关」），由实战三的脚本自举生成。</p>
+<p><strong>Embedding 三元组（FlagEmbedding 格式）</strong>：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span><span class="attr">&quot;query&quot;</span><span class="punctuation">:</span> <span class="string">&quot;驻车工况下母线电压波动伴随绝缘电阻下降&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"> <span class="attr">&quot;pos&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;案例 K-2214：电池包底部密封条老化导致的绝缘缓降故障分析……&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"> <span class="attr">&quot;neg&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;案例 K-1873：DC-DC 转换器纹波超标导致的母线电压波动……&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">         <span class="string">&quot;案例 K-0942：BMS 采样线束虚接引起的电压跳变误报……&quot;</span><span class="punctuation">]</span><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<h3 id="4-2-七步管线"><a href="#4-2-七步管线" class="headerlink" title="4.2 七步管线"></a>4.2 七步管线</h3><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>做什么</th>
+<th>门禁</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>① 采集</td>
+<td>按信噪比排序：已关单工单中的确认根因 &gt; 历史案例库 &gt; 专家访谈补录</td>
+<td>种子集 80–150 条真实案例</td>
+</tr>
+<tr>
+<td>② 脱敏</td>
+<td>VIN（17 位规则）、车牌、手机号、姓名、经纬度、经销商代码替换为语义等价占位符</td>
+<td>规则有单元测试，每条数据留过闸记录</td>
+</tr>
+<tr>
+<td>③ 结构化抽取</td>
+<td>强模型把自由文本工单抽成 <code>{症状, 信号特征, 环境, 确认根因, 处置动作}</code></td>
+<td>只抽已确认根因，不抽猜测</td>
+</tr>
+<tr>
+<td>④ 合成扩增</td>
+<td>输入侧扰动（换车型、换工况、增删干扰信号）与场景组合（多故障叠加、信息不足）；真实:扰动:组合:边界约 1:5:3:1</td>
+<td>约束「根因不变、表象合理变化」</td>
+</tr>
+<tr>
+<td>⑤ 双重过滤</td>
+<td>规则层：可解析、schema 通过、根因码在字典内、去重；评审层：强模型按 4 个维度打 1–5 分，保留 4 分以上</td>
+<td>预期淘汰 20%–35%</td>
+</tr>
+<tr>
+<td>⑥ 人工终审</td>
+<td>每条 30–60 秒，看结构、核根因逻辑；项目负责人亲审前 300 条</td>
+<td>通过率与淘汰原因写入数据卡</td>
+</tr>
+<tr>
+<td>⑦ 隔离与版本化</td>
+<td>与黄金集做案例 ID 硬隔离 + 8-gram 重叠查重；JSONL + git 管理；train&#x2F;val 按 95&#x2F;5 切分</td>
+<td>黄金集不参与训练的任何环节</td>
+</tr>
+</tbody></table>
+<p>边界样本（信息不足时输出 <code>insufficient_evidence: true</code> 且不给根因）必须占 8%–12%。模型学不会说「不知道」，上线后就会在信息不足时编造根因。</p>
+<h3 id="4-3-难负例的三个来源"><a href="#4-3-难负例的三个来源" class="headerlink" title="4.3 难负例的三个来源"></a>4.3 难负例的三个来源</h3><ol>
+<li><strong>词面陷阱负例</strong>：用检索模型取查询的前若干名、剔除正例后抽样，词面相似但语义不同。FlagEmbedding 的 <code>hn_mine.py</code> 可以直接产出这一路。</li>
+<li><strong>同域异因负例</strong>（价值最高）：同故障域不同根因、同 ECU 不同症状、同症状不同工况的案例互为负例。「什么容易混淆」只有懂业务的人知道，把它写成规则脚本沉淀下来。</li>
+<li><strong>剔除假负例</strong>：表述不同但根因相同的案例混进负例会严重伤害训练，用根因码做一致性校验剔除。</li>
+</ol>
+<h3 id="4-4-数据发布验收清单"><a href="#4-4-数据发布验收清单" class="headerlink" title="4.4 数据发布验收清单"></a>4.4 数据发布验收清单</h3><ul>
+<li><input disabled="" type="checkbox"> 脱敏全量通过，人工抽检 50 条无泄漏</li>
+<li><input disabled="" type="checkbox"> schema 校验通过率 100%</li>
+<li><input disabled="" type="checkbox"> 与黄金集查重 0 命中</li>
+<li><input disabled="" type="checkbox"> 单一根因占比低于 15%，否则模型会学成「万物皆此因」</li>
+<li><input disabled="" type="checkbox"> 边界样本占 8%–12%</li>
+<li><input disabled="" type="checkbox"> 终审通过率、淘汰原因分布写入数据卡</li>
+<li><input disabled="" type="checkbox"> 数据版本哈希已生成，实验日志可引用</li>
+</ul>
+<h2 id="五、实战一：bge-m3-检索微调"><a href="#五、实战一：bge-m3-检索微调" class="headerlink" title="五、实战一：bge-m3 检索微调"></a>五、实战一：bge-m3 检索微调</h2><p>先做它的理由：模型小、训练快、失败成本最低，而且收益直接体现在整条 RAG 链路上。</p>
+<h3 id="5-1-任务与成功标准"><a href="#5-1-任务与成功标准" class="headerlink" title="5.1 任务与成功标准"></a>5.1 任务与成功标准</h3><ul>
+<li>任务：提升 bge-m3 在诊断案例库上的稠密检索质量。</li>
+<li>裁判：固定测试集（200 条查询 + 全量案例语料），按根因码与训练三元组隔离。</li>
+<li>成功标准：recall@5 提升不少于 8 个百分点，或 MRR@10 提升不少于 0.05；同时用 100 条通用中文查询做回归，下降不超过 2 个百分点。</li>
+</ul>
+<h3 id="5-2-难负例挖掘与训练"><a href="#5-2-难负例挖掘与训练" class="headerlink" title="5.2 难负例挖掘与训练"></a>5.2 难负例挖掘与训练</h3><p><code>hn_mine.py</code> 在 FlagEmbedding 仓库的 <code>scripts/</code> 目录下，不在 pip 包的命令行入口里：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git <span class="built_in">clone</span> --depth 1 https://github.com/FlagOpen/FlagEmbedding.git</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">cd</span> FlagEmbedding/scripts</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">python hn_mine.py \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --input_file diag_pairs.jsonl \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  --output_file diag_triplets.jsonl \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  --candidate_pool corpus.jsonl \</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  --range_for_sampling 5-30 \</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  --negative_number 10 \</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  --embedder_name_or_path BAAI/bge-m3 \</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  --embedder_model_class encoder-only-m3</span></span></code></pre></div></div></figure>
+
+<p><code>candidate_pool</code> 每行一个 <code>{&quot;text&quot;: ...}</code>，不指定时只从输入文件已有的 <code>neg</code> 里检索。<code>range_for_sampling</code> 越靠前，负例越难。之后再叠加同域异因规则负例，并跑一遍假负例剔除。</p>
+<p>只微调稠密检索，关闭统一微调以省显存（将来需要稀疏或多向量检索时再开）：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">torchrun --nproc_per_node 1 \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  -m FlagEmbedding.finetune.embedder.encoder_only.m3 \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  --model_name_or_path BAAI/bge-m3 \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --train_data ./diag_triplets.jsonl \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  --output_dir ./output/bge-m3-diag-v1 \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  --learning_rate 1e-5 \</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  --num_train_epochs 3 \</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  --per_device_train_batch_size 16 \</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  --gradient_checkpointing \</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  --train_group_size 8 \</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  --temperature 0.02 \</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  --query_max_len 128 \</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  --passage_max_len 1024 \</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  --normalize_embeddings True \</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  --unified_finetuning False \</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">  --warmup_ratio 0.1 \</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">  --logging_steps 20 --save_steps 200</span></span></code></pre></div></div></figure>
+
+<p><code>train_group_size 8</code> 表示每条查询 1 个正例 + 7 个负例。显存不够时按以下顺序调整：<code>passage_max_len</code> 降低 → <code>train_group_size</code> 降低（不低于 4）→ batch 降低。优先保 batch，因为批内负例是免费的效果来源。</p>
+<h3 id="5-3-评估脚本"><a href="#5-3-评估脚本" class="headerlink" title="5.3 评估脚本"></a>5.3 评估脚本</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="19"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;eval_retrieval.py：基座与微调版各跑一遍，输出对比表。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">from</span> FlagEmbedding <span class="keyword">import</span> BGEM3FlagModel</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">evaluate</span>(<span class="params">model_path, queries, corpus, qrels, ks=(<span class="params"><span class="number">1</span>, <span class="number">5</span>, <span class="number">10</span></span>)</span>):</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    model = BGEM3FlagModel(model_path, use_fp16=<span class="literal">True</span>)</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    q_emb = model.encode([q[<span class="string">&quot;text&quot;</span>] <span class="keyword">for</span> q <span class="keyword">in</span> queries], max_length=<span class="number">128</span>)[<span class="string">&quot;dense_vecs&quot;</span>]</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    c_emb = model.encode([c[<span class="string">&quot;text&quot;</span>] <span class="keyword">for</span> c <span class="keyword">in</span> corpus], max_length=<span class="number">1024</span>)[<span class="string">&quot;dense_vecs&quot;</span>]</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    scores = q_emb @ c_emb.T  <span class="comment"># 向量已归一化，内积即余弦相似度</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    ids = [c[<span class="string">&quot;id&quot;</span>] <span class="keyword">for</span> c <span class="keyword">in</span> corpus]</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    metrics = &#123;<span class="string">f&quot;recall@<span class="subst">&#123;k&#125;</span>&quot;</span>: [] <span class="keyword">for</span> k <span class="keyword">in</span> ks&#125; | &#123;<span class="string">&quot;mrr@10&quot;</span>: []&#125;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="keyword">for</span> i, q <span class="keyword">in</span> <span class="built_in">enumerate</span>(queries):</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        rank = np.argsort(-scores[i])</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        gold = <span class="built_in">set</span>(qrels[q[<span class="string">&quot;id&quot;</span>]])</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        <span class="keyword">for</span> k <span class="keyword">in</span> ks:</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">            metrics[<span class="string">f&quot;recall@<span class="subst">&#123;k&#125;</span>&quot;</span>].append(<span class="built_in">len</span>(gold &amp; &#123;ids[j] <span class="keyword">for</span> j <span class="keyword">in</span> rank[:k]&#125;) / <span class="built_in">len</span>(gold))</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">        metrics[<span class="string">&quot;mrr@10&quot;</span>].append(<span class="built_in">next</span>((<span class="number">1</span> / (r + <span class="number">1</span>) <span class="keyword">for</span> r, j <span class="keyword">in</span> <span class="built_in">enumerate</span>(rank[:<span class="number">10</span>]) <span class="keyword">if</span> ids[j] <span class="keyword">in</span> gold), <span class="number">0.0</span>))</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="keyword">return</span> &#123;m: <span class="built_in">round</span>(<span class="built_in">float</span>(np.mean(v)), <span class="number">4</span>) <span class="keyword">for</span> m, v <span class="keyword">in</span> metrics.items()&#125;</span></span></code></pre></div></div></figure>
+
+<p>离线指标过关后，在 RAG 链路里切换向量模型、重建索引，用黄金集问题做一次端到端对比。</p>
+<h3 id="5-4-已知坑"><a href="#5-4-已知坑" class="headerlink" title="5.4 已知坑"></a>5.4 已知坑</h3><table>
+<thead>
+<tr>
+<th>坑</th>
+<th>表现</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>小语料过拟合</td>
+<td>epoch 大于 5 或数据少于 1000 条时通用能力明显下降</td>
+<td>混入 10%–20% 通用检索数据，或早停</td>
+</tr>
+<tr>
+<td>测试集泄漏</td>
+<td>查询的扰动变体与测试查询语义重复，离线指标虚高</td>
+<td>按根因码切分训练与测试，同根因不跨界</td>
+</tr>
+<tr>
+<td>batch 太小</td>
+<td>loss 在降但指标不动</td>
+<td>按 5.2 的顺序腾显存保 batch</td>
+</tr>
+<tr>
+<td>与 reranker 口径错位</td>
+<td>换了向量模型、没换 reranker，整体变差</td>
+<td>先摘掉 reranker 比较裸检索；生产必须用 reranker 时，用新向量模型重挖难负例并配套微调</td>
+</tr>
+<tr>
+<td>假负例</td>
+<td>训练后同根因案例反而被推远</td>
+<td>训练前必跑根因码一致性校验</td>
+</tr>
+</tbody></table>
+<h2 id="六、实战二：Qwen-LoRA-SFT-结构化输出"><a href="#六、实战二：Qwen-LoRA-SFT-结构化输出" class="headerlink" title="六、实战二：Qwen LoRA-SFT 结构化输出"></a>六、实战二：Qwen LoRA-SFT 结构化输出</h2><p>前置条件：黄金集与确定性评分器已经就绪，第四章管线已产出 1200–1800 条定版数据，并在本地冒烟通过。</p>
+<h3 id="6-1-任务与成功标准"><a href="#6-1-任务与成功标准" class="headerlink" title="6.1 任务与成功标准"></a>6.1 任务与成功标准</h3><ul>
+<li>任务：<code>信号摘要 → RootCauseHypothesis JSON</code>，刻意收窄为单一结构化任务。</li>
+<li>裁判：黄金集 + 确定性评分器（格式合法率、根因 top-1 命中率），外加强模型对解释质量打分。</li>
+<li>成功标准：格式合法率不低于 99.5%；根因 top-1 命中率达到对照大模型 API 的 90% 以上；P95 延迟和单次成本有数量级优势。目标是「窄任务逼近 + 延迟成本占优」，不是全面超越。</li>
+</ul>
+<h3 id="6-2-基座选择"><a href="#6-2-基座选择" class="headerlink" title="6.2 基座选择"></a>6.2 基座选择</h3><table>
+<thead>
+<tr>
+<th>候选</th>
+<th>发布</th>
+<th>优点</th>
+<th>注意</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Qwen3-8B</td>
+<td>2025-04</td>
+<td>稠密架构，LoRA 训练、QLoRA、vLLM multi-LoRA 部署路径最成熟</td>
+<td>混合思考模型，训练与推理都要关闭思考</td>
+</tr>
+<tr>
+<td>Qwen3-4B-Instruct-2507</td>
+<td>2025-08</td>
+<td>非思考指令模型，LLaMA-Factory 官方示例所用基座，冒烟和低成本部署首选</td>
+<td>复杂任务能力弱于 8B</td>
+</tr>
+<tr>
+<td>Qwen3.5-9B</td>
+<td>2026-02</td>
+<td>更新一代，LLaMA-Factory 0.9.5 已提供 <code>qwen3_5</code> &#x2F; <code>qwen3_5_nothink</code> 模板</td>
+<td>原生多模态、混合注意力架构；量化与 LoRA 部署需按所用推理框架版本实测</td>
+</tr>
+</tbody></table>
+<p>本文以 Qwen3-8B 为主基座，同一份数据和评分器可以在另外两个候选上各跑一轮，用对比表而不是直觉决定。</p>
+<h3 id="6-3-训练配置"><a href="#6-3-训练配置" class="headerlink" title="6.3 训练配置"></a>6.3 训练配置</h3><p><code>qwen3_8b_diag_lora.yaml</code>：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="41"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">### model</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">model_name_or_path:</span> <span class="string">Qwen/Qwen3-8B</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">trust_remote_code:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment">### method</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">stage:</span> <span class="string">sft</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">do_train:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">finetuning_type:</span> <span class="string">lora</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">lora_target:</span> <span class="string">all</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">lora_rank:</span> <span class="number">16</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">lora_alpha:</span> <span class="number">32</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="attr">lora_dropout:</span> <span class="number">0.05</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="comment">### dataset</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="attr">dataset:</span> <span class="string">diag_sft_v1</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="attr">template:</span> <span class="string">qwen3_nothink</span>        <span class="comment"># 模板错一切皆错；推理侧也必须关闭思考</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="attr">cutoff_len:</span> <span class="number">2048</span>               <span class="comment"># 必须大于最长样本的 token 数，先统计再定</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="attr">preprocessing_num_workers:</span> <span class="number">8</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="comment">### output</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="attr">output_dir:</span> <span class="string">saves/qwen3-8b-diag-lora-v1</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="attr">logging_steps:</span> <span class="number">10</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="attr">save_steps:</span> <span class="number">200</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="attr">plot_loss:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="attr">report_to:</span> <span class="string">none</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"><span class="comment">### train</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"><span class="attr">per_device_train_batch_size:</span> <span class="number">2</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx"><span class="attr">gradient_accumulation_steps:</span> <span class="number">8</span>  <span class="comment"># 等效 batch 16</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx"><span class="attr">learning_rate:</span> <span class="number">1.0e-4</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx"><span class="attr">num_train_epochs:</span> <span class="number">3.0</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"><span class="attr">lr_scheduler_type:</span> <span class="string">cosine</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx"><span class="attr">warmup_ratio:</span> <span class="number">0.1</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"><span class="attr">bf16:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx"><span class="attr">gradient_checkpointing:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx"><span class="comment">### eval</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"><span class="attr">val_size:</span> <span class="number">0.05</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx"><span class="attr">per_device_eval_batch_size:</span> <span class="number">2</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx"><span class="attr">eval_strategy:</span> <span class="string">steps</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx"><span class="attr">eval_steps:</span> <span class="number">100</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">llamafactory-cli train qwen3_8b_diag_lora.yaml</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">llamafactory-cli chat --model_name_or_path Qwen/Qwen3-8B \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  --adapter_name_or_path saves/qwen3-8b-diag-lora-v1 --template qwen3_nothink   <span class="comment"># 手测：先看模板与停止符</span></span></span></code></pre></div></div></figure>
+
+<p>读训练曲线：train loss 平滑下降属正常；<strong>验证集 loss 拐头回升，就取拐点前的 checkpoint</strong>。但结构化任务的最终裁判不是 loss，而是格式合法率与命中率。</p>
+<h3 id="6-4-部署：multi-LoRA-天然-A-B"><a href="#6-4-部署：multi-LoRA-天然-A-B" class="headerlink" title="6.4 部署：multi-LoRA 天然 A&#x2F;B"></a>6.4 部署：multi-LoRA 天然 A&#x2F;B</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">vllm serve Qwen/Qwen3-8B \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  --enable-lora \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  --lora-modules diag-v1=saves/qwen3-8b-diag-lora-v1 \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  --max-lora-rank 16</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># 请求 model=&quot;diag-v1&quot; 走微调版，model=&quot;Qwen/Qwen3-8B&quot; 走基座：同一进程内对照</span></span></span></code></pre></div></div></figure>
+
+<p>需要合并部署（端侧、极限资源）时，用 LLaMA-Factory 的导出配置合并；合并必须基于非量化底模：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">### merge_diag.yaml</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">model_name_or_path:</span> <span class="string">Qwen/Qwen3-8B</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">adapter_name_or_path:</span> <span class="string">saves/qwen3-8b-diag-lora-v1</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">template:</span> <span class="string">qwen3_nothink</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">trust_remote_code:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">export_dir:</span> <span class="string">merged/qwen3-8b-diag-v1</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">export_size:</span> <span class="number">5</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">export_device:</span> <span class="string">cpu</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">export_legacy_format:</span> <span class="literal">false</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">llamafactory-cli <span class="built_in">export</span> merge_diag.yaml</span></span></code></pre></div></div></figure>
+
+<h3 id="6-5-评分器与评测脚本"><a href="#6-5-评分器与评测脚本" class="headerlink" title="6.5 评分器与评测脚本"></a>6.5 评分器与评测脚本</h3><p>评分器是这个手册里最值钱的代码：验收用它，偏好对筛选用它，将来做 RL 时它就是奖励函数。</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="35"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;grader.py：确定性评分器——验收、偏好对筛选、将来的 RL 奖励共用一份实现。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">from</span> typing <span class="keyword">import</span> <span class="type">Literal</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">from</span> pydantic <span class="keyword">import</span> BaseModel, Field, ValidationError</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">Candidate</span>(<span class="title class_ inherited__">BaseModel</span>):</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    cause_code: <span class="built_in">str</span> = Field(pattern=<span class="string">r&quot;^RC-[A-Z]+-\d&#123;4&#125;$&quot;</span>)  <span class="comment"># 必须来自根因字典</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    description: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    confidence: <span class="built_in">float</span> = Field(ge=<span class="number">0</span>, le=<span class="number">1</span>)</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    evidence: <span class="built_in">list</span>[<span class="built_in">str</span>] = Field(min_length=<span class="number">1</span>)</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    next_actions: <span class="built_in">list</span>[<span class="built_in">str</span>] = Field(min_length=<span class="number">1</span>)</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">RootCauseHypothesis</span>(<span class="title class_ inherited__">BaseModel</span>):</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    root_cause_candidates: <span class="built_in">list</span>[Candidate] = Field(max_length=<span class="number">3</span>)</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    severity: <span class="type">Literal</span>[<span class="string">&quot;LOW&quot;</span>, <span class="string">&quot;MEDIUM&quot;</span>, <span class="string">&quot;HIGH&quot;</span>]</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    insufficient_evidence: <span class="built_in">bool</span> = <span class="literal">False</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">grade</span>(<span class="params">raw: <span class="built_in">str</span>, gold_cause: <span class="built_in">str</span> | <span class="literal">None</span>, known_codes: <span class="built_in">set</span>[<span class="built_in">str</span>]</span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;gold_cause 为 None 表示边界样本：期望模型声明证据不足。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        obj = RootCauseHypothesis.model_validate_json(raw)</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="keyword">except</span> ValidationError:</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        <span class="keyword">return</span> &#123;<span class="string">&quot;format_ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;top1_hit&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;score&quot;</span>: <span class="number">0.0</span>&#125;</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">    codes = [c.cause_code <span class="keyword">for</span> c <span class="keyword">in</span> obj.root_cause_candidates]</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    <span class="keyword">if</span> <span class="built_in">any</span>(c <span class="keyword">not</span> <span class="keyword">in</span> known_codes <span class="keyword">for</span> c <span class="keyword">in</span> codes):  <span class="comment"># 编造的根因码按格式错误处理</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        <span class="keyword">return</span> &#123;<span class="string">&quot;format_ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;top1_hit&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;score&quot;</span>: <span class="number">0.0</span>&#125;</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    <span class="keyword">if</span> gold_cause <span class="keyword">is</span> <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">        hit = obj.insufficient_evidence <span class="keyword">and</span> <span class="keyword">not</span> codes</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">    <span class="keyword">else</span>:</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">        ranked = <span class="built_in">sorted</span>(obj.root_cause_candidates, key=<span class="keyword">lambda</span> c: -c.confidence)</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">        hit = <span class="built_in">bool</span>(ranked) <span class="keyword">and</span> ranked[<span class="number">0</span>].cause_code == gold_cause</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;format_ok&quot;</span>: <span class="literal">True</span>, <span class="string">&quot;top1_hit&quot;</span>: hit, <span class="string">&quot;score&quot;</span>: <span class="number">0.3</span> + <span class="number">0.7</span> * hit&#125;</span></span></code></pre></div></div></figure>
+
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="43"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;eval_sft.py：同一份黄金集，分别评测基座与 LoRA 版本（vLLM 的 OpenAI 兼容接口）。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> json</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> statistics</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">import</span> sys</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">import</span> time</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">from</span> grader <span class="keyword">import</span> grade</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">client = OpenAI(base_url=<span class="string">&quot;http://localhost:8000/v1&quot;</span>, api_key=<span class="string">&quot;EMPTY&quot;</span>)</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">SYSTEM = <span class="built_in">open</span>(<span class="string">&quot;prompts/diag_system.txt&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>).read().strip()  <span class="comment"># 与训练数据的 system 一字不差</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">KNOWN = &#123;line.strip() <span class="keyword">for</span> line <span class="keyword">in</span> <span class="built_in">open</span>(<span class="string">&quot;data/cause_codes.txt&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>) <span class="keyword">if</span> line.strip()&#125;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">model: <span class="built_in">str</span>, golden_path: <span class="built_in">str</span></span>) -&gt; <span class="built_in">dict</span>:</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    rows = [json.loads(line) <span class="keyword">for</span> line <span class="keyword">in</span> <span class="built_in">open</span>(golden_path, encoding=<span class="string">&quot;utf-8&quot;</span>)]</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    graded, latencies = [], []</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="keyword">for</span> r <span class="keyword">in</span> rows:</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">        t0 = time.perf_counter()</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">        resp = client.chat.completions.create(</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">            model=model,</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">            temperature=<span class="number">0</span>,</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">            max_tokens=<span class="number">1024</span>,</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">            messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;system&quot;</span>, <span class="string">&quot;content&quot;</span>: SYSTEM&#125;, &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: r[<span class="string">&quot;input&quot;</span>]&#125;],</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">            extra_body=&#123;<span class="string">&quot;chat_template_kwargs&quot;</span>: &#123;<span class="string">&quot;enable_thinking&quot;</span>: <span class="literal">False</span>&#125;&#125;,  <span class="comment"># 与 *_nothink 训练模板保持一致</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        )</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        latencies.append(time.perf_counter() - t0)</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        graded.append(grade(resp.choices[<span class="number">0</span>].message.content <span class="keyword">or</span> <span class="string">&quot;&quot;</span>, r.get(<span class="string">&quot;gold_cause&quot;</span>), KNOWN))</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    n = <span class="built_in">len</span>(graded)</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">    <span class="keyword">return</span> &#123;</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">        <span class="string">&quot;model&quot;</span>: model,</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">        <span class="string">&quot;n&quot;</span>: n,</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">        <span class="string">&quot;format_ok&quot;</span>: <span class="built_in">round</span>(<span class="built_in">sum</span>(g[<span class="string">&quot;format_ok&quot;</span>] <span class="keyword">for</span> g <span class="keyword">in</span> graded) / n, <span class="number">4</span>),</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">        <span class="string">&quot;top1_hit&quot;</span>: <span class="built_in">round</span>(<span class="built_in">sum</span>(g[<span class="string">&quot;top1_hit&quot;</span>] <span class="keyword">for</span> g <span class="keyword">in</span> graded) / n, <span class="number">4</span>),</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">        <span class="string">&quot;p95_latency_s&quot;</span>: <span class="built_in">round</span>(statistics.quantiles(latencies, n=<span class="number">20</span>)[<span class="number">18</span>], <span class="number">3</span>),</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">    golden = sys.argv[<span class="number">1</span>]</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">    <span class="keyword">for</span> m <span class="keyword">in</span> sys.argv[<span class="number">2</span>:]:  <span class="comment"># 例：python eval_sft.py data/golden.jsonl Qwen/Qwen3-8B diag-v1</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">        <span class="built_in">print</span>(json.dumps(run(m, golden), ensure_ascii=<span class="literal">False</span>))</span></span></code></pre></div></div></figure>
+
+<h3 id="6-6-已知坑"><a href="#6-6-已知坑" class="headerlink" title="6.6 已知坑"></a>6.6 已知坑</h3><table>
+<thead>
+<tr>
+<th>坑</th>
+<th>表现</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>模板不匹配</td>
+<td>输出混乱、停不下来、夹带思考内容</td>
+<td>训练模板与推理模板一致；Qwen3 用 <code>qwen3_nothink</code> 训练时，推理请求也要关闭思考</td>
+</tr>
+<tr>
+<td><code>cutoff_len</code> 截断输出</td>
+<td>长样本的 JSON 被截尾且不报错，模型学会「写半截」</td>
+<td>训练前统计 token 长度分布，按 P99 加余量设置</td>
+</tr>
+<tr>
+<td>学习率过大</td>
+<td>模型只会输出 JSON，基础对话能力丧失</td>
+<td>LoRA 学习率以 2e-4 为上限，异常先降学习率</td>
+</tr>
+<tr>
+<td>没配验证集</td>
+<td>无法发现过拟合</td>
+<td>必配 <code>val_size</code></td>
+</tr>
+<tr>
+<td>量化部署后指标下降</td>
+<td>合并加 4 bit 量化后命中率掉 1–3 个点</td>
+<td>最终对比表必须用生产同款部署形态测</td>
+</tr>
+<tr>
+<td>合成数据同质化</td>
+<td>输出千篇一律</td>
+<td>回查扩增配比与生成温度</td>
+</tr>
+</tbody></table>
+<h2 id="七、实战三：DPO-偏好优化"><a href="#七、实战三：DPO-偏好优化" class="headerlink" title="七、实战三：DPO 偏好优化"></a>七、实战三：DPO 偏好优化</h2><p>目标是<strong>流程贯通、建立直觉</strong>，指标提升是加分项，不是 KPI。</p>
+<h3 id="7-1-用-SFT-模型自举偏好对"><a href="#7-1-用-SFT-模型自举偏好对" class="headerlink" title="7.1 用 SFT 模型自举偏好对"></a>7.1 用 SFT 模型自举偏好对</h3><p>对黄金集之外的 300–500 条输入，让 SFT 模型各采样 4 个候选，先用确定性评分器打分，分数相同的再由强模型按单一维度（证据链是否来自输入且支撑结论）排序，取最好和最差成对：</p>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="47"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;build_pairs.py：用 SFT 模型自举偏好对，输出 LLaMA-Factory 偏好数据格式。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> json</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> sys</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">from</span> grader <span class="keyword">import</span> grade</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">local = OpenAI(base_url=<span class="string">&quot;http://localhost:8000/v1&quot;</span>, api_key=<span class="string">&quot;EMPTY&quot;</span>)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">SYSTEM = <span class="built_in">open</span>(<span class="string">&quot;prompts/diag_system.txt&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>).read().strip()</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">KNOWN = &#123;line.strip() <span class="keyword">for</span> line <span class="keyword">in</span> <span class="built_in">open</span>(<span class="string">&quot;data/cause_codes.txt&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>) <span class="keyword">if</span> line.strip()&#125;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">judge_evidence</span>(<span class="params"><span class="keyword">case</span>: <span class="built_in">str</span>, answer: <span class="built_in">str</span></span>) -&gt; <span class="built_in">int</span>:</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;单一维度评审：证据链是否来自输入且支撑结论，返回 1-5。实现时接入强模型并固定评分提示词。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="keyword">raise</span> NotImplementedError</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">build</span>(<span class="params">src_path: <span class="built_in">str</span>, out_path: <span class="built_in">str</span>, n: <span class="built_in">int</span> = <span class="number">4</span></span>) -&gt; <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    kept = <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="keyword">with</span> <span class="built_in">open</span>(out_path, <span class="string">&quot;w&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>) <span class="keyword">as</span> out:</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        <span class="keyword">for</span> line <span class="keyword">in</span> <span class="built_in">open</span>(src_path, encoding=<span class="string">&quot;utf-8&quot;</span>):</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">            r = json.loads(line)</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">            resp = local.chat.completions.create(</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">                model=<span class="string">&quot;diag-v1&quot;</span>, n=n, temperature=<span class="number">0.8</span>, max_tokens=<span class="number">1024</span>,</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">                messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;system&quot;</span>, <span class="string">&quot;content&quot;</span>: SYSTEM&#125;, &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: r[<span class="string">&quot;input&quot;</span>]&#125;],</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">                extra_body=&#123;<span class="string">&quot;chat_template_kwargs&quot;</span>: &#123;<span class="string">&quot;enable_thinking&quot;</span>: <span class="literal">False</span>&#125;&#125;,</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">            )</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">            scored = []</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">            <span class="keyword">for</span> choice <span class="keyword">in</span> resp.choices:</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">                text = choice.message.content <span class="keyword">or</span> <span class="string">&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">                g = grade(text, r.get(<span class="string">&quot;gold_cause&quot;</span>), KNOWN)</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">                <span class="comment"># 确定性分数优先，评审分只在确定性分数相同的候选之间排序</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">                j = judge_evidence(r[<span class="string">&quot;input&quot;</span>], text) <span class="keyword">if</span> g[<span class="string">&quot;format_ok&quot;</span>] <span class="keyword">else</span> <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">                scored.append((g[<span class="string">&quot;score&quot;</span>], j, text))</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">            scored.sort(key=<span class="keyword">lambda</span> x: (x[<span class="number">0</span>], x[<span class="number">1</span>]))</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">            worst, best = scored[<span class="number">0</span>], scored[-<span class="number">1</span>]</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">            <span class="keyword">if</span> best[<span class="number">0</span>] &lt; <span class="number">1.0</span> <span class="keyword">or</span> (best[<span class="number">0</span>], best[<span class="number">1</span>]) == (worst[<span class="number">0</span>], worst[<span class="number">1</span>]):</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">                <span class="keyword">continue</span>  <span class="comment"># 最好的也没命中根因，或好坏没有差距：丢弃，不硬凑</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">            out.write(json.dumps(&#123;<span class="string">&quot;system&quot;</span>: SYSTEM, <span class="string">&quot;instruction&quot;</span>: r[<span class="string">&quot;input&quot;</span>],</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">                                  <span class="string">&quot;chosen&quot;</span>: best[<span class="number">2</span>], <span class="string">&quot;rejected&quot;</span>: worst[<span class="number">2</span>]&#125;, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span>)</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">            kept += <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">    <span class="built_in">print</span>(<span class="string">f&quot;kept <span class="subst">&#123;kept&#125;</span> pairs -&gt; <span class="subst">&#123;out_path&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">    build(sys.argv[<span class="number">1</span>], sys.argv[<span class="number">2</span>])</span></span></code></pre></div></div></figure>
+
+<p>产出后人工抽审 20%，确认差距真实且维度单一。</p>
+<h3 id="7-2-参考模型的坑：先合并，再训练新-adapter"><a href="#7-2-参考模型的坑：先合并，再训练新-adapter" class="headerlink" title="7.2 参考模型的坑：先合并，再训练新 adapter"></a>7.2 参考模型的坑：先合并，再训练新 adapter</h3><p>LLaMA-Factory 在 LoRA 模式下没有显式指定 <code>ref_model</code> 时，DPO 的参考模型是「关闭 adapter 的当前模型」。如果直接在 SFT adapter 上继续训练，关闭 adapter 后得到的是<strong>原始基座</strong>，而不是 SFT 模型，DPO 约束的方向就偏了。稳妥做法是先把 SFT adapter 合并成新底模（6.4 节的导出配置），再在合并模型上训练一个新的 DPO adapter：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="27"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">### qwen3_8b_diag_dpo.yaml</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">model_name_or_path:</span> <span class="string">merged/qwen3-8b-diag-v1</span>   <span class="comment"># 合并后的 SFT 模型，关闭 adapter 即为参考模型</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">trust_remote_code:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">stage:</span> <span class="string">dpo</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">do_train:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">finetuning_type:</span> <span class="string">lora</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">lora_target:</span> <span class="string">all</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">lora_rank:</span> <span class="number">16</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">pref_beta:</span> <span class="number">0.1</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">pref_loss:</span> <span class="string">sigmoid</span>            <span class="comment"># 标准 DPO</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="attr">dataset:</span> <span class="string">diag_dpo_v1</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="attr">template:</span> <span class="string">qwen3_nothink</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="attr">cutoff_len:</span> <span class="number">2048</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="attr">output_dir:</span> <span class="string">saves/qwen3-8b-diag-dpo-v1</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="attr">per_device_train_batch_size:</span> <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="attr">gradient_accumulation_steps:</span> <span class="number">8</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="attr">learning_rate:</span> <span class="number">5.0e-6</span>         <span class="comment"># 比 SFT 低一个数量级</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="attr">num_train_epochs:</span> <span class="number">1.0</span>         <span class="comment"># DPO 容易过拟合，1 个 epoch 起步</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="attr">lr_scheduler_type:</span> <span class="string">cosine</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="attr">warmup_ratio:</span> <span class="number">0.1</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="attr">bf16:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="attr">val_size:</span> <span class="number">0.05</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"><span class="attr">eval_strategy:</span> <span class="string">steps</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"><span class="attr">eval_steps:</span> <span class="number">50</span></span></span></code></pre></div></div></figure>
+
+<p>另一种做法是显式设置 <code>ref_model</code> 与 <code>ref_model_adapters</code> 指向 SFT 版本，代价是训练时多加载一份模型。</p>
+<h3 id="7-3-观察与止损"><a href="#7-3-观察与止损" class="headerlink" title="7.3 观察与止损"></a>7.3 观察与止损</h3><p>观察三件事：黄金集硬指标不许倒退；评审维度分数是否上移；同一输入采样 4 次，输出多样性是否塌缩。出现以下任一信号即停止：任何硬指标回退超过 1 个百分点；两轮数据迭代后目标维度提升不足 0.2 分；输出多样性明显塌缩。</p>
+<h2 id="八、如何验收与上线"><a href="#八、如何验收与上线" class="headerlink" title="八、如何验收与上线"></a>八、如何验收与上线</h2><p>验收只回答一个问题：在生产同款部署形态下，微调版是否在同一裁判面前稳定优于替代方案，并且随时可以退回。</p>
+<h3 id="8-1-验收对比表"><a href="#8-1-验收对比表" class="headerlink" title="8.1 验收对比表"></a>8.1 验收对比表</h3><p>所有候选在同一份黄金集、同一个评分器、生产同款部署形态下测：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>Qwen3-8B 基座</th>
+<th>diag-v1（LoRA）</th>
+<th>对照大模型 API</th>
+<th>门槛</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>格式合法率</td>
+<td>实测</td>
+<td>实测</td>
+<td>实测</td>
+<td>≥ 99.5%</td>
+</tr>
+<tr>
+<td>根因 top-1 命中率</td>
+<td>实测</td>
+<td>实测</td>
+<td>实测（上限参照）</td>
+<td>≥ API 的 90%</td>
+</tr>
+<tr>
+<td>解释质量（评审 1–5）</td>
+<td>实测</td>
+<td>实测</td>
+<td>实测</td>
+<td>不低于基座</td>
+</tr>
+<tr>
+<td>P95 延迟</td>
+<td>实测</td>
+<td>实测</td>
+<td>实测</td>
+<td>数量级优势</td>
+</tr>
+<tr>
+<td>单次调用成本</td>
+<td>实测</td>
+<td>实测</td>
+<td>实测</td>
+<td>满足 1.5 节收益公式</td>
+</tr>
+<tr>
+<td>通用能力回归</td>
+<td>实测</td>
+<td>实测</td>
+<td>—</td>
+<td>下降不超过 2 个百分点</td>
+</tr>
+</tbody></table>
+<h3 id="8-2-模型资产登记"><a href="#8-2-模型资产登记" class="headerlink" title="8.2 模型资产登记"></a>8.2 模型资产登记</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">models/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  registry.jsonl                # 每行一个版本的 manifest</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  qwen3-8b-diag-lora/</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    v1.0.0/</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      adapter/</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      manifest.json</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      eval_report.md</span></span></code></pre></div></div></figure>
+
+<p>manifest 必填：<code>model_id</code>、<code>base_model</code>、<code>adapter_hash</code>、<code>data_version</code>、<code>train_config_hash</code>、<code>eval_summary</code>（格式合法率、命中率、评审分）、<code>created_at</code>、<code>status</code>（candidate &#x2F; staging &#x2F; prod &#x2F; retired）。<strong>没有 <code>eval_summary</code> 的版本不允许进入 staging</strong>，评估门禁从代码延伸到模型资产。</p>
+<h3 id="8-3-上线形态、灰度与回滚"><a href="#8-3-上线形态、灰度与回滚" class="headerlink" title="8.3 上线形态、灰度与回滚"></a>8.3 上线形态、灰度与回滚</h3><table>
+<thead>
+<tr>
+<th>形态</th>
+<th>方式</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>multi-LoRA 热插拔</td>
+<td>vLLM <code>--enable-lora</code>，按请求选 adapter</td>
+<td>多技能并存、快速 A&#x2F;B，首选</td>
+</tr>
+<tr>
+<td>合并量化独立部署</td>
+<td>导出合并权重再量化</td>
+<td>端侧或资源受限</td>
+</tr>
+<tr>
+<td>网关路由</td>
+<td>AI 网关按租户、场景路由到微调版或大模型 API</td>
+<td>生产形态：大模型 API 永远是兜底</td>
+</tr>
+</tbody></table>
+<p>灰度按 5% → 25% → 100% 放量，每档观察 24 小时。回滚就是切 adapter 或切路由，秒级完成。</p>
+<h3 id="8-4-上线后的监控与飞轮"><a href="#8-4-上线后的监控与飞轮" class="headerlink" title="8.4 上线后的监控与飞轮"></a>8.4 上线后的监控与飞轮</h3><ul>
+<li><strong>在线质量信号</strong>：格式合法率每个请求都能确定性判定，直接进指标系统；诊断工程师对根因的采纳与驳回写回观测平台，同时就是下一轮偏好数据。</li>
+<li><strong>漂移检测</strong>：每月用黄金集重跑线上版本，指标漂移超过 2 个百分点就调查。新车型、新故障模式进入，就是数据分布漂移。</li>
+<li><strong>重训节奏</strong>：季度例行 + 漂移触发；每次重训重新回答 1.6 节的五问，并通过验收门禁。</li>
+</ul>
+<h2 id="2026-09-补记：2026-07-之后的相关变化"><a href="#2026-09-补记：2026-07-之后的相关变化" class="headerlink" title="2026-09 补记：2026-07 之后的相关变化"></a>2026-09 补记：2026-07 之后的相关变化</h2><p>截至 2026-09-29，<strong>没有影响本文结论的变化</strong>。核实到的相关更新：</p>
+<ul>
+<li><strong>新基座</strong>：Qwen 官方在 2026-08 陆续于 Hugging Face 上架 Qwen3.8 系列（含 27B 等规格），模型卡注明基于 Qwen3.5 架构、原生支持图像与视频理解、默认开启思考。LLaMA-Factory 截至 2026-09-29 的最新发布版本仍是 0.9.5，新基座的模板支持需要看主分支或等待新版本。按本文方法，换基座只需在同一数据与评分器上补跑一轮对比表。</li>
+<li><strong>框架版本</strong>：TRL 1.14.0（2026-09-25）、verl 0.9.1（2026-09-20）、vLLM 0.30.0（2026-09-22）、FlagEmbedding 1.4.2（2026-08-24）、ms-swift 4.5.3（2026-09-08）。本文命令与配置没有因此失效，但升级时应按各自发布说明回归一遍冒烟与验收。</li>
+<li><strong>OpenAI 托管微调</strong>：官方弃用页面在 2026-07 之后没有新增与微调相关的条目；1.4 节中 2026-07-02 的限制已生效，2026-10-23（o4-mini 快照及部分微调模型下线）与 2027-01-06（停止创建新微调任务）两个节点仍按原计划推进。</li>
+</ul>
+<p>值得持续关注的方向：新一代混合架构基座在 LoRA 训练、量化与 multi-LoRA 部署上的工具链成熟度；其他厂商托管微调服务的生命周期政策；开源 RL 框架（TRL、verl）在单卡与小集群上的易用性，它决定 2.3 节的立项六问中第 4、5 问何时能松动。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列已读完</div>
+        <h3>「自托管 AI 基础设施」到此结束</h3>
+        <p>回到路径总览，选择下一条要完成的学习路径。</p>
+        <a class="btn primary" href="/paths/">选择下一条路径</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/04/08/technical-docs/MacBook%E6%9C%AC%E5%9C%B0%E5%A4%A7%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：MacBook 本地大模型部署指南：统一内存、推理框架与模型选型</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E8%BF%99%E4%BB%BD%E6%89%8B%E5%86%8C%E5%9B%9E%E7%AD%94%E4%BB%80%E4%B9%88" data-toc-target="这份手册回答什么"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">这份手册回答什么</span></a><a class="toc-level-2" href="#%E4%B8%80%E3%80%81%E4%BD%95%E6%97%B6%E5%BE%AE%E8%B0%83" data-toc-target="一、何时微调"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">一、何时微调</span></a><a class="toc-level-3" href="#1-1-%E5%9B%9B%E7%BA%A7%E6%89%8B%E6%AE%B5%E9%98%B6%E6%A2%AF" data-toc-target="1-1-四级手段阶梯"><span class="toc-text">1.1 四级手段阶梯</span></a><a class="toc-level-3" href="#1-2-%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6%E4%B8%8E%E5%8F%8D%E9%9D%A2%E6%B8%85%E5%8D%95" data-toc-target="1-2-触发条件与反面清单"><span class="toc-text">1.2 触发条件与反面清单</span></a><a class="toc-level-3" href="#1-3-%E6%8C%89%E9%97%AE%E9%A2%98%E7%B1%BB%E5%9E%8B%E9%80%89%E6%96%B9%E6%B3%95" data-toc-target="1-3-按问题类型选方法"><span class="toc-text">1.3 按问题类型选方法</span></a><a class="toc-level-3" href="#1-4-%E6%89%98%E7%AE%A1%E5%BE%AE%E8%B0%83%E8%BF%98%E6%98%AF%E8%87%AA%E5%BB%BA%EF%BC%9A2026-%E5%B9%B4%E7%9A%84%E6%96%B0%E7%BA%A6%E6%9D%9F" data-toc-target="1-4-托管微调还是自建：2026-年的新约束"><span class="toc-text">1.4 托管微调还是自建：2026 年的新约束</span></a><a class="toc-level-3" href="#1-5-%E6%88%90%E6%9C%AC%E6%A8%A1%E5%9E%8B" data-toc-target="1-5-成本模型"><span class="toc-text">1.5 成本模型</span></a><a class="toc-level-3" href="#1-6-%E7%AB%8B%E9%A1%B9%E4%BA%94%E9%97%AE" data-toc-target="1-6-立项五问"><span class="toc-text">1.6 立项五问</span></a><a class="toc-level-2" href="#%E4%BA%8C%E3%80%81%E6%96%B9%E6%B3%95%E9%80%9F%E8%A7%88%EF%BC%9A%E6%9E%B6%E6%9E%84%E5%B8%88%E9%9C%80%E8%A6%81%E7%9F%A5%E9%81%93%E7%9A%84%E9%83%A8%E5%88%86" data-toc-target="二、方法速览：架构师需要知道的部分"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">二、方法速览：架构师需要知道的部分</span></a><a class="toc-level-3" href="#2-1-SFT-%E4%B8%8E-LoRA-QLoRA" data-toc-target="2-1-SFT-与-LoRA-QLoRA"><span class="toc-text">2.1 SFT 与 LoRA / QLoRA</span></a><a class="toc-level-3" href="#2-2-DPO-%E5%8F%8A%E5%85%B6%E5%8F%98%E4%BD%93" data-toc-target="2-2-DPO-及其变体"><span class="toc-text">2.2 DPO 及其变体</span></a><a class="toc-level-3" href="#2-3-GRPO-%E4%B8%8E-RLVR%EF%BC%9A%E8%AF%BB%E6%87%82%EF%BC%8C%E5%B9%B6%E8%83%BD%E8%AE%BA%E8%AF%81%E3%80%8C%E6%9A%82%E6%97%B6%E4%B8%8D%E4%B8%8A%E3%80%8D" data-toc-target="2-3-GRPO-与-RLVR：读懂，并能论证「暂时不上」"><span class="toc-text">2.3 GRPO 与 RLVR：读懂，并能论证「暂时不上」</span></a><a class="toc-level-3" href="#2-4-Embedding-%E5%BE%AE%E8%B0%83" data-toc-target="2-4-Embedding-微调"><span class="toc-text">2.4 Embedding 微调</span></a><a class="toc-level-2" href="#%E4%B8%89%E3%80%81%E5%B7%A5%E5%85%B7%E9%93%BE%E4%B8%8E%E7%8E%AF%E5%A2%83" data-toc-target="三、工具链与环境"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">三、工具链与环境</span></a><a class="toc-level-3" href="#3-1-%E6%A1%86%E6%9E%B6%E9%80%89%E5%9E%8B" data-toc-target="3-1-框架选型"><span class="toc-text">3.1 框架选型</span></a><a class="toc-level-3" href="#3-2-%E6%9C%AC%E5%9C%B0%E4%B8%8E%E4%BA%91%E7%AB%AF%E5%88%86%E5%B7%A5" data-toc-target="3-2-本地与云端分工"><span class="toc-text">3.2 本地与云端分工</span></a><a class="toc-level-2" href="#%E5%9B%9B%E3%80%81%E6%95%B0%E6%8D%AE%E9%A3%9E%E8%BD%AE%EF%BC%9A%E8%AF%8A%E6%96%AD%E5%B7%A5%E5%8D%95-%E2%86%92-%E8%AE%AD%E7%BB%83%E6%95%B0%E6%8D%AE" data-toc-target="四、数据飞轮：诊断工单-→-训练数据"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">四、数据飞轮：诊断工单 → 训练数据</span></a><a class="toc-level-3" href="#4-1-%E4%B8%89%E7%A7%8D%E6%95%B0%E6%8D%AE%E5%BD%A2%E6%80%81" data-toc-target="4-1-三种数据形态"><span class="toc-text">4.1 三种数据形态</span></a><a class="toc-level-3" href="#4-2-%E4%B8%83%E6%AD%A5%E7%AE%A1%E7%BA%BF" data-toc-target="4-2-七步管线"><span class="toc-text">4.2 七步管线</span></a><a class="toc-level-3" href="#4-3-%E9%9A%BE%E8%B4%9F%E4%BE%8B%E7%9A%84%E4%B8%89%E4%B8%AA%E6%9D%A5%E6%BA%90" data-toc-target="4-3-难负例的三个来源"><span class="toc-text">4.3 难负例的三个来源</span></a><a class="toc-level-3" href="#4-4-%E6%95%B0%E6%8D%AE%E5%8F%91%E5%B8%83%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="4-4-数据发布验收清单"><span class="toc-text">4.4 数据发布验收清单</span></a><a class="toc-level-2" href="#%E4%BA%94%E3%80%81%E5%AE%9E%E6%88%98%E4%B8%80%EF%BC%9Abge-m3-%E6%A3%80%E7%B4%A2%E5%BE%AE%E8%B0%83" data-toc-target="五、实战一：bge-m3-检索微调"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">五、实战一：bge-m3 检索微调</span></a><a class="toc-level-3" href="#5-1-%E4%BB%BB%E5%8A%A1%E4%B8%8E%E6%88%90%E5%8A%9F%E6%A0%87%E5%87%86" data-toc-target="5-1-任务与成功标准"><span class="toc-text">5.1 任务与成功标准</span></a><a class="toc-level-3" href="#5-2-%E9%9A%BE%E8%B4%9F%E4%BE%8B%E6%8C%96%E6%8E%98%E4%B8%8E%E8%AE%AD%E7%BB%83" data-toc-target="5-2-难负例挖掘与训练"><span class="toc-text">5.2 难负例挖掘与训练</span></a><a class="toc-level-3" href="#5-3-%E8%AF%84%E4%BC%B0%E8%84%9A%E6%9C%AC" data-toc-target="5-3-评估脚本"><span class="toc-text">5.3 评估脚本</span></a><a class="toc-level-3" href="#5-4-%E5%B7%B2%E7%9F%A5%E5%9D%91" data-toc-target="5-4-已知坑"><span class="toc-text">5.4 已知坑</span></a><a class="toc-level-2" href="#%E5%85%AD%E3%80%81%E5%AE%9E%E6%88%98%E4%BA%8C%EF%BC%9AQwen-LoRA-SFT-%E7%BB%93%E6%9E%84%E5%8C%96%E8%BE%93%E5%87%BA" data-toc-target="六、实战二：Qwen-LoRA-SFT-结构化输出"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">六、实战二：Qwen LoRA-SFT 结构化输出</span></a><a class="toc-level-3" href="#6-1-%E4%BB%BB%E5%8A%A1%E4%B8%8E%E6%88%90%E5%8A%9F%E6%A0%87%E5%87%86" data-toc-target="6-1-任务与成功标准"><span class="toc-text">6.1 任务与成功标准</span></a><a class="toc-level-3" href="#6-2-%E5%9F%BA%E5%BA%A7%E9%80%89%E6%8B%A9" data-toc-target="6-2-基座选择"><span class="toc-text">6.2 基座选择</span></a><a class="toc-level-3" href="#6-3-%E8%AE%AD%E7%BB%83%E9%85%8D%E7%BD%AE" data-toc-target="6-3-训练配置"><span class="toc-text">6.3 训练配置</span></a><a class="toc-level-3" href="#6-4-%E9%83%A8%E7%BD%B2%EF%BC%9Amulti-LoRA-%E5%A4%A9%E7%84%B6-A-B" data-toc-target="6-4-部署：multi-LoRA-天然-A-B"><span class="toc-text">6.4 部署：multi-LoRA 天然 A/B</span></a><a class="toc-level-3" href="#6-5-%E8%AF%84%E5%88%86%E5%99%A8%E4%B8%8E%E8%AF%84%E6%B5%8B%E8%84%9A%E6%9C%AC" data-toc-target="6-5-评分器与评测脚本"><span class="toc-text">6.5 评分器与评测脚本</span></a><a class="toc-level-3" href="#6-6-%E5%B7%B2%E7%9F%A5%E5%9D%91" data-toc-target="6-6-已知坑"><span class="toc-text">6.6 已知坑</span></a><a class="toc-level-2" href="#%E4%B8%83%E3%80%81%E5%AE%9E%E6%88%98%E4%B8%89%EF%BC%9ADPO-%E5%81%8F%E5%A5%BD%E4%BC%98%E5%8C%96" data-toc-target="七、实战三：DPO-偏好优化"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">七、实战三：DPO 偏好优化</span></a><a class="toc-level-3" href="#7-1-%E7%94%A8-SFT-%E6%A8%A1%E5%9E%8B%E8%87%AA%E4%B8%BE%E5%81%8F%E5%A5%BD%E5%AF%B9" data-toc-target="7-1-用-SFT-模型自举偏好对"><span class="toc-text">7.1 用 SFT 模型自举偏好对</span></a><a class="toc-level-3" href="#7-2-%E5%8F%82%E8%80%83%E6%A8%A1%E5%9E%8B%E7%9A%84%E5%9D%91%EF%BC%9A%E5%85%88%E5%90%88%E5%B9%B6%EF%BC%8C%E5%86%8D%E8%AE%AD%E7%BB%83%E6%96%B0-adapter" data-toc-target="7-2-参考模型的坑：先合并，再训练新-adapter"><span class="toc-text">7.2 参考模型的坑：先合并，再训练新 adapter</span></a><a class="toc-level-3" href="#7-3-%E8%A7%82%E5%AF%9F%E4%B8%8E%E6%AD%A2%E6%8D%9F" data-toc-target="7-3-观察与止损"><span class="toc-text">7.3 观察与止损</span></a><a class="toc-level-2" href="#%E5%85%AB%E3%80%81%E5%A6%82%E4%BD%95%E9%AA%8C%E6%94%B6%E4%B8%8E%E4%B8%8A%E7%BA%BF" data-toc-target="八、如何验收与上线"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">八、如何验收与上线</span></a><a class="toc-level-3" href="#8-1-%E9%AA%8C%E6%94%B6%E5%AF%B9%E6%AF%94%E8%A1%A8" data-toc-target="8-1-验收对比表"><span class="toc-text">8.1 验收对比表</span></a><a class="toc-level-3" href="#8-2-%E6%A8%A1%E5%9E%8B%E8%B5%84%E4%BA%A7%E7%99%BB%E8%AE%B0" data-toc-target="8-2-模型资产登记"><span class="toc-text">8.2 模型资产登记</span></a><a class="toc-level-3" href="#8-3-%E4%B8%8A%E7%BA%BF%E5%BD%A2%E6%80%81%E3%80%81%E7%81%B0%E5%BA%A6%E4%B8%8E%E5%9B%9E%E6%BB%9A" data-toc-target="8-3-上线形态、灰度与回滚"><span class="toc-text">8.3 上线形态、灰度与回滚</span></a><a class="toc-level-3" href="#8-4-%E4%B8%8A%E7%BA%BF%E5%90%8E%E7%9A%84%E7%9B%91%E6%8E%A7%E4%B8%8E%E9%A3%9E%E8%BD%AE" data-toc-target="8-4-上线后的监控与飞轮"><span class="toc-text">8.4 上线后的监控与飞轮</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A2026-07-%E4%B9%8B%E5%90%8E%E7%9A%84%E7%9B%B8%E5%85%B3%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：2026-07-之后的相关变化"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">2026-09 补记：2026-07 之后的相关变化</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/self-hosted-ai-infra/" style="--rail: 100%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">8 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E8%BF%99%E4%BB%BD%E6%89%8B%E5%86%8C%E5%9B%9E%E7%AD%94%E4%BB%80%E4%B9%88" data-toc-target="这份手册回答什么" data-title="01 · 这份手册回答什么" aria-label="这份手册回答什么"></a><a class="toc-strip__dot" href="#%E4%B8%80%E3%80%81%E4%BD%95%E6%97%B6%E5%BE%AE%E8%B0%83" data-toc-target="一、何时微调" data-title="02 · 一、何时微调" aria-label="一、何时微调"></a><a class="toc-strip__dot" href="#%E4%BA%8C%E3%80%81%E6%96%B9%E6%B3%95%E9%80%9F%E8%A7%88%EF%BC%9A%E6%9E%B6%E6%9E%84%E5%B8%88%E9%9C%80%E8%A6%81%E7%9F%A5%E9%81%93%E7%9A%84%E9%83%A8%E5%88%86" data-toc-target="二、方法速览：架构师需要知道的部分" data-title="03 · 二、方法速览：架构师需要知道的部分" aria-label="二、方法速览：架构师需要知道的部分"></a><a class="toc-strip__dot" href="#%E4%B8%89%E3%80%81%E5%B7%A5%E5%85%B7%E9%93%BE%E4%B8%8E%E7%8E%AF%E5%A2%83" data-toc-target="三、工具链与环境" data-title="04 · 三、工具链与环境" aria-label="三、工具链与环境"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E3%80%81%E6%95%B0%E6%8D%AE%E9%A3%9E%E8%BD%AE%EF%BC%9A%E8%AF%8A%E6%96%AD%E5%B7%A5%E5%8D%95-%E2%86%92-%E8%AE%AD%E7%BB%83%E6%95%B0%E6%8D%AE" data-toc-target="四、数据飞轮：诊断工单-→-训练数据" data-title="05 · 四、数据飞轮：诊断工单 → 训练数据" aria-label="四、数据飞轮：诊断工单 → 训练数据"></a><a class="toc-strip__dot" href="#%E4%BA%94%E3%80%81%E5%AE%9E%E6%88%98%E4%B8%80%EF%BC%9Abge-m3-%E6%A3%80%E7%B4%A2%E5%BE%AE%E8%B0%83" data-toc-target="五、实战一：bge-m3-检索微调" data-title="06 · 五、实战一：bge-m3 检索微调" aria-label="五、实战一：bge-m3 检索微调"></a><a class="toc-strip__dot" href="#%E5%85%AD%E3%80%81%E5%AE%9E%E6%88%98%E4%BA%8C%EF%BC%9AQwen-LoRA-SFT-%E7%BB%93%E6%9E%84%E5%8C%96%E8%BE%93%E5%87%BA" data-toc-target="六、实战二：Qwen-LoRA-SFT-结构化输出" data-title="07 · 六、实战二：Qwen LoRA-SFT 结构化输出" aria-label="六、实战二：Qwen LoRA-SFT 结构化输出"></a><a class="toc-strip__dot" href="#%E4%B8%83%E3%80%81%E5%AE%9E%E6%88%98%E4%B8%89%EF%BC%9ADPO-%E5%81%8F%E5%A5%BD%E4%BC%98%E5%8C%96" data-toc-target="七、实战三：DPO-偏好优化" data-title="08 · 七、实战三：DPO 偏好优化" aria-label="七、实战三：DPO 偏好优化"></a><a class="toc-strip__dot" href="#%E5%85%AB%E3%80%81%E5%A6%82%E4%BD%95%E9%AA%8C%E6%94%B6%E4%B8%8E%E4%B8%8A%E7%BA%BF" data-toc-target="八、如何验收与上线" data-title="09 · 八、如何验收与上线" aria-label="八、如何验收与上线"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A2026-07-%E4%B9%8B%E5%90%8E%E7%9A%84%E7%9B%B8%E5%85%B3%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：2026-07-之后的相关变化" data-title="10 · 2026-09 补记：2026-07 之后的相关变化" aria-label="2026-09 补记：2026-07 之后的相关变化"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/模型微调与定制能力","title":"架构师的模型微调决策手册：何时微调、怎么做、如何验收","url":"/2026/07/14/technical-docs/%E6%A8%A1%E5%9E%8B%E5%BE%AE%E8%B0%83%E4%B8%8E%E5%AE%9A%E5%88%B6%E8%83%BD%E5%8A%9B/","path":"self-hosted-ai-infra","index":7,"total":8,"next":null}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

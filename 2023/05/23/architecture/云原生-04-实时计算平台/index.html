@@ -1,0 +1,666 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>车辆信号实时计算平台：Flink 与动态规则引擎 · 飞轮之道</title>
+<meta name="description" content="基于 Flink 1.17 构建车辆信号实时计算平台：纠正「状态存在 Kafka」的误解，拆分解析与规则作业，用广播状态实现规则分钟级生效，按表达式、模板、决策三层组织规则，并给出容量、语义与发布流程设计。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2023/05/23/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-04-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="车辆信号实时计算平台：Flink 与动态规则引擎 · 飞轮之道">
+<meta property="og:description" content="基于 Flink 1.17 构建车辆信号实时计算平台：纠正「状态存在 Kafka」的误解，拆分解析与规则作业，用广播状态实现规则分钟级生效，按表达式、模板、决策三层组织规则，并给出容量、语义与发布流程设计。">
+<meta property="og:url" content="https://flywhlway.github.io/2023/05/23/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-04-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">数据与中间件</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 5 / 9 篇</a>
+    </div>
+    <h1>车辆信号实时计算平台：Flink 与动态规则引擎</h1>
+    <p class="article-deck">基于 Flink 1.17 构建车辆信号实时计算平台：纠正「状态存在 Kafka」的误解，拆分解析与规则作业，用广播状态实现规则分钟级生效，按表达式、模板、决策三层组织规则…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>12 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a><a class="article-meta__tag" href="/tags/%E8%BD%A6%E8%81%94%E7%BD%91/">#车联网</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Flink 状态在状态后端（堆内存或本地 RocksDB），靠检查点持久化到对象存储；Kafka 只保存输入数据，偏移量随检查点一起保存。</li><li>规则分三层：单帧表达式用 Aviator，持续、窗口、计次等有状态逻辑由平台模板算子实现，跨事件的业务决策才用 Drools。</li><li>动态规则走 Kafka 压缩主题 + 广播状态；编译后的表达式不入状态，恢复时按规则定义重建。</li><li>告警链路用至少一次 + 确定性事件 ID 去重，不用精确一次事务写出，否则告警延迟被检查点间隔拉长。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="平台要解决的问题"><a href="#平台要解决的问题" class="headerlink" title="平台要解决的问题"></a>平台要解决的问题</h2><p>在建设实时计算平台之前，车辆告警与统计主要靠两种方式：一是每 5 分钟对分析库跑一轮 SQL 批量判断，二是在各业务服务里为不同车型手写判断代码。前者延迟以分钟计，后者每改一个阈值都要发版，而且同一条「电池过温」规则在三个服务里有三种写法。</p>
+<p>新平台的目标是四个可验证的数字：</p>
+<table>
+<thead>
+<tr>
+<th>目标</th>
+<th>指标</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>时效</td>
+<td>信号进入平台到产生告警，P95 &lt; 5 s（不含车端攒批时间）</td>
+</tr>
+<tr>
+<td>规则迭代</td>
+<td>规则变更从发布到全量生效 &lt; 2 分钟，无需发布作业</td>
+</tr>
+<tr>
+<td>容量</td>
+<td>保有 150 万辆、峰值 10 万帧&#x2F;秒，单帧约 200 个信号</td>
+</tr>
+<tr>
+<td>可验证</td>
+<td>任何规则上线前都能用历史数据回放，预估触发率</td>
+</tr>
+</tbody></table>
+<h2 id="先纠正一个常见误解：Flink-的状态不在-Kafka-里"><a href="#先纠正一个常见误解：Flink-的状态不在-Kafka-里" class="headerlink" title="先纠正一个常见误解：Flink 的状态不在 Kafka 里"></a>先纠正一个常见误解：Flink 的状态不在 Kafka 里</h2><p>规划早期的设计稿里，把 Flink 的算子状态和键控状态画成「存放在 Kafka」。这是把 Flink 与 Kafka Streams 混为一谈了，后者确实用 Kafka 的 changelog 主题备份状态。Flink 的状态模型是：</p>
+<ul>
+<li><strong>运行时状态在状态后端里。</strong> HashMapStateBackend 把状态作为对象放在 TaskManager 的 JVM 堆上；EmbeddedRocksDBStateBackend 把状态序列化后存在 TaskManager 本地磁盘的 RocksDB 中。</li>
+<li><strong>持久化靠检查点。</strong> 检查点把状态快照写到分布式存储（HDFS、S3 兼容的对象存储）。RocksDB 支持增量检查点；Flink 1.16 起生产可用的 changelog 状态后端，可以让检查点耗时更短、更可预期。</li>
+<li><strong>Kafka 只提供可重放的输入。</strong> Kafka Source 的分区偏移量作为状态的一部分写进检查点。故障恢复时，状态从检查点恢复，Kafka 从检查点记录的偏移量重新消费，两者对齐，才得到精确一次的状态语义。</li>
+</ul>
+<pre class="mermaid">flowchart LR
+  K["Kafka 分区&lt;br/&gt;输入数据"] --&gt;|消费| TM["TaskManager&lt;br/&gt;状态后端：堆 / 本地 RocksDB"]
+  TM --&gt;|检查点：状态快照 + 消费偏移量| OS["对象存储&lt;br/&gt;检查点目录"]
+  OS -.-&gt;|故障恢复：加载快照| TM
+  TM -.-&gt;|按快照中的偏移量回退重读| K</pre>
+
+
+<p>这个纠正直接改变了三项设计：检查点存储要单独规划容量与生命周期；Kafka 的保留时长必须覆盖「最老可用检查点或保存点」到当前的时间差，否则恢复时数据已被删除；状态规模要按 TaskManager 的内存与本地盘来规划，而不是按 Kafka 集群。</p>
+<h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><pre class="mermaid">flowchart TB
+  RAW["Kafka：原始上行&lt;br/&gt;车辆信封"] --&gt; P["解析作业&lt;br/&gt;按信号模型版本解码"]
+  P --&gt; FR["Kafka：标准信号帧"]
+  FR --&gt; R["规则作业&lt;br/&gt;表达式 + 模板算子 + 广播规则"]
+  FR --&gt; ST["统计作业&lt;br/&gt;Flink SQL 窗口聚合"]
+  RC["规则中心&lt;br/&gt;编辑 / 校验 / 回放 / 发布"] --&gt; RT["Kafka：规则主题&lt;br/&gt;压缩策略"]
+  RT --&gt; R
+  R --&gt; EV["Kafka：规则事件"]
+  EV --&gt; D["诊断决策作业&lt;br/&gt;Drools"]
+  EV --&gt; AL["告警服务&lt;br/&gt;去重 / 收敛 / 通知"]
+  D --&gt; AL
+  R --&gt; RS["Redis：车辆最新状态"]
+  ST --&gt; CH["ClickHouse：实时分析"]
+  OP["Flink Kubernetes Operator&lt;br/&gt;作业生命周期"] -.-&gt; P
+  OP -.-&gt; R
+  OP -.-&gt; ST
+  OP -.-&gt; D</pre>
+
+
+<p>作业按<strong>变更节奏</strong>拆分：解析作业随车型与信号模型变化，按月发布；规则作业的逻辑几乎不变，变的是广播进来的规则；诊断决策作业随业务策略调整。拆开后，改一个解析器不会重启告警链路，反过来也一样。代价是多一次 Kafka 往返，在延迟预算里约几十毫秒，可以接受。</p>
+<p>早期设计稿中与 Flink 并列的 Spark 与自研流式 SQL 层，这次不再进入实时链路：流处理统一在 Flink 上，简单的聚合与 ETL 用 Flink SQL 表达，Spark 留给离线数仓（第 07 篇）。</p>
+<h2 id="选型"><a href="#选型" class="headerlink" title="选型"></a>选型</h2><table>
+<thead>
+<tr>
+<th>领域</th>
+<th>候选</th>
+<th>决策</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>流计算引擎</td>
+<td>Flink 1.17 &#x2F; Spark Structured Streaming &#x2F; Kafka Streams</td>
+<td>Flink</td>
+<td>按键定时器、广播状态、事件时间与检查点机制成熟；微批模型的延迟与按键定时语义不如 Flink；Kafka Streams 是库而非平台，多作业统一运维弱</td>
+</tr>
+<tr>
+<td>表达式引擎</td>
+<td>Aviator 5.3 &#x2F; MVEL &#x2F; QLExpress &#x2F; Groovy</td>
+<td>Aviator</td>
+<td>编译为 JVM 字节码，求值在微秒级；可通过语法特性集合、类白名单与循环次数上限裁剪能力，适合执行外部输入的表达式</td>
+</tr>
+<tr>
+<td>决策规则</td>
+<td>Drools 8 &#x2F; 自研决策表</td>
+<td>Drools，限定在事件层使用</td>
+<td>规则网络适合多条件组合与业务人员维护的决策表；编译与内存开销大，不能放在原始帧上</td>
+</tr>
+<tr>
+<td>部署</td>
+<td>Flink on YARN &#x2F; Flink on Kubernetes</td>
+<td>Kubernetes + Flink Kubernetes Operator（1.4 以上），Application 模式</td>
+<td>与平台底座统一；每个作业独立集群，故障与资源隔离；YARN 上的存量作业逐步迁移</td>
+</tr>
+</tbody></table>
+<p>Groovy 被排除的原因值得单独说：它是完整的编程语言，外部输入的脚本可以做任何事；动态编译还会不断生成新类，长期运行容易耗尽 Metaspace。</p>
+<h2 id="规则的三层模型"><a href="#规则的三层模型" class="headerlink" title="规则的三层模型"></a>规则的三层模型</h2><p>把所有规则都塞进一个引擎，是规则平台失控的常见原因。按表达能力与成本分为三层：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>表达方式</th>
+<th>例子</th>
+<th>状态</th>
+<th>单次成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L1 表达式</td>
+<td>Aviator 表达式，作用于单帧</td>
+<td><code>BatTempMax &gt; 55 &amp;&amp; ChargeState == 1</code></td>
+<td>无</td>
+<td>微秒级</td>
+</tr>
+<tr>
+<td>L2 模板规则</td>
+<td>平台内置模板 + 参数 + L1 条件</td>
+<td>充电时电池温度持续 30 秒超过 55℃</td>
+<td>每车每规则一份</td>
+<td>一次状态读写</td>
+</tr>
+<tr>
+<td>L3 决策规则</td>
+<td>Drools 规则或决策表，作用于 L1&#x2F;L2 产出的事件</td>
+<td>同一车 10 分钟内先后出现绝缘告警与冷却液温度异常，且属于某批次电池包，升级为高优先级工单</td>
+<td>Drools 工作内存</td>
+<td>毫秒级，但只处理事件流</td>
+</tr>
+</tbody></table>
+<p>L2 的模板是有限集合，由平台开发并充分测试：<strong>持续</strong>（条件连续成立 N 秒）、<strong>窗口聚合</strong>（N 秒内均值、最大值）、<strong>变化率</strong>（单位时间变化量）、<strong>计次</strong>（M 分钟内出现 K 次）、<strong>超时</strong>（N 秒无数据）。规则作者只填参数，不写状态逻辑，这是让非开发人员也能安全编写规则的关键。</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;ruleId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;bat-overtemp-charging&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">&quot;version&quot;</span><span class="punctuation">:</span> <span class="number">7</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">&quot;selector&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;models&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;M1&quot;</span><span class="punctuation">,</span> <span class="string">&quot;M2&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span> <span class="attr">&quot;minSchemaVersion&quot;</span><span class="punctuation">:</span> <span class="string">&quot;3.2&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">&quot;template&quot;</span><span class="punctuation">:</span> <span class="string">&quot;SUSTAINED&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">&quot;condition&quot;</span><span class="punctuation">:</span> <span class="string">&quot;BatTempMax &gt; 55 &amp;&amp; ChargeState == 1&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">&quot;params&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;durationSec&quot;</span><span class="punctuation">:</span> <span class="number">30</span><span class="punctuation">,</span> <span class="attr">&quot;resetAfterSec&quot;</span><span class="punctuation">:</span> <span class="number">600</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">&quot;severity&quot;</span><span class="punctuation">:</span> <span class="string">&quot;P1&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="attr">&quot;mode&quot;</span><span class="punctuation">:</span> <span class="string">&quot;SHADOW&quot;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><code>mode</code> 为 <code>SHADOW</code> 时，事件写入影子主题，不进入告警服务，用于上线前观察真实触发率。</p>
+<h2 id="动态规则：广播状态"><a href="#动态规则：广播状态" class="headerlink" title="动态规则：广播状态"></a>动态规则：广播状态</h2><p>规则中心把每次发布写入一个压缩策略（<code>cleanup.policy=compact</code>）的 Kafka 主题，键为规则 ID，删除规则写入墓碑消息。规则作业把它作为广播流接入，与按 VIN 分区的信号帧流连接：</p>
+<figure class="highlight java cb cb--long" data-lang="java" data-label="Java" data-ext="java" data-lines="47"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">// 规则作业核心算子：按 VIN 分区的信号帧流 + 广播的规则流</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RuleEvaluator</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">        <span class="keyword">extends</span> <span class="title class_">KeyedBroadcastProcessFunction</span>&lt;String, SignalFrame, RuleDef, RuleEvent&gt; &#123;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">MapStateDescriptor</span>&lt;String, RuleDef&gt; <span class="variable">RULES</span> <span class="operator">=</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">            <span class="keyword">new</span> <span class="title class_">MapStateDescriptor</span>&lt;&gt;(<span class="string">&quot;rules&quot;</span>, String.class, RuleDef.class);</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="comment">// 编译后的表达式不可序列化，不放进状态，只缓存在算子内存中，恢复后按规则定义懒重建</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">transient</span> Map&lt;String, CompiledRule&gt; compiled;</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="comment">// 每辆车所有模板规则的状态合并为一个对象，每帧只读写一次</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">transient</span> ValueState&lt;VehicleRuleState&gt; vehicleState;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">open</span><span class="params">(Configuration conf)</span> &#123;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        compiled = <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;&gt;();</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        <span class="type">ValueStateDescriptor</span>&lt;VehicleRuleState&gt; <span class="variable">desc</span> <span class="operator">=</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">                <span class="keyword">new</span> <span class="title class_">ValueStateDescriptor</span>&lt;&gt;(<span class="string">&quot;vehicle-rule-state&quot;</span>, VehicleRuleState.class);</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">        desc.enableTimeToLive(StateTtlConfig.newBuilder(Time.days(<span class="number">7</span>)).build()); <span class="comment">// 长期无数据的车辆自动清理</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">        vehicleState = getRuntimeContext().getState(desc);</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">processBroadcastElement</span><span class="params">(RuleDef rule, Context ctx, Collector&lt;RuleEvent&gt; out)</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">            <span class="keyword">throws</span> Exception &#123;</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        <span class="type">BroadcastState</span>&lt;String, RuleDef&gt; <span class="variable">rules</span> <span class="operator">=</span> ctx.getBroadcastState(RULES);</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        <span class="keyword">if</span> (rule.isTombstone()) &#123;</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">            rules.remove(rule.getRuleId());</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">            compiled.remove(rule.getRuleId());</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        &#125; <span class="keyword">else</span> &#123;</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">            compiled.put(rule.getRuleId(), CompiledRule.compile(rule)); <span class="comment">// 规则中心已做过静态校验</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">            rules.put(rule.getRuleId(), rule);</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">processElement</span><span class="params">(SignalFrame frame, ReadOnlyContext ctx, Collector&lt;RuleEvent&gt; out)</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">            <span class="keyword">throws</span> Exception &#123;</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">        <span class="type">VehicleRuleState</span> <span class="variable">st</span> <span class="operator">=</span> Optional.ofNullable(vehicleState.value()).orElseGet(VehicleRuleState::<span class="keyword">new</span>);</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">        <span class="keyword">for</span> (Map.Entry&lt;String, RuleDef&gt; e : ctx.getBroadcastState(RULES).immutableEntries()) &#123;</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">            <span class="type">CompiledRule</span> <span class="variable">r</span> <span class="operator">=</span> compiled.computeIfAbsent(e.getKey(), k -&gt; CompiledRule.compile(e.getValue()));</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">            <span class="keyword">if</span> (r.appliesTo(frame.getModel(), frame.getSchemaVersion())) &#123;</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">                r.evaluate(frame, st, out);   <span class="comment">// L1 表达式求值 + L2 模板状态机，事件 ID 在此生成</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">        vehicleState.update(st);</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>几个容易踩的点：</p>
+<ul>
+<li><strong>广播状态在每个并行实例上各存一份</strong>，规则总量要控制在千条级；规则编译也会在每个实例上各做一次。</li>
+<li><strong>规则到千条级后要建索引。</strong> 示例中每帧遍历全部规则只适合少量规则，实际按车型与信号模型版本预先分组，每帧只遍历适用的几十条。</li>
+<li><strong>新规则没有历史状态。</strong> 一条「持续 30 秒」的新规则，最早在生效 30 秒后才可能触发；需要历史数据的规则，在回放环境里补算，而不是在线回填。</li>
+<li><strong>全新启动的作业</strong>从压缩主题最早位置读取，得到全部现存规则；从检查点恢复的作业，广播状态随检查点恢复，再从记录的偏移量继续读取增量。</li>
+</ul>
+<h2 id="事件时间：全局水位线对百万车辆不成立"><a href="#事件时间：全局水位线对百万车辆不成立" class="headerlink" title="事件时间：全局水位线对百万车辆不成立"></a>事件时间：全局水位线对百万车辆不成立</h2><p>一个 Kafka 分区里混着上万辆车的数据。车辆驶出地库或隧道后，会一次性补传之前缓存的几分钟到几小时数据。如果规则作业依赖全局水位线，只有两种结果：要么这些补传数据全部被判定为迟到而丢弃，要么水位线为了等它们而停滞，拖慢所有其他车辆的告警。</p>
+<p>因此规则作业不使用全局水位线，而是按车处理时间顺序：</p>
+<ul>
+<li>车辆状态中记录该车最近一帧的车端时间。新帧时间早于它超过阈值（例如 60 秒），判定为补传数据，转入侧输出，由补算链路处理，只记录、不实时通知。</li>
+<li>「超时无数据」一类判断使用处理时间定时器，按车注册，不依赖水位线。</li>
+<li>全局水位线只用于车队级统计作业，配置允许迟到时间，迟到数据通过侧输出写入修正表，由分析库合并。</li>
+</ul>
+<h2 id="一致性语义与告警延迟"><a href="#一致性语义与告警延迟" class="headerlink" title="一致性语义与告警延迟"></a>一致性语义与告警延迟</h2><p>Kafka Sink 的精确一次依赖事务：数据在检查点完成时才提交，下游以 <code>read_committed</code> 读取，就要等到检查点完成才能看到数据。检查点间隔 60 秒，告警就可能被延迟 60 秒，直接违反 5 秒的目标。</p>
+<p>所以告警链路选择<strong>至少一次加幂等</strong>：事件 ID 由「规则 ID + 规则版本 + VIN + 触发时的车端时间」确定性生成，作业重放产生的重复事件 ID 完全相同，告警服务按 ID 去重即可。统计链路写 ClickHouse，使用可按主键去重合并的表引擎，重复写入同样无害。</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 规则作业的检查点与状态配置（Flink 1.17）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">state.backend.type:</span> <span class="string">hashmap</span>                 <span class="comment"># 状态小、访问频繁，选堆内状态</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">state.backend.changelog.enabled:</span> <span class="literal">true</span>       <span class="comment"># changelog 让堆状态的检查点也近似增量</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">state.backend.changelog.storage:</span> <span class="string">filesystem</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">dstl.dfs.base-path:</span> <span class="string">s3://flink-changelog/rule-job</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">state.checkpoints.dir:</span> <span class="string">s3://flink-checkpoints/rule-job</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">execution.checkpointing.interval:</span> <span class="string">60s</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">execution.checkpointing.min-pause:</span> <span class="string">30s</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">execution.checkpointing.timeout:</span> <span class="string">10min</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">execution.checkpointing.unaligned.enabled:</span> <span class="literal">true</span>   <span class="comment"># 反压时检查点仍能按时完成</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">state.checkpoints.num-retained:</span> <span class="number">3</span></span></span></code></pre></div></div></figure>
+
+<h2 id="容量规划"><a href="#容量规划" class="headerlink" title="容量规划"></a>容量规划</h2><p><strong>不要把帧拆成信号。</strong> 早期设计稿的数据流在入口处用 flatMap 把每帧拆成逐个信号的记录，10 万帧&#x2F;秒 × 200 个信号就是 2,000 万条&#x2F;秒，序列化与网络开销会压垮集群。规则作业以整帧为单位计算，帧内按名称取信号值。</p>
+<p><strong>状态后端按访问模式选。</strong> 估算规则作业的状态：150 万辆车，平均每车 10 条有状态规则、每条约 100 字节，原始数据约 1.5 GB，考虑 Java 对象开销按 3 倍计约 5 GB。48 个并行实例平均每个约 100 MB，完全放得进堆。而状态访问频率是每秒 10 万次读写，放在 RocksDB 里每次都要序列化与本地查找，放在堆上只是对象引用。因此规则作业用堆状态后端，配合 changelog 缩短检查点；窗口大、状态以 GB 计的统计作业用 RocksDB 加增量检查点。</p>
+<p><strong>计算量估算。</strong> 按车型索引后每帧适用约 30 条规则，每秒 300 万次表达式求值，按每次微秒级估算约需数个 CPU 核；加上反序列化与状态读写，规则作业以 48 并行度、每个 TaskManager 4 个槽位起步，压测后再调整。Kafka 信号帧主题的分区数取并行度的整数倍，避免个别实例分到更多分区而成为热点。</p>
+<p><strong>延迟预算。</strong></p>
+<table>
+<thead>
+<tr>
+<th>环节</th>
+<th>预算</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>接入层写入 Kafka</td>
+<td>≤ 100 ms</td>
+</tr>
+<tr>
+<td>解析作业</td>
+<td>≤ 300 ms</td>
+</tr>
+<tr>
+<td>信号帧主题中转</td>
+<td>≤ 100 ms</td>
+</tr>
+<tr>
+<td>规则作业（含缓冲刷写）</td>
+<td>≤ 500 ms</td>
+</tr>
+<tr>
+<td>告警服务去重与推送</td>
+<td>≤ 1 s</td>
+</tr>
+<tr>
+<td>合计与余量</td>
+<td>约 2 s，余量用于反压与故障切换</td>
+</tr>
+</tbody></table>
+<p>Flink 网络缓冲的超时时间（<code>execution.buffer-timeout</code>）默认 100 ms，吞吐与延迟都能接受，不需要调到 0。</p>
+<h2 id="规则发布流程"><a href="#规则发布流程" class="headerlink" title="规则发布流程"></a>规则发布流程</h2><ol>
+<li><strong>静态校验</strong>：语法检查；引用的信号必须存在于信号字典，类型匹配；选择器中的车型与信号模型版本合法。</li>
+<li><strong>回放评估</strong>：取最近 24 小时约 1% 车辆的信号帧回放，统计触发率。触发率超过每千车每小时 5 次，需要人工确认，这一步专门拦截单位写错（例如把℃当成 K）导致的告警风暴。</li>
+<li><strong>影子运行</strong>：以 <code>SHADOW</code> 模式发布，观察至少一个完整的使用周期（例如一个早晚高峰）。</li>
+<li><strong>正式生效</strong>：切换为 <code>ACTIVE</code>，版本号递增。</li>
+<li><strong>回滚</strong>：重新发布上一版本定义，1 分钟内生效。</li>
+</ol>
+<h2 id="反例与风险"><a href="#反例与风险" class="headerlink" title="反例与风险"></a>反例与风险</h2><ul>
+<li><strong>帧拆信号再计算。</strong> 数据量放大两个数量级，还丢失了同一帧内信号的同时性。</li>
+<li><strong>Drools 直接作用于原始帧。</strong> 为每辆车维护工作内存，内存随车辆数线性增长；规则库编译在秒级，放在热路径上就是告警延迟。</li>
+<li><strong>告警链路用精确一次事务写出。</strong> 看似更严谨，实际上把告警延迟绑到了检查点间隔上。</li>
+<li><strong>一个巨型作业包办一切。</strong> 解析、规则、统计放在一个作业里，任何变更都要全量重启。反过来每条规则一个作业，资源碎片化，同样不可取。</li>
+<li><strong>Kafka 保留时长短于恢复窗口。</strong> 从三天前的保存点恢复时，数据早已过期删除。</li>
+<li><strong>状态不设 TTL。</strong> 报废车辆、已删除规则的状态永远不会被清理，状态规模只增不减。</li>
+<li><strong>表达式引擎不做沙箱。</strong> 放开反射与类加载，规则编辑权限就等于生产环境的代码执行权限。</li>
+</ul>
+<h2 id="2026-回看：三层规则站住了，第三层正在被模型改写"><a href="#2026-回看：三层规则站住了，第三层正在被模型改写" class="headerlink" title="2026 回看：三层规则站住了，第三层正在被模型改写"></a>2026 回看：三层规则站住了，第三层正在被模型改写</h2><h3 id="经受住时间的判断"><a href="#经受住时间的判断" class="headerlink" title="经受住时间的判断"></a>经受住时间的判断</h3><ul>
+<li><strong>状态与 Kafka 的职责划分</strong>、<strong>按变更节奏拆作业</strong>、<strong>告警走至少一次加幂等</strong>，这些是流计算的基本功，三年里没有变化。</li>
+<li><strong>三层规则模型</strong>依然成立。L1 与 L2 覆盖了绝大多数告警规则，平台模板让规则作者无需理解 Flink 状态。</li>
+<li><strong>按车处理事件时间</strong>的做法，在补传数据比例随车队规模增长的情况下，价值越来越明显。</li>
+</ul>
+<h3 id="需要修正的判断"><a href="#需要修正的判断" class="headerlink" title="需要修正的判断"></a>需要修正的判断</h3><ul>
+<li><strong>引擎版本与接口。</strong> Flink 2.0 在 2025 年 3 月发布，移除了 DataSet API、SourceFunction、SinkFunction 等旧接口，最低 Java 版本提升到 11。2023 年新写的自定义连接器，应当一开始就基于新的 Source 与 Sink V2 接口，否则升级时要重写。</li>
+<li><strong>大状态作业的部署方式。</strong> Flink 2.0 引入存算分离的状态管理与 ForSt 状态后端，以分布式文件系统作为状态的主存储，大状态作业在 Kubernetes 上扩缩容快得多。当年统计作业「本地 RocksDB + 增量检查点」的设计，今天会改为 ForSt；规则作业状态小、访问密集，堆状态的选择仍然合理。</li>
+<li><strong>L3 的实现方式。</strong> 当年把跨事件的诊断决策交给 Drools。今天这一层的相当一部分工作，适合交给模型：Flink 2.1 引入 Model DDL 与实时 AI 函数，可以在 SQL 里直接调用模型对事件打分或生成解释；Flink Agents 子项目（0.1.0 于 2025 年 10 月发布）让事件驱动的智能体直接运行在流上。</li>
+</ul>
+<h3 id="今天会怎么做"><a href="#今天会怎么做" class="headerlink" title="今天会怎么做"></a>今天会怎么做</h3><ul>
+<li>以 Flink 2.x 为基线（2026 年 6 月已发布 2.3），规则作业保持堆状态，统计与车队级作业使用存算分离状态。</li>
+<li><strong>确定性规则负责触发，模型负责解释与分诊。</strong> 告警是否触发仍由 L1、L2 规则决定，保证可解释、可回放、可审计；模型与智能体只处理规则产出的事件，给出可能原因、关联历史案例与处置建议，输出进入工单而不是直接通知车主。</li>
+<li>电池、电机等部件的异常检测模型通过 Model DDL 接入统计作业，模型输出作为一个新的「信号」回到 L1 与 L2，与传统阈值规则组合使用，而不是另起一套告警体系。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2023/06/13/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E7%BC%93%E5%AD%98%E9%80%89%E5%9E%8B/">高并发缓存选型：Redis 集群、KeyDB 与 Dragonfly 的取舍</a></h3>
+        <p>从线程模型、兼容性、压测口径与迁移回滚四个角度…</p>
+        <a class="btn primary" href="/2023/06/13/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E7%BC%93%E5%AD%98%E9%80%89%E5%9E%8B/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2023/05/09/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-03-%E7%BB%9F%E4%B8%80%E7%BD%91%E5%85%B3/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：统一网关：WAF、流量网关与微服务网关三合一</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%B9%B3%E5%8F%B0%E8%A6%81%E8%A7%A3%E5%86%B3%E7%9A%84%E9%97%AE%E9%A2%98" data-toc-target="平台要解决的问题"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">平台要解决的问题</span></a><a class="toc-level-2" href="#%E5%85%88%E7%BA%A0%E6%AD%A3%E4%B8%80%E4%B8%AA%E5%B8%B8%E8%A7%81%E8%AF%AF%E8%A7%A3%EF%BC%9AFlink-%E7%9A%84%E7%8A%B6%E6%80%81%E4%B8%8D%E5%9C%A8-Kafka-%E9%87%8C" data-toc-target="先纠正一个常见误解：Flink-的状态不在-Kafka-里"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">先纠正一个常见误解：Flink 的状态不在 Kafka 里</span></a><a class="toc-level-2" href="#%E6%9E%B6%E6%9E%84" data-toc-target="架构"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">架构</span></a><a class="toc-level-2" href="#%E9%80%89%E5%9E%8B" data-toc-target="选型"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">选型</span></a><a class="toc-level-2" href="#%E8%A7%84%E5%88%99%E7%9A%84%E4%B8%89%E5%B1%82%E6%A8%A1%E5%9E%8B" data-toc-target="规则的三层模型"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">规则的三层模型</span></a><a class="toc-level-2" href="#%E5%8A%A8%E6%80%81%E8%A7%84%E5%88%99%EF%BC%9A%E5%B9%BF%E6%92%AD%E7%8A%B6%E6%80%81" data-toc-target="动态规则：广播状态"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">动态规则：广播状态</span></a><a class="toc-level-2" href="#%E4%BA%8B%E4%BB%B6%E6%97%B6%E9%97%B4%EF%BC%9A%E5%85%A8%E5%B1%80%E6%B0%B4%E4%BD%8D%E7%BA%BF%E5%AF%B9%E7%99%BE%E4%B8%87%E8%BD%A6%E8%BE%86%E4%B8%8D%E6%88%90%E7%AB%8B" data-toc-target="事件时间：全局水位线对百万车辆不成立"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">事件时间：全局水位线对百万车辆不成立</span></a><a class="toc-level-2" href="#%E4%B8%80%E8%87%B4%E6%80%A7%E8%AF%AD%E4%B9%89%E4%B8%8E%E5%91%8A%E8%AD%A6%E5%BB%B6%E8%BF%9F" data-toc-target="一致性语义与告警延迟"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">一致性语义与告警延迟</span></a><a class="toc-level-2" href="#%E5%AE%B9%E9%87%8F%E8%A7%84%E5%88%92" data-toc-target="容量规划"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">容量规划</span></a><a class="toc-level-2" href="#%E8%A7%84%E5%88%99%E5%8F%91%E5%B8%83%E6%B5%81%E7%A8%8B" data-toc-target="规则发布流程"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">规则发布流程</span></a><a class="toc-level-2" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">反例与风险</span></a><a class="toc-level-2" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E4%B8%89%E5%B1%82%E8%A7%84%E5%88%99%E7%AB%99%E4%BD%8F%E4%BA%86%EF%BC%8C%E7%AC%AC%E4%B8%89%E5%B1%82%E6%AD%A3%E5%9C%A8%E8%A2%AB%E6%A8%A1%E5%9E%8B%E6%94%B9%E5%86%99" data-toc-target="2026-回看：三层规则站住了，第三层正在被模型改写"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">2026 回看：三层规则站住了，第三层正在被模型改写</span></a><a class="toc-level-3" href="#%E7%BB%8F%E5%8F%97%E4%BD%8F%E6%97%B6%E9%97%B4%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="经受住时间的判断"><span class="toc-text">经受住时间的判断</span></a><a class="toc-level-3" href="#%E9%9C%80%E8%A6%81%E4%BF%AE%E6%AD%A3%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="需要修正的判断"><span class="toc-text">需要修正的判断</span></a><a class="toc-level-3" href="#%E4%BB%8A%E5%A4%A9%E4%BC%9A%E6%80%8E%E4%B9%88%E5%81%9A" data-toc-target="今天会怎么做"><span class="toc-text">今天会怎么做</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 56%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 9</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%B9%B3%E5%8F%B0%E8%A6%81%E8%A7%A3%E5%86%B3%E7%9A%84%E9%97%AE%E9%A2%98" data-toc-target="平台要解决的问题" data-title="01 · 平台要解决的问题" aria-label="平台要解决的问题"></a><a class="toc-strip__dot" href="#%E5%85%88%E7%BA%A0%E6%AD%A3%E4%B8%80%E4%B8%AA%E5%B8%B8%E8%A7%81%E8%AF%AF%E8%A7%A3%EF%BC%9AFlink-%E7%9A%84%E7%8A%B6%E6%80%81%E4%B8%8D%E5%9C%A8-Kafka-%E9%87%8C" data-toc-target="先纠正一个常见误解：Flink-的状态不在-Kafka-里" data-title="02 · 先纠正一个常见误解：Flink 的状态不在 Kafka 里" aria-label="先纠正一个常见误解：Flink 的状态不在 Kafka 里"></a><a class="toc-strip__dot" href="#%E6%9E%B6%E6%9E%84" data-toc-target="架构" data-title="03 · 架构" aria-label="架构"></a><a class="toc-strip__dot" href="#%E9%80%89%E5%9E%8B" data-toc-target="选型" data-title="04 · 选型" aria-label="选型"></a><a class="toc-strip__dot" href="#%E8%A7%84%E5%88%99%E7%9A%84%E4%B8%89%E5%B1%82%E6%A8%A1%E5%9E%8B" data-toc-target="规则的三层模型" data-title="05 · 规则的三层模型" aria-label="规则的三层模型"></a><a class="toc-strip__dot" href="#%E5%8A%A8%E6%80%81%E8%A7%84%E5%88%99%EF%BC%9A%E5%B9%BF%E6%92%AD%E7%8A%B6%E6%80%81" data-toc-target="动态规则：广播状态" data-title="06 · 动态规则：广播状态" aria-label="动态规则：广播状态"></a><a class="toc-strip__dot" href="#%E4%BA%8B%E4%BB%B6%E6%97%B6%E9%97%B4%EF%BC%9A%E5%85%A8%E5%B1%80%E6%B0%B4%E4%BD%8D%E7%BA%BF%E5%AF%B9%E7%99%BE%E4%B8%87%E8%BD%A6%E8%BE%86%E4%B8%8D%E6%88%90%E7%AB%8B" data-toc-target="事件时间：全局水位线对百万车辆不成立" data-title="07 · 事件时间：全局水位线对百万车辆不成立" aria-label="事件时间：全局水位线对百万车辆不成立"></a><a class="toc-strip__dot" href="#%E4%B8%80%E8%87%B4%E6%80%A7%E8%AF%AD%E4%B9%89%E4%B8%8E%E5%91%8A%E8%AD%A6%E5%BB%B6%E8%BF%9F" data-toc-target="一致性语义与告警延迟" data-title="08 · 一致性语义与告警延迟" aria-label="一致性语义与告警延迟"></a><a class="toc-strip__dot" href="#%E5%AE%B9%E9%87%8F%E8%A7%84%E5%88%92" data-toc-target="容量规划" data-title="09 · 容量规划" aria-label="容量规划"></a><a class="toc-strip__dot" href="#%E8%A7%84%E5%88%99%E5%8F%91%E5%B8%83%E6%B5%81%E7%A8%8B" data-toc-target="规则发布流程" data-title="10 · 规则发布流程" aria-label="规则发布流程"></a><a class="toc-strip__dot" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险" data-title="11 · 反例与风险" aria-label="反例与风险"></a><a class="toc-strip__dot" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E4%B8%89%E5%B1%82%E8%A7%84%E5%88%99%E7%AB%99%E4%BD%8F%E4%BA%86%EF%BC%8C%E7%AC%AC%E4%B8%89%E5%B1%82%E6%AD%A3%E5%9C%A8%E8%A2%AB%E6%A8%A1%E5%9E%8B%E6%94%B9%E5%86%99" data-toc-target="2026-回看：三层规则站住了，第三层正在被模型改写" data-title="12 · 2026 回看：三层规则站住了，第三层正在被模型改写" aria-label="2026 回看：三层规则站住了，第三层正在被模型改写"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-04-实时计算平台","title":"车辆信号实时计算平台：Flink 与动态规则引擎","url":"/2023/05/23/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-04-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/","path":"cloud-native-platform","index":4,"total":9,"next":{"title":"高并发缓存选型：Redis 集群、KeyDB 与 Dragonfly 的取舍","url":"/2023/06/13/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-05-%E7%BC%93%E5%AD%98%E9%80%89%E5%9E%8B/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

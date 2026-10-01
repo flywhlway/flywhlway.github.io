@@ -1,0 +1,1491 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Java 微服务调用 Python Agent 的流式链路：gRPC 双向流与统一 SSE 事件协议 · 飞轮之道</title>
+<meta name="description" content="从浏览器到 LangGraph 的端到端流式链路：proto 事件模型、grpc.aio 服务端、grpc-java 与 WebFlux 的背压和取消桥接、统一 SSE 协议与排错清单。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/01/27/technical-docs/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%B5%81%E5%BC%8F%E8%B0%83%E7%94%A8%E4%B8%8EgRPC%E5%8F%8C%E5%90%91%E6%B5%81/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Java 微服务调用 Python Agent 的流式链路：gRPC 双向流与统一 SSE 事件协议 · 飞轮之道">
+<meta property="og:description" content="从浏览器到 LangGraph 的端到端流式链路：proto 事件模型、grpc.aio 服务端、grpc-java 与 WebFlux 的背压和取消桥接、统一 SSE 协议与排错清单。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/01/27/technical-docs/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%B5%81%E5%BC%8F%E8%B0%83%E7%94%A8%E4%B8%8EgRPC%E5%8F%8C%E5%90%91%E6%B5%81/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/langgraph-agent-engineering/">服务化与集成</a><a class="series-chip" href="/paths/langgraph-agent-engineering/" title="查看学习路径">第 8 / 17 篇</a>
+    </div>
+    <h1>Java 微服务调用 Python Agent 的流式链路：gRPC 双向流与统一 SSE 事件协议</h1>
+    <p class="article-deck">从浏览器到 LangGraph 的端到端流式链路：proto 事件模型、grpc.aio 服务端、grpc-java 与 WebFlux 的背压和取消桥接、统一 SSE 协议与排错…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>36 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/LangGraph/">#LangGraph</a><a class="article-meta__tag" href="/tags/gRPC/">#gRPC</a><a class="article-meta__tag" href="/tags/SSE/">#SSE</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>流式是整条链路的属性：任何一段缓冲、聚合或同步桥接，都会让前端退化成一次性收到全文。</li><li>Java 与 Python 之间用 gRPC 双向流，是为了让取消、人工确认这类运行中控制消息与事件走同一条流、落到同一个实例。</li><li>对前端只暴露自有的 SSE 事件协议（token、tool_call、tool_result、state、error、done），不透传 LangGraph 原始事件，框架升级只改 Python 适配层。</li><li>每个 run 有且只有一个 done 且位于最后；上游异常由网关补发 error + done，前端没收到 done 一律按中断处理。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="为什么要端到端流式"><a href="#为什么要端到端流式" class="headerlink" title="为什么要端到端流式"></a>为什么要端到端流式</h2><p>企业 Agent 平台的常见分工是：Java 微服务（Spring Cloud Alibaba）负责鉴权、租户、业务数据和对外 API，Python 执行面（FastAPI + LangGraph）负责模型调用与图编排。一次车辆故障诊断可能要查故障码库、检索维修手册、再让模型生成排查步骤，总耗时 20 秒以上很常见。不做流式，用户面对的是 20 秒空白；做了流式，1 秒内就能看到「正在查询 P0171」，随后是逐字输出的结论。</p>
+<p>端到端流式要解决三件事：</p>
+<table>
+<thead>
+<tr>
+<th>目标</th>
+<th>衡量方式</th>
+<th>被什么破坏</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>首个有意义事件尽早到达</td>
+<td>首事件延迟（不只是首 token，工具调用开始也算）</td>
+<td>任一段缓冲；响应头迟迟不提交</td>
+</tr>
+<tr>
+<td>过程可见</td>
+<td>前端能画出「查故障码 → 检索 → 生成」轨迹</td>
+<td>只透传文本，丢掉工具与阶段事件</td>
+</tr>
+<tr>
+<td>取消能真正止损</td>
+<td>用户点停止到模型请求被关闭的时间</td>
+<td>取消信号在某一段断掉，Python 继续跑、继续计费</td>
+</tr>
+</tbody></table>
+<p>关键认识：<strong>流式是链路属性，不是组件属性</strong>。Python 侧逐 token 产出，只要 Java 侧某处用了 <code>.collectList()</code>、Nginx 开着 <code>proxy_buffering</code>，前端看到的就是一次性全文。所以下文按段讲，每段都说明它如何保持「逐事件、可背压、可取消」。</p>
+<h2 id="链路总览"><a href="#链路总览" class="headerlink" title="链路总览"></a>链路总览</h2><pre class="mermaid">sequenceDiagram
+    participant B as 浏览器
+    participant N as Nginx / SCG
+    participant J as Java agent-gateway&lt;br/&gt;(WebFlux)
+    participant P as Python 执行面&lt;br/&gt;(grpc.aio + LangGraph)
+    participant L as LLM
+    B-&gt;&gt;N: POST /api/agent/runs (Accept: text/event-stream)
+    N-&gt;&gt;J: 透传，关闭缓冲
+    J-&gt;&gt;P: gRPC Chat 双向流：StartRun 帧
+    P-&gt;&gt;L: 流式请求
+    L--&gt;&gt;P: token 增量
+    P--&gt;&gt;J: AgentEvent&#123;seq, trace_id, token|tool_call|...&#125;
+    J--&gt;&gt;B: SSE: id=seq, event=type, data=JSON
+    B-&gt;&gt;J: 用户点停止（断开连接 或 POST /cancel）
+    J-&gt;&gt;P: 取消 gRPC 调用 或 发 CancelRun 帧
+    P-&gt;&gt;L: 关闭模型请求</pre>
+
+
+<p>各段职责划分：</p>
+<table>
+<thead>
+<tr>
+<th>段</th>
+<th>协议</th>
+<th>负责</th>
+<th>不负责</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>浏览器 ← 网关</td>
+<td>HTTP + SSE</td>
+<td>事件展示、按 seq 去重、断线判定</td>
+<td>重放历史事件</td>
+</tr>
+<tr>
+<td>Java agent-gateway</td>
+<td>WebFlux <code>Flux&lt;ServerSentEvent&gt;</code></td>
+<td>鉴权、trace_id、proto → SSE 映射、心跳、超时兜底</td>
+<td>理解图内部结构</td>
+</tr>
+<tr>
+<td>Java ← Python</td>
+<td>gRPC 双向流</td>
+<td>强类型事件、流控、取消与控制帧</td>
+<td>展示格式</td>
+</tr>
+<tr>
+<td>Python 执行面</td>
+<td>LangGraph <code>astream</code></td>
+<td>把图的多种流模式归一成协议事件</td>
+<td>前端协议细节</td>
+</tr>
+</tbody></table>
+<p>Java 与 Python 之间的通信方式选型：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>适用</th>
+<th>问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Java 用 WebClient 消费 Python 的 HTTP SSE</td>
+<td>原型、调试方便</td>
+<td>事件无强类型；取消只能断连接，无法携带原因；无法在运行中回传人工确认结果</td>
+</tr>
+<tr>
+<td>gRPC 服务端流（server streaming）</td>
+<td>只有下行输出</td>
+<td>运行中的控制消息要另开接口，而且必须路由到正在跑这个 run 的 Python 实例</td>
+</tr>
+<tr>
+<td>gRPC 双向流（本文）</td>
+<td>需要运行中取消、人工确认、回传补充信息</td>
+<td>L4 负载均衡会把长连接钉在单实例上，需要客户端负载均衡或 L7 代理</td>
+</tr>
+<tr>
+<td>RocketMQ 等消息队列 + 推送</td>
+<td>分钟级异步任务、报告生成</td>
+<td>顺序与延迟要额外保证，不适合 token 级输出</td>
+</tr>
+</tbody></table>
+<p>双向流的核心价值在最后一列的反面：控制帧（取消、审批）与事件共用一条 HTTP&#x2F;2 流，天然落到持有该 run 的那个 Python 协程，不需要分布式的 run 注册表。</p>
+<h2 id="proto：一次-run-的事件模型"><a href="#proto：一次-run-的事件模型" class="headerlink" title="proto：一次 run 的事件模型"></a>proto：一次 run 的事件模型</h2><figure class="highlight proto cb cb--long" data-lang="proto" data-label="Protobuf" data-ext="proto" data-lines="87"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">syntax = <span class="string">&quot;proto3&quot;</span>;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">package</span> agent.stream.v1;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">option</span> java_multiple_files = <span class="literal">true</span>;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="keyword">option</span> java_package = <span class="string">&quot;com.example.agent.stream.v1&quot;</span>;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="comment">// Java 服务 &lt;-&gt; Python Agent 执行面的唯一流式接口</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">service </span><span class="title class_">AgentStream</span> &#123;</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="comment">// 双向流：上行发 start / cancel，下行回事件序列</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="function"><span class="keyword">rpc</span> Chat(stream ClientFrame) <span class="keyword">returns</span> (stream AgentEvent)</span>;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">ClientFrame</span> &#123;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="keyword">oneof</span> frame &#123;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    StartRun start = <span class="number">1</span>;   <span class="comment">// 必须是第一帧</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    CancelRun cancel = <span class="number">2</span>; <span class="comment">// 运行中随时可发</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">  &#125;</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">StartRun</span> &#123;</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">  <span class="type">string</span> run_id = <span class="number">1</span>;               <span class="comment">// Java 侧生成，幂等键</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">  <span class="type">string</span> thread_id = <span class="number">2</span>;            <span class="comment">// 会话 ID，对应 LangGraph checkpointer 的 thread_id</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">  <span class="type">string</span> tenant_id = <span class="number">3</span>;</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">  <span class="type">string</span> user_input = <span class="number">4</span>;</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">  map&lt;<span class="type">string</span>, <span class="type">string</span>&gt; context = <span class="number">5</span>; <span class="comment">// 业务上下文，如 vin、dtc</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">CancelRun</span> &#123;</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">  <span class="type">string</span> reason = <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">AgentEvent</span> &#123;</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">  <span class="type">string</span> trace_id = <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">  <span class="type">string</span> run_id = <span class="number">2</span>;</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">  <span class="type">uint64</span> seq = <span class="number">3</span>;     <span class="comment">// 单次 run 内从 1 单调递增，不跳号</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">  <span class="type">int64</span> ts_ms = <span class="number">4</span>;    <span class="comment">// 产生事件的服务端时间</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">  <span class="type">string</span> node = <span class="number">5</span>;    <span class="comment">// 产生事件的 LangGraph 节点，可为空</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">  <span class="keyword">oneof</span> payload &#123;</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">    Token token = <span class="number">10</span>;</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">    ToolCall tool_call = <span class="number">11</span>;</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">    ToolResult tool_result = <span class="number">12</span>;</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">    StateUpdate state = <span class="number">13</span>;</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">    Error error = <span class="number">14</span>;</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">    Done done = <span class="number">15</span>;</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">  &#125;</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">Token</span> &#123;</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">  <span class="type">string</span> text = <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">  <span class="type">string</span> message_id = <span class="number">2</span>; <span class="comment">// 同一条 AI 消息的所有 token 共享</span></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">ToolCall</span> &#123;</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">  <span class="type">string</span> call_id = <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">  <span class="type">string</span> name = <span class="number">2</span>;</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">  <span class="type">string</span> args_json = <span class="number">3</span>;  <span class="comment">// 任意结构参数用 JSON 字符串，避免两端维护 Struct 转换</span></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">ToolResult</span> &#123;</span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">  <span class="type">string</span> call_id = <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">  <span class="type">bool</span> ok = <span class="number">2</span>;</span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">  <span class="type">string</span> output_json = <span class="number">3</span>;</span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">  <span class="type">int64</span> elapsed_ms = <span class="number">4</span>;</span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">StateUpdate</span> &#123;</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">  <span class="type">string</span> phase = <span class="number">1</span>;                 <span class="comment">// 节点完成后的阶段名</span></span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">  <span class="keyword">repeated</span> <span class="type">string</span> changed_keys = <span class="number">2</span>; <span class="comment">// 只报告变更的 key，不回传整份 State</span></span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">Error</span> &#123;</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">  <span class="type">string</span> code = <span class="number">1</span>;      <span class="comment">// 稳定错误码，如 LLM_TIMEOUT、TOOL_FAILED</span></span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">  <span class="type">string</span> message = <span class="number">2</span>;</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">  <span class="type">bool</span> retryable = <span class="number">3</span>;</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx"><span class="keyword">message </span><span class="title class_">Done</span> &#123;</span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">  <span class="keyword">enum </span><span class="title class_">Status</span> &#123;</span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">    STATUS_UNSPECIFIED = <span class="number">0</span>;</span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx">    COMPLETED = <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx">    CANCELLED = <span class="number">2</span>;</span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">    FAILED = <span class="number">3</span>;</span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">  &#125;</span></span>
+<span class="cb-line" data-ln="86"><span class="cb-tx">  Status status = <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="87"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>几个设计取舍：</p>
+<ul>
+<li><strong>用 <code>oneof</code> 而不是「枚举 + JSON 字符串」</strong>：Java 侧 <code>switch (ev.getPayloadCase())</code> 编译期穷举，新增事件类型时旧客户端拿到的是 <code>PAYLOAD_NOT_SET</code>，不会解析崩溃。</li>
+<li><strong>工具参数与结果用 <code>*_json</code> 字符串</strong>：工具的入参出参结构各异，用 <code>google.protobuf.Struct</code> 需要两端各做一次转换，收益不大；网关最终也是把它原样放进 SSE 的 JSON。</li>
+<li><strong><code>seq</code> 由 Python 单点生成</strong>：同一条 gRPC 流内消息本身有序，<code>seq</code> 的作用是给前端去重、给网关检测生产端 bug、给 SSE 的 <code>id</code> 字段提供值。</li>
+<li><strong><code>trace_id</code> 同时放 metadata 和事件体</strong>：metadata 供 Python 日志与 OpenTelemetry 使用，事件体供前端上报问题时带上。</li>
+<li><strong><code>state</code> 只报阶段和变更的 key</strong>：State 里可能有检索原文、内部评分等大对象或敏感字段，不应该顺着流式通道泄露到浏览器。</li>
+</ul>
+<h2 id="Python-执行面：LangGraph-流模式-→-gRPC-事件"><a href="#Python-执行面：LangGraph-流模式-→-gRPC-事件" class="headerlink" title="Python 执行面：LangGraph 流模式 → gRPC 事件"></a>Python 执行面：LangGraph 流模式 → gRPC 事件</h2><p>环境：Python 3.11+，以下版本为 2026-01 时点的稳定版本。</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">pip install <span class="string">&quot;langgraph&gt;=1.0,&lt;1.1&quot;</span> <span class="string">&quot;langchain-core&gt;=1.2,&lt;2&quot;</span> <span class="string">&quot;grpcio==1.76.0&quot;</span> <span class="string">&quot;grpcio-tools==1.76.0&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 如需接真实模型：pip install langchain langchain-deepseek，并设置 LLM_MODEL=deepseek:deepseek-chat</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. --pyi_out=. proto/agent_stream.proto</span></span></code></pre></div></div></figure>
+
+<h3 id="图与事件归一"><a href="#图与事件归一" class="headerlink" title="图与事件归一"></a>图与事件归一</h3><p>LangGraph 1.x 的 <code>astream</code> 支持同时订阅多种流模式，传列表时每次产出 <code>(mode, chunk)</code> 二元组。本文用到三种：</p>
+<table>
+<thead>
+<tr>
+<th>stream_mode</th>
+<th>chunk 形态</th>
+<th>映射为</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>messages</code></td>
+<td><code>(消息块, 元数据)</code>，元数据含 <code>langgraph_node</code></td>
+<td><code>token</code></td>
+<td>节点里调用 <code>model.ainvoke</code> 也会逐 token 产出，LangGraph 通过回调拿到增量</td>
+</tr>
+<tr>
+<td><code>custom</code></td>
+<td>节点内 <code>get_stream_writer()</code> 写入的任意对象</td>
+<td><code>tool_call</code> &#x2F; <code>tool_result</code></td>
+<td>工具的开始与结束由节点显式上报，时机可控</td>
+</tr>
+<tr>
+<td><code>updates</code></td>
+<td><code>{节点名: 该节点返回的增量}</code></td>
+<td><code>state</code></td>
+<td>只取 key 列表</td>
+</tr>
+<tr>
+<td><code>values</code></td>
+<td>每步完整 State</td>
+<td>不用</td>
+<td>体积随 State 增长，流式通道里不划算</td>
+</tr>
+</tbody></table>
+<figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="90"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;graph.py：查故障码（工具）-&gt; 生成结论（LLM 流式）。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> json</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> os</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">import</span> time</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">import</span> uuid</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="keyword">from</span> typing <span class="keyword">import</span> TypedDict</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="keyword">from</span> langchain_core.language_models.fake_chat_models <span class="keyword">import</span> GenericFakeChatModel</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">from</span> langchain_core.messages <span class="keyword">import</span> AIMessage, HumanMessage, SystemMessage</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">from</span> langgraph.config <span class="keyword">import</span> get_stream_writer</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="keyword">from</span> langgraph.graph <span class="keyword">import</span> END, START, StateGraph</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">DTC_KB = &#123;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="string">&quot;P0171&quot;</span>: &#123;<span class="string">&quot;desc&quot;</span>: <span class="string">&quot;系统过稀（Bank 1）&quot;</span>, <span class="string">&quot;checks&quot;</span>: [<span class="string">&quot;进气漏气&quot;</span>, <span class="string">&quot;MAF 脏污&quot;</span>, <span class="string">&quot;燃油压力&quot;</span>]&#125;,</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="string">&quot;P0300&quot;</span>: &#123;<span class="string">&quot;desc&quot;</span>: <span class="string">&quot;随机/多缸失火&quot;</span>, <span class="string">&quot;checks&quot;</span>: [<span class="string">&quot;点火线圈&quot;</span>, <span class="string">&quot;火花塞&quot;</span>, <span class="string">&quot;喷油器&quot;</span>]&#125;,</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">build_model</span>():</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="comment"># 设置 LLM_MODEL 走真实模型；否则用假模型（按空白切分后逐块流式输出）</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="keyword">if</span> os.getenv(<span class="string">&quot;LLM_MODEL&quot;</span>):</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        <span class="keyword">from</span> langchain.chat_models <span class="keyword">import</span> init_chat_model</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">        <span class="keyword">return</span> init_chat_model(os.environ[<span class="string">&quot;LLM_MODEL&quot;</span>], temperature=<span class="number">0</span>)</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    text = <span class="string">&quot;先 检查 进气 管路 是否 漏气 ， 再 清洗 MAF ， 最后 测 燃油 压力 。&quot;</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="keyword">return</span> GenericFakeChatModel(messages=<span class="built_in">iter</span>([AIMessage(content=text)] * <span class="number">1000</span>))</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">model = build_model()</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">DiagState</span>(TypedDict, total=<span class="literal">False</span>):</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">    question: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">    dtc: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">    evidence: <span class="built_in">dict</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">    answer: <span class="built_in">str</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">lookup_dtc</span>(<span class="params">state: DiagState</span>) -&gt; DiagState:</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">    writer = get_stream_writer()</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">    call_id = uuid.uuid4().<span class="built_in">hex</span>[:<span class="number">12</span>]</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">    args = &#123;<span class="string">&quot;code&quot;</span>: state[<span class="string">&quot;dtc&quot;</span>]&#125;</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">    writer(&#123;<span class="string">&quot;kind&quot;</span>: <span class="string">&quot;tool_call&quot;</span>, <span class="string">&quot;node&quot;</span>: <span class="string">&quot;lookup_dtc&quot;</span>, <span class="string">&quot;call_id&quot;</span>: call_id, <span class="string">&quot;name&quot;</span>: <span class="string">&quot;dtc_lookup&quot;</span>, <span class="string">&quot;args&quot;</span>: args&#125;)</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">    t0 = time.perf_counter()</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">    hit = DTC_KB.get(state[<span class="string">&quot;dtc&quot;</span>])</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">    writer(&#123;</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">        <span class="string">&quot;kind&quot;</span>: <span class="string">&quot;tool_result&quot;</span>, <span class="string">&quot;node&quot;</span>: <span class="string">&quot;lookup_dtc&quot;</span>, <span class="string">&quot;call_id&quot;</span>: call_id, <span class="string">&quot;ok&quot;</span>: hit <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>,</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">        <span class="string">&quot;output&quot;</span>: hit <span class="keyword">or</span> &#123;<span class="string">&quot;desc&quot;</span>: <span class="string">&quot;未收录&quot;</span>&#125;,</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">        <span class="string">&quot;elapsed_ms&quot;</span>: <span class="built_in">int</span>((time.perf_counter() - t0) * <span class="number">1000</span>),</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">    &#125;)</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;evidence&quot;</span>: hit <span class="keyword">or</span> &#123;&#125;&#125;</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">answer</span>(<span class="params">state: DiagState</span>) -&gt; DiagState:</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">    msgs = [</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">        SystemMessage(<span class="string">&quot;你是车辆诊断助手，只依据证据给出排查顺序。&quot;</span>),</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">        HumanMessage(<span class="string">f&quot;问题：<span class="subst">&#123;state[<span class="string">&#x27;question&#x27;</span>]&#125;</span>\n证据：<span class="subst">&#123;json.dumps(state[<span class="string">&#x27;evidence&#x27;</span>], ensure_ascii=<span class="literal">False</span>)&#125;</span>&quot;</span>),</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">    ]</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">    msg = <span class="keyword">await</span> model.ainvoke(msgs)  <span class="comment"># 订阅了 messages 模式时，这里的输出会被逐 token 捕获</span></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">    <span class="keyword">return</span> &#123;<span class="string">&quot;answer&quot;</span>: msg.text&#125;</span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">builder = StateGraph(DiagState)</span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">builder.add_node(<span class="string">&quot;lookup_dtc&quot;</span>, lookup_dtc)</span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">builder.add_node(<span class="string">&quot;answer&quot;</span>, answer)</span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">builder.add_edge(START, <span class="string">&quot;lookup_dtc&quot;</span>)</span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">builder.add_edge(<span class="string">&quot;lookup_dtc&quot;</span>, <span class="string">&quot;answer&quot;</span>)</span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx">builder.add_edge(<span class="string">&quot;answer&quot;</span>, END)</span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">graph = builder.<span class="built_in">compile</span>()</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">STREAM_NODES = &#123;<span class="string">&quot;answer&quot;</span>&#125;  <span class="comment"># 只下发面向用户的节点的 token；路由、抽取类 LLM 输出不外泄</span></span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">run_events</span>(<span class="params">question: <span class="built_in">str</span>, dtc: <span class="built_in">str</span></span>):</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">    <span class="string">&quot;&quot;&quot;把三种流模式归一成 (kind, node, payload)。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">    inputs = &#123;<span class="string">&quot;question&quot;</span>: question, <span class="string">&quot;dtc&quot;</span>: dtc&#125;</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">    <span class="keyword">async</span> <span class="keyword">for</span> mode, chunk <span class="keyword">in</span> graph.astream(inputs, stream_mode=[<span class="string">&quot;messages&quot;</span>, <span class="string">&quot;updates&quot;</span>, <span class="string">&quot;custom&quot;</span>]):</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">        <span class="keyword">if</span> mode == <span class="string">&quot;messages&quot;</span>:</span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">            msg_chunk, meta = chunk</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">            node = meta.get(<span class="string">&quot;langgraph_node&quot;</span>, <span class="string">&quot;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">            text = msg_chunk.text  <span class="comment"># 1.x 中 text 是属性，兼容 content 为内容块列表的模型</span></span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">            <span class="keyword">if</span> node <span class="keyword">in</span> STREAM_NODES <span class="keyword">and</span> text:</span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx">                <span class="keyword">yield</span> <span class="string">&quot;token&quot;</span>, node, &#123;<span class="string">&quot;text&quot;</span>: text, <span class="string">&quot;message_id&quot;</span>: msg_chunk.<span class="built_in">id</span> <span class="keyword">or</span> <span class="string">&quot;&quot;</span>&#125;</span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx">        <span class="keyword">elif</span> mode == <span class="string">&quot;custom&quot;</span>:</span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">            kind, node = chunk.pop(<span class="string">&quot;kind&quot;</span>), chunk.pop(<span class="string">&quot;node&quot;</span>, <span class="string">&quot;&quot;</span>)</span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">            <span class="keyword">yield</span> kind, node, chunk</span></span>
+<span class="cb-line" data-ln="86"><span class="cb-tx">        <span class="keyword">elif</span> mode == <span class="string">&quot;updates&quot;</span>:</span></span>
+<span class="cb-line" data-ln="87"><span class="cb-tx">            <span class="keyword">for</span> node, delta <span class="keyword">in</span> chunk.items():</span></span>
+<span class="cb-line" data-ln="88"><span class="cb-tx">                <span class="keyword">if</span> node.startswith(<span class="string">&quot;__&quot;</span>):  <span class="comment"># __interrupt__ 等内部键单独处理</span></span></span>
+<span class="cb-line" data-ln="89"><span class="cb-tx">                    <span class="keyword">continue</span></span></span>
+<span class="cb-line" data-ln="90"><span class="cb-tx">                <span class="keyword">yield</span> <span class="string">&quot;state&quot;</span>, node, &#123;<span class="string">&quot;phase&quot;</span>: node, <span class="string">&quot;changed_keys&quot;</span>: <span class="built_in">sorted</span>((delta <span class="keyword">or</span> &#123;&#125;).keys())&#125;</span></span></code></pre></div></div></figure>
+
+<p><code>STREAM_NODES</code> 白名单容易被忽略：<code>messages</code> 模式会捕获图里<strong>所有</strong> LLM 调用的 token，包括意图路由、结构化抽取这类输出 JSON 的调用。不加过滤，前端会先闪过一段 <code>{&quot;intent&quot;: &quot;diagnosis&quot;}</code> 再出现正文。</p>
+<h3 id="gRPC-服务端"><a href="#gRPC-服务端" class="headerlink" title="gRPC 服务端"></a>gRPC 服务端</h3><figure class="highlight python cb cb--long" data-lang="python" data-label="Python" data-ext="py" data-lines="100"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:3"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;server.py：grpc.aio 双向流服务端。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> asyncio</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> json</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">import</span> logging</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">import</span> time</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">import</span> grpc</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="keyword">import</span> agent_stream_pb2 <span class="keyword">as</span> pb</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="keyword">import</span> agent_stream_pb2_grpc <span class="keyword">as</span> pb_grpc</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="keyword">from</span> graph <span class="keyword">import</span> run_events</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">log = logging.getLogger(<span class="string">&quot;agent-stream&quot;</span>)</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">QUEUE_SIZE = <span class="number">256</span>  <span class="comment"># 有界队列：下游慢时反压到图执行</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">to_event</span>(<span class="params">kind: <span class="built_in">str</span>, node: <span class="built_in">str</span>, payload: <span class="built_in">dict</span></span>) -&gt; pb.AgentEvent:</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    ev = pb.AgentEvent(node=node)</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="keyword">if</span> kind == <span class="string">&quot;token&quot;</span>:</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">        ev.token.CopyFrom(pb.Token(**payload))</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="keyword">elif</span> kind == <span class="string">&quot;tool_call&quot;</span>:</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">        ev.tool_call.CopyFrom(pb.ToolCall(call_id=payload[<span class="string">&quot;call_id&quot;</span>], name=payload[<span class="string">&quot;name&quot;</span>],</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">                                          args_json=json.dumps(payload[<span class="string">&quot;args&quot;</span>], ensure_ascii=<span class="literal">False</span>)))</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    <span class="keyword">elif</span> kind == <span class="string">&quot;tool_result&quot;</span>:</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        ev.tool_result.CopyFrom(pb.ToolResult(call_id=payload[<span class="string">&quot;call_id&quot;</span>], ok=payload[<span class="string">&quot;ok&quot;</span>],</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">                                              output_json=json.dumps(payload[<span class="string">&quot;output&quot;</span>], ensure_ascii=<span class="literal">False</span>),</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">                                              elapsed_ms=payload[<span class="string">&quot;elapsed_ms&quot;</span>]))</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    <span class="keyword">elif</span> kind == <span class="string">&quot;state&quot;</span>:</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        ev.state.CopyFrom(pb.StateUpdate(**payload))</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    <span class="keyword">elif</span> kind == <span class="string">&quot;error&quot;</span>:</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">        ev.error.CopyFrom(pb.Error(**payload))</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">    <span class="keyword">elif</span> kind == <span class="string">&quot;done&quot;</span>:</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">        ev.done.CopyFrom(pb.Done(status=payload[<span class="string">&quot;status&quot;</span>]))</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">    <span class="keyword">return</span> ev</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">AgentStreamServicer</span>(pb_grpc.AgentStreamServicer):</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">Chat</span>(<span class="params">self, request_iterator, context</span>):</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">        frames = request_iterator.__aiter__()</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">        first = <span class="keyword">await</span> <span class="built_in">anext</span>(frames, <span class="literal">None</span>)</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">        <span class="keyword">if</span> first <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">or</span> <span class="keyword">not</span> first.HasField(<span class="string">&quot;start&quot;</span>):</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">            <span class="keyword">await</span> context.abort(grpc.StatusCode.INVALID_ARGUMENT, <span class="string">&quot;first frame must be start&quot;</span>)</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">        start = first.start</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">        trace_id = <span class="built_in">dict</span>(context.invocation_metadata()).get(<span class="string">&quot;x-trace-id&quot;</span>, start.run_id)</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">        queue: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_SIZE)</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">produce</span>():</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">            <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">                <span class="keyword">async</span> <span class="keyword">for</span> kind, node, payload <span class="keyword">in</span> run_events(start.user_input, start.context.get(<span class="string">&quot;dtc&quot;</span>, <span class="string">&quot;&quot;</span>)):</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">                    <span class="keyword">await</span> queue.put((kind, node, payload))</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">                <span class="keyword">await</span> queue.put((<span class="string">&quot;done&quot;</span>, <span class="string">&quot;&quot;</span>, &#123;<span class="string">&quot;status&quot;</span>: pb.Done.COMPLETED&#125;))</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">            <span class="keyword">except</span> asyncio.CancelledError:</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">                <span class="keyword">raise</span></span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">            <span class="keyword">except</span> Exception <span class="keyword">as</span> exc:  <span class="comment"># 业务异常转成协议事件，而不是直接断流</span></span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">                log.exception(<span class="string">&quot;run failed trace_id=%s&quot;</span>, trace_id)</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">                <span class="keyword">await</span> queue.put((<span class="string">&quot;error&quot;</span>, <span class="string">&quot;&quot;</span>, &#123;<span class="string">&quot;code&quot;</span>: <span class="string">&quot;RUN_FAILED&quot;</span>, <span class="string">&quot;message&quot;</span>: <span class="built_in">str</span>(exc)[:<span class="number">500</span>], <span class="string">&quot;retryable&quot;</span>: <span class="literal">False</span>&#125;))</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">                <span class="keyword">await</span> queue.put((<span class="string">&quot;done&quot;</span>, <span class="string">&quot;&quot;</span>, &#123;<span class="string">&quot;status&quot;</span>: pb.Done.FAILED&#125;))</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">watch_control</span>():</span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">            <span class="keyword">async</span> <span class="keyword">for</span> frame <span class="keyword">in</span> frames:</span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">                <span class="keyword">if</span> frame.HasField(<span class="string">&quot;cancel&quot;</span>):</span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">                    producer.cancel()</span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">                    <span class="keyword">await</span> queue.put((<span class="string">&quot;done&quot;</span>, <span class="string">&quot;&quot;</span>, &#123;<span class="string">&quot;status&quot;</span>: pb.Done.CANCELLED&#125;))</span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">                    <span class="keyword">return</span></span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">        producer = asyncio.create_task(produce())</span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx">        watcher = asyncio.create_task(watch_control())</span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">        seq = <span class="number">0</span></span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">        <span class="keyword">try</span>:</span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">            <span class="keyword">while</span> <span class="literal">True</span>:</span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">                kind, node, payload = <span class="keyword">await</span> queue.get()</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">                seq += <span class="number">1</span></span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">                ev = to_event(kind, node, payload)</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">                ev.trace_id, ev.run_id, ev.seq, ev.ts_ms = trace_id, start.run_id, seq, <span class="built_in">int</span>(time.time() * <span class="number">1000</span>)</span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">                <span class="keyword">yield</span> ev</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">                <span class="keyword">if</span> kind == <span class="string">&quot;done&quot;</span>:</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">                    <span class="keyword">break</span></span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">        <span class="keyword">finally</span>:</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">            <span class="comment"># 客户端断开或 deadline 到期时，grpc.aio 会取消本协程；这里把图执行一并取消</span></span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">            producer.cancel()</span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">            watcher.cancel()</span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">serve</span>(<span class="params">port: <span class="built_in">int</span> = <span class="number">50051</span></span>):</span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">    server = grpc.aio.server(options=[</span></span>
+<span class="cb-line" data-ln="86"><span class="cb-tx">        (<span class="string">&quot;grpc.keepalive_time_ms&quot;</span>, <span class="number">30_000</span>),</span></span>
+<span class="cb-line" data-ln="87"><span class="cb-tx">        (<span class="string">&quot;grpc.keepalive_timeout_ms&quot;</span>, <span class="number">10_000</span>),</span></span>
+<span class="cb-line" data-ln="88"><span class="cb-tx">        (<span class="string">&quot;grpc.keepalive_permit_without_calls&quot;</span>, <span class="number">1</span>),</span></span>
+<span class="cb-line" data-ln="89"><span class="cb-tx">        <span class="comment"># 允许客户端最快每 10s ping 一次；客户端 keepAliveTime 小于该值会被 GOAWAY(too_many_pings)</span></span></span>
+<span class="cb-line" data-ln="90"><span class="cb-tx">        (<span class="string">&quot;grpc.http2.min_ping_interval_without_data_ms&quot;</span>, <span class="number">10_000</span>),</span></span>
+<span class="cb-line" data-ln="91"><span class="cb-tx">    ])</span></span>
+<span class="cb-line" data-ln="92"><span class="cb-tx">    pb_grpc.add_AgentStreamServicer_to_server(AgentStreamServicer(), server)</span></span>
+<span class="cb-line" data-ln="93"><span class="cb-tx">    server.add_insecure_port(<span class="string">f&quot;[::]:<span class="subst">&#123;port&#125;</span>&quot;</span>)</span></span>
+<span class="cb-line" data-ln="94"><span class="cb-tx">    <span class="keyword">await</span> server.start()</span></span>
+<span class="cb-line" data-ln="95"><span class="cb-tx">    <span class="keyword">await</span> server.wait_for_termination()</span></span>
+<span class="cb-line" data-ln="96"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="97"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="98"><span class="cb-tx"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span></span>
+<span class="cb-line" data-ln="99"><span class="cb-tx">    logging.basicConfig(level=logging.INFO)</span></span>
+<span class="cb-line" data-ln="100"><span class="cb-tx">    asyncio.run(serve())</span></span></code></pre></div></div></figure>
+
+<p>这段代码里决定正确性的四个点：</p>
+<ol>
+<li><strong>单写者队列</strong>。图执行（<code>produce</code>）和控制帧监听（<code>watch_control</code>）是两个协程，都可能产生事件；所有事件先进同一个队列，再由生成器唯一出口编号并 <code>yield</code>。这样 <code>seq</code> 连续、顺序确定，不会出现两个协程并发写流导致的交错。</li>
+<li><strong>有界队列即反压</strong>。前端读得慢 → Java 不再 <code>request</code> → HTTP&#x2F;2 流控窗口耗尽 → <code>yield</code> 挂起 → 队列填满 → <code>queue.put</code> 挂起 → 图执行暂停在下一个事件点。整条链路没有无界缓冲。</li>
+<li><strong>两种取消都能走到图执行</strong>。软取消是收到 <code>CancelRun</code> 帧，主动取消 <code>producer</code> 并补一个 <code>done(CANCELLED)</code>，已生成内容保留；硬取消是 Java 取消 gRPC 调用（浏览器断开、超时），grpc.aio 取消 <code>Chat</code> 协程，<code>finally</code> 里取消 <code>producer</code>。<code>CancelledError</code> 必须原样抛出，一旦被 <code>except BaseException</code> 吞掉，模型请求会继续跑完。</li>
+<li><strong>异常转事件</strong>。节点异常不直接让 RPC 以错误状态结束，而是先发 <code>error</code> 再发 <code>done(FAILED)</code>，前端拿到的是可展示的错误码，而不是一条莫名断开的连接。</li>
+</ol>
+<p>不经过 Java，直接验证 Python 这一段（排错时用来切分问题）：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="23"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="string">&quot;&quot;&quot;client_check.py：直连 Python 执行面，打印事件；传参 N 表示收到第 N 个事件后发取消帧。&quot;&quot;&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">import</span> asyncio, sys</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">import</span> grpc</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">import</span> agent_stream_pb2 <span class="keyword">as</span> pb, agent_stream_pb2_grpc <span class="keyword">as</span> pb_grpc</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>(<span class="params">cancel_after: <span class="built_in">int</span></span>):</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="keyword">async</span> <span class="keyword">with</span> grpc.aio.insecure_channel(<span class="string">&quot;localhost:50051&quot;</span>) <span class="keyword">as</span> ch:</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        outbox: asyncio.Queue = asyncio.Queue()</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="keyword">await</span> outbox.put(pb.ClientFrame(start=pb.StartRun(run_id=<span class="string">&quot;r-1&quot;</span>, user_input=<span class="string">&quot;怠速抖动&quot;</span>, context=&#123;<span class="string">&quot;dtc&quot;</span>: <span class="string">&quot;P0171&quot;</span>&#125;)))</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">frames</span>():</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">            <span class="keyword">while</span> (f := <span class="keyword">await</span> outbox.get()) <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">                <span class="keyword">yield</span> f</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        call = pb_grpc.AgentStreamStub(ch).Chat(frames(), metadata=((<span class="string">&quot;x-trace-id&quot;</span>, <span class="string">&quot;t-local&quot;</span>),), timeout=<span class="number">30</span>)</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        <span class="keyword">async</span> <span class="keyword">for</span> ev <span class="keyword">in</span> call:</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">            <span class="built_in">print</span>(ev.seq, ev.WhichOneof(<span class="string">&quot;payload&quot;</span>), ev.node)</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">            <span class="keyword">if</span> ev.seq == cancel_after:</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">                <span class="keyword">await</span> outbox.put(pb.ClientFrame(cancel=pb.CancelRun(reason=<span class="string">&quot;user_stop&quot;</span>)))</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">        <span class="keyword">await</span> outbox.put(<span class="literal">None</span>)</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">asyncio.run(main(<span class="built_in">int</span>(sys.argv[<span class="number">1</span>]) <span class="keyword">if</span> <span class="built_in">len</span>(sys.argv) &gt; <span class="number">1</span> <span class="keyword">else</span> <span class="number">0</span>))</span></span></code></pre></div></div></figure>
+
+<p>正常运行时事件顺序为 <code>tool_call → tool_result → state(lookup_dtc) → token × N → state(answer) → done(COMPLETED)</code>；带参数 <code>5</code> 运行时，取消帧发出前已进入队列的事件仍按序送达（假模型产出很快，通常还会再收到几个 token），随后是 <code>done(CANCELLED)</code>，<code>seq</code> 保持连续。</p>
+<h2 id="Java-侧：grpc-java-客户端-WebFlux-SSE"><a href="#Java-侧：grpc-java-客户端-WebFlux-SSE" class="headerlink" title="Java 侧：grpc-java 客户端 + WebFlux SSE"></a>Java 侧：grpc-java 客户端 + WebFlux SSE</h2><p>版本：Spring Boot 3.5.10（3.5 线 2026-01-22 发布的补丁版本）、grpc-java 1.78.0（2025-12-23 发布，写作时的最新版本）。grpc-java 版本不受 Spring Boot 依赖管理，需要显式声明。</p>
+<figure class="highlight xml cb cb--long" data-lang="xml" data-label="XML" data-ext="xml" data-lines="58"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="tag">&lt;<span class="name">properties</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="tag">&lt;<span class="name">java.version</span>&gt;</span>21<span class="tag">&lt;/<span class="name">java.version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="tag">&lt;<span class="name">grpc.version</span>&gt;</span>1.78.0<span class="tag">&lt;/<span class="name">grpc.version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="tag">&lt;<span class="name">protoc.version</span>&gt;</span>3.25.8<span class="tag">&lt;/<span class="name">protoc.version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="tag">&lt;/<span class="name">properties</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-webflux<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.grpc<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>grpc-netty-shaded<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;grpc.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="tag">&lt;<span class="name">scope</span>&gt;</span>runtime<span class="tag">&lt;/<span class="name">scope</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.grpc<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>grpc-protobuf<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;grpc.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.grpc<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>grpc-stub<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;grpc.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"><span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx"><span class="tag">&lt;<span class="name">build</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">  <span class="tag">&lt;<span class="name">extensions</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">    <span class="tag">&lt;<span class="name">extension</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">      <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>kr.motd.maven<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">      <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>os-maven-plugin<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">      <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.7.1<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">    <span class="tag">&lt;/<span class="name">extension</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">extensions</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">  <span class="tag">&lt;<span class="name">plugins</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">    <span class="tag">&lt;<span class="name">plugin</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">      <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.xolstice.maven.plugins<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">      <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>protobuf-maven-plugin<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">      <span class="tag">&lt;<span class="name">version</span>&gt;</span>0.6.1<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">      <span class="tag">&lt;<span class="name">configuration</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">        <span class="tag">&lt;<span class="name">protocArtifact</span>&gt;</span>com.google.protobuf:protoc:$&#123;protoc.version&#125;:exe:$&#123;os.detected.classifier&#125;<span class="tag">&lt;/<span class="name">protocArtifact</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">        <span class="tag">&lt;<span class="name">pluginId</span>&gt;</span>grpc-java<span class="tag">&lt;/<span class="name">pluginId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">        <span class="tag">&lt;<span class="name">pluginArtifact</span>&gt;</span>io.grpc:protoc-gen-grpc-java:$&#123;grpc.version&#125;:exe:$&#123;os.detected.classifier&#125;<span class="tag">&lt;/<span class="name">pluginArtifact</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">      <span class="tag">&lt;/<span class="name">configuration</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">      <span class="tag">&lt;<span class="name">executions</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">        <span class="tag">&lt;<span class="name">execution</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">          <span class="tag">&lt;<span class="name">goals</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">            <span class="tag">&lt;<span class="name">goal</span>&gt;</span>compile<span class="tag">&lt;/<span class="name">goal</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">            <span class="tag">&lt;<span class="name">goal</span>&gt;</span>compile-custom<span class="tag">&lt;/<span class="name">goal</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">          <span class="tag">&lt;/<span class="name">goals</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">        <span class="tag">&lt;/<span class="name">execution</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">      <span class="tag">&lt;/<span class="name">executions</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">    <span class="tag">&lt;/<span class="name">plugin</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">plugins</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx"><span class="tag">&lt;/<span class="name">build</span>&gt;</span></span></span></code></pre></div></div></figure>
+
+<h3 id="Channel-配置"><a href="#Channel-配置" class="headerlink" title="Channel 配置"></a>Channel 配置</h3><figure class="highlight java cb" data-lang="java" data-label="Java" data-ext="java" data-lines="19"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">@Configuration</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">AgentGrpcConfig</span> &#123;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="meta">@Bean(destroyMethod = &quot;shutdownNow&quot;)</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="type">ManagedChannel</span> <span class="title function_">agentChannel</span><span class="params">(<span class="meta">@Value(&quot;$&#123;agent.grpc.target:dns:///localhost:50051&#125;&quot;)</span> String target)</span> &#123;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="keyword">return</span> ManagedChannelBuilder.forTarget(target)</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">                .usePlaintext()                        <span class="comment">// 生产环境换成 TLS / mTLS</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">                .keepAliveTime(<span class="number">30</span>, TimeUnit.SECONDS)   <span class="comment">// 必须 &gt;= 服务端允许的最小 ping 间隔</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">                .keepAliveTimeout(<span class="number">10</span>, TimeUnit.SECONDS)</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                .keepAliveWithoutCalls(<span class="literal">true</span>)</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">                .defaultLoadBalancingPolicy(<span class="string">&quot;round_robin&quot;</span>)</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">                .build();</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="meta">@Bean</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    AgentStreamGrpc.<span class="type">AgentStreamStub</span> <span class="title function_">agentStreamStub</span><span class="params">(ManagedChannel agentChannel)</span> &#123;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        <span class="keyword">return</span> AgentStreamGrpc.newStub(agentChannel);</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>gRPC 基于 HTTP&#x2F;2 长连接，所有调用复用少量连接。如果 Python 实例前面是 L4 负载均衡（如 Kubernetes 普通 Service），连接建立后所有流都会落到同一个 Pod。两种解法：<code>dns:///</code> 指向 Headless Service，配合 <code>round_robin</code> 做客户端负载均衡；或者前置 Envoy 这类按请求分发的 L7 代理。用 Nacos 做服务发现时，需要自定义 <code>NameResolver</code> 把实例列表喂给 gRPC，本文不展开。</p>
+<h3 id="gRPC-流桥接为-Flux"><a href="#gRPC-流桥接为-Flux" class="headerlink" title="gRPC 流桥接为 Flux"></a>gRPC 流桥接为 Flux</h3><figure class="highlight java cb cb--long" data-lang="java" data-label="Java" data-ext="java" data-lines="79"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">/** 把一次 gRPC 双向流桥接成 Flux，并打通背压与取消。 */</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="meta">@Component</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">AgentStreamClient</span> &#123;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Metadata.<span class="type">Key</span>&lt;String&gt; <span class="variable">TRACE_ID</span> <span class="operator">=</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">            Metadata.Key.of(<span class="string">&quot;x-trace-id&quot;</span>, Metadata.ASCII_STRING_MARSHALLER);</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> AgentStreamGrpc.AgentStreamStub stub;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="comment">// runId -&gt; 上行流，用于软取消（用户点停止，保留已生成内容）</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="type">Map</span>&lt;String, ClientCallStreamObserver&lt;ClientFrame&gt;&gt; <span class="variable">running</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;&gt;();</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="type">public</span> <span class="title function_">AgentStreamClient</span><span class="params">(AgentStreamGrpc.AgentStreamStub stub)</span> &#123;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="built_in">this</span>.stub = stub;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">Flux</span>&lt;AgentEvent&gt; <span class="title function_">chat</span><span class="params">(StartRun start, String traceId, Duration deadline)</span> &#123;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        <span class="keyword">return</span> Flux.create(sink -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">            <span class="type">Metadata</span> <span class="variable">headers</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Metadata</span>();</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">            headers.put(TRACE_ID, traceId);</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">            <span class="type">ClientResponseObserver</span>&lt;ClientFrame, AgentEvent&gt; <span class="variable">observer</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ClientResponseObserver</span>&lt;&gt;() &#123;</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">                <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">                <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">beforeStart</span><span class="params">(ClientCallStreamObserver&lt;ClientFrame&gt; requestStream)</span> &#123;</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">                    <span class="comment">// 关闭自动流控：只有下游要数据时才向 Python 端 request</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">                    requestStream.disableAutoRequestWithInitial(<span class="number">0</span>);</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">                &#125;</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">                <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">                <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">onNext</span><span class="params">(AgentEvent event)</span> &#123;</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">                    sink.next(event);</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">                &#125;</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">                <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">                <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">onError</span><span class="params">(Throwable t)</span> &#123;</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">                    running.remove(start.getRunId());</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">                    sink.error(t);</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">                &#125;</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">                <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">                <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">onCompleted</span><span class="params">()</span> &#123;</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">                    running.remove(start.getRunId());</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">                    sink.complete();</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">                &#125;</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">            &#125;;</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">            <span class="type">var</span> <span class="variable">requestStream</span> <span class="operator">=</span> (ClientCallStreamObserver&lt;ClientFrame&gt;) stub</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">                    .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(headers))</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">                    .withDeadlineAfter(deadline.toMillis(), TimeUnit.MILLISECONDS)</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">                    .chat(observer);</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">            running.put(start.getRunId(), requestStream);</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">            <span class="comment">// call 启动后才能 request（beforeStart 里调用会抛 IllegalStateException）</span></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">            sink.onRequest(n -&gt; requestStream.request((<span class="type">int</span>) Math.min(n, Integer.MAX_VALUE)));</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">            <span class="comment">// 浏览器断开 / 上游 timeout -&gt; 取消订阅 -&gt; 硬取消 gRPC 调用 -&gt; Python 协程收到 CancelledError</span></span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">            sink.onCancel(() -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">                running.remove(start.getRunId());</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">                requestStream.cancel(<span class="string">&quot;downstream cancelled&quot;</span>, <span class="literal">null</span>);</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">            &#125;);</span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">            <span class="keyword">synchronized</span> (requestStream) &#123;</span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">                requestStream.onNext(ClientFrame.newBuilder().setStart(start).build());</span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">        &#125;, FluxSink.OverflowStrategy.ERROR); <span class="comment">// request 与 onNext 一一对应，超发即协议错误</span></span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">    <span class="comment">/** 软取消：让 Python 端自己收尾并回 done(CANCELLED)。 */</span></span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">cancel</span><span class="params">(String runId, String reason)</span> &#123;</span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">        <span class="type">var</span> <span class="variable">requestStream</span> <span class="operator">=</span> running.get(runId);</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">        <span class="keyword">if</span> (requestStream == <span class="literal">null</span>) &#123;</span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">            <span class="keyword">return</span> <span class="literal">false</span>;</span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">        <span class="keyword">synchronized</span> (requestStream) &#123; <span class="comment">// StreamObserver 不是线程安全的，上行写入要串行</span></span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">            requestStream.onNext(ClientFrame.newBuilder()</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">                    .setCancel(CancelRun.newBuilder().setReason(reason)).build());</span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">            requestStream.onCompleted();</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">        <span class="keyword">return</span> <span class="literal">true</span>;</span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>背压的关键是 <code>disableAutoRequestWithInitial(0)</code> 加 <code>sink.onRequest</code>：Reactor 下游（最终是 Reactor Netty 往 socket 写 SSE）要多少，才向 gRPC 要多少。溢出策略选 <code>ERROR</code> 而不是 <code>BUFFER</code>，因为按需 request 之后不应该出现超发；真出现了说明桥接写错了，应该尽早暴露，而不是悄悄堆在内存里。</p>
+<h3 id="proto-事件-→-SSE-事件"><a href="#proto-事件-→-SSE-事件" class="headerlink" title="proto 事件 → SSE 事件"></a>proto 事件 → SSE 事件</h3><figure class="highlight java cb cb--long" data-lang="java" data-label="Java" data-ext="java" data-lines="107"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:3"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">/** proto 事件 -&gt; 统一 SSE 事件；每个 run 一个实例，负责序号校验与兜底终止事件。 */</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">SseEventMapper</span> &#123;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Logger</span> <span class="variable">log</span> <span class="operator">=</span> LoggerFactory.getLogger(SseEventMapper.class);</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">int</span> <span class="variable">PROTOCOL_VERSION</span> <span class="operator">=</span> <span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> ObjectMapper json;</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> String runId;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> String traceId;</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="keyword">private</span> <span class="type">long</span> lastSeq;</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="keyword">private</span> <span class="type">boolean</span> terminated;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="type">public</span> <span class="title function_">SseEventMapper</span><span class="params">(ObjectMapper json, String runId, String traceId)</span> &#123;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="built_in">this</span>.json = json;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">        <span class="built_in">this</span>.runId = runId;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">        <span class="built_in">this</span>.traceId = traceId;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">ServerSentEvent</span>&lt;String&gt; <span class="title function_">toSse</span><span class="params">(AgentEvent ev)</span> &#123;</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">        <span class="keyword">if</span> (ev.getSeq() != lastSeq + <span class="number">1</span>) &#123;</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">            <span class="comment">// 同一条 gRPC 流内不会乱序；出现跳号说明生产端有 bug</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">            log.warn(<span class="string">&quot;seq gap runId=&#123;&#125; expected=&#123;&#125; actual=&#123;&#125;&quot;</span>, runId, lastSeq + <span class="number">1</span>, ev.getSeq());</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        lastSeq = ev.getSeq();</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        <span class="type">ObjectNode</span> <span class="variable">data</span> <span class="operator">=</span> json.createObjectNode();</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        String type;</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        <span class="keyword">switch</span> (ev.getPayloadCase()) &#123;</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">            <span class="keyword">case</span> TOKEN -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">                type = <span class="string">&quot;token&quot;</span>;</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">                data.put(<span class="string">&quot;text&quot;</span>, ev.getToken().getText()).put(<span class="string">&quot;messageId&quot;</span>, ev.getToken().getMessageId());</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">            <span class="keyword">case</span> TOOL_CALL -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">                type = <span class="string">&quot;tool_call&quot;</span>;</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">                data.put(<span class="string">&quot;callId&quot;</span>, ev.getToolCall().getCallId()).put(<span class="string">&quot;name&quot;</span>, ev.getToolCall().getName());</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">                data.set(<span class="string">&quot;args&quot;</span>, readJson(ev.getToolCall().getArgsJson()));</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">            <span class="keyword">case</span> TOOL_RESULT -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">                type = <span class="string">&quot;tool_result&quot;</span>;</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">                data.put(<span class="string">&quot;callId&quot;</span>, ev.getToolResult().getCallId()).put(<span class="string">&quot;ok&quot;</span>, ev.getToolResult().getOk())</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">                        .put(<span class="string">&quot;elapsedMs&quot;</span>, ev.getToolResult().getElapsedMs());</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">                data.set(<span class="string">&quot;output&quot;</span>, readJson(ev.getToolResult().getOutputJson()));</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">            <span class="keyword">case</span> STATE -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">                type = <span class="string">&quot;state&quot;</span>;</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">                data.put(<span class="string">&quot;phase&quot;</span>, ev.getState().getPhase());</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">                data.set(<span class="string">&quot;changedKeys&quot;</span>, json.valueToTree(ev.getState().getChangedKeysList()));</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">            <span class="keyword">case</span> ERROR -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">                type = <span class="string">&quot;error&quot;</span>;</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">                data.put(<span class="string">&quot;code&quot;</span>, ev.getError().getCode()).put(<span class="string">&quot;message&quot;</span>, ev.getError().getMessage())</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">                        .put(<span class="string">&quot;retryable&quot;</span>, ev.getError().getRetryable());</span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">            <span class="keyword">case</span> DONE -&gt; &#123;</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">                type = <span class="string">&quot;done&quot;</span>;</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">                terminated = <span class="literal">true</span>;</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">                data.put(<span class="string">&quot;status&quot;</span>, ev.getDone().getStatus().name().toLowerCase());</span></span>
+<span class="cb-line" data-ln="57"><span class="cb-tx">            &#125;</span></span>
+<span class="cb-line" data-ln="58"><span class="cb-tx">            <span class="keyword">default</span> -&gt; type = <span class="string">&quot;unknown&quot;</span>; <span class="comment">// 新版 Python 发来的未知类型，前端按协议忽略</span></span></span>
+<span class="cb-line" data-ln="59"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="60"><span class="cb-tx">        <span class="keyword">return</span> build(type, ev.getSeq(), ev.getTsMs(), ev.getNode(), data);</span></span>
+<span class="cb-line" data-ln="61"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="62"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="63"><span class="cb-tx">    <span class="comment">/** gRPC 异常或无 done 就结束时，由网关补发 error + done，保证前端总能收到终止事件。 */</span></span></span>
+<span class="cb-line" data-ln="64"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">List</span>&lt;ServerSentEvent&lt;String&gt;&gt; <span class="title function_">failure</span><span class="params">(Throwable t)</span> &#123;</span></span>
+<span class="cb-line" data-ln="65"><span class="cb-tx">        <span class="keyword">if</span> (terminated) &#123;</span></span>
+<span class="cb-line" data-ln="66"><span class="cb-tx">            <span class="keyword">return</span> List.of();</span></span>
+<span class="cb-line" data-ln="67"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="68"><span class="cb-tx">        terminated = <span class="literal">true</span>;</span></span>
+<span class="cb-line" data-ln="69"><span class="cb-tx">        <span class="type">Status</span> <span class="variable">status</span> <span class="operator">=</span> Status.fromThrowable(t);</span></span>
+<span class="cb-line" data-ln="70"><span class="cb-tx">        <span class="type">String</span> <span class="variable">code</span> <span class="operator">=</span> <span class="keyword">switch</span> (status.getCode()) &#123;</span></span>
+<span class="cb-line" data-ln="71"><span class="cb-tx">            <span class="keyword">case</span> DEADLINE_EXCEEDED -&gt; <span class="string">&quot;RUN_DEADLINE_EXCEEDED&quot;</span>;</span></span>
+<span class="cb-line" data-ln="72"><span class="cb-tx">            <span class="keyword">case</span> UNAVAILABLE -&gt; <span class="string">&quot;AGENT_UNAVAILABLE&quot;</span>;</span></span>
+<span class="cb-line" data-ln="73"><span class="cb-tx">            <span class="keyword">case</span> CANCELLED -&gt; <span class="string">&quot;RUN_CANCELLED&quot;</span>;</span></span>
+<span class="cb-line" data-ln="74"><span class="cb-tx">            <span class="keyword">default</span> -&gt; t <span class="keyword">instanceof</span> TimeoutException ? <span class="string">&quot;STREAM_IDLE_TIMEOUT&quot;</span> : <span class="string">&quot;UPSTREAM_ERROR&quot;</span>;</span></span>
+<span class="cb-line" data-ln="75"><span class="cb-tx">        &#125;;</span></span>
+<span class="cb-line" data-ln="76"><span class="cb-tx">        <span class="type">long</span> <span class="variable">now</span> <span class="operator">=</span> System.currentTimeMillis();</span></span>
+<span class="cb-line" data-ln="77"><span class="cb-tx">        <span class="type">ObjectNode</span> <span class="variable">err</span> <span class="operator">=</span> json.createObjectNode().put(<span class="string">&quot;code&quot;</span>, code)</span></span>
+<span class="cb-line" data-ln="78"><span class="cb-tx">                .put(<span class="string">&quot;message&quot;</span>, String.valueOf(status.getDescription()))</span></span>
+<span class="cb-line" data-ln="79"><span class="cb-tx">                .put(<span class="string">&quot;retryable&quot;</span>, status.getCode() == Status.Code.UNAVAILABLE);</span></span>
+<span class="cb-line" data-ln="80"><span class="cb-tx">        <span class="type">ObjectNode</span> <span class="variable">done</span> <span class="operator">=</span> json.createObjectNode().put(<span class="string">&quot;status&quot;</span>, <span class="string">&quot;failed&quot;</span>);</span></span>
+<span class="cb-line" data-ln="81"><span class="cb-tx">        <span class="keyword">return</span> List.of(build(<span class="string">&quot;error&quot;</span>, ++lastSeq, now, <span class="string">&quot;&quot;</span>, err), build(<span class="string">&quot;done&quot;</span>, ++lastSeq, now, <span class="string">&quot;&quot;</span>, done));</span></span>
+<span class="cb-line" data-ln="82"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="83"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="84"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">List</span>&lt;ServerSentEvent&lt;String&gt;&gt; <span class="title function_">completeWithoutDone</span><span class="params">()</span> &#123;</span></span>
+<span class="cb-line" data-ln="85"><span class="cb-tx">        <span class="keyword">return</span> failure(Status.INTERNAL.withDescription(<span class="string">&quot;upstream closed without done&quot;</span>).asRuntimeException());</span></span>
+<span class="cb-line" data-ln="86"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="87"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="88"><span class="cb-tx">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="type">boolean</span> <span class="title function_">isTerminal</span><span class="params">(ServerSentEvent&lt;String&gt; sse)</span> &#123;</span></span>
+<span class="cb-line" data-ln="89"><span class="cb-tx">        <span class="keyword">return</span> <span class="string">&quot;done&quot;</span>.equals(sse.event());</span></span>
+<span class="cb-line" data-ln="90"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="91"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="92"><span class="cb-tx">    <span class="keyword">private</span> <span class="type">ServerSentEvent</span>&lt;String&gt; <span class="title function_">build</span><span class="params">(String type, <span class="type">long</span> seq, <span class="type">long</span> ts, String node, JsonNode data)</span> &#123;</span></span>
+<span class="cb-line" data-ln="93"><span class="cb-tx">        <span class="type">ObjectNode</span> <span class="variable">envelope</span> <span class="operator">=</span> json.createObjectNode()</span></span>
+<span class="cb-line" data-ln="94"><span class="cb-tx">                .put(<span class="string">&quot;v&quot;</span>, PROTOCOL_VERSION).put(<span class="string">&quot;type&quot;</span>, type).put(<span class="string">&quot;traceId&quot;</span>, traceId).put(<span class="string">&quot;runId&quot;</span>, runId)</span></span>
+<span class="cb-line" data-ln="95"><span class="cb-tx">                .put(<span class="string">&quot;seq&quot;</span>, seq).put(<span class="string">&quot;ts&quot;</span>, ts).put(<span class="string">&quot;node&quot;</span>, node);</span></span>
+<span class="cb-line" data-ln="96"><span class="cb-tx">        envelope.set(<span class="string">&quot;data&quot;</span>, data);</span></span>
+<span class="cb-line" data-ln="97"><span class="cb-tx">        <span class="keyword">return</span> ServerSentEvent.&lt;String&gt;builder().id(Long.toString(seq)).event(type).data(envelope.toString()).build();</span></span>
+<span class="cb-line" data-ln="98"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="99"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="100"><span class="cb-tx">    <span class="keyword">private</span> <span class="type">JsonNode</span> <span class="title function_">readJson</span><span class="params">(String raw)</span> &#123;</span></span>
+<span class="cb-line" data-ln="101"><span class="cb-tx">        <span class="keyword">try</span> &#123;</span></span>
+<span class="cb-line" data-ln="102"><span class="cb-tx">            <span class="keyword">return</span> raw.isEmpty() ? json.nullNode() : json.readTree(raw);</span></span>
+<span class="cb-line" data-ln="103"><span class="cb-tx">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span></span>
+<span class="cb-line" data-ln="104"><span class="cb-tx">            <span class="keyword">return</span> json.getNodeFactory().textNode(raw);</span></span>
+<span class="cb-line" data-ln="105"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="106"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="107"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<h3 id="SSE-端点：心跳、超时与终止"><a href="#SSE-端点：心跳、超时与终止" class="headerlink" title="SSE 端点：心跳、超时与终止"></a>SSE 端点：心跳、超时与终止</h3><figure class="highlight java cb cb--long" data-lang="java" data-label="Java" data-ext="java" data-lines="56"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">@RestController</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="meta">@RequestMapping(&quot;/api/agent&quot;)</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">AgentSseController</span> &#123;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Duration</span> <span class="variable">RUN_DEADLINE</span> <span class="operator">=</span> Duration.ofMinutes(<span class="number">5</span>);   <span class="comment">// 整次运行的硬上限</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Duration</span> <span class="variable">IDLE_TIMEOUT</span> <span class="operator">=</span> Duration.ofSeconds(<span class="number">90</span>);  <span class="comment">// 两个业务事件之间的最长静默</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Duration</span> <span class="variable">HEARTBEAT</span> <span class="operator">=</span> Duration.ofSeconds(<span class="number">15</span>);     <span class="comment">// 小于链路上最短的空闲超时</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> AgentStreamClient client;</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> ObjectMapper json;</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="type">public</span> <span class="title function_">AgentSseController</span><span class="params">(AgentStreamClient client, ObjectMapper json)</span> &#123;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="built_in">this</span>.client = client;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="built_in">this</span>.json = json;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">RunRequest</span><span class="params">(String threadId, String input, Map&lt;String, String&gt; context)</span> &#123;&#125;</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="meta">@PostMapping(path = &quot;/runs&quot;, produces = MediaType.TEXT_EVENT_STREAM_VALUE)</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">Flux</span>&lt;ServerSentEvent&lt;String&gt;&gt; <span class="title function_">run</span><span class="params">(<span class="meta">@RequestBody</span> RunRequest req,</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx"><span class="params">                                             <span class="meta">@RequestHeader(name = &quot;X-Trace-Id&quot;, required = false)</span> String traceHeader,</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="params">                                             ServerHttpResponse response)</span> &#123;</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">        <span class="type">String</span> <span class="variable">traceId</span> <span class="operator">=</span> traceHeader != <span class="literal">null</span> ? traceHeader : UUID.randomUUID().toString();</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        <span class="type">String</span> <span class="variable">runId</span> <span class="operator">=</span> UUID.randomUUID().toString();</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        response.getHeaders().setCacheControl(CacheControl.noCache());</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        response.getHeaders().set(<span class="string">&quot;X-Accel-Buffering&quot;</span>, <span class="string">&quot;no&quot;</span>); <span class="comment">// 让 Nginx 对本响应关闭缓冲</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">        response.getHeaders().set(<span class="string">&quot;X-Run-Id&quot;</span>, runId);</span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">        <span class="type">StartRun</span> <span class="variable">start</span> <span class="operator">=</span> StartRun.newBuilder()</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">                .setRunId(runId)</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">                .setThreadId(req.threadId() == <span class="literal">null</span> ? runId : req.threadId())</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">                .setUserInput(req.input())</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">                .putAllContext(req.context() == <span class="literal">null</span> ? Map.of() : req.context())</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">                .build();</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">        <span class="type">SseEventMapper</span> <span class="variable">mapper</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SseEventMapper</span>(json, runId, traceId);</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">        <span class="type">Flux</span>&lt;ServerSentEvent&lt;String&gt;&gt; <span class="variable">events</span> <span class="operator">=</span> client.chat(start, traceId, RUN_DEADLINE)</span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">                .timeout(IDLE_TIMEOUT)</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">                .map(mapper::toSse)</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">                .concatWith(Flux.defer(() -&gt; Flux.fromIterable(mapper.completeWithoutDone())))</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">                .onErrorResume(e -&gt; Flux.fromIterable(mapper.failure(e)));</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">        <span class="type">Flux</span>&lt;ServerSentEvent&lt;String&gt;&gt; <span class="variable">heartbeat</span> <span class="operator">=</span> Flux.interval(HEARTBEAT)</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">                .map(i -&gt; ServerSentEvent.&lt;String&gt;builder().comment(<span class="string">&quot;ping&quot;</span>).build());</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">        <span class="keyword">return</span> Flux.merge(events, heartbeat)</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">                .startWith(ServerSentEvent.&lt;String&gt;builder().comment(<span class="string">&quot;open&quot;</span>).build()) <span class="comment">// 立即提交响应头</span></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">                .takeUntil(SseEventMapper::isTerminal);</span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx">    <span class="meta">@PostMapping(&quot;/runs/&#123;runId&#125;/cancel&quot;)</span></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">Mono</span>&lt;ResponseEntity&lt;Void&gt;&gt; <span class="title function_">cancel</span><span class="params">(<span class="meta">@PathVariable</span> String runId)</span> &#123;</span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">        <span class="type">boolean</span> <span class="variable">ok</span> <span class="operator">=</span> client.cancel(runId, <span class="string">&quot;user_stop&quot;</span>);</span></span>
+<span class="cb-line" data-ln="54"><span class="cb-tx">        <span class="keyword">return</span> Mono.just(ok ? ResponseEntity.accepted().build() : ResponseEntity.notFound().build());</span></span>
+<span class="cb-line" data-ln="55"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="56"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>用 <code>curl -N</code> 验证这一段（<code>-N</code> 关闭 curl 自身的输出缓冲）：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -sN -X POST localhost:8080/api/agent/runs \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> -H <span class="string">&#x27;X-Trace-Id: t-demo-1&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;input&quot;:&quot;怠速抖动&quot;,&quot;context&quot;:&#123;&quot;dtc&quot;:&quot;P0171&quot;&#125;&#125;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p>输出应当逐条出现，而不是最后一次性刷出：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">:open</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">id:1</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">event:tool_call</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">data:&#123;&quot;v&quot;:1,&quot;type&quot;:&quot;tool_call&quot;,&quot;traceId&quot;:&quot;t-demo-1&quot;,&quot;runId&quot;:&quot;953be853-…&quot;,&quot;seq&quot;:1,&quot;ts&quot;:1769517000315,&quot;node&quot;:&quot;lookup_dtc&quot;,&quot;data&quot;:&#123;&quot;callId&quot;:&quot;8a3fa5e756e6&quot;,&quot;name&quot;:&quot;dtc_lookup&quot;,&quot;args&quot;:&#123;&quot;code&quot;:&quot;P0171&quot;&#125;&#125;&#125;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">id:4</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">event:token</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">data:&#123;&quot;v&quot;:1,&quot;type&quot;:&quot;token&quot;,&quot;traceId&quot;:&quot;t-demo-1&quot;,&quot;runId&quot;:&quot;953be853-…&quot;,&quot;seq&quot;:4,&quot;ts&quot;:1769517000317,&quot;node&quot;:&quot;answer&quot;,&quot;data&quot;:&#123;&quot;text&quot;:&quot;先&quot;,&quot;messageId&quot;:&quot;lc_run--…&quot;&#125;&#125;</span></span></code></pre></div></div></figure>
+
+<h3 id="背压、取消、超时、心跳如何落在代码里"><a href="#背压、取消、超时、心跳如何落在代码里" class="headerlink" title="背压、取消、超时、心跳如何落在代码里"></a>背压、取消、超时、心跳如何落在代码里</h3><table>
+<thead>
+<tr>
+<th>关注点</th>
+<th>实现</th>
+<th>容易踩的坑</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>背压</td>
+<td><code>disableAutoRequestWithInitial(0)</code> + <code>sink.onRequest</code> → gRPC <code>request(n)</code> → HTTP&#x2F;2 窗口 → Python 有界队列</td>
+<td>在 <code>beforeStart</code> 里调 <code>request</code> 会因 call 未启动而抛异常；用 <code>OverflowStrategy.BUFFER</code> 会把背压问题藏成内存增长</td>
+</tr>
+<tr>
+<td>硬取消</td>
+<td>浏览器断开 → Reactor Netty 取消订阅 → <code>sink.onCancel</code> → <code>call.cancel</code> → Python <code>CancelledError</code></td>
+<td>Flux 中间某处 <code>.block()</code> 或把事件丢进线程池，取消链就断了</td>
+</tr>
+<tr>
+<td>软取消</td>
+<td><code>POST /runs/{id}/cancel</code> → <code>CancelRun</code> 帧 → Python 收尾并发 <code>done(CANCELLED)</code></td>
+<td><code>running</code> 表是单实例内存；多副本部署时取消请求可能打到另一个 Java 实例，需按 runId 做一致性路由或用 Redis Pub&#x2F;Sub 广播</td>
+</tr>
+<tr>
+<td>运行上限</td>
+<td><code>withDeadlineAfter(5 min)</code>，Python 侧可用 <code>context.time_remaining()</code> 自查</td>
+<td>deadline 只在发起调用时设置一次，不是空闲超时</td>
+</tr>
+<tr>
+<td>空闲超时</td>
+<td><code>Flux.timeout(90s)</code>：两个业务事件之间静默太久即判定上游卡死</td>
+<td>心跳不能算业务事件，所以心跳必须在 <code>timeout</code> 之后再 merge</td>
+</tr>
+<tr>
+<td>心跳</td>
+<td>每 15 秒一个 SSE 注释帧 <code>:ping</code>，不占 seq</td>
+<td>间隔要小于链路上最短的空闲超时（Nginx 默认 <code>proxy_read_timeout</code> 为 60 秒）</td>
+</tr>
+<tr>
+<td>响应头</td>
+<td><code>startWith(:open)</code> 让响应头立即提交</td>
+<td>响应头要等第一个事件才发出时，网关的响应超时会先触发 504</td>
+</tr>
+<tr>
+<td>终止</td>
+<td><code>takeUntil(done)</code>；异常和「无 done 就结束」都由 <code>SseEventMapper</code> 补发 <code>error + done</code></td>
+<td>忘了 <code>takeUntil</code>，心跳流是无限的，连接永远不会关闭</td>
+</tr>
+</tbody></table>
+<p>软取消与硬取消怎么选：前端「停止生成」按钮直接 <code>AbortController.abort()</code> 断开连接，最简单也最可靠，任何实例都能生效；只有需要「保留已生成内容并由 Agent 写一句收尾」时才走软取消。</p>
+<h2 id="统一-SSE-事件协议"><a href="#统一-SSE-事件协议" class="headerlink" title="统一 SSE 事件协议"></a>统一 SSE 事件协议</h2><p>前端只认这一份协议，不认 LangGraph、LangChain 或任何模型厂商的事件格式。</p>
+<h3 id="线格式"><a href="#线格式" class="headerlink" title="线格式"></a>线格式</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">id:&lt;seq&gt;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">event:&lt;type&gt;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">data:&lt;信封 JSON，单行&gt;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">:ping</span></span></code></pre></div></div></figure>
+
+<ul>
+<li><code>id</code> 等于 <code>seq</code>；<code>event</code> 等于信封里的 <code>type</code>，方便原生 <code>EventSource</code> 按类型 <code>addEventListener</code>。</li>
+<li>心跳与连接建立用注释帧（冒号开头），不分配 <code>seq</code>，前端解析时直接跳过。</li>
+<li>本协议不承诺断线续传：<code>id</code> 为将来基于 <code>Last-Event-ID</code> 的重放预留，实现重放需要把事件写入 Redis Stream 之类的存储，不在本文范围内。</li>
+</ul>
+<h3 id="信封字段"><a href="#信封字段" class="headerlink" title="信封字段"></a>信封字段</h3><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>v</code></td>
+<td>int</td>
+<td>协议版本，当前为 1</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>string</td>
+<td>事件类型，见下表</td>
+</tr>
+<tr>
+<td><code>traceId</code></td>
+<td>string</td>
+<td>全链路追踪 ID，前端上报问题时必须带上</td>
+</tr>
+<tr>
+<td><code>runId</code></td>
+<td>string</td>
+<td>本次运行 ID，同时通过响应头 <code>X-Run-Id</code> 返回</td>
+</tr>
+<tr>
+<td><code>seq</code></td>
+<td>long</td>
+<td>本次运行内从 1 开始连续递增</td>
+</tr>
+<tr>
+<td><code>ts</code></td>
+<td>long</td>
+<td>事件产生时间（毫秒），网关补发的事件用网关时间</td>
+</tr>
+<tr>
+<td><code>node</code></td>
+<td>string</td>
+<td>产生事件的图节点，可为空</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>object</td>
+<td>各类型自己的负载</td>
+</tr>
+</tbody></table>
+<h3 id="事件类型"><a href="#事件类型" class="headerlink" title="事件类型"></a>事件类型</h3><table>
+<thead>
+<tr>
+<th>type</th>
+<th>data 字段</th>
+<th>前端处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>token</code></td>
+<td><code>text</code>、<code>messageId</code></td>
+<td>按 <code>messageId</code> 追加文本；<code>text</code> 是增量，不是累计全文</td>
+</tr>
+<tr>
+<td><code>tool_call</code></td>
+<td><code>callId</code>、<code>name</code>、<code>args</code></td>
+<td>在轨迹里新增一个「进行中」的工具节点</td>
+</tr>
+<tr>
+<td><code>tool_result</code></td>
+<td><code>callId</code>、<code>ok</code>、<code>elapsedMs</code>、<code>output</code></td>
+<td>按 <code>callId</code> 找到对应节点并标记完成或失败</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td><code>phase</code>、<code>changedKeys</code></td>
+<td>更新阶段指示（如「检索完成」）</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td><code>code</code>、<code>message</code>、<code>retryable</code></td>
+<td>展示错误；<code>retryable=true</code> 时提供重试按钮</td>
+</tr>
+<tr>
+<td><code>done</code></td>
+<td><code>status</code>：<code>completed</code> &#x2F; <code>cancelled</code> &#x2F; <code>failed</code></td>
+<td>结束本次运行，关闭连接</td>
+</tr>
+</tbody></table>
+<h3 id="协议规则"><a href="#协议规则" class="headerlink" title="协议规则"></a>协议规则</h3><ol>
+<li>每个 run <strong>有且只有一个</strong> <code>done</code>，且一定是最后一个业务事件；<code>error</code> 可以出现零到多次，不一定致命。</li>
+<li>前端收到 <code>seq &lt;= 已处理的最大 seq</code> 的事件直接丢弃；连接在 <code>done</code> 之前关闭，一律按中断处理。</li>
+<li>前端必须忽略未知的 <code>type</code> 和未知字段。新增事件类型、新增字段不升 <code>v</code>；删除字段或改变语义才升 <code>v</code>。</li>
+<li><code>tool_call</code> 与 <code>tool_result</code> 通过 <code>callId</code> 配对，允许多个工具调用交错。</li>
+<li><code>state</code> 不携带 State 内容；需要展示中间结果的，定义专门的事件类型并做字段级脱敏。</li>
+</ol>
+<p>反例：直接把 <code>astream_events</code> 的原始事件 <code>JSON.stringify</code> 推给前端。前端会依赖 <code>on_chat_model_stream</code>、<code>run_id</code>、<code>parent_ids</code> 这类框架内部结构；图里多一层子图、框架升一个大版本，前端就要跟着改。文末补记里 LangGraph 与 LangChain 在 2026 年的两次流式接口变化，正好说明了这条边界的价值。</p>
+<h3 id="前端消费"><a href="#前端消费" class="headerlink" title="前端消费"></a>前端消费</h3><p><code>EventSource</code> 只支持 GET 且不能带自定义请求头，诊断请求需要 POST 请求体和鉴权头，所以用 <code>fetch</code> 读流：</p>
+<figure class="highlight javascript cb cb--long" data-lang="javascript" data-label="JavaScript" data-ext="js" data-lines="36"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment">// 用 fetch 消费 POST 形式的 SSE</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">export</span> <span class="keyword">async</span> <span class="keyword">function</span> <span class="title function_">runAgent</span>(<span class="params">body, onEvent, signal</span>) &#123;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="keyword">const</span> res = <span class="keyword">await</span> <span class="title function_">fetch</span>(<span class="string">&quot;/api/agent/runs&quot;</span>, &#123;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">method</span>: <span class="string">&quot;POST&quot;</span>,</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">headers</span>: &#123; <span class="string">&quot;Content-Type&quot;</span>: <span class="string">&quot;application/json&quot;</span>, <span class="title class_">Accept</span>: <span class="string">&quot;text/event-stream&quot;</span> &#125;,</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">body</span>: <span class="title class_">JSON</span>.<span class="title function_">stringify</span>(body),</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    signal, <span class="comment">// 用户点停止时 abort：断开连接即硬取消</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  &#125;);</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="keyword">if</span> (!res.<span class="property">ok</span> || !res.<span class="property">body</span>) <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">Error</span>(<span class="string">`HTTP <span class="subst">$&#123;res.status&#125;</span>`</span>);</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="keyword">const</span> reader = res.<span class="property">body</span>.<span class="title function_">pipeThrough</span>(<span class="keyword">new</span> <span class="title class_">TextDecoderStream</span>()).<span class="title function_">getReader</span>();</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="keyword">let</span> buf = <span class="string">&quot;&quot;</span>;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="keyword">let</span> lastSeq = <span class="number">0</span>;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="keyword">for</span> (;;) &#123;</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="keyword">const</span> &#123; value, done &#125; = <span class="keyword">await</span> reader.<span class="title function_">read</span>();</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="keyword">if</span> (done) <span class="keyword">break</span>;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    buf += value;</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    <span class="keyword">let</span> m;</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="keyword">while</span> ((m = <span class="regexp">/\r?\n\r?\n/</span>.<span class="title function_">exec</span>(buf))) &#123;</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">      <span class="keyword">const</span> frame = buf.<span class="title function_">slice</span>(<span class="number">0</span>, m.<span class="property">index</span>);</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      buf = buf.<span class="title function_">slice</span>(m.<span class="property">index</span> + m[<span class="number">0</span>].<span class="property">length</span>);</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="keyword">const</span> data = frame</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">        .<span class="title function_">split</span>(<span class="regexp">/\r?\n/</span>)</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">        .<span class="title function_">filter</span>(<span class="function">(<span class="params">line</span>) =&gt;</span> line.<span class="title function_">startsWith</span>(<span class="string">&quot;data:&quot;</span>))</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">        .<span class="title function_">map</span>(<span class="function">(<span class="params">line</span>) =&gt;</span> line.<span class="title function_">slice</span>(<span class="number">5</span>).<span class="title function_">replace</span>(<span class="regexp">/^ /</span>, <span class="string">&quot;&quot;</span>))</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">        .<span class="title function_">join</span>(<span class="string">&quot;\n&quot;</span>);</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">      <span class="keyword">if</span> (!data) <span class="keyword">continue</span>; <span class="comment">// 注释帧只用于保活</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">      <span class="keyword">const</span> ev = <span class="title class_">JSON</span>.<span class="title function_">parse</span>(data);</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">      <span class="keyword">if</span> (ev.<span class="property">seq</span> &lt;= lastSeq) <span class="keyword">continue</span>; <span class="comment">// 重复事件丢弃</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">      lastSeq = ev.<span class="property">seq</span>;</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">      <span class="title function_">onEvent</span>(ev);</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">      <span class="keyword">if</span> (ev.<span class="property">type</span> === <span class="string">&quot;done&quot;</span>) <span class="keyword">return</span> ev.<span class="property">data</span>.<span class="property">status</span>;</span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">  &#125;</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">  <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">Error</span>(<span class="string">&quot;stream closed before done&quot;</span>); <span class="comment">// 没收到 done 一律按中断处理</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>注意 Spring 输出的是 <code>data:</code> 后不带空格的格式，SSE 规范允许冒号后有一个可选空格，解析时两种都要兼容。</p>
+<h2 id="代理层：Nginx-与-Spring-Cloud-Gateway"><a href="#代理层：Nginx-与-Spring-Cloud-Gateway" class="headerlink" title="代理层：Nginx 与 Spring Cloud Gateway"></a>代理层：Nginx 与 Spring Cloud Gateway</h2><p>Nginx 对 SSE 的默认行为是缓冲响应、60 秒读超时。上面的端点已经返回 <code>X-Accel-Buffering: no</code>，Nginx 会对这个响应关闭缓冲；其余配置按路径单独给：</p>
+<figure class="highlight nginx cb" data-lang="nginx" data-label="Nginx" data-ext="conf" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="section">location</span> /api/agent/ &#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="attribute">proxy_pass</span> http://agent_gateway;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attribute">proxy_http_version</span> <span class="number">1</span>.<span class="number">1</span>;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attribute">proxy_set_header</span> Connection <span class="string">&quot;&quot;</span>;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attribute">proxy_buffering</span> <span class="literal">off</span>;       <span class="comment"># 与 X-Accel-Buffering 双保险</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attribute">proxy_cache</span> <span class="literal">off</span>;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attribute">gzip</span> <span class="literal">off</span>;                  <span class="comment"># 压缩会攒够一块再输出</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attribute">proxy_read_timeout</span> <span class="number">300s</span>;   <span class="comment"># 与 RUN_DEADLINE 对齐；心跳保证不会因空闲被切</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>Spring Cloud Gateway 的 <code>response-timeout</code> 约束的是「等待下游响应头」的时间，这也是 SSE 端点要先发 <code>:open</code> 注释帧的原因。对 Agent 路由单独放宽即可，负值表示对该路由禁用全局响应超时：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">spring:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">cloud:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">gateway:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">server:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">webflux:</span>          <span class="comment"># Spring Cloud 2025.0（Gateway 4.3）起的新前缀；更早版本为 spring.cloud.gateway.*</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">          <span class="attr">routes:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">agent-stream</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">              <span class="attr">uri:</span> <span class="string">lb://agent-gateway</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">              <span class="attr">predicates:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                <span class="bullet">-</span> <span class="string">Path=/api/agent/**</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">              <span class="attr">metadata:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">                <span class="attr">response-timeout:</span> <span class="number">-1</span></span></span></code></pre></div></div></figure>
+
+<p>Agent 路由上不要挂会读取完整响应体的过滤器（如 <code>ModifyResponseBody</code>），它会把流聚合成一个整体再转发。</p>
+<h2 id="排错清单"><a href="#排错清单" class="headerlink" title="排错清单"></a>排错清单</h2><p>先定位是哪一段坏了：用上文的 <code>client_check.py</code> 直连 Python，<code>curl -N</code> 分别直连 Java、经过网关、经过 Nginx，第一段出现「整块到达」「提前断开」的地方就是问题所在。</p>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>常见原因</th>
+<th>排查与修复</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>前端等很久后一次性收到全文</td>
+<td>Nginx <code>proxy_buffering</code>、<code>gzip</code>；网关过滤器聚合响应体；Java 某处 <code>collectList()</code> &#x2F; <code>reduce</code>；Controller 返回的不是 <code>Flux</code> 或缺少 <code>produces = text/event-stream</code></td>
+<td>逐段 <code>curl -N</code>；Nginx 关缓冲与压缩；检查 Flux 链上有无聚合操作符</td>
+</tr>
+<tr>
+<td>Python 直连也是整块输出</td>
+<td>节点里用的模型客户端不支持流式或关闭了流式；<code>stream_mode</code> 没包含 <code>messages</code>；token 被 <code>STREAM_NODES</code> 过滤</td>
+<td>用 <code>client_check.py</code> 看 token 事件是否逐条出现；核对节点名</td>
+</tr>
+<tr>
+<td>固定 60 秒左右断开</td>
+<td>代理空闲超时（Nginx <code>proxy_read_timeout</code>、云负载均衡的 idle timeout）</td>
+<td>心跳间隔小于最短空闲超时；按路径放宽读超时</td>
+</tr>
+<tr>
+<td>长时间无事件后请求 504</td>
+<td>响应头未提交，网关等待响应头超时</td>
+<td><code>startWith</code> 注释帧立即提交响应头</td>
+</tr>
+<tr>
+<td>服务端认为连接还在，客户端早已离开（半开连接）</td>
+<td>移动网络切换、NAT 表项过期，TCP 没有收到 FIN&#x2F;RST</td>
+<td>SSE 层靠心跳写入失败来发现；gRPC 层靠 keepalive ping 发现，两段都要配</td>
+</tr>
+<tr>
+<td>gRPC 连接反复被 GOAWAY，日志含 <code>too_many_pings</code></td>
+<td>客户端 <code>keepAliveTime</code> 小于服务端允许的最小 ping 间隔（服务端默认 5 分钟）</td>
+<td>服务端配置 <code>grpc.http2.min_ping_interval_without_data_ms</code> 不大于客户端 ping 间隔，并开启 <code>grpc.keepalive_permit_without_calls</code></td>
+</tr>
+<tr>
+<td>用户点了停止，模型还在输出、还在计费</td>
+<td>取消链某段断开：Flux 链中有 <code>.block()</code> 或线程池同步桥接；<code>Flux.create</code> 没注册 <code>onCancel</code>；Python 节点在 <code>run_in_executor</code> 线程里跑同步代码（线程无法被取消）；<code>CancelledError</code> 被宽泛的异常捕获吞掉</td>
+<td>在 Python <code>finally</code> 与模型客户端关闭处打日志，自下而上确认每一段都收到了取消</td>
+</tr>
+<tr>
+<td>事件乱序或重复</td>
+<td>Python 多个协程直接写流、绕过单写者队列；Java 用了 <code>flatMap</code> 并发处理事件；前端重试后两次 run 的事件混在一起</td>
+<td>所有事件经同一队列编号；Java 只用 <code>map</code> &#x2F; <code>concatMap</code>；前端按 <code>runId + seq</code> 去重</td>
+</tr>
+<tr>
+<td><code>RESOURCE_EXHAUSTED</code>，工具结果大时出现</td>
+<td>gRPC 默认单条消息上限 4MB</td>
+<td>工具结果在 Python 侧截断或摘要后再上报，原文存对象存储，事件里只放引用</td>
+</tr>
+<tr>
+<td>前端先闪过一段 JSON 再出正文</td>
+<td><code>messages</code> 模式捕获了路由或抽取节点的 LLM 输出</td>
+<td>按 <code>langgraph_node</code> 白名单过滤 token</td>
+</tr>
+</tbody></table>
+<h2 id="2026-09-补记：LangGraph-v2-流式与-astream-events-v3-的影响"><a href="#2026-09-补记：LangGraph-v2-流式与-astream-events-v3-的影响" class="headerlink" title="2026-09 补记：LangGraph v2 流式与 astream_events v3 的影响"></a>2026-09 补记：LangGraph v2 流式与 astream_events v3 的影响</h2><p>本文写于 2026-01，之后两处流式接口有变化，结论是：<strong>协议层不用动，只改 Python 适配层</strong>。</p>
+<p><strong>LangGraph 1.1（2026-03-10）引入 <code>version=&quot;v2&quot;</code> 类型安全流式。</strong> 该版本的发布说明写明：默认的 v1 行为不变，仍然产出 <code>(stream_mode, data)</code> 元组；显式传 <code>version=&quot;v2&quot;</code> 后，<code>stream()</code> &#x2F; <code>astream()</code> 产出带 <code>type</code>、<code>ns</code>、<code>data</code> 字段的 <code>StreamPart</code> 字典，每种模式有对应的 TypedDict，可以按 <code>part[&quot;type&quot;]</code> 做类型收窄。上文 <code>run_events</code> 的改动只有解包方式：</p>
+<figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">async</span> <span class="keyword">for</span> part <span class="keyword">in</span> graph.astream(inputs, stream_mode=[<span class="string">&quot;messages&quot;</span>, <span class="string">&quot;updates&quot;</span>, <span class="string">&quot;custom&quot;</span>], version=<span class="string">&quot;v2&quot;</span>):</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    mode, chunk = part[<span class="string">&quot;type&quot;</span>], part[<span class="string">&quot;data&quot;</span>]</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    ...  <span class="comment"># 其余映射逻辑不变；子图事件的命名空间在 part[&quot;ns&quot;] 中</span></span></span></code></pre></div></div></figure>
+
+<p><strong>langchain 1.3（2026-05-12）为 <code>create_agent</code> 构建的 Agent 提供 <code>stream_events(..., version=&quot;v3&quot;)</code> &#x2F; <code>astream_events(..., version=&quot;v3&quot;)</code>。</strong> 它返回带类型化投影的运行对象：<code>stream.messages</code> 下每条消息有 <code>.text</code>、<code>.reasoning</code>、<code>.tool_calls</code>，<code>stream.tool_calls</code> 提供工具执行的生命周期（输入、输出增量、最终输出与错误）。对本协议的影响：</p>
+<ul>
+<li>如果执行面改用 <code>create_agent</code>，<code>token</code> 来自 <code>message.text</code> 的增量，<code>tool_call</code> &#x2F; <code>tool_result</code> 来自 <code>stream.tool_calls</code>，不再需要在节点里手写 <code>get_stream_writer()</code> 上报工具事件。</li>
+<li>v3 暴露了推理内容（<code>reasoning</code>）和工具输出增量，这两类信息在本协议里没有对应类型。按规则 3，新增 <code>reasoning</code>、<code>tool_output_delta</code> 两种事件类型不需要升协议版本，旧前端会忽略它们。</li>
+<li>自己用 <code>StateGraph</code> 编排的图，仍然按上文用 <code>astream</code> 的流模式映射即可，v3 是 <code>langchain</code> Agent 层的能力。</li>
+</ul>
+<p>两次变化都印证了「不透传框架原始事件」的价值：前端和 Java 网关对这两次升级无感知。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/01/20/architecture/AIHub%E4%BC%81%E4%B8%9A%E7%BA%A7AI%E9%97%A8%E6%88%B7%E6%9E%B6%E6%9E%84/">AIHub：企业 AI 门户与 Agent 服务集成架构</a></h3>
+        <p>通用聊天前台 + 独立 Agent 后端：门户、网关、执行三层分工，OpenAI 兼容与 Open WebUI Pipe 接入契约…</p>
+        <a class="btn primary" href="/2026/01/20/architecture/AIHub%E4%BC%81%E4%B8%9A%E7%BA%A7AI%E9%97%A8%E6%88%B7%E6%9E%B6%E6%9E%84/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/29/agent-systems/Agent%E5%8D%8F%E8%AE%AE%E5%9B%9B%E4%BB%B6%E5%A5%97-MCP-A2A-AG-UI-OTel%E5%AE%8C%E6%95%B4%E6%8C%87%E5%8D%97/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Agent 开发框架协议四件套完整指南：MCP · A2A · AG-UI · OpenTelemetry</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 9 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%B5%81%E5%BC%8F" data-toc-target="为什么要端到端流式"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">为什么要端到端流式</span></a><a class="toc-level-2" href="#%E9%93%BE%E8%B7%AF%E6%80%BB%E8%A7%88" data-toc-target="链路总览"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">链路总览</span></a><a class="toc-level-2" href="#proto%EF%BC%9A%E4%B8%80%E6%AC%A1-run-%E7%9A%84%E4%BA%8B%E4%BB%B6%E6%A8%A1%E5%9E%8B" data-toc-target="proto：一次-run-的事件模型"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">proto：一次 run 的事件模型</span></a><a class="toc-level-2" href="#Python-%E6%89%A7%E8%A1%8C%E9%9D%A2%EF%BC%9ALangGraph-%E6%B5%81%E6%A8%A1%E5%BC%8F-%E2%86%92-gRPC-%E4%BA%8B%E4%BB%B6" data-toc-target="Python-执行面：LangGraph-流模式-→-gRPC-事件"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">Python 执行面：LangGraph 流模式 → gRPC 事件</span></a><a class="toc-level-3" href="#%E5%9B%BE%E4%B8%8E%E4%BA%8B%E4%BB%B6%E5%BD%92%E4%B8%80" data-toc-target="图与事件归一"><span class="toc-text">图与事件归一</span></a><a class="toc-level-3" href="#gRPC-%E6%9C%8D%E5%8A%A1%E7%AB%AF" data-toc-target="gRPC-服务端"><span class="toc-text">gRPC 服务端</span></a><a class="toc-level-2" href="#Java-%E4%BE%A7%EF%BC%9Agrpc-java-%E5%AE%A2%E6%88%B7%E7%AB%AF-WebFlux-SSE" data-toc-target="Java-侧：grpc-java-客户端-WebFlux-SSE"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">Java 侧：grpc-java 客户端 + WebFlux SSE</span></a><a class="toc-level-3" href="#Channel-%E9%85%8D%E7%BD%AE" data-toc-target="Channel-配置"><span class="toc-text">Channel 配置</span></a><a class="toc-level-3" href="#gRPC-%E6%B5%81%E6%A1%A5%E6%8E%A5%E4%B8%BA-Flux" data-toc-target="gRPC-流桥接为-Flux"><span class="toc-text">gRPC 流桥接为 Flux</span></a><a class="toc-level-3" href="#proto-%E4%BA%8B%E4%BB%B6-%E2%86%92-SSE-%E4%BA%8B%E4%BB%B6" data-toc-target="proto-事件-→-SSE-事件"><span class="toc-text">proto 事件 → SSE 事件</span></a><a class="toc-level-3" href="#SSE-%E7%AB%AF%E7%82%B9%EF%BC%9A%E5%BF%83%E8%B7%B3%E3%80%81%E8%B6%85%E6%97%B6%E4%B8%8E%E7%BB%88%E6%AD%A2" data-toc-target="SSE-端点：心跳、超时与终止"><span class="toc-text">SSE 端点：心跳、超时与终止</span></a><a class="toc-level-3" href="#%E8%83%8C%E5%8E%8B%E3%80%81%E5%8F%96%E6%B6%88%E3%80%81%E8%B6%85%E6%97%B6%E3%80%81%E5%BF%83%E8%B7%B3%E5%A6%82%E4%BD%95%E8%90%BD%E5%9C%A8%E4%BB%A3%E7%A0%81%E9%87%8C" data-toc-target="背压、取消、超时、心跳如何落在代码里"><span class="toc-text">背压、取消、超时、心跳如何落在代码里</span></a><a class="toc-level-2" href="#%E7%BB%9F%E4%B8%80-SSE-%E4%BA%8B%E4%BB%B6%E5%8D%8F%E8%AE%AE" data-toc-target="统一-SSE-事件协议"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">统一 SSE 事件协议</span></a><a class="toc-level-3" href="#%E7%BA%BF%E6%A0%BC%E5%BC%8F" data-toc-target="线格式"><span class="toc-text">线格式</span></a><a class="toc-level-3" href="#%E4%BF%A1%E5%B0%81%E5%AD%97%E6%AE%B5" data-toc-target="信封字段"><span class="toc-text">信封字段</span></a><a class="toc-level-3" href="#%E4%BA%8B%E4%BB%B6%E7%B1%BB%E5%9E%8B" data-toc-target="事件类型"><span class="toc-text">事件类型</span></a><a class="toc-level-3" href="#%E5%8D%8F%E8%AE%AE%E8%A7%84%E5%88%99" data-toc-target="协议规则"><span class="toc-text">协议规则</span></a><a class="toc-level-3" href="#%E5%89%8D%E7%AB%AF%E6%B6%88%E8%B4%B9" data-toc-target="前端消费"><span class="toc-text">前端消费</span></a><a class="toc-level-2" href="#%E4%BB%A3%E7%90%86%E5%B1%82%EF%BC%9ANginx-%E4%B8%8E-Spring-Cloud-Gateway" data-toc-target="代理层：Nginx-与-Spring-Cloud-Gateway"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">代理层：Nginx 与 Spring Cloud Gateway</span></a><a class="toc-level-2" href="#%E6%8E%92%E9%94%99%E6%B8%85%E5%8D%95" data-toc-target="排错清单"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">排错清单</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ALangGraph-v2-%E6%B5%81%E5%BC%8F%E4%B8%8E-astream-events-v3-%E7%9A%84%E5%BD%B1%E5%93%8D" data-toc-target="2026-09-补记：LangGraph-v2-流式与-astream-events-v3-的影响"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">2026-09 补记：LangGraph v2 流式与 astream_events v3 的影响</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/langgraph-agent-engineering/" style="--rail: 47%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">8 / 17</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%B5%81%E5%BC%8F" data-toc-target="为什么要端到端流式" data-title="01 · 为什么要端到端流式" aria-label="为什么要端到端流式"></a><a class="toc-strip__dot" href="#%E9%93%BE%E8%B7%AF%E6%80%BB%E8%A7%88" data-toc-target="链路总览" data-title="02 · 链路总览" aria-label="链路总览"></a><a class="toc-strip__dot" href="#proto%EF%BC%9A%E4%B8%80%E6%AC%A1-run-%E7%9A%84%E4%BA%8B%E4%BB%B6%E6%A8%A1%E5%9E%8B" data-toc-target="proto：一次-run-的事件模型" data-title="03 · proto：一次 run 的事件模型" aria-label="proto：一次 run 的事件模型"></a><a class="toc-strip__dot" href="#Python-%E6%89%A7%E8%A1%8C%E9%9D%A2%EF%BC%9ALangGraph-%E6%B5%81%E6%A8%A1%E5%BC%8F-%E2%86%92-gRPC-%E4%BA%8B%E4%BB%B6" data-toc-target="Python-执行面：LangGraph-流模式-→-gRPC-事件" data-title="04 · Python 执行面：LangGraph 流模式 → gRPC 事件" aria-label="Python 执行面：LangGraph 流模式 → gRPC 事件"></a><a class="toc-strip__dot" href="#Java-%E4%BE%A7%EF%BC%9Agrpc-java-%E5%AE%A2%E6%88%B7%E7%AB%AF-WebFlux-SSE" data-toc-target="Java-侧：grpc-java-客户端-WebFlux-SSE" data-title="05 · Java 侧：grpc-java 客户端 + WebFlux SSE" aria-label="Java 侧：grpc-java 客户端 + WebFlux SSE"></a><a class="toc-strip__dot" href="#%E7%BB%9F%E4%B8%80-SSE-%E4%BA%8B%E4%BB%B6%E5%8D%8F%E8%AE%AE" data-toc-target="统一-SSE-事件协议" data-title="06 · 统一 SSE 事件协议" aria-label="统一 SSE 事件协议"></a><a class="toc-strip__dot" href="#%E4%BB%A3%E7%90%86%E5%B1%82%EF%BC%9ANginx-%E4%B8%8E-Spring-Cloud-Gateway" data-toc-target="代理层：Nginx-与-Spring-Cloud-Gateway" data-title="07 · 代理层：Nginx 与 Spring Cloud Gateway" aria-label="代理层：Nginx 与 Spring Cloud Gateway"></a><a class="toc-strip__dot" href="#%E6%8E%92%E9%94%99%E6%B8%85%E5%8D%95" data-toc-target="排错清单" data-title="08 · 排错清单" aria-label="排错清单"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ALangGraph-v2-%E6%B5%81%E5%BC%8F%E4%B8%8E-astream-events-v3-%E7%9A%84%E5%BD%B1%E5%93%8D" data-toc-target="2026-09-补记：LangGraph-v2-流式与-astream-events-v3-的影响" data-title="09 · 2026-09 补记：LangGraph v2 流式与 astream_events v3 的影响" aria-label="2026-09 补记：LangGraph v2 流式与 astream_events v3 的影响"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/微服务流式调用与gRPC双向流","title":"Java 微服务调用 Python Agent 的流式链路：gRPC 双向流与统一 SSE 事件协议","url":"/2026/01/27/technical-docs/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%B5%81%E5%BC%8F%E8%B0%83%E7%94%A8%E4%B8%8EgRPC%E5%8F%8C%E5%90%91%E6%B5%81/","path":"langgraph-agent-engineering","index":7,"total":17,"next":{"title":"AIHub：企业 AI 门户与 Agent 服务集成架构","url":"/2026/01/20/architecture/AIHub%E4%BC%81%E4%B8%9A%E7%BA%A7AI%E9%97%A8%E6%88%B7%E6%9E%B6%E6%9E%84/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

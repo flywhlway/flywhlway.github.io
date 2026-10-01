@@ -1,0 +1,751 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Open-GSD 源码解析（一）：研究方法与框架全景 · 飞轮之道</title>
+<meta name="description" content="Open-GSD 源码解析系列第一篇：界定研究对象与证据规则，厘清 open-gsd 生态中多个同名项目的边界，并从全景层面说明 GSD Core 作为宿主 Agent 之上的纪律层，如何对抗上下文腐化。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/08/03/engineering-practice/Open-GSD-01-%E7%A0%94%E7%A9%B6%E6%96%B9%E6%B3%95%E4%B8%8E%E5%85%A8%E6%99%AF/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Open-GSD 源码解析（一）：研究方法与框架全景 · 飞轮之道">
+<meta property="og:description" content="Open-GSD 源码解析系列第一篇：界定研究对象与证据规则，厘清 open-gsd 生态中多个同名项目的边界，并从全景层面说明 GSD Core 作为宿主 Agent 之上的纪律层，如何对抗上下文腐化。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/08/03/engineering-practice/Open-GSD-01-%E7%A0%94%E7%A9%B6%E6%96%B9%E6%B3%95%E4%B8%8E%E5%85%A8%E6%99%AF/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / <a href="/paths/spec-driven-development/">源码深读</a><a class="series-chip" href="/paths/spec-driven-development/" title="查看学习路径">第 3 / 10 篇</a>
+    </div>
+    <h1>Open-GSD 源码解析（一）：研究方法与框架全景</h1>
+    <p class="article-deck">Open-GSD 源码解析系列第一篇：界定研究对象与证据规则，厘清 open-gsd 生态中多个同名项目的边界…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>23 分钟</span>
+      <span>发布于 2026.08</span>
+      <a class="article-meta__tag" href="/tags/Claude-Code/">#Claude Code</a><a class="article-meta__tag" href="/tags/AI-%E7%BC%96%E7%A8%8B/">#AI 编程</a><a class="article-meta__tag" href="/tags/Open-GSD/">#Open-GSD</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>GSD Core 是寄生于宿主 Agent Runtime 之上的纪律层，不是与 Claude Code、Codex、Cursor 平级的竞争产品。</li><li>GSD Core 用新鲜上下文子代理、规范驱动制品与元提示三位一体，应对上下文腐化、无跨会话记忆与无人验证三类失效。</li><li>open-gsd 名下并存 GSD Core、GSD Pi、GSD 2 等多个项目，研究前必须先划清边界，避免把其他项目的特性套到 GSD Core 上。</li><li>本系列以 gsd-core 仓库 next 分支源码为唯一一手来源，文档与源码冲突时如实并列呈现，不替读者选边。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p><strong>本篇导读</strong>：本篇是 Open-GSD（GSD Core）源码解析系列的第一篇，先交代研究对象、信息来源与证据规则，再从全景层面回答 GSD Core 是什么、为什么存在、与宿主 Agent 及同名项目是什么关系。后续五篇的所有源码级结论，都以这里界定的研究范围与引用规范为前提。</p>
+<blockquote>
+<p><strong>研究快照信息</strong></p>
+<ul>
+<li>研究对象：<code>open-gsd/gsd-core</code>（GitHub 组织 <code>open-gsd</code> 下的核心仓库）</li>
+<li>克隆分支：<code>next</code>（该仓库默认分支）</li>
+<li>克隆时 HEAD：commit <code>d2d2f7c088bed7d588749a05bc89d1012f870c48</code>，提交时间 2026-07-31 10:56:11 -0400</li>
+<li><code>package.json</code> 声明版本：<code>1.9.1</code></li>
+<li>研究&#x2F;撰写日期：2026-08-01</li>
+<li>研究方式：<code>git clone</code> 官方仓库直接阅读源码与文档（非仅网页检索），交叉核对 GitHub 仓库页面、npm 包信息、社区博客</li>
+<li>本系列为<strong>独立第三方研究成果</strong>，不是 Open-GSD 官方文档。官方最新信息请始终以 <code>https://github.com/open-gsd/gsd-core</code> 与 <code>https://opengsd.net</code> 为准</li>
+</ul>
+</blockquote>
+<h2 id="第〇部分-·-研究方法与信息来源说明"><a href="#第〇部分-·-研究方法与信息来源说明" class="headerlink" title="第〇部分 · 研究方法与信息来源说明"></a>第〇部分 · 研究方法与信息来源说明</h2><h3 id="0-1-研究对象界定"><a href="#0-1-研究对象界定" class="headerlink" title="0.1 研究对象界定"></a>0.1 研究对象界定</h3><p>通常所说的 “Open-GSD”，经检索与源码核实，指向 GitHub 组织 <strong><code>open-gsd</code></strong> 名下的核心仓库 <strong><code>open-gsd/gsd-core</code></strong>（npm 包名 <code>@opengsd/gsd-core</code>，官网 <code>opengsd.net</code>）。这是一个 <strong>MIT 许可、TypeScript&#x2F;Node.js 编写、以 Markdown Prompt 文件为主体形态</strong>的”元框架”（meta-framework），核心定位是：</p>
+<blockquote>
+<p>通过一套上下文工程（Context Engineering）与规范驱动开发（Spec-Driven Development）的纪律，把 Claude Code、Codex、Cursor 等 AI 编程 Agent 的长期自治能力变得可靠。</p>
+</blockquote>
+<p>本系列以这一仓库的 <code>next</code> 分支（研究快照见本篇开头）作为<strong>唯一的一手信息源</strong>，所有架构结论、目录职责、字段含义均来自对该仓库源码与官方文档的直接阅读，而非对 Open-GSD 的概括性转述。</p>
+<h3 id="0-2-版本谱系与生态定位（关键澄清）"><a href="#0-2-版本谱系与生态定位（关键澄清）" class="headerlink" title="0.2 版本谱系与生态定位（关键澄清）"></a>0.2 版本谱系与生态定位（关键澄清）</h3><p><code>open-gsd</code> 这一名字下的生态并不是单一产品，而是<strong>至少 5 个独立代码库</strong>的集合，命名相近但架构、版本号、产品形态完全不同。这是深入研究前必须先厘清的陷阱——如果不做这层澄清，后续对”目录结构””Skill 数量””命令语法”的任何具体论断都可能张冠李戴。经逐仓库核实，谱系如下：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>仓库</th>
+<th>定位</th>
+<th>与本文研究对象（GSD Core）的关系</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>GSD Core</strong>（本文唯一研究对象）</td>
+<td><code>open-gsd/gsd-core</code></td>
+<td><strong>不是独立 Agent</strong>，是叠加在宿主 Agent Runtime 之上的 Meta-Prompting &#x2F; Context Engineering &#x2F; Spec-Driven Development 框架；以 Skill、Command、Agent、Workflow 等 Markdown Prompt 文件为主体，配合一个 Node.js CLI 工具（<code>gsd-tools.cjs</code>）做确定性状态管理</td>
+<td>——</td>
+</tr>
+<tr>
+<td>GSD Pi</td>
+<td><code>open-gsd/gsd-pi</code></td>
+<td><strong>独立的本地优先编码 Agent 产品</strong>：自带 TUI 终端界面、可选 Web 控制台（<code>gsd --web</code>）、多 Provider 模型路由（可以把 Claude Code、Cursor Agent 当作”外部 CLI Provider”来调用）、自有的 <code>.gsd/</code> 项目记忆体系与安装器 <code>@opengsd/gsd-pi</code></td>
+<td>同一 GitHub 组织下的姊妹项目，但代码库、版本号（近期重新从 <code>1.0.0</code> 起跳，目前已到 <code>v1.11.0</code>）、产品形态均与 GSD Core 不同。<strong>GSD Pi 是一个可以运行的 Agent 程序本身，GSD Core 是喂给别的 Agent 程序吃的”纪律说明书”</strong>——这是两者最本质的区别，本文后续不会混用</td>
+</tr>
+<tr>
+<td>GSD 2</td>
+<td><code>gsd-build/gsd-2</code></td>
+<td>历史版本，是早期 <code>get-shit-done-cc</code> 之后、<code>open-gsd</code> 组织成立之前的过渡形态</td>
+<td>仓库 README 已显式声明”项目现已在 Open GSD 仓库以 GSD Pi 的形式延续”，代码不再更新；GSD Core 文档树中仍保留 <code>docs/how-to/migrate-from-gsd-2.md</code> 供历史用户迁移，侧面印证 GSD Core 与 GSD 2 存在血缘但已完全重写</td>
+</tr>
+<tr>
+<td><code>get-shit-done-cc</code>（旧 npm 包名）</td>
+<td>——</td>
+<td>项目最早期的 npm 分发名</td>
+<td>GSD Core 文档中的 <code>docs/cleanup-get-shit-done-cc.md</code> 专门处理”从旧包名迁移到 <code>@opengsd/gsd-core</code> 后遗留产物”的问题，是包名演进的直接证据</td>
+</tr>
+<tr>
+<td><code>gsd-opencode</code>（rokicool）</td>
+<td><code>rokicool/gsd-opencode</code></td>
+<td>社区维护的 OpenCode 专用移植版（作者署名 “by TACHES”）</td>
+<td>GSD Core 官方 README 的 Community 表格中明确收录为 <em>“Original OpenCode port”</em>，属独立第三方仓库，非官方组织资产</td>
+</tr>
+<tr>
+<td><code>gsd-skill-creator</code>（Tibsfox）</td>
+<td><code>Tibsfox/gsd-skill-creator</code></td>
+<td>第三方”学习层”插件：观察用户在 GSD 生命周期内的操作模式（工具序列、文件模式、纠正行为），用 N-gram + DBSCAN 聚类检测重复模式，达到阈值后建议自动生成新 Skill &#x2F; Agent</td>
+<td>README 中明确写明”不替代任何 GSD 功能，只是观察你在 GSD 生命周期内的工作方式”，是生态圈内的第三方增强工具，不属于官方仓库范围</td>
+</tr>
+</tbody></table>
+<p><strong>为什么这层区分很重要</strong>：讨论 GSD 的框架定位（Framework Position）时，需要分析它与 Claude Code &#x2F; Codex &#x2F; Cursor &#x2F; Gemini CLI &#x2F; OpenCode &#x2F; Copilot 的关系——这些确实都是 GSD <strong>Core</strong> 的宿主对象。但如果不做上表的澄清，很容易把 GSD Pi（一个独立 Agent 产品，拥有自己的 TUI 和模型路由）的特性错误地归到 GSD Core 头上，或者反过来把 GSD Core 的”寄生式”安装模型套到 GSD Pi 上——这是本系列在后续 19 个部分中会持续保持警惕的一条红线。</p>
+<p>此外，行业内还存在与 GSD <strong>同一品类</strong>（”驱动编码 Agent 的元框架”）但<strong>代码库完全独立、不属于 open-gsd 组织</strong>的竞品，例如 <strong>Superpowers</strong>（侧重测试驱动的 Skill 触发）与 <strong>GSTACK</strong>。这些将在 1.6 节做简要定位性介绍，但不构成后续源码分析的对象，以避免”不做主观臆测”的研究红线被稀释到非本体项目上。</p>
+<h3 id="0-3-研究方法与工具链"><a href="#0-3-研究方法与工具链" class="headerlink" title="0.3 研究方法与工具链"></a>0.3 研究方法与工具链</h3><p>本系列所有事实性论断遵循以下证据优先级（从高到低）：</p>
+<ol>
+<li><strong>直接阅读的源码文件</strong>（<code>.md</code> &#x2F; <code>.cjs</code> &#x2F; <code>.cts</code> &#x2F; <code>.json</code> 等，本次已克隆到本地的 <code>next</code> 分支全量文件）——最高优先级，行文中标注具体文件路径。</li>
+<li><strong>官方仓库中的架构决策记录（ADR）与 Issue&#x2F;PR 编号</strong> —— 如 <code>docs/adr/0656-research-module-seam.md</code>、<code>#2792</code>、<code>#921</code> 等，这些是项目维护者自己写下的设计权衡记录，可信度仅次于源码本身。</li>
+<li><strong>官方仓库根目录与 <code>docs/</code> 下的说明性文档</strong>（README、ARCHITECTURE.md、各 <code>explanation/*.md</code>）—— 用于理解”为什么这样设计”，与源码相互印证。</li>
+<li><strong>GitHub 仓库主页元信息</strong>（Star 数、Fork 数、License、Topics）—— 用于外部认知定位，会标注”研究快照时点”，因为这类数字持续变化。</li>
+<li><strong>第三方报道&#x2F;博客</strong>（如比较 GSD、Superpowers、GSTACK 的行业博客）—— 仅用于补充生态定位背景，<strong>不作为架构细节的依据</strong>；凡与一手源码&#x2F;官方文档冲突之处，一律以一手来源为准，并在文中注明差异（例如某博客所述的社区 Star 数汇总口径与官方仓库页面直接读取的数字不一致，本文采用后者）。</li>
+</ol>
+<p>本文<strong>不采用</strong>的做法：不臆测未读过的源码行为、不对”可能存在”但未在仓库中找到的机制做描述性展开、不将 GSD Pi &#x2F; GSD 2 &#x2F; 第三方分支的特性套用到 GSD Core 名下。</p>
+<h3 id="0-4-引用规范"><a href="#0-4-引用规范" class="headerlink" title="0.4 引用规范"></a>0.4 引用规范</h3><p>正文中出现的以下标注方式均指向可在仓库中直接核实的位置：</p>
+<ul>
+<li><code>路径/文件名</code>：仓库内真实文件路径，如 <code>docs/ARCHITECTURE.md</code>、<code>skills/gsd-quick/SKILL.md</code></li>
+<li><code>#数字</code>：GitHub Issue 或 PR 编号，如 <code>#2792</code></li>
+<li><code>ADR-数字</code>：<code>docs/adr/</code> 下的架构决策记录编号</li>
+<li>引用官方文档原文时，会控制引用长度并以自己的语言转述架构含义，避免整段照搬</li>
+</ul>
+<h3 id="0-5-局限性与免责声明"><a href="#0-5-局限性与免责声明" class="headerlink" title="0.5 局限性与免责声明"></a>0.5 局限性与免责声明</h3><ul>
+<li>本文研究快照截止 2026-08-01，<code>next</code> 分支仍在活跃开发（克隆时 4,731+ commits，最后一次提交发生在研究前一天），文中具体数字（Star 数、Skill&#x2F;Agent 总数、版本号）<strong>会随时间推移而漂移</strong>，读者若需要精确当前值，应以仓库实时状态为准。</li>
+<li><code>package.json</code> 标注版本 <code>1.9.1</code>，而根 README 的”What’s new”链接指向 <code>1.7.0</code>——这是文档更新滞后于代码发布的正常现象，本文如实记录这一滞后，不做主观修正。</li>
+<li>关于项目的具体创始团队&#x2F;个人归属，本文未能通过一手渠道（仓库 <code>CONTRIBUTING.md</code>、GitHub 组织页面）完全确认第三方博客中提到的具体人名，故本文对此不做断言，仅呈现可核实的组织与仓库事实。</li>
+<li>本文不对 GSD Pi、GSD 2、第三方分支做同等深度的源码分析——它们仅在需要澄清边界时被提及。</li>
+</ul>
+<hr>
+<h2 id="第一部分-·-Open-GSD（GSD-Core）全景介绍"><a href="#第一部分-·-Open-GSD（GSD-Core）全景介绍" class="headerlink" title="第一部分 · Open-GSD（GSD Core）全景介绍"></a>第一部分 · Open-GSD（GSD Core）全景介绍</h2><h3 id="1-1-一句话定义"><a href="#1-1-一句话定义" class="headerlink" title="1.1 一句话定义"></a>1.1 一句话定义</h3><blockquote>
+<p>GSD Core 是一个<strong>元提示（meta-prompting）、上下文工程（context engineering）、规范驱动开发（spec-driven development）框架</strong>，通过一套磁盘化的状态文件与”新鲜上下文子代理”编排模式，驱动 Claude Code、Codex、Cursor 等 AI 编程 Agent 以纪律化的五阶段循环（Discuss → Plan → Execute → Verify → Ship）交付软件，同时对抗长会话中不可避免的”上下文腐化”（context rot）。</p>
+</blockquote>
+<p>——定义直接来自 <code>README.md</code> 与 <code>docs/ARCHITECTURE.md</code> 的 “System Overview” 一节，本文仅做了中文层面的整合表述，未添加原文没有的推断性内容。</p>
+<h3 id="1-2-为什么会有-GSD-——-起源与问题空间"><a href="#1-2-为什么会有-GSD-——-起源与问题空间" class="headerlink" title="1.2 为什么会有 GSD —— 起源与问题空间"></a>1.2 为什么会有 GSD —— 起源与问题空间</h3><p><code>docs/ARCHITECTURE.md</code> 与根 README 的 “Why it works” 一节，把 AI 辅助编程在<strong>规模化场景</strong>下失效的原因归纳为三条，这三条共同构成了 GSD 存在的理由：</p>
+<ol>
+<li><strong>上下文膨胀会静默拉低输出质量</strong>（Context bloat silently degrades output quality）——模型不会报错，只会”悄悄变差”。</li>
+<li><strong>会话之间没有共享记忆</strong>（No shared memory between sessions）——每次 <code>/clear</code> 或话题切换，此前建立的架构共识、边界条件都需要重新解释。</li>
+<li><strong>没有任何机制验证代码真的能跑</strong>（Nothing verifies that code actually works）——“生成完成”不等于”目标达成”。</li>
+</ol>
+<p>GSD Core 给出的解法逐条对应：<strong>新鲜子代理</strong>解决第一条、<strong>磁盘化的结构化产物</strong>（<code>STATE.md</code> &#x2F; <code>CONTEXT.md</code> 等）解决第二条、<strong>Verify 阶段的目标回溯核查</strong>解决第三条。这三条并非孤立特性，而是同一套设计哲学的三个切面——这也是为什么后文会反复看到”Context Engineering””Spec-Driven Development””Meta-Prompting”这三个词总是成对出现。</p>
+<h3 id="1-3-Context-Rot：AI-编程助手的隐形杀手"><a href="#1-3-Context-Rot：AI-编程助手的隐形杀手" class="headerlink" title="1.3 Context Rot：AI 编程助手的隐形杀手"></a>1.3 Context Rot：AI 编程助手的隐形杀手</h3><p><code>docs/explanation/context-engineering.md</code> 对 Context Rot 给出了目前为止我读到的最清晰的工程化解释，摘要还原如下（转述，非逐字引用）：</p>
+<ul>
+<li>每一次 AI 编程会话本质上都是从零开始的：模型读取问题、推理、作答。但真实会话很少只有一轮——你会追问、粘贴报错、迭代代码、把跑偏的模型拉回来。每一轮交互都会把新的 token 塞进上下文窗口（模型一次能”看见”的有限缓冲区）。</li>
+<li>随着窗口被填满，一种隐蔽的现象会发生：<strong>模型不会大声宣告失败，它会继续作答，但答案的质量在悄悄劣化</strong>。早期给出的约束、双方确认过的架构、提到过的边界条件，会在注意力分配中逐渐被后来的内容稀释——这不是”遗忘”（模型从未以人类的方式”记住”过），而是 Transformer 注意力在长序列上的必然属性：窗口中积累的噪声越多，信噪比就越差。</li>
+<li>Context Rot 的四种典型症状（原文列出）：<ul>
+<li>模型开始与它自己此前已确认过的决策相矛盾；</li>
+<li>代码风格逐渐偏离会话最初约定的规范；</li>
+<li>制定计划时开始忽略明确提出过、但已被埋在历史深处的需求；</li>
+<li>模型会”幻觉”出二十条消息之前还答对过的文件名或函数签名。</li>
+</ul>
+</li>
+<li>朴素的应对方式是执行 <code>/clear</code> 推倒重来，但这会丢失连续性——你必须重新解释背景、重新粘贴相关文件、重新陈述约束，会话实质上被清零重启。</li>
+</ul>
+<p>GSD Core 的核心洞察是：<strong>一次编码会话中的”重活”（研究、规划、编写代码、验证）大多根本不需要发生在主上下文里</strong>。这些都是离散的、有边界的任务，完全可以交给一个专门的子代理去做——子代理从一个干净的、被精心限定范围的上下文窗口开始，把结果汇报给一个保持精简的”薄编排层”。</p>
+<blockquote>
+<p>原文特别强调了一句话，本文认为值得完整保留其含义：”这不是应对 Context Rot 的权宜之计（workaround），而是一种结构性解法（structural solution）。”</p>
+</blockquote>
+<h3 id="1-4-GSD-的解法：三位一体"><a href="#1-4-GSD-的解法：三位一体" class="headerlink" title="1.4 GSD 的解法：三位一体"></a>1.4 GSD 的解法：三位一体</h3><p>结合 <code>docs/ARCHITECTURE.md</code>、<code>docs/explanation/context-engineering.md</code> 与根 README，GSD Core 的解决方案可以拆解为三个相互耦合、缺一不可的支柱：</p>
+<h4 id="支柱一：Context-Engineering（上下文工程）——新鲜上下文子代理"><a href="#支柱一：Context-Engineering（上下文工程）——新鲜上下文子代理" class="headerlink" title="支柱一：Context Engineering（上下文工程）——新鲜上下文子代理"></a>支柱一：Context Engineering（上下文工程）——新鲜上下文子代理</h4><p>主编排会话（你的主 session）<strong>从不直接触碰源码文件</strong>。它只做四件事：加载一个精简的 JSON 上下文载荷（通过 <code>gsd-tools.cjs init &lt;workflow&gt;</code>）、派生带聚焦提示词的专职子代理、收集结果、在步骤之间更新共享状态。因为主编排层”什么重活都不干”，它的上下文窗口增长得缓慢且可预测；真正的重活发生在每次都全新起步、只接收任务所需精确上下文、完成即终止的子代理里。</p>
+<h4 id="支柱二：Spec-Driven-Development（规范驱动开发）——先产出结构化制品，再执行"><a href="#支柱二：Spec-Driven-Development（规范驱动开发）——先产出结构化制品，再执行" class="headerlink" title="支柱二：Spec-Driven Development（规范驱动开发）——先产出结构化制品，再执行"></a>支柱二：Spec-Driven Development（规范驱动开发）——先产出结构化制品，再执行</h4><p>仅有新鲜上下文还不够——如果一个”全新”的 Agent 收到的却是含糊的指令，它只会产出含糊的输出。每个阶段在执行前都要先产出结构化制品：<code>CONTEXT.md</code> 固化 Discuss 阶段的实现决策，<code>RESEARCH.md</code> 记录研究发现，<code>PLAN.md</code> 把工作拆解为带显式验收标准、按依赖关系排序的离散任务。等到执行子代理（Executor）真正动手改文件时，它面对的是一份精确的规格说明，而不是对一段长对话的重新诠释。</p>
+<h4 id="支柱三：Meta-Prompting（元提示）——把工程经验固化进-Prompt-本身"><a href="#支柱三：Meta-Prompting（元提示）——把工程经验固化进-Prompt-本身" class="headerlink" title="支柱三：Meta-Prompting（元提示）——把工程经验固化进 Prompt 本身"></a>支柱三：Meta-Prompting（元提示）——把工程经验固化进 Prompt 本身</h4><p><code>gsd-core/workflows/</code> 与 <code>agents/</code> 下的文件不是临时拼凑的指令，而是被精心设计的提示词，编码了”如何界定任务范围、要验证什么、什么时候该升级给人类做检查点”这类来之不易的经验。用户不需要在每次会话里重新解释这些知识——它们已经烘焙进了系统自己的提示词中。</p>
+<p>三者的组合是刻意为之的：”新鲜上下文确保每个 Agent 能清晰推理；规范驱动的制品确保每个 Agent 在推理正确的事情；元提示确保每个 Agent 知道如何推理得好。”（转述自 <code>context-engineering.md</code>）</p>
+<h3 id="1-5-Framework-Positioning：GSD-Core-是什么，不是什么"><a href="#1-5-Framework-Positioning：GSD-Core-是什么，不是什么" class="headerlink" title="1.5 Framework Positioning：GSD Core 是什么，不是什么"></a>1.5 Framework Positioning：GSD Core 是什么，不是什么</h3><p>这是最容易被误解的一点，也是讨论框架定位（Framework Position）时真正要回答的问题。基于源码与文档，可以给出一个不含糊的定位：</p>
+<blockquote>
+<p><strong>GSD Core 本身不是一个 Agent，不内置模型调用能力，不自己”跑”起来。它是一套安装进宿主 Agent Runtime 里的 Prompt 文件 + 一个辅助性的确定性 CLI 工具（<code>gsd-tools.cjs</code>）。真正执行推理、调用 LLM API、读写文件的，始终是宿主 Runtime 自己（Claude Code &#x2F; Codex &#x2F; Cursor 等）的原生能力。</strong></p>
+</blockquote>
+<p>这一点从安装方式上就能直接验证——<code>README.md</code> Quickstart 一节写明：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">npx @opengsd/gsd-core@latest</span></span></code></pre></div></div></figure>
+
+<blockquote>
+<p>安装器会询问你使用的 Runtime（Claude Code、OpenCode、Antigravity CLI、Kimi CLI、Kilo、Codex、Copilot、Cursor、Windsurf 等），以及是全局安装还是项目本地安装。<strong>安装器是跨 Runtime 兼容性的必经之路——不要直接从 <code>agents/</code> 或 <code>commands/</code> 复制文件。</strong>（转述自 README，加粗为本文强调）</p>
+</blockquote>
+<p>也就是说，GSD Core 的”产品形态”就是一批 Markdown 文件，通过安装器被适配、翻译、放置到各个宿主 Runtime 各自的扩展目录里（Claude Code 的 <code>~/.claude/skills/</code> 或 <code>commands/</code>、OpenCode 的 <code>.opencode/</code>、Codex 的 <code>~/.codex/</code>……），然后<strong>由宿主 Runtime 自己的原生 Skill&#x2F;Command&#x2F;SubAgent 机制去解释执行这些 Markdown Prompt</strong>。</p>
+<h4 id="与六大主流-Agent-Runtime-的关系"><a href="#与六大主流-Agent-Runtime-的关系" class="headerlink" title="与六大主流 Agent Runtime 的关系"></a>与六大主流 Agent Runtime 的关系</h4><table>
+<thead>
+<tr>
+<th>Runtime &#x2F; 工具</th>
+<th>定位</th>
+<th>与 GSD Core 的关系</th>
+<th>GSD Core 在其上的安装形态（据 <code>docs/ARCHITECTURE.md</code> “Component Architecture”）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Claude Code</strong></td>
+<td>Anthropic 官方 Agentic CLI，具备原生 Sub-Agent &#x2F; Skill &#x2F; Hook 机制</td>
+<td>GSD Core 投入生态资源最重的”一等公民”宿主</td>
+<td>全局安装为 Skills（含两阶段命名空间路由，见下文）；本地安装为 Custom Slash Commands（连字符形式 <code>/gsd-command-name</code>），并注册 <code>PreCompact</code>&#x2F;<code>Stop</code>&#x2F;<code>SubagentStop</code> 等生命周期 Hook</td>
+</tr>
+<tr>
+<td><strong>OpenAI Codex &#x2F; Codex CLI</strong></td>
+<td>OpenAI 官方 Agentic 编程工具</td>
+<td>平级支持的宿主之一</td>
+<td>以 Codex 自身的 “Skills” 形式安装，调用语法为 <code>$gsd-command-name</code></td>
+</tr>
+<tr>
+<td><strong>Cursor</strong></td>
+<td>AI 原生代码编辑器</td>
+<td>平级支持的宿主之一</td>
+<td>Slash Commands（连字符形式），另有专属 <code>hooks.json</code> 协调（见 <code>runtime-hooks-surface.cjs</code>）</td>
+</tr>
+<tr>
+<td><strong>Gemini CLI &#x2F; Antigravity</strong></td>
+<td>Google 官方 Agentic CLI &#x2F; IDE</td>
+<td>平级支持的宿主之一（源码中对应 <code>capabilities/gemini</code>、<code>capabilities/antigravity</code>；根目录也保留 <code>GEMINI.md</code>）</td>
+<td>Skills；安装根按 <code>~/.gemini/antigravity/</code>、<code>antigravity-ide/</code>、<code>antigravity-cli/</code> 自动探测</td>
+</tr>
+<tr>
+<td><strong>GitHub Copilot（CLI&#x2F;Chat）</strong></td>
+<td>微软&#x2F;GitHub 官方 AI 编程助手</td>
+<td>平级支持的宿主之一</td>
+<td>Slash Commands，本地安装写入 <code>./.github/</code></td>
+</tr>
+<tr>
+<td><strong>OpenCode</strong></td>
+<td>开源、多模型的 Agentic CLI</td>
+<td>平级支持的宿主之一，同时也是社区独立移植版 <code>gsd-opencode</code>（<code>rokicool</code> 仓库）的目标平台</td>
+<td>Slash Commands（连字符形式），插件位于仓库自带的 <code>.opencode/plugins/</code></td>
+</tr>
+</tbody></table>
+<p>除以上用户明确点名的六个之外，源码中 <code>capabilities/</code> 目录下还能直接看到 <strong>Kimi CLI、Kilo、Windsurf、Trae、Cline、Augment Code、CodeBuddy、Qwen、Ollama、LM Studio、llama.cpp、VS Code、zcode</strong> 等更多受支持的运行时适配目录，<code>docs/how-to/install-on-your-runtime.md</code> 中提到”全部 16 个受支持 Runtime”的说法（这是官方文档中的原始措辞，与 <code>capabilities/</code> 目录下可数出的 20+ 个细分适配相比，说明”正式安装矩阵”与”能力&#x2F;插件级适配”是两个不完全重合的统计口径，本文如实呈现这一差异而非强行统一）。</p>
+<p>值得一提：<code>capabilities/codebuddy</code> 的存在，说明腾讯云 CodeBuddy CLI 也在 GSD Core 官方支持的宿主列表中——对同时面向 Claude Code 与 CodeBuddy CLI 双 Runtime 的技能项目而言，这意味着后续本系列第六篇（第十四、十七部分）讨论”设备诊断 Skill 如何落地”时，GSD Core 在 CodeBuddy 上的具体加载形态（下文会看到，CodeBuddy 被归入”扁平&#x2F;flat 技能加载”一类宿主）是可以直接参照的一手依据，而不需要额外假设。</p>
+<h4 id="与同类竞品的简要定位（非本文源码分析对象）"><a href="#与同类竞品的简要定位（非本文源码分析对象）" class="headerlink" title="与同类竞品的简要定位（非本文源码分析对象）"></a>与同类竞品的简要定位（非本文源码分析对象）</h4><p>一篇比较 Claude Code 编排框架选型的行业博客（Pulumi Blog）将 GSD、<strong>Superpowers</strong>、<strong>GSTACK</strong> 并列为三种可选框架，给出的定性区分是：Superpowers 侧重”测试驱动的强制门禁”（每次代码变更都必须先有一个失败的测试），GSD 的核心架构决策是”不用单一超级编排器，而是每个阶段各配一个独立编排器，每个编排器的上下文占用都控制在其容量的 50% 以下”。这与本文直接从源码读到的”薄编排器 + 阶段化五步循环”完全吻合，故予以采信作为生态背景介绍；但该博客给出的具体 Star 数（数万级）与本文直接从 <code>open-gsd/gsd-core</code> 仓库主页读取到的数字（研究快照时点为 7.1k Star、483 Fork）存在明显差异，可能统计口径不同（例如是否合并了 GSD Pi、社区分支等生态整体声量），本文不对差异原因做推测，仅如实并列呈现，并以直接读取的仓库页面数字作为后续引用的基准。</p>
+<h3 id="1-6-五阶段循环总览（详解见本系列第三篇第五部分）"><a href="#1-6-五阶段循环总览（详解见本系列第三篇第五部分）" class="headerlink" title="1.6 五阶段循环总览（详解见本系列第三篇第五部分）"></a>1.6 五阶段循环总览（详解见本系列第三篇第五部分）</h3><p><code>docs/explanation/the-phase-loop.md</code> 将 GSD Core 的核心工作节奏概括为一句话：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Discuss → (UI design，可选) → Plan → Execute → Verify → Ship</span></span></code></pre></div></div></figure>
+
+<p>每一个”阶段”（Phase）都会依次走完这五步（UI 设计为可选的第 1.5 步），循环不是形式主义——<strong>每一步都在防御上一步单独无法防御的某一类失败模式</strong>：Discuss 防止”规划建立在错误假设之上”；Plan 防止”执行一个根本走不通的设计”；Verify 防止”交付了偏离真实需求的成果”。这一模型将在本系列第三篇（第五部分）逐阶段展开输入&#x2F;输出&#x2F;Prompt&#x2F;状态&#x2F;依赖&#x2F;典型 Skill 的完整分析，此处仅做全局定位。</p>
+<h3 id="1-7-Skill-Runtime-与-Prompt-Runtime-速览（详解见本系列第四篇第六-十部分）"><a href="#1-7-Skill-Runtime-与-Prompt-Runtime-速览（详解见本系列第四篇第六-十部分）" class="headerlink" title="1.7 Skill Runtime 与 Prompt Runtime 速览（详解见本系列第四篇第六~十部分）"></a>1.7 Skill Runtime 与 Prompt Runtime 速览（详解见本系列第四篇第六~十部分）</h3><p>GSD Core 的可扩展性单元是 <strong>Skill</strong>——本次克隆的 <code>next</code> 分支 <code>skills/</code> 目录下共有 <strong>71 个技能子目录</strong>（含命名空间路由技能，详见下文），每个都是一个独立的 <code>SKILL.md</code> Prompt 文件。<code>docs/ARCHITECTURE.md</code> 中记录了一项影响深远的架构演进——<strong>两阶段分层路由（Two-stage hierarchical routing，v1.40，issue #2792）</strong>：</p>
+<ul>
+<li>早期做法是把全部具体技能平铺在顶层，模型每一轮都要”眼前过一遍”全部技能列表，token 成本随技能数量线性增长；</li>
+<li>v1.40 引入 <strong>6 个命名空间元技能</strong>（<code>gsd-workflow</code>、<code>gsd-project</code>、<code>gsd-quality</code>、<code>gsd-context</code>、<code>gsd-manage</code>、<code>gsd-ideate</code>，源文件为 <code>commands/gsd/ns-*.md</code>），作为悬浮在具体子技能之上的一层路由；</li>
+<li>在”非递归技能加载器”的宿主（cline、qwen、hermes、augment、trae）上，安装器只暴露这 6 个命名空间路由作为顶层技能，把约 61 个具体技能嵌套到 <code>&lt;router&gt;/skills/&lt;name&gt;/SKILL.md</code> 下，模型选中一个命名空间路由后，路由体内嵌的路由表会指示它去读取具体技能文件——<strong>眼前技能列表从约 67 条压缩到约 6 条</strong>；</li>
+<li>在”支持递归或加载行为未确认”的宿主（claude global、cursor、codex、copilot、windsurf、codebuddy、opencode、kilo、antigravity）上，仍保持全部技能平铺（这里有两处历史反复：Antigravity 曾从嵌套改回扁平——因为它的技能扫描器 <code>agy</code> 只扫描 <code>skills/&lt;name&gt;/SKILL.md</code> 一层，嵌套的子技能根本无法被发现；Claude 全局安装同理曾被改回扁平——因为 Claude 的 Skill 工具在遇到未知技能名时会直接硬报错，而不会重试走路由，导致嵌套的具体技能变得不可调用）。</li>
+</ul>
+<p>这是一处教科书级别的”多版本实现差异”案例——按照”若源码存在多个实现版本，应分析差异”的研究原则，这里的差异不是历史遗留，而是<strong>同一套路由机制在不同宿主能力矩阵下的两种并存实现</strong>，将在本系列第四篇（第八、九部分）结合具体源码与真实 <code>SKILL.md</code> 路由文件展开。</p>
+<p>命名空间路由技能的 <code>description</code> 字段本身也是一处值得留意的设计——例如 <code>gsd-ns-workflow</code> 的描述写的是 <code>&quot;workflow | discuss plan execute verify phase progress&quot;</code>，用竖线分隔关键词标签而非自然语言句子。<code>docs/ARCHITECTURE.md</code> 中给出的理由是”Tool Attention 相关研究表明，关键词密集型标签在路由任务上的表现优于自然语言描述，且 token 成本约为后者的 40%”——这一细节将在本系列第四篇（第九部分）”Skill Matching”中结合更多真实 <code>description</code> 样本展开分析。</p>
+<h3 id="1-8-整体架构图"><a href="#1-8-整体架构图" class="headerlink" title="1.8 整体架构图"></a>1.8 整体架构图</h3><p>以下架构图基于 <code>docs/ARCHITECTURE.md</code> “System Overview” 一节中的原始 ASCII 图重绘（分层关系与文字标注保持与源文档一致，仅转换为 Mermaid 语法）：</p>
+<pre class="mermaid">flowchart TB
+    USER["用户 USER&lt;br/&gt;/gsd-command [args]"]
+    CMD["命令层 COMMAND LAYER&lt;br/&gt;commands/gsd/*.md&lt;br/&gt;（Prompt 化命令文件；&lt;br/&gt;Claude Code 自定义命令 / Codex 技能）"]
+    WF["工作流层 WORKFLOW LAYER&lt;br/&gt;gsd-core/workflows/*.md&lt;br/&gt;（编排逻辑：读取引用文档、派生 Agent、管理状态）"]
+    A1["AGENT&lt;br/&gt;（全新上下文）"]
+    A2["AGENT&lt;br/&gt;（全新上下文）"]
+    A3["AGENT&lt;br/&gt;（全新上下文）"]
+    CLI["CLI 工具层 CLI TOOLS LAYER&lt;br/&gt;gsd-tools.cjs 命令族 + 领域模块&lt;br/&gt;command-routing-hub + 可观测性接缝"]
+    FS["文件系统 FILE SYSTEM（.planning/）&lt;br/&gt;PROJECT.md ｜ REQUIREMENTS.md ｜ ROADMAP.md&lt;br/&gt;STATE.md ｜ config.json ｜ phases/ ｜ research/"]
+
+    USER --&gt; CMD
+    CMD --&gt; WF
+    WF --&gt; A1
+    WF --&gt; A2
+    WF --&gt; A3
+    A1 --&gt; CLI
+    A2 --&gt; CLI
+    A3 --&gt; CLI
+    CLI --&gt; FS
+    FS -.状态回读，驱动下一次编排.-&gt; WF</pre>
+
+
+<p><strong>分层要点</strong>（来源：<code>docs/ARCHITECTURE.md</code> “Design Principles”）：</p>
+<ul>
+<li><strong>Fresh Context Per Agent</strong>：每个被编排层派生的 Agent 都拿到一个干净的上下文窗口（最高可达 200K token，1M 级模型下更多），这是消灭 Context Rot 的机制本体，而非权宜之计；</li>
+<li><strong>Thin Orchestrators</strong>（薄编排器）：<code>gsd-core/workflows/*.md</code> 从不亲自干重活，只做四件事——通过 <code>gsd-tools.cjs init &lt;workflow&gt;</code> 加载上下文、派生带聚焦 Prompt 的专职 Agent、收集结果并路由到下一步、在步骤之间更新状态；</li>
+<li><strong>File-Based State</strong>（文件化状态）：全部状态活在 <code>.planning/</code> 下的人类可读 Markdown 与 JSON 中，没有数据库、没有服务端、没有外部依赖——这意味着状态能扛住 <code>/clear</code>、能被人类和 Agent 同时检视、能被提交进 Git 供团队可见；</li>
+<li><strong>Absent &#x3D; Enabled</strong>（缺省即启用）：<code>config.json</code> 中缺失的功能开关字段默认视为 <code>true</code>，用户需要显式关闭功能，而不是显式打开默认项；</li>
+<li><strong>Defense in Depth</strong>（纵深防御）：Plan 在执行前先被 <code>plan-checker</code> Agent 校验；执行按任务粒度产生原子提交；执行完成后有 Verify 阶段对照阶段目标复核；UAT（用户验收测试）作为人工把关的最终闸门。</li>
+</ul>
+<h3 id="1-9-项目生命周期图（Milestone-→-Phase-→-五阶段循环）"><a href="#1-9-项目生命周期图（Milestone-→-Phase-→-五阶段循环）" class="headerlink" title="1.9 项目生命周期图（Milestone → Phase → 五阶段循环）"></a>1.9 项目生命周期图（Milestone → Phase → 五阶段循环）</h3><pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Discuss
+    Discuss --&gt; UIDesign: 存在可视化交付物（可选步骤）
+    Discuss --&gt; Plan: 无 UI 交付物，直接进入 Plan
+    UIDesign --&gt; Plan: 产出 UI-SPEC.md 设计契约
+    Plan --&gt; PlanCheck: Planner 产出 PLAN.md
+    PlanCheck --&gt; Plan: Plan Checker 打回（最多 3 轮修订）
+    PlanCheck --&gt; Execute: Plan Checker 通过
+    Execute --&gt; Verify: Executor 按依赖波次完成，产出 SUMMARY.md
+    Verify --&gt; Plan: 发现偏差，生成针对性修复计划
+    Verify --&gt; Ship: Verifier 判定目标达成，产出 VERIFICATION.md
+    Ship --&gt; [*]: 创建 PR，归档本 Phase 制品
+    Ship --&gt; Discuss: Milestone 未完成，进入下一个 Phase</pre>
+
+
+<p><strong>关键概念区分</strong>（来源：<code>docs/explanation/the-phase-loop.md</code>）：</p>
+<ul>
+<li><strong>Milestone（里程碑）</strong>：一个版本周期——一次有意义、可发布的产品增量，拥有名称、版本号、一组界定”必须交付什么”的需求。里程碑完成的标志是它所有的 Phase 都已 Ship，且需求全部被覆盖。</li>
+<li><strong>Phase（阶段）</strong>：一个里程碑内的一个工作单元，拥有一个目标、一组它要覆盖的需求、一组实现它的 Plan。</li>
+<li>二者的关注范围不同：里程碑问的是”这个版本的产品要做什么、不做什么”；阶段问的是”下一件能被安全地研究、规划、执行、验证的有边界的事情是什么”。</li>
+<li>原文给出了判断”好的 Phase 边界”的具体标准与反例，颇具实操价值，将在本系列第三篇（第五部分）完整展开——例如”新增 HMAC-SHA256 签名校验中间件”是一个恰当的 Phase 范围，而”构建整个认证系统”通常不是（几乎总是包含多个本该拆分为独立 Phase 的关注点），”修复 README 里的错别字”则达不到需要走循环的门槛，应使用 <code>/gsd-quick</code> 处理。</li>
+</ul>
+<h3 id="1-10-Context-生命周期与关键时序图"><a href="#1-10-Context-生命周期与关键时序图" class="headerlink" title="1.10 Context 生命周期与关键时序图"></a>1.10 Context 生命周期与关键时序图</h3><p>Context Rot 的对抗机制不是抽象概念，而是体现在每一次具体的 Agent 派生动作里。以下时序图还原 <code>/gsd-plan-phase</code> 命令触发后的真实调用序列（来源：<code>docs/explanation/context-engineering.md</code> 给出的具体步骤描述 + <code>docs/ARCHITECTURE.md</code> “Data Flow → Phase Execution Flow”）：</p>
+<pre class="mermaid">sequenceDiagram
+    participant U as 用户
+    participant O as 主编排会话 Orchestrator&lt;br/&gt;（上下文缓慢、可预测地增长）
+    participant CT as gsd-tools.cjs
+    participant R as Researcher Agent&lt;br/&gt;（全新 200K 上下文）
+    participant P as Planner Agent&lt;br/&gt;（全新 200K 上下文）
+    participant PC as Plan-Checker Agent&lt;br/&gt;（全新 200K 上下文）
+    participant FS as .planning/ 文件系统
+
+    U-&gt;&gt;O: /gsd-plan-phase
+    O-&gt;&gt;CT: gsd-tools.cjs init plan-phase
+    CT--&gt;&gt;O: 精简 JSON 上下文载荷（项目摘要/阶段目标/相关配置）
+    Note over O,R: 主会话从不直接读写源码文件——&lt;br/&gt;它只派生 Agent、收集结果、更新状态
+    O-&gt;&gt;R: 派生（携带 CONTEXT.md）
+    R-&gt;&gt;FS: 写入 RESEARCH.md
+    R--&gt;&gt;O: 返回结果引用（非原始抓取内容）
+    O-&gt;&gt;P: 派生（携带 RESEARCH.md 路径 + CONTEXT.md + 可达性检查）
+    P-&gt;&gt;FS: 写入多份 PLAN.md（按依赖关系分波次）
+    P--&gt;&gt;O: 返回结果引用
+    O-&gt;&gt;PC: 派生（携带全部 PLAN.md）
+    PC-&gt;&gt;FS: 校验完整性/一致性/范围/可达性
+    alt 校验不通过（最多 3 轮）
+        PC--&gt;&gt;O: 打回，携带修订意见
+        O-&gt;&gt;P: 重新派生 Planner（新鲜上下文）
+    else 校验通过
+        PC--&gt;&gt;O: 通过
+        O-&gt;&gt;FS: state planned-phase → 更新 STATE.md
+        O--&gt;&gt;U: 阶段就绪，可执行
+    end</pre>
+
+
+<p><strong>这张图揭示的核心机制</strong>（转述自 <code>context-engineering.md</code> “Lifecycle hooks and context headroom” 一节）：</p>
+<ul>
+<li>新鲜上下文子代理模型保护的是<strong>每一个被派生的 Agent</strong>；但还有一个更微妙的问题——<strong>编排会话本身也会随时间被填满</strong>。长时间运行的编排过程会静默消耗自己的上下文窗口（加载载荷、读取状态输出、在阶段之间路由）。如果没有任何关于剩余余量的信号，会话可能悄悄劣化，或者更糟——触发一次自动压缩（compaction），静默丢弃编排器原本依赖的规划状态。</li>
+<li>自 <strong>GSD 1.4.0</strong> 起，这一问题通过注册运行时生命周期 Hook 来解决：Claude Code 会在 <code>PreCompact</code>（即将发生压缩前）、<code>Stop</code>（一轮会话结束）、<code>SubagentStop</code>（派生的子代理完成）这些事件上触发 Hook；Qwen 暴露的是同名的 <code>SubagentStop</code>&#x2F;<code>Stop</code>&#x2F;<code>PreCompact</code> 事件。这是”多运行时哲学在可观测性层的应用”——GSD 在每个运行时各自暴露的位置注册语义等价的 Hook，而不是要求所有运行时统一采用同一套事件模型。</li>
+<li>一个值得记录的历史反复：早期版本曾对 <code>plan-phase</code>、<code>execute-phase</code>、<code>autonomous</code> 这三个”重”技能额外施加 <code>context: fork</code>（子代理化的上下文隔离），但后来被移除（<code>#921</code>）——原因是这三个恰恰是<strong>派生型编排器</strong>（spawning orchestrators），它们的核心职责就是派生子代理（<code>gsd-planner</code>、<code>gsd-executor</code> 等），而一个被 fork 出去的子代理上下文本身<strong>没有 <code>Agent</code> 工具</strong>，无法再派生下一层子代理。这三个技能真正的上下文隔离来自于它们所派生的子代理，而不是编排器自身的 fork——这是又一处”分析实现版本差异”的真实案例。</li>
+</ul>
+<h3 id="1-11-关键量化事实速览（研究快照，非固定值）"><a href="#1-11-关键量化事实速览（研究快照，非固定值）" class="headerlink" title="1.11 关键量化事实速览（研究快照，非固定值）"></a>1.11 关键量化事实速览（研究快照，非固定值）</h3><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>数值&#x2F;事实</th>
+<th>一手来源</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GitHub 仓库</td>
+<td><code>open-gsd/gsd-core</code></td>
+<td>仓库主页</td>
+</tr>
+<tr>
+<td>Star &#x2F; Fork 数</td>
+<td>7.1k Star ／ 483 Fork</td>
+<td>仓库主页（研究快照时点）</td>
+</tr>
+<tr>
+<td>许可证</td>
+<td>MIT</td>
+<td><code>LICENSE</code></td>
+</tr>
+<tr>
+<td>npm 包名</td>
+<td><code>@opengsd/gsd-core</code></td>
+<td><code>package.json</code></td>
+</tr>
+<tr>
+<td>当前版本</td>
+<td><code>1.9.1</code>（<code>package.json</code>），根 README 的 “What’s new” 链接仍指向 <code>1.7.0</code>（文档滞后于代码）</td>
+<td><code>package.json</code> &#x2F; <code>README.md</code></td>
+</tr>
+<tr>
+<td>Node 版本要求</td>
+<td><code>&gt;=22.0.0</code>（npm <code>&gt;=10.0.0</code>）</td>
+<td><code>package.json</code></td>
+</tr>
+<tr>
+<td>核心运行时依赖</td>
+<td><code>@anthropic-ai/claude-agent-sdk</code>（<code>^0.2.84</code>）、<code>ws</code>（<code>^8.21.0</code>）</td>
+<td><code>package.json</code></td>
+</tr>
+<tr>
+<td>默认分支</td>
+<td><code>next</code></td>
+<td><code>git branch</code></td>
+</tr>
+<tr>
+<td>本次克隆时 Commit 数</td>
+<td>4,731+（浅克隆，实际总量更多）</td>
+<td><code>git log</code></td>
+</tr>
+<tr>
+<td>Skill 目录数</td>
+<td>71 个（含 6 个命名空间路由技能；<code>docs/ARCHITECTURE.md</code> 撰写时估计约 67 个，说明仍在持续增长）</td>
+<td><code>skills/</code> 目录实测</td>
+</tr>
+<tr>
+<td>Agent 总数</td>
+<td>33</td>
+<td><code>docs/ARCHITECTURE.md</code>（”Total agents: 33”）</td>
+</tr>
+<tr>
+<td>正式安装矩阵 Runtime 数</td>
+<td>官方 how-to 文档口径为 16 个；<code>capabilities/</code> 目录下可数出 20+ 细分适配（含 CodeBuddy、Qwen、Ollama、LM Studio、llama.cpp 等）</td>
+<td><code>docs/how-to/install-on-your-runtime.md</code>、<code>capabilities/</code> 目录</td>
+</tr>
+<tr>
+<td>测试工程化程度</td>
+<td>引入 Stryker 变异测试（<code>stryker.config.mjs</code>）+ 大量 “doc parity” &#x2F; “inventory sync” 类漂移防护测试（如 <code>tests/inventory-manifest-sync.test.cjs</code>）</td>
+<td><code>stryker.config.mjs</code>、<code>tests/</code> 目录、<code>docs/INVENTORY.md</code></td>
+</tr>
+<tr>
+<td>多语言 README</td>
+<td>提供简体中文、日本語、한국어、Português 四个语言版本</td>
+<td><code>README.zh-CN.md</code> 等</td>
+</tr>
+</tbody></table>
+<h3 id="1-12-本部分小结与下文预告"><a href="#1-12-本部分小结与下文预告" class="headerlink" title="1.12 本部分小结与下文预告"></a>1.12 本部分小结与下文预告</h3><p>第一部分回答了”GSD 是什么、为什么存在、和谁是什么关系”这三个最基础也最容易被误解的问题，其中最重要的两个结论是：</p>
+<ol>
+<li><strong>GSD Core 是寄生于宿主 Agent Runtime 之上的纪律层，不是与 Claude Code&#x2F;Codex&#x2F;Cursor 平级的竞争产品</strong>——它靠三位一体（新鲜上下文子代理 + 规范驱动制品 + 元提示）解决”上下文腐化、无跨会话记忆、无人验证”这三个规模化失效模式；</li>
+<li><strong>“open-gsd” 这个名字下并存着代码库、版本号、产品形态都不同的多个项目</strong>（GSD Core &#x2F; GSD Pi &#x2F; 历史版本 GSD 2 &#x2F; 社区分支 &#x2F; 第三方学习层插件），本文后续 19 个部分将全部聚焦于 <strong>GSD Core</strong> 这一个代码库，任何看起来像是”GSD 特性”但实际来自 GSD Pi 或第三方项目的描述都会被明确标注区分。</li>
+</ol>
+<p>下一篇《Open-GSD 源码解析（二）：仓库结构与十一层架构》将从第二部分 Repository 全面解析开始，逐目录展开——<code>.claude-plugin/</code>、<code>agents/</code>、<code>capabilities/</code>（含其 40+ 子目录的角色地图）、<code>commands/gsd/</code>、<code>docs/</code>（四象限文档体系）、<code>gsd-core/</code>（<code>bin/</code> <code>workflows/</code> <code>references/</code> <code>templates/</code>）、<code>hooks/</code>、<code>pi/</code>、<code>scripts/</code>、<code>skills/</code>、<code>src/</code>、<code>tests/</code> 等每一个顶层目录的用途、生命周期、依赖关系、入口位置、主要对象与典型调用，并配一张全目录依赖图。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/08/05/engineering-practice/Open-GSD-02-%E4%BB%93%E5%BA%93%E4%B8%8E%E6%9E%B6%E6%9E%84/">Open-GSD 源码解析（二）：仓库结构与十一层架构</a></h3>
+        <p>Open-GSD 源码解析系列第二篇：逐目录解析 gsd-core 仓库的顶层入口与七个功能簇，梳理声明式、命令式、协议化三条分发路径…</p>
+        <a class="btn primary" href="/2026/08/05/engineering-practice/Open-GSD-02-%E4%BB%93%E5%BA%93%E4%B8%8E%E6%9E%B6%E6%9E%84/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/06/25/engineering-practice/GSD%E4%B8%8EBMAD%E6%B7%B1%E5%BA%A6%E5%AF%B9%E6%AF%94/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：GSD 与 BMAD 深度对比</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 2 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%AC%AC%E3%80%87%E9%83%A8%E5%88%86-%C2%B7-%E7%A0%94%E7%A9%B6%E6%96%B9%E6%B3%95%E4%B8%8E%E4%BF%A1%E6%81%AF%E6%9D%A5%E6%BA%90%E8%AF%B4%E6%98%8E" data-toc-target="第〇部分-·-研究方法与信息来源说明"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">第〇部分 · 研究方法与信息来源说明</span></a><a class="toc-level-3" href="#0-1-%E7%A0%94%E7%A9%B6%E5%AF%B9%E8%B1%A1%E7%95%8C%E5%AE%9A" data-toc-target="0-1-研究对象界定"><span class="toc-text">0.1 研究对象界定</span></a><a class="toc-level-3" href="#0-2-%E7%89%88%E6%9C%AC%E8%B0%B1%E7%B3%BB%E4%B8%8E%E7%94%9F%E6%80%81%E5%AE%9A%E4%BD%8D%EF%BC%88%E5%85%B3%E9%94%AE%E6%BE%84%E6%B8%85%EF%BC%89" data-toc-target="0-2-版本谱系与生态定位（关键澄清）"><span class="toc-text">0.2 版本谱系与生态定位（关键澄清）</span></a><a class="toc-level-3" href="#0-3-%E7%A0%94%E7%A9%B6%E6%96%B9%E6%B3%95%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE" data-toc-target="0-3-研究方法与工具链"><span class="toc-text">0.3 研究方法与工具链</span></a><a class="toc-level-3" href="#0-4-%E5%BC%95%E7%94%A8%E8%A7%84%E8%8C%83" data-toc-target="0-4-引用规范"><span class="toc-text">0.4 引用规范</span></a><a class="toc-level-3" href="#0-5-%E5%B1%80%E9%99%90%E6%80%A7%E4%B8%8E%E5%85%8D%E8%B4%A3%E5%A3%B0%E6%98%8E" data-toc-target="0-5-局限性与免责声明"><span class="toc-text">0.5 局限性与免责声明</span></a><a class="toc-level-2" href="#%E7%AC%AC%E4%B8%80%E9%83%A8%E5%88%86-%C2%B7-Open-GSD%EF%BC%88GSD-Core%EF%BC%89%E5%85%A8%E6%99%AF%E4%BB%8B%E7%BB%8D" data-toc-target="第一部分-·-Open-GSD（GSD-Core）全景介绍"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">第一部分 · Open-GSD（GSD Core）全景介绍</span></a><a class="toc-level-3" href="#1-1-%E4%B8%80%E5%8F%A5%E8%AF%9D%E5%AE%9A%E4%B9%89" data-toc-target="1-1-一句话定义"><span class="toc-text">1.1 一句话定义</span></a><a class="toc-level-3" href="#1-2-%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E6%9C%89-GSD-%E2%80%94%E2%80%94-%E8%B5%B7%E6%BA%90%E4%B8%8E%E9%97%AE%E9%A2%98%E7%A9%BA%E9%97%B4" data-toc-target="1-2-为什么会有-GSD-——-起源与问题空间"><span class="toc-text">1.2 为什么会有 GSD —— 起源与问题空间</span></a><a class="toc-level-3" href="#1-3-Context-Rot%EF%BC%9AAI-%E7%BC%96%E7%A8%8B%E5%8A%A9%E6%89%8B%E7%9A%84%E9%9A%90%E5%BD%A2%E6%9D%80%E6%89%8B" data-toc-target="1-3-Context-Rot：AI-编程助手的隐形杀手"><span class="toc-text">1.3 Context Rot：AI 编程助手的隐形杀手</span></a><a class="toc-level-3" href="#1-4-GSD-%E7%9A%84%E8%A7%A3%E6%B3%95%EF%BC%9A%E4%B8%89%E4%BD%8D%E4%B8%80%E4%BD%93" data-toc-target="1-4-GSD-的解法：三位一体"><span class="toc-text">1.4 GSD 的解法：三位一体</span></a><a class="toc-level-3" href="#1-5-Framework-Positioning%EF%BC%9AGSD-Core-%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%8C%E4%B8%8D%E6%98%AF%E4%BB%80%E4%B9%88" data-toc-target="1-5-Framework-Positioning：GSD-Core-是什么，不是什么"><span class="toc-text">1.5 Framework Positioning：GSD Core 是什么，不是什么</span></a><a class="toc-level-3" href="#1-6-%E4%BA%94%E9%98%B6%E6%AE%B5%E5%BE%AA%E7%8E%AF%E6%80%BB%E8%A7%88%EF%BC%88%E8%AF%A6%E8%A7%A3%E8%A7%81%E6%9C%AC%E7%B3%BB%E5%88%97%E7%AC%AC%E4%B8%89%E7%AF%87%E7%AC%AC%E4%BA%94%E9%83%A8%E5%88%86%EF%BC%89" data-toc-target="1-6-五阶段循环总览（详解见本系列第三篇第五部分）"><span class="toc-text">1.6 五阶段循环总览（详解见本系列第三篇第五部分）</span></a><a class="toc-level-3" href="#1-7-Skill-Runtime-%E4%B8%8E-Prompt-Runtime-%E9%80%9F%E8%A7%88%EF%BC%88%E8%AF%A6%E8%A7%A3%E8%A7%81%E6%9C%AC%E7%B3%BB%E5%88%97%E7%AC%AC%E5%9B%9B%E7%AF%87%E7%AC%AC%E5%85%AD-%E5%8D%81%E9%83%A8%E5%88%86%EF%BC%89" data-toc-target="1-7-Skill-Runtime-与-Prompt-Runtime-速览（详解见本系列第四篇第六-十部分）"><span class="toc-text">1.7 Skill Runtime 与 Prompt Runtime 速览（详解见本系列第四篇第六~十部分）</span></a><a class="toc-level-3" href="#1-8-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84%E5%9B%BE" data-toc-target="1-8-整体架构图"><span class="toc-text">1.8 整体架构图</span></a><a class="toc-level-3" href="#1-9-%E9%A1%B9%E7%9B%AE%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E5%9B%BE%EF%BC%88Milestone-%E2%86%92-Phase-%E2%86%92-%E4%BA%94%E9%98%B6%E6%AE%B5%E5%BE%AA%E7%8E%AF%EF%BC%89" data-toc-target="1-9-项目生命周期图（Milestone-→-Phase-→-五阶段循环）"><span class="toc-text">1.9 项目生命周期图（Milestone → Phase → 五阶段循环）</span></a><a class="toc-level-3" href="#1-10-Context-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E4%B8%8E%E5%85%B3%E9%94%AE%E6%97%B6%E5%BA%8F%E5%9B%BE" data-toc-target="1-10-Context-生命周期与关键时序图"><span class="toc-text">1.10 Context 生命周期与关键时序图</span></a><a class="toc-level-3" href="#1-11-%E5%85%B3%E9%94%AE%E9%87%8F%E5%8C%96%E4%BA%8B%E5%AE%9E%E9%80%9F%E8%A7%88%EF%BC%88%E7%A0%94%E7%A9%B6%E5%BF%AB%E7%85%A7%EF%BC%8C%E9%9D%9E%E5%9B%BA%E5%AE%9A%E5%80%BC%EF%BC%89" data-toc-target="1-11-关键量化事实速览（研究快照，非固定值）"><span class="toc-text">1.11 关键量化事实速览（研究快照，非固定值）</span></a><a class="toc-level-3" href="#1-12-%E6%9C%AC%E9%83%A8%E5%88%86%E5%B0%8F%E7%BB%93%E4%B8%8E%E4%B8%8B%E6%96%87%E9%A2%84%E5%91%8A" data-toc-target="1-12-本部分小结与下文预告"><span class="toc-text">1.12 本部分小结与下文预告</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/spec-driven-development/" style="--rail: 30%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">3 / 10</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%AC%AC%E3%80%87%E9%83%A8%E5%88%86-%C2%B7-%E7%A0%94%E7%A9%B6%E6%96%B9%E6%B3%95%E4%B8%8E%E4%BF%A1%E6%81%AF%E6%9D%A5%E6%BA%90%E8%AF%B4%E6%98%8E" data-toc-target="第〇部分-·-研究方法与信息来源说明" data-title="01 · 第〇部分 · 研究方法与信息来源说明" aria-label="第〇部分 · 研究方法与信息来源说明"></a><a class="toc-strip__dot" href="#%E7%AC%AC%E4%B8%80%E9%83%A8%E5%88%86-%C2%B7-Open-GSD%EF%BC%88GSD-Core%EF%BC%89%E5%85%A8%E6%99%AF%E4%BB%8B%E7%BB%8D" data-toc-target="第一部分-·-Open-GSD（GSD-Core）全景介绍" data-title="02 · 第一部分 · Open-GSD（GSD Core）全景介绍" aria-label="第一部分 · Open-GSD（GSD Core）全景介绍"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/Open-GSD-01-研究方法与全景","title":"Open-GSD 源码解析（一）：研究方法与框架全景","url":"/2026/08/03/engineering-practice/Open-GSD-01-%E7%A0%94%E7%A9%B6%E6%96%B9%E6%B3%95%E4%B8%8E%E5%85%A8%E6%99%AF/","path":"spec-driven-development","index":2,"total":10,"next":{"title":"Open-GSD 源码解析（二）：仓库结构与十一层架构","url":"/2026/08/05/engineering-practice/Open-GSD-02-%E4%BB%93%E5%BA%93%E4%B8%8E%E6%9E%B6%E6%9E%84/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

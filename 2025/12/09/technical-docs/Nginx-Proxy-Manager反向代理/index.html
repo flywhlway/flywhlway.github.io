@@ -1,0 +1,839 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>家用服务器入口层：内网穿透 + Nginx Proxy Manager + 证书自动化 · 飞轮之道</title>
+<meta name="description" content="没有公网 IP 的家用服务器如何搭入口层：cpolar 隧道 + NPM 路由 + 通配证书签发与同步，附逐跳排障法、MinIO 反代要点与网络隔离。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/12/09/technical-docs/Nginx-Proxy-Manager%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="家用服务器入口层：内网穿透 + Nginx Proxy Manager + 证书自动化 · 飞轮之道">
+<meta property="og:description" content="没有公网 IP 的家用服务器如何搭入口层：cpolar 隧道 + NPM 路由 + 通配证书签发与同步，附逐跳排障法、MinIO 反代要点与网络隔离。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/12/09/technical-docs/Nginx-Proxy-Manager%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/self-hosted-ai-infra/">入口与容器</a><a class="series-chip" href="/paths/self-hosted-ai-infra/" title="查看学习路径">第 1 / 8 篇</a>
+    </div>
+    <h1>家用服务器入口层：内网穿透 + Nginx Proxy Manager + 证书自动化</h1>
+    <p class="article-deck">没有公网 IP 的家用服务器如何搭入口层：cpolar 隧道 + NPM 路由 + 通配证书签发与同步，附逐跳排障法、MinIO 反代要点与网络隔离。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>18 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/Nginx-Proxy-Manager/">#Nginx Proxy Manager</a><a class="article-meta__tag" href="/tags/MinIO/">#MinIO</a><a class="article-meta__tag" href="/tags/%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86/">#反向代理</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>先想清楚 TLS 在哪一跳终止、证书归谁签发，再决定要不要同步证书。</li><li>Let&#39;s Encrypt 的 live/ 目录全是相对软链，docker cp 默认只拷链接本身。</li><li>排障按 DNS → 隧道边缘 → 隧道客户端 → NPM → 上游逐跳打点，每一跳只回答通或不通。</li><li>上游容器一律不发布端口，只让 NPM 对外；管理端口只绑本机。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <p>家里的服务器没有公网 IP，又想用自己的域名、HTTPS 访问 NAS、对象存储和几个自建应用，最常见的组合是：内网穿透负责把流量带进来，Nginx Proxy Manager（下文简称 NPM）负责按域名分发，证书自动签发、自动续期。</p>
+<p>这套组合搭起来不难，难在出问题时分不清是哪一层坏了。本文按实际落地顺序整理：拓扑与 TLS 终止点、证书签发与同步（给出最终版脚本和 systemd timer）、一次真实踩到的 <code>docker cp</code> 软链陷阱、逐跳排障法、WebSocket &#x2F; 大文件 &#x2F; MinIO Console 的反代要点，最后是安全头与网络隔离。</p>
+<p>写作时 NPM 的最新版本是 v2.13.0（2025-11-04 发布，此前 v2.12 系列之后停滞了较长时间）；隧道以 cpolar 为例，其它支持「自定义域名 + 自定义证书」的隧道服务思路相同。</p>
+<h2 id="拓扑：先确定-TLS-在哪一跳终止"><a href="#拓扑：先确定-TLS-在哪一跳终止" class="headerlink" title="拓扑：先确定 TLS 在哪一跳终止"></a>拓扑：先确定 TLS 在哪一跳终止</h2><pre class="mermaid">flowchart LR
+    U[外网浏览器] --&gt;|DNS: CNAME 到隧道服务| E[隧道边缘节点&lt;br/&gt;TLS 终止&lt;br/&gt;使用自定义证书]
+    E --&gt;|隧道| C[宿主机 cpolar 客户端]
+    C --&gt;|HTTP| N[NPM :80]
+    L[内网浏览器] --&gt;|内网 DNS 指向 10.0.0.10| N2[NPM :443&lt;br/&gt;同一张通配证书]
+    N --&gt; A[应用容器]
+    N2 --&gt; A
+    N --&gt; M1[MinIO Console :9001]
+    N --&gt; M2[MinIO API :9000]</pre>
+
+
+<p>几个关键决定：</p>
+<table>
+<thead>
+<tr>
+<th>决定</th>
+<th>本文选择</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>隧道协议</td>
+<td>HTTP 隧道 + 自定义域名 + 自定义证书</td>
+<td>浏览器访问标准 443 端口；TCP 隧道通常分配的是高位端口，不适合给人用的域名</td>
+</tr>
+<tr>
+<td>外网 TLS 终止点</td>
+<td>隧道边缘节点</td>
+<td>边缘节点必须持有 <code>*.example.com</code> 的证书和私钥，这就是需要「证书同步」的原因</td>
+</tr>
+<tr>
+<td>证书签发方</td>
+<td>NPM（DNS-01 签通配证书）</td>
+<td>NPM 本来就要给内网 443 用同一张证书，只维护一份续期逻辑</td>
+</tr>
+<tr>
+<td>隧道回源端口</td>
+<td>NPM 的 80</td>
+<td>边缘已解密，回源走 HTTP；回源到 443 会得到 400</td>
+</tr>
+<tr>
+<td>是否加一层原生 Nginx</td>
+<td>不加</td>
+<td>每多一跳，排障就多一跳；只有需要 NPM 界面表达不了的复杂路由时才加</td>
+</tr>
+</tbody></table>
+<p>隧道配置只需要固定两个证书路径，之后续期只替换文件，不再改配置。cpolar 以 systemd 服务运行时默认读取 <code>/usr/local/etc/cpolar/cpolar.yml</code>：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">tunnels:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">wildcard-web:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">proto:</span> <span class="string">http</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">addr:</span> <span class="number">80</span>                      <span class="comment"># 回源到 NPM 的 HTTP 端口</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">hostname:</span> <span class="string">&quot;*.example.com&quot;</span>     <span class="comment"># 需要套餐支持自定义（泛）域名</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">bind_tls:</span> <span class="literal">true</span>                <span class="comment"># 只提供 HTTPS</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">crt:</span> <span class="string">/usr/local/etc/cpolar/certs/fullchain.pem</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attr">key:</span> <span class="string">/usr/local/etc/cpolar/certs/privkey.pem</span></span></span></code></pre></div></div></figure>
+
+<p>这个拓扑带来一个容易忽略的推论：<strong>经隧道进来的请求到达 NPM 时 <code>$scheme</code> 是 <code>http</code></strong>。如果在 NPM 的 Proxy Host 上勾选 Force SSL，NPM 会返回 301 跳到 https，浏览器再经边缘回来，仍是 http，于是 <code>ERR_TOO_MANY_REDIRECTS</code>。HTTP→HTTPS 跳转交给隧道侧（<code>bind_tls: true</code> 只开 HTTPS），NPM 上对这些域名不要开 Force SSL。只从内网访问的 Proxy Host 不受影响。</p>
+<p>NPM 自身的部署保持最小化，管理端口只绑本机：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="22"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># /opt/edge/npm/compose.yaml</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">services:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">npm:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">jc21/nginx-proxy-manager:latest</span>   <span class="comment"># 生产环境固定到具体版本标签</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">container_name:</span> <span class="string">npm</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">restart:</span> <span class="string">unless-stopped</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">ports:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;80:80&quot;</span>            <span class="comment"># 若只经隧道访问，可改为 127.0.0.1:80:80</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;443:443&quot;</span>          <span class="comment"># 内网直连用</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;127.0.0.1:81:81&quot;</span>  <span class="comment"># 管理后台，经 SSH 端口转发访问</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="attr">volumes:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">./data:/data</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">./letsencrypt:/etc/letsencrypt</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="attr">networks:</span> [<span class="string">edge</span>]</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="attr">healthcheck:</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="attr">test:</span> [<span class="string">&quot;CMD&quot;</span>, <span class="string">&quot;/usr/bin/check-health&quot;</span>]</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="attr">interval:</span> <span class="string">30s</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="attr">timeout:</span> <span class="string">5s</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="attr">networks:</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">  <span class="attr">edge:</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">    <span class="attr">name:</span> <span class="string">edge</span></span></span></code></pre></div></div></figure>
+
+<p>首次进入后台（<code>ssh -L 8181:127.0.0.1:81 user@10.0.0.10</code> 后访问 <code>http://127.0.0.1:8181</code>）立即设置管理员邮箱和强密码，旧版本存在公开的默认凭据，不要留着。</p>
+<h2 id="证书：签发、续期与同步"><a href="#证书：签发、续期与同步" class="headerlink" title="证书：签发、续期与同步"></a>证书：签发、续期与同步</h2><h3 id="两种签发方式怎么选"><a href="#两种签发方式怎么选" class="headerlink" title="两种签发方式怎么选"></a>两种签发方式怎么选</h3><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>推荐</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>入口是 NPM，需要通配证书</td>
+<td>NPM 内置 Let’s Encrypt，选 DNS Challenge</td>
+<td>通配证书只能用 DNS-01；在 NPM 里选 DNS 服务商并填 API 凭据，续期由 NPM 负责</td>
+</tr>
+<tr>
+<td>入口是云主机上的原生 Nginx（没有 NPM）</td>
+<td>acme.sh</td>
+<td>单域名可用 webroot（HTTP-01），通配证书用 DNS API</td>
+</tr>
+<tr>
+<td>同一台机器已有 NPM 占用 80 端口</td>
+<td>不要再跑 acme.sh standalone</td>
+<td>端口冲突；要么交给 NPM，要么 acme.sh 走 DNS-01</td>
+</tr>
+</tbody></table>
+<p>两种工具不要在同一域名上混用：各自维护续期状态，谁最后写入证书文件谁生效，出问题时很难判断当前证书来自哪边。</p>
+<p>还有一个背景变化：Let’s Encrypt 已于 2025 年 6 月停止发送证书到期提醒邮件。续期失败不会再有人通知你，下文的同步脚本顺带承担到期检查。</p>
+<h3 id="原生-Nginx-场景：acme-sh-的最终用法"><a href="#原生-Nginx-场景：acme-sh-的最终用法" class="headerlink" title="原生 Nginx 场景：acme.sh 的最终用法"></a>原生 Nginx 场景：acme.sh 的最终用法</h3><p>acme.sh 自 3.0 起默认 CA 是 ZeroSSL，如果想用 Let’s Encrypt 需要显式切换。以阿里云 DNS 签通配证书为例：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="13"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl https://get.acme.sh | sh -s email=ops@example.com</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">~/.acme.sh/acme.sh --set-default-ca --server letsencrypt</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># DNS-01：凭据会保存到 ~/.acme.sh/account.conf，续期时复用</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="built_in">export</span> Ali_Key=<span class="string">&quot;*_ChangeMe_*&quot;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="built_in">export</span> Ali_Secret=<span class="string">&quot;*_ChangeMe_*&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">~/.acme.sh/acme.sh --issue --dns dns_ali -d example.com -d <span class="string">&#x27;*.example.com&#x27;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="comment"># 签发成功后再安装：复制到 Nginx 使用的固定路径，并注册续期后的重载命令</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">~/.acme.sh/acme.sh --install-cert -d example.com \</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  --key-file       /etc/nginx/ssl/example.com.key \</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  --fullchain-file /etc/nginx/ssl/example.com.fullchain.pem \</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  --reloadcmd      <span class="string">&quot;systemctl reload nginx&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>必须遵守的顺序与边界：</p>
+<ul>
+<li><strong><code>--issue</code> 成功后才能 <code>--install-cert</code></strong>。签发失败时执行安装，会得到 0 字节的证书文件，下一次 <code>nginx -s reload</code> 直接失败，已有站点跟着挂。</li>
+<li>Nginx 只引用 <code>--install-cert</code> 复制出来的文件，不要直接引用 <code>~/.acme.sh/</code> 目录下的文件，那里的结构随版本可能变化。</li>
+<li>用 webroot（<code>-w</code>）时，<code>-w</code> 必须是该域名 80 端口 server 块实际提供 <code>/.well-known/acme-challenge/</code> 的目录。多个站点 root 不同却共用一个 <code>-w</code>，是 webroot 失败的头号原因。更稳的做法是所有 80 端口 server 块统一加：</li>
+</ul>
+<figure class="highlight nginx cb" data-lang="nginx" data-label="Nginx" data-ext="conf" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="section">location</span><span class="regexp"> ^~</span> /.well-known/acme-challenge/ &#123;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">    <span class="attribute">root</span> /var/www/acme;   <span class="comment"># acme.sh 使用 -w /var/www/acme</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attribute">default_type</span> <span class="string">&quot;text/plain&quot;</span>;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<ul>
+<li>签发报 404 时，先看报错里 CA 实际访问的 URL。一次真实案例：申请的是 <code>oss.example.com</code>，报错 URL 却是 <code>https://example.com/.well-known/...</code>。Let’s Encrypt 的 HTTP-01 会跟随重定向，说明该子域名的 80 端口被一条写死主域名的 <code>return 301</code> 带走了，落到主域名站点，那里没有 challenge 文件。修的是重定向规则，不是证书命令。</li>
+<li>手动验证 challenge 路径：<code>echo ok &gt; /var/www/acme/.well-known/acme-challenge/probe</code>，再从外网 <code>curl -i http://oss.example.com/.well-known/acme-challenge/probe</code>，拿到 <code>ok</code> 再签。</li>
+</ul>
+<h3 id="家用场景：把-NPM-的证书同步给隧道"><a href="#家用场景：把-NPM-的证书同步给隧道" class="headerlink" title="家用场景：把 NPM 的证书同步给隧道"></a>家用场景：把 NPM 的证书同步给隧道</h3><p>NPM 续期是自动的，但它只更新自己容器里的文件；隧道边缘用的是 <code>crt</code>&#x2F;<code>key</code> 指向的那两个文件，不会跟着变。需要一个定时任务：从 NPM 导出证书，校验无误且有变化时才替换，并重启隧道客户端。</p>
+<p>先确认证书编号。NPM 的证书按 <code>npm-&lt;ID&gt;</code> 存放：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">docker <span class="built_in">exec</span> npm <span class="built_in">ls</span> /etc/letsencrypt/live/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">docker <span class="built_in">exec</span> npm <span class="built_in">cat</span> /etc/letsencrypt/live/npm-1/fullchain.pem \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  | openssl x509 -noout -ext subjectAltName     <span class="comment"># -ext 需要 OpenSSL 1.1.1+</span></span></span></code></pre></div></div></figure>
+
+<p>最终版脚本（以 root 运行，理由见后文）：</p>
+<figure class="highlight bash cb cb--long" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="52"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">#!/usr/bin/env bash</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># /usr/local/sbin/npm-cert-sync.sh</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># 从 NPM 导出通配证书，校验后同步给 cpolar；证书有变化才重启隧道</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">set</span> -euo pipefail</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">NPM_CONTAINER=<span class="string">&quot;<span class="variable">$&#123;NPM_CONTAINER:-npm&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">CERT_ID=<span class="string">&quot;<span class="variable">$&#123;CERT_ID:-npm-1&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">EXPECT_SAN=<span class="string">&quot;<span class="variable">$&#123;EXPECT_SAN:-*.example.com&#125;</span>&quot;</span>          <span class="comment"># 防止 CERT_ID 指错证书</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">DST_DIR=<span class="string">&quot;<span class="variable">$&#123;DST_DIR:-/usr/local/etc/cpolar/certs&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">TUNNEL_UNIT=<span class="string">&quot;<span class="variable">$&#123;TUNNEL_UNIT:-cpolar.service&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">WARN_DAYS=<span class="string">&quot;<span class="variable">$&#123;WARN_DAYS:-14&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="function"><span class="title">log</span></span>() &#123; <span class="built_in">echo</span> <span class="string">&quot;[cert-sync] $*&quot;</span>; &#125;                   <span class="comment"># stdout 由 systemd 收进 journal</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">SRC=<span class="string">&quot;/etc/letsencrypt/live/<span class="variable">$&#123;CERT_ID&#125;</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">TMP=<span class="string">&quot;<span class="subst">$(mktemp -d)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="built_in">trap</span> <span class="string">&#x27;rm -rf &quot;$TMP&quot;&#x27;</span> EXIT</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">rc=0</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx"><span class="comment"># 1. 导出：live/ 下是指向 ../../archive/ 的相对软链，在容器内 cat 即可解引用</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="comment">#    注意不要加 -t：分配 TTY 会把换行转成 CRLF，写出的 PEM 会损坏</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">docker <span class="built_in">exec</span> <span class="string">&quot;<span class="variable">$NPM_CONTAINER</span>&quot;</span> <span class="built_in">cat</span> <span class="string">&quot;<span class="variable">$SRC</span>/fullchain.pem&quot;</span> &gt; <span class="string">&quot;<span class="variable">$TMP</span>/fullchain.pem&quot;</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">docker <span class="built_in">exec</span> <span class="string">&quot;<span class="variable">$NPM_CONTAINER</span>&quot;</span> <span class="built_in">cat</span> <span class="string">&quot;<span class="variable">$SRC</span>/privkey.pem&quot;</span>   &gt; <span class="string">&quot;<span class="variable">$TMP</span>/privkey.pem&quot;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="comment"># 2. 校验：非空、可解析、私钥与证书配对、SAN 正确</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="built_in">test</span> -s <span class="string">&quot;<span class="variable">$TMP</span>/fullchain.pem&quot;</span> &amp;&amp; <span class="built_in">test</span> -s <span class="string">&quot;<span class="variable">$TMP</span>/privkey.pem&quot;</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">cert_pub=<span class="string">&quot;<span class="subst">$(openssl x509 -in <span class="string">&quot;<span class="variable">$TMP</span>/fullchain.pem&quot;</span> -noout -pubkey)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">key_pub=<span class="string">&quot;<span class="subst">$(openssl pkey -in <span class="string">&quot;<span class="variable">$TMP</span>/privkey.pem&quot;</span> -pubout)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">[[ <span class="string">&quot;<span class="variable">$cert_pub</span>&quot;</span> == <span class="string">&quot;<span class="variable">$key_pub</span>&quot;</span> ]] || &#123; <span class="built_in">log</span> <span class="string">&quot;私钥与证书不匹配，放弃同步&quot;</span>; <span class="built_in">exit</span> 1; &#125;</span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">openssl x509 -<span class="keyword">in</span> <span class="string">&quot;<span class="variable">$TMP</span>/fullchain.pem&quot;</span> -noout -ext subjectAltName \</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">  | grep -qF <span class="string">&quot;DNS:<span class="variable">$&#123;EXPECT_SAN&#125;</span>&quot;</span> || &#123; <span class="built_in">log</span> <span class="string">&quot;SAN 不含 <span class="variable">$&#123;EXPECT_SAN&#125;</span>，检查 CERT_ID&quot;</span>; <span class="built_in">exit</span> 1; &#125;</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"><span class="comment"># 3. 到期检查：源证书临近到期说明 NPM 续期失败，以非零退出让 unit 标红</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx"><span class="keyword">if</span> ! openssl x509 -<span class="keyword">in</span> <span class="string">&quot;<span class="variable">$TMP</span>/fullchain.pem&quot;</span> -noout -checkend $((WARN_DAYS * <span class="number">86400</span>)) &gt;/dev/null; <span class="keyword">then</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">  <span class="built_in">log</span> <span class="string">&quot;警告：NPM 中的证书将在 <span class="variable">$&#123;WARN_DAYS&#125;</span> 天内到期，检查 NPM 续期日志&quot;</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">  rc=2</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"><span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"><span class="comment"># 4. 无变化直接退出；有变化先写临时文件再 mv，避免隧道读到半个文件</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">install -d -m 0700 <span class="string">&quot;<span class="variable">$DST_DIR</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx"><span class="keyword">if</span> cmp -s <span class="string">&quot;<span class="variable">$TMP</span>/fullchain.pem&quot;</span> <span class="string">&quot;<span class="variable">$DST_DIR</span>/fullchain.pem&quot;</span> \</span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">   &amp;&amp; cmp -s <span class="string">&quot;<span class="variable">$TMP</span>/privkey.pem&quot;</span> <span class="string">&quot;<span class="variable">$DST_DIR</span>/privkey.pem&quot;</span>; <span class="keyword">then</span></span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">  <span class="built_in">log</span> <span class="string">&quot;证书未变化&quot;</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">  <span class="built_in">exit</span> <span class="string">&quot;<span class="variable">$rc</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx"><span class="keyword">fi</span></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">install -m 0644 <span class="string">&quot;<span class="variable">$TMP</span>/fullchain.pem&quot;</span> <span class="string">&quot;<span class="variable">$DST_DIR</span>/.fullchain.pem.new&quot;</span></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">install -m 0600 <span class="string">&quot;<span class="variable">$TMP</span>/privkey.pem&quot;</span>   <span class="string">&quot;<span class="variable">$DST_DIR</span>/.privkey.pem.new&quot;</span></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx"><span class="built_in">mv</span> -f <span class="string">&quot;<span class="variable">$DST_DIR</span>/.fullchain.pem.new&quot;</span> <span class="string">&quot;<span class="variable">$DST_DIR</span>/fullchain.pem&quot;</span></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx"><span class="built_in">mv</span> -f <span class="string">&quot;<span class="variable">$DST_DIR</span>/.privkey.pem.new&quot;</span>   <span class="string">&quot;<span class="variable">$DST_DIR</span>/privkey.pem&quot;</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">systemctl restart <span class="string">&quot;<span class="variable">$TUNNEL_UNIT</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx"><span class="built_in">log</span> <span class="string">&quot;已更新并重启 <span class="variable">$&#123;TUNNEL_UNIT&#125;</span>：<span class="subst">$(openssl x509 -in <span class="string">&quot;<span class="variable">$DST_DIR</span>/fullchain.pem&quot;</span> -noout -enddate)</span>&quot;</span></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx"><span class="built_in">exit</span> <span class="string">&quot;<span class="variable">$rc</span>&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>配套的 systemd service 与 timer：</p>
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># /etc/systemd/system/npm-cert-sync.service</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="section">[Unit]</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">Description</span>=Sync NPM certificate to cpolar</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">Requires</span>=docker.service</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">After</span>=docker.service</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="section">[Service]</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">Type</span>=<span class="literal">on</span>eshot</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">Environment</span>=CERT_ID=npm-<span class="number">1</span> EXPECT_SAN=*.example.com</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">ExecStart</span>=/usr/local/sbin/npm-cert-sync.sh</span></span></code></pre></div></div></figure>
+
+<figure class="highlight ini cb" data-lang="ini" data-label="INI" data-ext="ini" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># /etc/systemd/system/npm-cert-sync.timer</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="section">[Unit]</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">Description</span>=Daily NPM certificate sync</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="section">[Timer]</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">OnCalendar</span>=*-*-* <span class="number">03</span>:<span class="number">20</span>:<span class="number">00</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">RandomizedDelaySec</span>=<span class="number">10</span>min</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="attr">Persistent</span>=<span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="section">[Install]</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">WantedBy</span>=timers.target</span></span></code></pre></div></div></figure>
+
+<p>启用并做一次闭环验证：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">sudo</span> install -m 0750 npm-cert-sync.sh /usr/local/sbin/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">sudo</span> systemctl daemon-reload</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">sudo</span> systemctl <span class="built_in">enable</span> --now npm-cert-sync.timer</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">sudo</span> systemctl start npm-cert-sync.service          <span class="comment"># 立即跑一次</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">journalctl -u npm-cert-sync.service -n 20 --no-pager</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">systemctl list-timers npm-cert-sync.timer</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="comment"># 最权威的验证：从外网看边缘节点实际下发的证书</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="built_in">echo</span> | openssl s_client -connect app.example.com:443 -servername app.example.com 2&gt;/dev/null \</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  | openssl x509 -noout -issuer -enddate -ext subjectAltName</span></span></code></pre></div></div></figure>
+
+<p>每天跑一次足够：NPM 在到期前约 30 天就会续期，同步窗口远大于一天。<code>Persistent=true</code> 保证关机错过的那次在开机后补跑。</p>
+<h3 id="为什么用-root-级-systemd，而不是用户级"><a href="#为什么用-root-级-systemd，而不是用户级" class="headerlink" title="为什么用 root 级 systemd，而不是用户级"></a>为什么用 root 级 systemd，而不是用户级</h3><p>最初的版本用 <code>systemctl --user</code> 管理隧道和同步任务，连续踩了三个坑：</p>
+<ol>
+<li>退出 SSH 后用户级 systemd 被回收，timer 不再触发，需要 <code>loginctl enable-linger &lt;用户&gt;</code>；</li>
+<li>用户级 unit 的环境与交互 shell 不同，<code>docker</code> 命令找不到或连不上 socket，日志只有一行 <code>Start sync...</code> 就中断（<code>set -e</code> 静默退出）；</li>
+<li><code>docker</code> 组本身就等价于 root 权限，用普通用户跑并没有换来实质隔离。</li>
+</ol>
+<p>所以最终把脚本和 timer 都放到系统级，以 root 运行，日志统一进 journal。若坚持用户级，至少要开启 linger，并在 unit 里显式写 <code>Environment=PATH=...</code>，且把脚本的 stderr 也导入日志，否则失败时什么都看不到。</p>
+<h2 id="docker-cp-软链陷阱"><a href="#docker-cp-软链陷阱" class="headerlink" title="docker cp 软链陷阱"></a>docker cp 软链陷阱</h2><p>这是同步脚本第一版的真实故障，单独拿出来，因为它的报错很容易误判成权限问题。</p>
+<p><strong>症状</strong>：同步脚本用 <code>docker cp npm:/etc/letsencrypt/live/npm-1/fullchain.pem /tmp/x/</code> 导出证书，脚本在第一条 <code>docker cp</code> 处退出，报错类似：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">invalid symlink &quot;/tmp/x/fullchain.pem&quot; -&gt; &quot;../../archive/npm-1/fullchain1.pem&quot;</span></span></code></pre></div></div></figure>
+
+<p><strong>根因</strong>：Let’s Encrypt（certbot）的目录结构里，<code>live/&lt;名称&gt;/</code> 下的四个文件都是软链，指向 <code>../../archive/&lt;名称&gt;/</code> 下带序号的真实文件，每次续期序号加一、软链改指向。<code>docker cp</code> 从容器拷出时<strong>默认拷贝的是链接本身而不是目标</strong>，拷到宿主机的临时目录后，这条相对路径的软链指向一个不存在的位置，于是被判定为无效链接。</p>
+<p><strong>修复</strong>（三选一）：</p>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>命令要点</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>容器内解引用输出</td>
+<td><code>docker exec npm cat .../fullchain.pem &gt; 本地文件</code></td>
+<td>本文脚本采用；与卷的挂载方式无关</td>
+</tr>
+<tr>
+<td>让 docker cp 跟随链接</td>
+<td><code>docker cp -L npm:.../fullchain.pem 本地目录/</code></td>
+<td><code>-L</code>（<code>--follow-link</code>）拷贝链接目标</td>
+</tr>
+<tr>
+<td>宿主机直接读绑定挂载</td>
+<td><code>cat /opt/edge/npm/letsencrypt/live/npm-1/fullchain.pem</code></td>
+<td>仅当 <code>/etc/letsencrypt</code> 是绑定挂载时；相对软链在宿主机上同样能解析，但需要 root 才能读私钥</td>
+</tr>
+</tbody></table>
+<p><strong>反例</strong>：直接从 <code>archive/</code> 拷 <code>fullchain1.pem</code>。它今天能用，续期后变成 <code>fullchain2.pem</code>，脚本继续同步旧证书，而且因为「文件没变化」不会报任何错，直到证书过期。</p>
+<p><strong>验证</strong>：<code>file /usr/local/etc/cpolar/certs/fullchain.pem</code> 应显示 PEM 证书而不是 symbolic link；再用上一节的 <code>openssl s_client</code> 看边缘证书的到期时间。</p>
+<h2 id="逐跳排障法：DNS-→-隧道-→-NPM-→-上游"><a href="#逐跳排障法：DNS-→-隧道-→-NPM-→-上游" class="headerlink" title="逐跳排障法：DNS → 隧道 → NPM → 上游"></a>逐跳排障法：DNS → 隧道 → NPM → 上游</h2><p>外网打不开时，最浪费时间的做法是同时改好几处配置。正确做法是沿请求路径逐跳打点，每一跳只回答「通 &#x2F; 不通」，第一个不通的地方就是要修的地方。</p>
+<pre class="mermaid">flowchart TD
+    S[外网访问失败] --&gt; Z&#123;本机是否开了代理&lt;br/&gt;或 DNS 缓存旧记录&#125;
+    Z --&gt;|是| Z1[关闭代理 / 刷新缓存后重试]
+    Z --&gt;|否| D&#123;dig 结果是否&lt;br/&gt;CNAME 到隧道服务&#125;
+    D --&gt;|否| D1[修 DNS 记录]
+    D --&gt;|是| E&#123;openssl s_client&lt;br/&gt;拿到的是自己的证书吗&#125;
+    E --&gt;|握手失败| E1[隧道离线 / 域名未绑定到隧道]
+    E --&gt;|证书不对或过期| E2[查 crt/key 路径与同步任务]
+    E --&gt;|是| C&#123;NPM access 日志&lt;br/&gt;是否出现这次请求&#125;
+    C --&gt;|没有| C1[查隧道客户端: 服务状态 / addr 是否指向 80]
+    C --&gt;|有| N&#123;NPM 返回什么&#125;
+    N --&gt;|默认欢迎页或 fallback 日志| N1[Proxy Host 域名不匹配]
+    N --&gt;|301 循环| N2[关闭该域名的 Force SSL]
+    N --&gt;|502 / 504| U[从 edge 网络内直连上游]
+    U --&gt; U1[上游未运行 / 不在同一网络 / 只监听 127.0.0.1 / 超时]</pre>
+
+
+<h3 id="第-0-跳：排除客户端自身"><a href="#第-0-跳：排除客户端自身" class="headerlink" title="第 0 跳：排除客户端自身"></a>第 0 跳：排除客户端自身</h3><p>浏览器开着系统代理时，DevTools 里请求的 Remote Address 会显示本机代理地址，很容易被误读成「请求被转发到了某个奇怪端口」。排障时先让命令行绕过代理：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl --noproxy <span class="string">&#x27;*&#x27;</span> -sv https://app.example.com -o /dev/null</span></span></code></pre></div></div></figure>
+
+<p>浏览器侧用无痕窗口排除缓存和旧的 HSTS 记录。</p>
+<h3 id="第-1-跳：DNS"><a href="#第-1-跳：DNS" class="headerlink" title="第 1 跳：DNS"></a>第 1 跳：DNS</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">dig +short CNAME app.example.com</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">dig +short app.example.com @223.5.5.5</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">dig +short app.example.com @1.1.1.1</span></span></code></pre></div></div></figure>
+
+<p>应当 CNAME 到隧道服务在控制台里给出的目标。多个公共解析器结果不一致，说明改动还在传播，别急着改别处。</p>
+<h3 id="第-2-跳：隧道边缘"><a href="#第-2-跳：隧道边缘" class="headerlink" title="第 2 跳：隧道边缘"></a>第 2 跳：隧道边缘</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">echo</span> | openssl s_client -connect app.example.com:443 -servername app.example.com 2&gt;/dev/null \</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  | openssl x509 -noout -subject -enddate</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">curl --noproxy <span class="string">&#x27;*&#x27;</span> -sI https://app.example.com</span></span></code></pre></div></div></figure>
+
+<ul>
+<li>握手失败或拿到隧道服务的默认证书：域名没有绑定到隧道，或隧道不在线；</li>
+<li>拿到的是自己的证书但已过期：同步任务没跑或 NPM 续期失败，查 <code>journalctl -u npm-cert-sync.service</code>；</li>
+<li>能拿到响应头：边缘到这里是通的，继续往里查。</li>
+</ul>
+<h3 id="第-3-跳：隧道客户端"><a href="#第-3-跳：隧道客户端" class="headerlink" title="第 3 跳：隧道客户端"></a>第 3 跳：隧道客户端</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">systemctl status cpolar --no-pager</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">journalctl -u cpolar -n 100 --no-pager</span></span></code></pre></div></div></figure>
+
+<p>常见错误是 <code>addr</code> 指向了 443：边缘已经解密，回源发的是明文 HTTP，NPM 会返回 400，内容是「The plain HTTP request was sent to HTTPS port」。</p>
+<h3 id="第-4-跳：NPM"><a href="#第-4-跳：NPM" class="headerlink" title="第 4 跳：NPM"></a>第 4 跳：NPM</h3><p>在宿主机上绕过隧道，直接带 Host 头打 NPM：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -sI -H <span class="string">&#x27;Host: app.example.com&#x27;</span> http://127.0.0.1</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">docker <span class="built_in">exec</span> npm sh -c <span class="string">&#x27;ls /data/logs/&#x27;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">docker <span class="built_in">exec</span> npm <span class="built_in">tail</span> -f /data/logs/proxy-host-1_access.<span class="built_in">log</span></span></span></code></pre></div></div></figure>
+
+<p>外网访问时日志完全没动静，问题在前三跳；有记录则看状态码：</p>
+<table>
+<thead>
+<tr>
+<th>NPM 的表现</th>
+<th>含义</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>默认欢迎页，请求记在 fallback 日志</td>
+<td>没有匹配到任何 Proxy Host</td>
+<td>核对 Domain Names 与实际 Host，泛域名要逐个子域名建 Host 或用通配 Host</td>
+</tr>
+<tr>
+<td>301 反复跳转</td>
+<td>Force SSL 与隧道 TLS 终止冲突</td>
+<td>该域名关闭 Force SSL</td>
+</tr>
+<tr>
+<td>502 Bad Gateway</td>
+<td>上游不可达</td>
+<td>进入第 5 跳</td>
+</tr>
+<tr>
+<td>504 Gateway Timeout</td>
+<td>上游可达但太慢</td>
+<td>调大超时（见下一节），或查上游自身</td>
+</tr>
+</tbody></table>
+<h3 id="第-5-跳：上游容器"><a href="#第-5-跳：上游容器" class="headerlink" title="第 5 跳：上游容器"></a>第 5 跳：上游容器</h3><p>在 NPM 所在的网络里直接访问上游，排除 NPM 配置因素：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">docker run --<span class="built_in">rm</span> --network edge curlimages/curl -sI http://minio:9001</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">docker inspect -f <span class="string">&#x27;&#123;&#123;range $k, $v := .NetworkSettings.Networks&#125;&#125;&#123;&#123;$k&#125;&#125; &#123;&#123;end&#125;&#125;&#x27;</span> minio</span></span></code></pre></div></div></figure>
+
+<ul>
+<li>解析不到容器名：上游没有加入 <code>edge</code> 网络；</li>
+<li>Connection refused：上游只监听了容器内的 <code>127.0.0.1</code>，或端口写错；</li>
+<li>能通但经 NPM 仍 502：Proxy Host 里的 Forward Hostname &#x2F; Port &#x2F; Scheme 填错（上游是 HTTP 却选了 https 最常见）。</li>
+</ul>
+<h2 id="WebSocket、大文件与-MinIO-Console"><a href="#WebSocket、大文件与-MinIO-Console" class="headerlink" title="WebSocket、大文件与 MinIO Console"></a>WebSocket、大文件与 MinIO Console</h2><h3 id="WebSocket-与长连接"><a href="#WebSocket-与长连接" class="headerlink" title="WebSocket 与长连接"></a>WebSocket 与长连接</h3><p>在 NPM 的 Proxy Host 中勾选 Websockets Support 即可透传 <code>Upgrade</code> &#x2F; <code>Connection</code> 头。容易漏的是超时：Nginx 的 <code>proxy_read_timeout</code> 默认 60 秒，没有心跳的长连接空闲超过读超时就会被切断，表现为「页面用一会儿就断线重连」。在该 Host 的 Advanced 中补：</p>
+<figure class="highlight nginx cb" data-lang="nginx" data-label="Nginx" data-ext="conf" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attribute">proxy_read_timeout</span> <span class="number">3600s</span>;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attribute">proxy_send_timeout</span> <span class="number">3600s</span>;</span></span></code></pre></div></div></figure>
+
+<h3 id="大文件上传与下载"><a href="#大文件上传与下载" class="headerlink" title="大文件上传与下载"></a>大文件上传与下载</h3><p>上传大文件失败时返回 413，是 <code>client_max_body_size</code> 不够；上传能成功但磁盘被打满或很慢，是 Nginx 先把请求体缓冲到本地再转发。针对对象存储、网盘这类 Host：</p>
+<figure class="highlight nginx cb" data-lang="nginx" data-label="Nginx" data-ext="conf" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attribute">client_max_body_size</span> <span class="number">0</span>;          <span class="comment"># 不限制，交给上游控制</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attribute">proxy_request_buffering</span> <span class="literal">off</span>;     <span class="comment"># 边收边转，不落盘</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attribute">proxy_buffering</span> <span class="literal">off</span>;             <span class="comment"># 下载同理</span></span></span></code></pre></div></div></figure>
+
+<p>边界：隧道服务自身可能有单请求大小、带宽或时长限制，这不是 NPM 能解决的；大文件搬运优先走内网直连 NPM 的 443。</p>
+<h3 id="MinIO：API-与-Console-分两个域名"><a href="#MinIO：API-与-Console-分两个域名" class="headerlink" title="MinIO：API 与 Console 分两个域名"></a>MinIO：API 与 Console 分两个域名</h3><p>MinIO 有两个端口：9000 是 S3 API，9001 是 Web Console（需以 <code>--console-address &quot;:9001&quot;</code> 启动）。反代时给它们各一个子域名，不要共用，也不要把 Console 挂在路径下，路径方式需要额外配置且更易出错：</p>
+<table>
+<thead>
+<tr>
+<th>域名</th>
+<th>上游</th>
+<th>NPM 设置</th>
+<th>Advanced 要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>s3.example.com</code></td>
+<td><code>minio:9000</code></td>
+<td>不开 Websockets</td>
+<td><code>client_max_body_size 0; proxy_request_buffering off; proxy_buffering off; ignore_invalid_headers off; chunked_transfer_encoding off;</code></td>
+</tr>
+<tr>
+<td><code>minio.example.com</code></td>
+<td><code>minio:9001</code></td>
+<td>开 Websockets</td>
+<td>同上，外加较长的 <code>proxy_read_timeout</code></td>
+</tr>
+</tbody></table>
+<p>这组指令来自 MinIO 官方的 Nginx 反代示例（官方示例在 API 与 Console 两个 server 块中都放了上传大小与缓冲相关的四条），NPM 的 Advanced 配置正好落在 server 级。两个关键的反代语义：</p>
+<ul>
+<li><strong>S3 API 必须原样保留 Host</strong>。S3 V4 签名把 Host 头算进签名，反代改写了 Host（或端口），客户端会得到 <code>SignatureDoesNotMatch</code>（403）。NPM 默认传递 <code>Host $host</code>，一般无需改动；自写 Nginx 时按官方示例用 <code>proxy_set_header Host $http_host;</code>。</li>
+<li><strong>Console 需要 WebSocket</strong>。官方示例要求透传 <code>Upgrade</code> &#x2F; <code>Connection</code>，没开 Websockets Support 时常见的表现是能登录、但页面数据加载失败或反复掉线。</li>
+</ul>
+<p>MinIO 侧有两个与外部地址相关的变量，含义经常被混淆：</p>
+<ul>
+<li><code>MINIO_BROWSER_REDIRECT_URL=https://minio.example.com</code>：Console 的对外地址。只通过反代访问 Console 时必须设置。</li>
+<li><code>MINIO_SERVER_URL</code>：Console <strong>回连 API</strong> 用的地址，登录请求就是发往这里。设置了它，就必须保证从 MinIO 容器内部能解析、能访问、证书匹配。在隧道拓扑里，公网域名从内网往往绕不回来，不需要时不要设置，Console 默认回连本机 API。</li>
+</ul>
+<h3 id="Console-登录-401：先判定是反代问题还是容器问题"><a href="#Console-登录-401：先判定是反代问题还是容器问题" class="headerlink" title="Console 登录 401：先判定是反代问题还是容器问题"></a>Console 登录 401：先判定是反代问题还是容器问题</h3><p><code>POST /api/v1/login</code> 返回 401 时，第一步不是改 Nginx，而是绕过反代直连一次：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 在内网机器上直接访问 Console 端口（临时开放或 SSH 端口转发）</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">curl -s -o /dev/null -w <span class="string">&#x27;%&#123;http_code&#125;\n&#x27;</span> -X POST http://10.0.0.10:9001/api/v1/login \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;accessKey&quot;:&quot;&lt;MINIO_ROOT_USER&gt;&quot;,&quot;secretKey&quot;:&quot;*_ChangeMe_*&quot;&#125;&#x27;</span></span></span></code></pre></div></div></figure>
+
+<ul>
+<li>直连也是 401：与反代无关，按容器侧排查：凭据是否正确，<code>MINIO_SERVER_URL</code> 回连是否可达；</li>
+<li>直连 200、经域名 401 或登录后立刻被踢回：检查 Websockets Support 是否开启，是否在 Advanced 里改写了 Host 或 Origin；</li>
+<li>请求根本没到 MinIO（NPM 日志没有记录）：回到逐跳排障的前几跳。</li>
+</ul>
+<p><strong>反例</strong>：看到 401 就不断往 Nginx 里堆 <code>X-Forwarded-*</code>、<code>Origin</code> 头。多余的头不会修好凭据问题，改写 Origin 反而可能引入新的跨域校验失败。</p>
+<h2 id="安全头与网络隔离"><a href="#安全头与网络隔离" class="headerlink" title="安全头与网络隔离"></a>安全头与网络隔离</h2><h3 id="安全响应头"><a href="#安全响应头" class="headerlink" title="安全响应头"></a>安全响应头</h3><p>在 Proxy Host 的 Advanced 中加一组通用头，HSTS 用 NPM 自带的开关，不要手写两份：</p>
+<figure class="highlight nginx cb" data-lang="nginx" data-label="Nginx" data-ext="conf" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attribute">add_header</span> X-Content-Type-Options <span class="string">&quot;nosniff&quot;</span> always;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attribute">add_header</span> X-Frame-Options <span class="string">&quot;SAMEORIGIN&quot;</span> always;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attribute">add_header</span> Referrer-Policy <span class="string">&quot;strict-origin-when-cross-origin&quot;</span> always;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attribute">add_header</span> Permissions-Policy <span class="string">&quot;camera=(), microphone=(), geolocation=()&quot;</span> always;</span></span></code></pre></div></div></figure>
+
+<ul>
+<li><code>always</code> 让 4xx&#x2F;5xx 响应也带上这些头，错误页同样可能被嵌入或嗅探；</li>
+<li><code>X-XSS-Protection</code> 已被现代浏览器废弃，不必再加；CSP 与应用强相关，按应用单独配置，不要全站统一下发；</li>
+<li>Nginx 的 <code>add_header</code> 继承规则是：<strong>某个 location 里只要出现任何 <code>add_header</code>，外层的 <code>add_header</code> 全部不再继承</strong>。NPM 在开启 HSTS 等选项时会在生成的 location 中写入 <code>add_header</code>，Advanced 里 server 级的头可能因此消失。以实测为准：</li>
+</ul>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl --noproxy <span class="string">&#x27;*&#x27;</span> -sI https://app.example.com | grep -iE <span class="string">&#x27;x-content-type|x-frame|referrer|strict-transport&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p>缺失时，把这组头交给上游应用输出，比与 NPM 生成的配置较劲更省事。</p>
+<h3 id="网络隔离"><a href="#网络隔离" class="headerlink" title="网络隔离"></a>网络隔离</h3><p>原则只有一条：<strong>只有 NPM 对外，其它容器一律不发布端口</strong>。</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 上游服务的 compose 片段：加入 edge 网络，不写 ports</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">services:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">app:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">example/app:1.0</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">networks:</span> [<span class="string">edge</span>]</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attr">networks:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">edge:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="attr">external:</span> <span class="literal">true</span></span></span></code></pre></div></div></figure>
+
+<ul>
+<li>NPM 通过容器名访问上游（<code>app:8080</code>），上游不需要也不应该有 <code>ports</code>；</li>
+<li>NPM 的 81 管理端口绑定 <code>127.0.0.1</code>，经 SSH 端口转发访问；</li>
+<li><strong>发布端口会绕过 ufw</strong>：Docker 通过 iptables 直接转发已发布端口，ufw 的 INPUT 规则拦不住。确实要对内网开放某个端口时，绑定到内网网卡地址（如 <code>10.0.0.10:5432:5432</code>），或在 <code>DOCKER-USER</code> 链中加规则；</li>
+<li>敏感的数据库、缓存再单独放一个不接入 <code>edge</code> 的内部网络，只让需要它的应用同时加入两个网络。</li>
+</ul>
+<p>验证「没有绕过 NPM 的路径」：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 宿主机上列出所有发布端口，除 NPM 外不应有 0.0.0.0 绑定</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">docker ps --format <span class="string">&#x27;table &#123;&#123;.Names&#125;&#125;\t&#123;&#123;.Ports&#125;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">sudo</span> ss -lntp | grep -v <span class="string">&#x27;127.0.0.1&#x27;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># 从另一台内网机器扫描，只应看到 80/443（以及 SSH）</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">nmap -Pn 10.0.0.10</span></span></code></pre></div></div></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>家用入口层的难点不在组件多，而在边界是否清楚：TLS 在隧道边缘终止，所以证书必须同步、NPM 不能再强制跳转；证书只由一个组件签发，同步脚本负责校验、原子替换和到期告警；排障沿请求路径逐跳打点；上游只在内部网络可见。把这几条定下来，新增一个服务只需要「加入 edge 网络 + 在 NPM 建一个 Host」。</p>
+<h2 id="2026-09-补记：NPM-版本与证书续期"><a href="#2026-09-补记：NPM-版本与证书续期" class="headerlink" title="2026-09 补记：NPM 版本与证书续期"></a>2026-09 补记：NPM 版本与证书续期</h2><ul>
+<li>NPM 在 2025-11 恢复发布后保持了稳定节奏：v2.14（2026-02-17）、v2.15（2026-05-31）、v2.16.0（2026-09-24）。</li>
+<li>v2.16.0 新增界面内日志查看器，逐跳排障第 4 跳不必再进容器 <code>tail</code> 日志；新增按路径的访问控制，部分原本写在 Advanced 里的规则可以改回界面配置。</li>
+<li>v2.16.0 将 Certbot 升级到 5.8。使用 DNS Challenge 的用户升级前应确认所用 DNS 插件与新版 Certbot 兼容，升级后手动触发一次续期并运行同步脚本，确认 <code>journalctl -u npm-cert-sync.service</code> 没有报错、边缘证书到期时间已更新。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/01/13/technical-docs/Docker%E5%AE%B9%E5%99%A8%E5%8C%96%E9%83%A8%E7%BD%B2%E5%AE%9E%E8%B7%B5/">Docker 部署常见坑：挂载权限、容器代理与数据库远程访问</a></h3>
+        <p>单机 Docker 部署的五类常见坑：挂载目录 UID/GID 与 ACL、容器访问模型 API 的代理与超时、MySQL 8 远程授权、M…</p>
+        <a class="btn primary" href="/2026/01/13/technical-docs/Docker%E5%AE%B9%E5%99%A8%E5%8C%96%E9%83%A8%E7%BD%B2%E5%AE%9E%E8%B7%B5/">继续阅读</a>
+      </div>
+      
+      
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E6%8B%93%E6%89%91%EF%BC%9A%E5%85%88%E7%A1%AE%E5%AE%9A-TLS-%E5%9C%A8%E5%93%AA%E4%B8%80%E8%B7%B3%E7%BB%88%E6%AD%A2" data-toc-target="拓扑：先确定-TLS-在哪一跳终止"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">拓扑：先确定 TLS 在哪一跳终止</span></a><a class="toc-level-2" href="#%E8%AF%81%E4%B9%A6%EF%BC%9A%E7%AD%BE%E5%8F%91%E3%80%81%E7%BB%AD%E6%9C%9F%E4%B8%8E%E5%90%8C%E6%AD%A5" data-toc-target="证书：签发、续期与同步"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">证书：签发、续期与同步</span></a><a class="toc-level-3" href="#%E4%B8%A4%E7%A7%8D%E7%AD%BE%E5%8F%91%E6%96%B9%E5%BC%8F%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="两种签发方式怎么选"><span class="toc-text">两种签发方式怎么选</span></a><a class="toc-level-3" href="#%E5%8E%9F%E7%94%9F-Nginx-%E5%9C%BA%E6%99%AF%EF%BC%9Aacme-sh-%E7%9A%84%E6%9C%80%E7%BB%88%E7%94%A8%E6%B3%95" data-toc-target="原生-Nginx-场景：acme-sh-的最终用法"><span class="toc-text">原生 Nginx 场景：acme.sh 的最终用法</span></a><a class="toc-level-3" href="#%E5%AE%B6%E7%94%A8%E5%9C%BA%E6%99%AF%EF%BC%9A%E6%8A%8A-NPM-%E7%9A%84%E8%AF%81%E4%B9%A6%E5%90%8C%E6%AD%A5%E7%BB%99%E9%9A%A7%E9%81%93" data-toc-target="家用场景：把-NPM-的证书同步给隧道"><span class="toc-text">家用场景：把 NPM 的证书同步给隧道</span></a><a class="toc-level-3" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E7%94%A8-root-%E7%BA%A7-systemd%EF%BC%8C%E8%80%8C%E4%B8%8D%E6%98%AF%E7%94%A8%E6%88%B7%E7%BA%A7" data-toc-target="为什么用-root-级-systemd，而不是用户级"><span class="toc-text">为什么用 root 级 systemd，而不是用户级</span></a><a class="toc-level-2" href="#docker-cp-%E8%BD%AF%E9%93%BE%E9%99%B7%E9%98%B1" data-toc-target="docker-cp-软链陷阱"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">docker cp 软链陷阱</span></a><a class="toc-level-2" href="#%E9%80%90%E8%B7%B3%E6%8E%92%E9%9A%9C%E6%B3%95%EF%BC%9ADNS-%E2%86%92-%E9%9A%A7%E9%81%93-%E2%86%92-NPM-%E2%86%92-%E4%B8%8A%E6%B8%B8" data-toc-target="逐跳排障法：DNS-→-隧道-→-NPM-→-上游"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">逐跳排障法：DNS → 隧道 → NPM → 上游</span></a><a class="toc-level-3" href="#%E7%AC%AC-0-%E8%B7%B3%EF%BC%9A%E6%8E%92%E9%99%A4%E5%AE%A2%E6%88%B7%E7%AB%AF%E8%87%AA%E8%BA%AB" data-toc-target="第-0-跳：排除客户端自身"><span class="toc-text">第 0 跳：排除客户端自身</span></a><a class="toc-level-3" href="#%E7%AC%AC-1-%E8%B7%B3%EF%BC%9ADNS" data-toc-target="第-1-跳：DNS"><span class="toc-text">第 1 跳：DNS</span></a><a class="toc-level-3" href="#%E7%AC%AC-2-%E8%B7%B3%EF%BC%9A%E9%9A%A7%E9%81%93%E8%BE%B9%E7%BC%98" data-toc-target="第-2-跳：隧道边缘"><span class="toc-text">第 2 跳：隧道边缘</span></a><a class="toc-level-3" href="#%E7%AC%AC-3-%E8%B7%B3%EF%BC%9A%E9%9A%A7%E9%81%93%E5%AE%A2%E6%88%B7%E7%AB%AF" data-toc-target="第-3-跳：隧道客户端"><span class="toc-text">第 3 跳：隧道客户端</span></a><a class="toc-level-3" href="#%E7%AC%AC-4-%E8%B7%B3%EF%BC%9ANPM" data-toc-target="第-4-跳：NPM"><span class="toc-text">第 4 跳：NPM</span></a><a class="toc-level-3" href="#%E7%AC%AC-5-%E8%B7%B3%EF%BC%9A%E4%B8%8A%E6%B8%B8%E5%AE%B9%E5%99%A8" data-toc-target="第-5-跳：上游容器"><span class="toc-text">第 5 跳：上游容器</span></a><a class="toc-level-2" href="#WebSocket%E3%80%81%E5%A4%A7%E6%96%87%E4%BB%B6%E4%B8%8E-MinIO-Console" data-toc-target="WebSocket、大文件与-MinIO-Console"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">WebSocket、大文件与 MinIO Console</span></a><a class="toc-level-3" href="#WebSocket-%E4%B8%8E%E9%95%BF%E8%BF%9E%E6%8E%A5" data-toc-target="WebSocket-与长连接"><span class="toc-text">WebSocket 与长连接</span></a><a class="toc-level-3" href="#%E5%A4%A7%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E4%B8%8E%E4%B8%8B%E8%BD%BD" data-toc-target="大文件上传与下载"><span class="toc-text">大文件上传与下载</span></a><a class="toc-level-3" href="#MinIO%EF%BC%9AAPI-%E4%B8%8E-Console-%E5%88%86%E4%B8%A4%E4%B8%AA%E5%9F%9F%E5%90%8D" data-toc-target="MinIO：API-与-Console-分两个域名"><span class="toc-text">MinIO：API 与 Console 分两个域名</span></a><a class="toc-level-3" href="#Console-%E7%99%BB%E5%BD%95-401%EF%BC%9A%E5%85%88%E5%88%A4%E5%AE%9A%E6%98%AF%E5%8F%8D%E4%BB%A3%E9%97%AE%E9%A2%98%E8%BF%98%E6%98%AF%E5%AE%B9%E5%99%A8%E9%97%AE%E9%A2%98" data-toc-target="Console-登录-401：先判定是反代问题还是容器问题"><span class="toc-text">Console 登录 401：先判定是反代问题还是容器问题</span></a><a class="toc-level-2" href="#%E5%AE%89%E5%85%A8%E5%A4%B4%E4%B8%8E%E7%BD%91%E7%BB%9C%E9%9A%94%E7%A6%BB" data-toc-target="安全头与网络隔离"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">安全头与网络隔离</span></a><a class="toc-level-3" href="#%E5%AE%89%E5%85%A8%E5%93%8D%E5%BA%94%E5%A4%B4" data-toc-target="安全响应头"><span class="toc-text">安全响应头</span></a><a class="toc-level-3" href="#%E7%BD%91%E7%BB%9C%E9%9A%94%E7%A6%BB" data-toc-target="网络隔离"><span class="toc-text">网络隔离</span></a><a class="toc-level-2" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">总结</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ANPM-%E7%89%88%E6%9C%AC%E4%B8%8E%E8%AF%81%E4%B9%A6%E7%BB%AD%E6%9C%9F" data-toc-target="2026-09-补记：NPM-版本与证书续期"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">2026-09 补记：NPM 版本与证书续期</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/self-hosted-ai-infra/" style="--rail: 13%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">1 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E6%8B%93%E6%89%91%EF%BC%9A%E5%85%88%E7%A1%AE%E5%AE%9A-TLS-%E5%9C%A8%E5%93%AA%E4%B8%80%E8%B7%B3%E7%BB%88%E6%AD%A2" data-toc-target="拓扑：先确定-TLS-在哪一跳终止" data-title="01 · 拓扑：先确定 TLS 在哪一跳终止" aria-label="拓扑：先确定 TLS 在哪一跳终止"></a><a class="toc-strip__dot" href="#%E8%AF%81%E4%B9%A6%EF%BC%9A%E7%AD%BE%E5%8F%91%E3%80%81%E7%BB%AD%E6%9C%9F%E4%B8%8E%E5%90%8C%E6%AD%A5" data-toc-target="证书：签发、续期与同步" data-title="02 · 证书：签发、续期与同步" aria-label="证书：签发、续期与同步"></a><a class="toc-strip__dot" href="#docker-cp-%E8%BD%AF%E9%93%BE%E9%99%B7%E9%98%B1" data-toc-target="docker-cp-软链陷阱" data-title="03 · docker cp 软链陷阱" aria-label="docker cp 软链陷阱"></a><a class="toc-strip__dot" href="#%E9%80%90%E8%B7%B3%E6%8E%92%E9%9A%9C%E6%B3%95%EF%BC%9ADNS-%E2%86%92-%E9%9A%A7%E9%81%93-%E2%86%92-NPM-%E2%86%92-%E4%B8%8A%E6%B8%B8" data-toc-target="逐跳排障法：DNS-→-隧道-→-NPM-→-上游" data-title="04 · 逐跳排障法：DNS → 隧道 → NPM → 上游" aria-label="逐跳排障法：DNS → 隧道 → NPM → 上游"></a><a class="toc-strip__dot" href="#WebSocket%E3%80%81%E5%A4%A7%E6%96%87%E4%BB%B6%E4%B8%8E-MinIO-Console" data-toc-target="WebSocket、大文件与-MinIO-Console" data-title="05 · WebSocket、大文件与 MinIO Console" aria-label="WebSocket、大文件与 MinIO Console"></a><a class="toc-strip__dot" href="#%E5%AE%89%E5%85%A8%E5%A4%B4%E4%B8%8E%E7%BD%91%E7%BB%9C%E9%9A%94%E7%A6%BB" data-toc-target="安全头与网络隔离" data-title="06 · 安全头与网络隔离" aria-label="安全头与网络隔离"></a><a class="toc-strip__dot" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结" data-title="07 · 总结" aria-label="总结"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9ANPM-%E7%89%88%E6%9C%AC%E4%B8%8E%E8%AF%81%E4%B9%A6%E7%BB%AD%E6%9C%9F" data-toc-target="2026-09-补记：NPM-版本与证书续期" data-title="08 · 2026-09 补记：NPM 版本与证书续期" aria-label="2026-09 补记：NPM 版本与证书续期"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/Nginx-Proxy-Manager反向代理","title":"家用服务器入口层：内网穿透 + Nginx Proxy Manager + 证书自动化","url":"/2025/12/09/technical-docs/Nginx-Proxy-Manager%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86/","path":"self-hosted-ai-infra","index":0,"total":8,"next":{"title":"Docker 部署常见坑：挂载权限、容器代理与数据库远程访问","url":"/2026/01/13/technical-docs/Docker%E5%AE%B9%E5%99%A8%E5%8C%96%E9%83%A8%E7%BD%B2%E5%AE%9E%E8%B7%B5/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

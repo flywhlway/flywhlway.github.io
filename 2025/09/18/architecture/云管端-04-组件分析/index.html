@@ -1,0 +1,1083 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>云管端 AI Agent 组件分析与选型决策 · 飞轮之道</title>
+<meta name="description" content="把八个组件族压缩为选型决策：每族先列必须回答的问题，再按适用条件、代价与退出成本比较候选。先锁定协议、Trace、记忆与 Embedding 等不可逆点，引擎与框架保持可替换。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2025/09/18/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-04-%E7%BB%84%E4%BB%B6%E5%88%86%E6%9E%90/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="云管端 AI Agent 组件分析与选型决策 · 飞轮之道">
+<meta property="og:description" content="把八个组件族压缩为选型决策：每族先列必须回答的问题，再按适用条件、代价与退出成本比较候选。先锁定协议、Trace、记忆与 Embedding 等不可逆点，引擎与框架保持可替换。">
+<meta property="og:url" content="https://flywhlway.github.io/2025/09/18/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-04-%E7%BB%84%E4%BB%B6%E5%88%86%E6%9E%90/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-pipe-edge-agent-platform/">拆解系统</a><a class="series-chip" href="/paths/cloud-pipe-edge-agent-platform/" title="查看学习路径">第 5 / 20 篇</a>
+    </div>
+    <h1>云管端 AI Agent 组件分析与选型决策</h1>
+    <p class="article-deck">把八个组件族压缩为选型决策：每族先列必须回答的问题，再按适用条件、代价与退出成本比较候选。先锁定协议、Trace、记忆与 Embedding 等不可逆点，引擎与框架保持可替换。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>14 分钟</span>
+      <span>发布于 2025.09</span>
+      <a class="article-meta__tag" href="/tags/%E4%BA%91%E7%AE%A1%E7%AB%AF/">#云管端</a><a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>选型看三列：适用条件、代价、退出成本；退出成本决定是现在必须选对，还是先用着再换。</li><li>难换的是协议与数据格式（MCP/A2A、Trace Schema、记忆模型、Embedding 版本），不是推理引擎与框架。</li><li>编排默认外层 Workflow 加内层 Agent；检索从混合检索加 Rerank 起步，图增强要由评测集证明。</li><li>MCP 远程接入自 2025-03-26 版规范起走 Streamable HTTP，不要再按 HTTP+SSE 双端点实现。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="本篇的定位"><a href="#本篇的定位" class="headerlink" title="本篇的定位"></a>本篇的定位</h2><p>组件选型最常见的失误是按功能清单挑产品。本篇只做一件事：每个组件族选型前必须先回答哪些问题，候选方案在什么条件下成立、要付出什么代价、将来换掉它有多贵。组件原理放在各专章，具体开源项目的横向对比放在 18 篇。</p>
+<p>每个决策表都用同样三列评估候选：</p>
+<ul>
+<li><strong>适用条件</strong>：不满足就直接排除，不进入比较。</li>
+<li><strong>代价</strong>：上线后持续付出的东西，包括延迟、运维、质量风险。</li>
+<li><strong>退出成本</strong>：换掉它时要重做什么，例如数据迁移、索引重建、接口改写、重新评测。退出成本高的组件必须现在选对，或者用标准接口隔离；退出成本低的组件按当下最省的方案选。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>组件族</th>
+<th>本篇回答的选型问题</th>
+<th>原理与实现</th>
+<th>另有主场的内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A 编排与能力接入</td>
+<td>执行形态、意图路由、能力接入协议、Agent 互通</td>
+<td>03、07</td>
+<td>MCP 安全清单见 12</td>
+</tr>
+<tr>
+<td>B 记忆</td>
+<td>框架还是自研、记忆数据模型</td>
+<td>08</td>
+<td>—</td>
+</tr>
+<tr>
+<td>C 知识与检索</td>
+<td>向量存储规模档、检索形态何时升级</td>
+<td>09</td>
+<td>项目对比见 18</td>
+</tr>
+<tr>
+<td>D 模型服务</td>
+<td>推理托管方式、路由与负载</td>
+<td>10、11</td>
+<td>降级矩阵与首字时延预算见 01，逐步降级见 06</td>
+</tr>
+<tr>
+<td>E 缓存与计量</td>
+<td>各层缓存的引入顺序</td>
+<td>10</td>
+<td>语义缓存见 10</td>
+</tr>
+<tr>
+<td>F 交互与流式</td>
+<td>流式协议、端云语音分工</td>
+<td>01、11</td>
+<td>—</td>
+</tr>
+<tr>
+<td>G 安全</td>
+<td>检测还是隔离、沙箱强度</td>
+<td>12</td>
+<td>—</td>
+</tr>
+<tr>
+<td>H 观测、评测与训练</td>
+<td>Trace 数据格式、观测平台、是否训练</td>
+<td>13、14、15</td>
+<td>埋点 Schema 见 05</td>
+</tr>
+</tbody></table>
+<h2 id="先定不可逆点，再选可替换件"><a href="#先定不可逆点，再选可替换件" class="headerlink" title="先定不可逆点，再选可替换件"></a>先定不可逆点，再选可替换件</h2><p>退出成本分布并不均匀。在这个平台上，真正难换的是协议与数据格式，而不是引擎与框架：</p>
+<table>
+<thead>
+<tr>
+<th>退出成本</th>
+<th>对象</th>
+<th>换掉时要重做什么</th>
+<th>现在就要做的隔离</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>高</td>
+<td>工具与 Agent 互通协议（MCP、A2A）</td>
+<td>所有能力提供方重新适配</td>
+<td>只选开放协议；注册中心记录每个接入对应的规范版本</td>
+</tr>
+<tr>
+<td>高</td>
+<td>Trace 与埋点 Schema</td>
+<td>历史数据无法对比，看板、评测、训练样本全部返工</td>
+<td>对齐 OTel GenAI 语义约定，同时保留一层内部字段映射</td>
+</tr>
+<tr>
+<td>高</td>
+<td>记忆数据模型</td>
+<td>用户记忆迁移，来源追溯断裂</td>
+<td>来源、置信度、有效期落在自有存储</td>
+</tr>
+<tr>
+<td>高</td>
+<td>Embedding 模型版本</td>
+<td>全量重建索引并重跑评测</td>
+<td>索引名带模型版本，支持双写切换</td>
+</tr>
+<tr>
+<td>高</td>
+<td>端侧模型格式与推理运行时</td>
+<td>随 OTA 重新发版，重新适配 NPU</td>
+<td>端侧推理封装为能力接口，业务不直接调运行时</td>
+</tr>
+<tr>
+<td>中</td>
+<td>向量库、观测平台、Agent 框架</td>
+<td>迁移数据或改写编排代码</td>
+<td>检索与编排经内部接口访问</td>
+</tr>
+<tr>
+<td>低</td>
+<td>云端推理引擎、模型供应商、Reranker</td>
+<td>改网关配置并跑回归</td>
+<td>业务只声明 <code>model_intent</code></td>
+</tr>
+</tbody></table>
+<pre class="mermaid">flowchart LR
+  P["协议与数据契约&lt;br/&gt;MCP / A2A / Trace / 记忆模型 / Embedding 版本"] --&gt; S["有状态存储&lt;br/&gt;向量库 / 记忆库 / 特征表"]
+  S --&gt; R["运行时与框架&lt;br/&gt;编排引擎 / Agent 框架 / 网关"]
+  R --&gt; E["可替换引擎&lt;br/&gt;推理引擎 / 模型 / Reranker"]</pre>
+
+
+<p>越靠左越要早定、越难改；越靠右越应保持随时可换。下面各族的结论都服从这个顺序。</p>
+<h2 id="A-编排与能力接入"><a href="#A-编排与能力接入" class="headerlink" title="A 编排与能力接入"></a>A 编排与能力接入</h2><h3 id="A1-执行形态：Workflow、Agent-还是组合"><a href="#A1-执行形态：Workflow、Agent-还是组合" class="headerlink" title="A1 执行形态：Workflow、Agent 还是组合"></a>A1 执行形态：Workflow、Agent 还是组合</h3><p>必须回答：</p>
+<ol>
+<li>任务分支能否穷举？不能穷举的请求占多大比例？</li>
+<li>是否产生副作用（车控、下单、写数据），失败后是否需要补偿？</li>
+<li>单次任务是否会跨越分钟级，或经历进程重启？</li>
+<li>业务能否接受成本与时延不可预测？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>纯 Workflow（DAG 或状态机）</td>
+<td>分支可穷举、SLA 严格、带副作用</td>
+<td>长尾分支要人工补齐</td>
+<td>低：节点输入输出契约固定</td>
+</tr>
+<tr>
+<td>单 Agent 循环（ReAct 类）</td>
+<td>多步、分支难穷举、工具只读或低风险</td>
+<td>成本与时延不可预测，调试困难</td>
+<td>中：换框架后提示词与工具描述需重评测</td>
+</tr>
+<tr>
+<td>外层 Workflow + 内层 Agent</td>
+<td>多数企业场景的默认形态</td>
+<td>两套执行语义要在同一条 Trace 里对齐</td>
+<td>中</td>
+</tr>
+<tr>
+<td>持久化执行引擎托底（Temporal 类）</td>
+<td>长任务、跨重启、需要补偿事务</td>
+<td>独立集群，工作流代码须满足确定性约束</td>
+<td>高：业务代码与引擎 API 绑定</td>
+</tr>
+<tr>
+<td>多 Agent 协作</td>
+<td>领域天然分工，且需要隔离上下文</td>
+<td>协调开销、错误级联、归因困难</td>
+<td>高：拓扑与消息约定难以平移</td>
+</tr>
+</tbody></table>
+<p>结论：默认由外层 Workflow 定骨架，Agent 只处理不可穷举的节点；带副作用的动作一律留在 Workflow 节点并要求二次确认；每个 Agent 都带轮次、工具调用次数、Token 与耗时三重预算。多 Agent 只在上下文隔离能换来可测的质量提升时引入。运行时设计见 07 篇。</p>
+<h3 id="A2-意图路由"><a href="#A2-意图路由" class="headerlink" title="A2 意图路由"></a>A2 意图路由</h3><p>必须回答：</p>
+<ol>
+<li>入口背后有多少业务域、多少意图？意图集多久变一次？</li>
+<li>路由能占用多少首字时延预算（预算分配见 01 篇）？</li>
+<li>路由结果能否离线评测？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>规则与关键词</td>
+<td>意图少于 20 个且稳定</td>
+<td>泛化差，规则互相冲突</td>
+<td>低</td>
+</tr>
+<tr>
+<td>判别式小模型分类</td>
+<td>意图集稳定，有标注数据</td>
+<td>标注与再训练</td>
+<td>中：标注集可复用</td>
+</tr>
+<tr>
+<td>语义相似度路由（意图向量检索）</td>
+<td>意图多、变化快</td>
+<td>近邻意图易混，依赖反例</td>
+<td>低</td>
+</tr>
+<tr>
+<td>大模型函数调用路由</td>
+<td>长尾与组合意图</td>
+<td>延迟与成本最高，结果波动</td>
+<td>低</td>
+</tr>
+<tr>
+<td>混合路由（向量召回 + 小模型判别 + 置信度阈值）</td>
+<td>多业务域共享一个入口</td>
+<td>两级组件运维</td>
+<td>中</td>
+</tr>
+</tbody></table>
+<p>结论：多域入口选混合路由：高置信直接落域，中置信并行探测两个域，低置信反问用户；意图分类不用大模型；每次路由都记录 <code>route_reason</code>，否则线上无法解释为什么落到这个域。Planner 独立成服务的取舍见 00 篇 ADR-02 与 03 篇。</p>
+<h3 id="A3-能力接入：Tool、Skill-与-MCP"><a href="#A3-能力接入：Tool、Skill-与-MCP" class="headerlink" title="A3 能力接入：Tool、Skill 与 MCP"></a>A3 能力接入：Tool、Skill 与 MCP</h3><p>必须回答：</p>
+<ol>
+<li>能力由谁提供：同团队、跨团队，还是第三方？</li>
+<li>调用发生在本地（端侧、同进程）还是远程？</li>
+<li>能力数量会不会超出模型能稳定选择的范围（经验值约 30 个）？</li>
+<li>权限按用户、按 Agent，还是取二者交集？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>进程内 Tool（框架原生函数调用）</td>
+<td>能力少、同团队维护</td>
+<td>与 Agent 框架绑定</td>
+<td>中：换框架要重写注册代码</td>
+</tr>
+<tr>
+<td>MCP Server，stdio 传输</td>
+<td>端侧或本地单用户工具</td>
+<td>进程生命周期管理，无多租户</td>
+<td>低</td>
+</tr>
+<tr>
+<td>MCP Server，Streamable HTTP 传输</td>
+<td>跨团队、远程、多租户</td>
+<td>需要网关统一鉴权与审计</td>
+<td>低：开放协议</td>
+</tr>
+<tr>
+<td>Skill 层（意图到能力组合的封装）</td>
+<td>能力超过 30 个，选错工具成为主要失败原因</td>
+<td>描述质量与冲突检测需要治理</td>
+<td>中：自定义格式</td>
+</tr>
+<tr>
+<td>存量 API 直接暴露为工具</td>
+<td>迁移过渡期</td>
+<td>描述写给人看，结果冗长</td>
+<td>低</td>
+</tr>
+</tbody></table>
+<p>协议版本有三点要写进 ADR：</p>
+<ul>
+<li>MCP 远程传输自 2025-03-26 版规范起为 Streamable HTTP，取代原先的 HTTP+SSE 双端点方式，新接入不要再按旧方式实现。</li>
+<li>2025-06-18 版规范把 MCP Server 定位为 OAuth 资源服务器，并加入结构化工具输出与 Elicitation（服务端向用户补问）。鉴权统一放在网关实现，不让每个 Server 各写一套。</li>
+<li>官方 MCP Registry 已于 2025-09-08 开放预览。内部注册中心的元数据字段宜向它看齐，避免日后维护两套描述。</li>
+</ul>
+<p>结论：跨团队能力一律以 MCP Server 暴露，远程走 Streamable HTTP；能力超过 30 个就在注册中心引入 Skill 层，每个 Skill 注册时附不少于 10 条正例意图和 5 条反例；工具描述面向模型写，参数用枚举约束，结果裁剪后再回灌上下文。MCP 的安全基线见 12 篇。</p>
+<h3 id="A4-Agent-互通"><a href="#A4-Agent-互通" class="headerlink" title="A4 Agent 互通"></a>A4 Agent 互通</h3><p>必须回答：</p>
+<ol>
+<li>端侧 Agent 是否要调用云端 Agent，跨域 Agent 是否要协作？</li>
+<li>任务是同步问答还是长时异步？</li>
+<li>身份与权限跨多跳时如何传递？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>点对点 HTTP 调用</td>
+<td>Agent 不超过 3 个，同团队维护</td>
+<td>拓扑随数量平方增长</td>
+<td>低</td>
+</tr>
+<tr>
+<td>消息总线 + 自研寻址（NATS、Kafka 类）</td>
+<td>内部同构 Agent，异步为主</td>
+<td>私有协议，跨团队互通差</td>
+<td>高：寻址与消息格式自定义</td>
+</tr>
+<tr>
+<td>A2A 协议 + 中心桥接（Agent 网关）</td>
+<td>端云与跨域协作、长任务、需要能力发现</td>
+<td>多一跳延迟，每跳都要鉴权</td>
+<td>低：开放协议，已于 2025-06 捐赠 Linux 基金会</td>
+</tr>
+</tbody></table>
+<p>结论：A2A 负责 Agent 之间的任务委托，MCP 负责 Agent 调用工具，两者不混用；桥接层对每一跳独立鉴权，按调用方与被调方权限的交集放行，不信任上游传来的身份。</p>
+<h2 id="B-记忆"><a href="#B-记忆" class="headerlink" title="B 记忆"></a>B 记忆</h2><p>必须回答：</p>
+<ol>
+<li>用户能否要求”忘掉某件事”？记忆需要追溯到哪一轮对话吗？</li>
+<li>记忆抽取在线同步做，还是会话结束后异步做？</li>
+<li>事实型记忆与统计型画像是否分开存？</li>
+<li>记忆召回最多占上下文预算的多少？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>会话窗口 + 滚动摘要（Redis、框架 Checkpointer）</td>
+<td>短期记忆，所有对话场景</td>
+<td>摘要有损，最易丢实体与数字</td>
+<td>低</td>
+</tr>
+<tr>
+<td>开源或托管记忆框架（Mem0、Zep 类）</td>
+<td>需要尽快上线长期记忆</td>
+<td>冲突合并与审计能力参差，数据模型受框架约束</td>
+<td>高：记忆模型与抽取逻辑绑定</td>
+</tr>
+<tr>
+<td>自研事件溯源（PG + pgvector + 事件表 + 物化视图）</td>
+<td>需要回溯干预、审计与合规删除</td>
+<td>建设成本高</td>
+<td>低：数据在自有模型里</td>
+</tr>
+<tr>
+<td>特征表画像（Feast 类或自研）</td>
+<td>稳定的统计倾向，如偏好类型、活跃时段</td>
+<td>更新有延迟，冷启动无数据</td>
+<td>中</td>
+</tr>
+<tr>
+<td>图记忆</td>
+<td>实体关系密集，如家庭成员与设备归属</td>
+<td>抽取贵，更新难</td>
+<td>高</td>
+</tr>
+</tbody></table>
+<p>上下文压缩的优先级：结构化压缩（转成字段或表格）优于选择式过滤，选择式过滤优于生成式摘要；压缩用小模型执行，压缩前后的内容都留存，便于效果归因。</p>
+<p>结论：无论是否采用记忆框架，<code>source_trace_id</code>、<code>confidence</code>、<code>valid_until</code> 三个字段和原始来源都必须落在自有存储，框架只作为抽取与召回的实现。写入异步、幂等、可审计；涉及身份、健康、财务倾向的记忆走人工复核。详见 08 篇。</p>
+<h2 id="C-知识与检索"><a href="#C-知识与检索" class="headerlink" title="C 知识与检索"></a>C 知识与检索</h2><p>必须回答：</p>
+<ol>
+<li>语料多大、多久更新一次、是否按车型或版本分区？</li>
+<li>查询里型号、错误码、功能名这类专有词占多大比例？</li>
+<li>有没有评测集证明多跳或全局性问题是主要失败类型？</li>
+<li>Embedding 换代时，全量重建能否在维护窗口内完成？</li>
+</ol>
+<h3 id="C1-向量存储"><a href="#C1-向量存储" class="headerlink" title="C1 向量存储"></a>C1 向量存储</h3><table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>pgvector</td>
+<td>百万级以下，已有 PG 运维能力</td>
+<td>规模上去后性能与调优受限</td>
+<td>低</td>
+</tr>
+<tr>
+<td>嵌入式向量库（LanceDB 类）</td>
+<td>端侧与轻量服务</td>
+<td>生态相对年轻</td>
+<td>低</td>
+</tr>
+<tr>
+<td>独立向量库（Qdrant、Weaviate 类）</td>
+<td>百万到千万级，需要混合检索与多租户</td>
+<td>独立集群运维</td>
+<td>中</td>
+</tr>
+<tr>
+<td>分布式向量库（Milvus 类）</td>
+<td>千万级以上</td>
+<td>组件多，运维最重</td>
+<td>中</td>
+</tr>
+<tr>
+<td>云托管向量服务</td>
+<td>没有运维团队，数据允许出域</td>
+<td>厂商锁定</td>
+<td>高</td>
+</tr>
+</tbody></table>
+<p>向量库的退出成本主要来自两处：索引重建，以及元数据过滤语法的改写。检索统一经内部接口访问，就能把后者压到最低。</p>
+<h3 id="C2-检索形态"><a href="#C2-检索形态" class="headerlink" title="C2 检索形态"></a>C2 检索形态</h3><table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>纯向量检索</td>
+<td>仅口语化语义问题</td>
+<td>型号、错误码、功能名上系统性失败</td>
+<td>低</td>
+</tr>
+<tr>
+<td>混合检索 + Rerank（召回约 50 条，重排取约 5 条）</td>
+<td>企业知识库的默认配置</td>
+<td>Rerank 增加几十毫秒延迟</td>
+<td>低</td>
+</tr>
+<tr>
+<td>图与向量双索引（LightRAG 类）</td>
+<td>需要关系推理且知识持续更新</td>
+<td>建图成本</td>
+<td>中</td>
+</tr>
+<tr>
+<td>全量图谱（GraphRAG 类）</td>
+<td>高价值、低更新频率、全局性问题</td>
+<td>建图的大模型调用量极大，增量更新难</td>
+<td>高</td>
+</tr>
+</tbody></table>
+<p>Embedding 与切分的决策点：中文语料选中文优化模型；维度不是越高越好，存储与检索成本会先于效果翻倍；索引名带模型版本；切分采用”按标题层级 + 父子分块”，标题路径写入 chunk 元数据，命中小块、返回父块。</p>
+<p>结论：从混合检索 + Rerank + 评测集起步，元数据过滤前置（先按车型、版本过滤再检索）；只有评测集证明多跳问题是主要失败类型时，才对那个子域引入图增强。原理与评测见 09 篇。</p>
+<h2 id="D-模型服务"><a href="#D-模型服务" class="headerlink" title="D 模型服务"></a>D 模型服务</h2><p>必须回答：</p>
+<ol>
+<li>请求按难度分级后，分类、闲聊、复杂推理各占多少比例？</li>
+<li>数据能否出域？流量是否稳定到值得自建推理？</li>
+<li>哪些意图必须离线可用？这决定端侧 SLM 的职责。</li>
+<li>失败时降到哪一级仍可接受？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>商业模型 API（经网关访问）</td>
+<td>起步期，流量波动大</td>
+<td>单价高，数据出域，限流不由自己控制</td>
+<td>低</td>
+</tr>
+<tr>
+<td>自建推理引擎（vLLM、SGLang 类）</td>
+<td>流量稳定、数据不出域、需要控制前缀缓存</td>
+<td>GPU 成本与运维</td>
+<td>中</td>
+</tr>
+<tr>
+<td>端侧 SLM（llama.cpp、ONNX Runtime、厂商 NPU SDK）</td>
+<td>离线可用、隐私敏感、高频轻任务</td>
+<td>量化精度损失，模型随 OTA 更新</td>
+<td>高：与硬件和 OTA 流程绑定</td>
+</tr>
+<tr>
+<td>模型路由网关（LiteLLM 类，或 Envoy、Higress 插件）</td>
+<td>多模型并存</td>
+<td>策略复杂后必须靠可观测解释</td>
+<td>低</td>
+</tr>
+<tr>
+<td>Kubernetes 推理路由扩展（Gateway API Inference Extension，2025-09-09 发布 v1.0）</td>
+<td>自建推理跑在 Kubernetes 上</td>
+<td>需要推理服务暴露负载指标</td>
+<td>低：遵循 Gateway API</td>
+</tr>
+</tbody></table>
+<p>结论：业务只声明 <code>model_intent</code>，模型选择、路由与 Fallback 都是网关配置（00 篇 ADR-04）；按难度分级用模，意图分类交给小模型；自建推理的负载均衡按未完成请求数或 Token 队列长度分配，不用轮询；Prompt 模板按代码管理，每次调用记录 <code>prompt_version</code>。降级矩阵见 01 篇，调用链上的逐步降级见 06 篇，模型平台与网关分别见 10、11 篇。</p>
+<h2 id="E-缓存与计量"><a href="#E-缓存与计量" class="headerlink" title="E 缓存与计量"></a>E 缓存与计量</h2><p>必须回答：</p>
+<ol>
+<li>用户问法收敛到什么程度？</li>
+<li>答案对时效有多敏感，例如电量、天气、附近状态？</li>
+<li>是否自建推理？这决定能否直接控制前缀缓存。</li>
+<li>Token 消耗以谁的计量为准？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Prompt 稳定内容前置 + 前缀缓存</td>
+<td>所有场景</td>
+<td>要固定 Prompt 各段顺序：系统指令、工具描述、知识、记忆、用户问题</td>
+<td>低</td>
+</tr>
+<tr>
+<td>网关 Token 计量与配额</td>
+<td>所有场景，必选</td>
+<td>全链路强制接入，限流按 Token&#x2F;s 而非 QPS</td>
+<td>中</td>
+</tr>
+<tr>
+<td>精确匹配缓存</td>
+<td>模板化请求</td>
+<td>命中率低</td>
+<td>低</td>
+</tr>
+<tr>
+<td>语义缓存</td>
+<td>问法高度收敛的 C 端场景</td>
+<td>误命中直接答错，缓存键维度与失效策略复杂</td>
+<td>中</td>
+</tr>
+</tbody></table>
+<p>结论：引入顺序是先调整 Prompt 结构让前缀缓存生效（几乎零成本），再建网关计量与配额，最后才上语义缓存。以网关计量为唯一口径，禁止业务自报。语义缓存的键维度、阈值与失效策略见 10 篇。</p>
+<h2 id="F-交互与流式"><a href="#F-交互与流式" class="headerlink" title="F 交互与流式"></a>F 交互与流式</h2><p>必须回答：</p>
+<ol>
+<li>用户是否需要随时打断播报（barge-in）？</li>
+<li>哪些语音意图必须在端侧识别？</li>
+<li>客户端到云端的流是单向还是双向？</li>
+<li>多模态输入在哪一层融合？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SSE</td>
+<td>回答类单向流，需要穿透代理，需要断点续传</td>
+<td>只能单向，长连接占用</td>
+<td>低</td>
+</tr>
+<tr>
+<td>WebSocket</td>
+<td>语音全双工等双向实时交互</td>
+<td>心跳与重连自己实现，部分代理兼容性差</td>
+<td>中</td>
+</tr>
+<tr>
+<td>gRPC 流</td>
+<td>服务间内部调用</td>
+<td>端侧与浏览器支持弱</td>
+<td>中</td>
+</tr>
+<tr>
+<td>端侧 ASR</td>
+<td>车控指令、离线场景</td>
+<td>词表有限</td>
+<td>中：随 OTA 更新</td>
+</tr>
+<tr>
+<td>云端流式 ASR</td>
+<td>开放域问答</td>
+<td>依赖网络</td>
+<td>低</td>
+</tr>
+</tbody></table>
+<p>结论：回答流统一用 SSE（00 篇 ADR-09），首包尽快返回，心跳保活，客户端指数退避并按 <code>Last-Event-ID</code> 续传；语音全双工另走双向通道，打断能力要求播报与采集并行且回声消除有效。融合放在编排层之前，Planner 只处理统一的上下文包（契约见 01 篇）。</p>
+<h2 id="G-安全"><a href="#G-安全" class="headerlink" title="G 安全"></a>G 安全</h2><p>必须回答：</p>
+<ol>
+<li>注入防御主要靠检测，还是靠架构隔离？</li>
+<li>哪些能力会执行模型生成的内容（代码、脚本、动态查询）？</li>
+<li>流式输出如何分段检测？检测服务故障时放行还是拦截？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>规则 + 分类模型检测（Llama Guard、NeMo Guardrails 类）</td>
+<td>基线，所有入口</td>
+<td>总能被绕过，有误拦截</td>
+<td>低</td>
+</tr>
+<tr>
+<td>架构隔离（指令与数据分区、工具最小权限、危险操作二次确认）</td>
+<td>必选，主防线</td>
+<td>约束工具与 Prompt 设计</td>
+<td>—</td>
+</tr>
+<tr>
+<td>容器 + seccomp 沙箱</td>
+<td>可信度较高的内部脚本</td>
+<td>隔离强度最弱</td>
+<td>低</td>
+</tr>
+<tr>
+<td>gVisor 类用户态内核</td>
+<td>执行模型生成代码的通用场景</td>
+<td>系统调用有性能损耗</td>
+<td>中</td>
+</tr>
+<tr>
+<td>Firecracker 类微虚拟机</td>
+<td>多租户、不可信代码</td>
+<td>启动与资源开销最大</td>
+<td>中</td>
+</tr>
+<tr>
+<td>WASM 运行时</td>
+<td>端侧与轻量插件</td>
+<td>语言与系统能力受限</td>
+<td>中</td>
+</tr>
+</tbody></table>
+<p>结论：检测只是基线，隔离才是主防线；凡执行模型生成内容的能力都必须进沙箱，端侧同样如此；出站检测 fail-closed，并提供误拦截反馈通道。完整清单见 12 篇。</p>
+<h2 id="H-观测、评测与训练"><a href="#H-观测、评测与训练" class="headerlink" title="H 观测、评测与训练"></a>H 观测、评测与训练</h2><p>必须回答：</p>
+<ol>
+<li>Trace 的数据格式用标准还是自定义？</li>
+<li>是否需要 Prompt 版本管理、会话回放、评测联动？</li>
+<li>评测集如何分层，哪一套作为发布门禁？</li>
+<li>想靠训练解决的问题，是否已经确认 Prompt、RAG 与上下文质量解决不了？</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>候选</th>
+<th>适用条件</th>
+<th>代价</th>
+<th>退出成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>OpenTelemetry + GenAI 语义约定（2025-08-25 发布的 v1.37，仍为 Development 状态）</td>
+<td>必选的数据格式底座</td>
+<td>字段仍在变化，需锁定版本</td>
+<td>低</td>
+</tr>
+<tr>
+<td>通用观测栈（Jaeger、Prometheus、Grafana、Loki 类）</td>
+<td>延迟、成功率、资源等基础指标</td>
+<td>不理解 LLM 语义</td>
+<td>低</td>
+</tr>
+<tr>
+<td>LLM 观测平台（Langfuse、Phoenix 类）</td>
+<td>需要 Prompt 版本、会话回放、评测联动</td>
+<td>多一套存储</td>
+<td>中；以 OTel 为统一入口时为低</td>
+</tr>
+<tr>
+<td>不训练：优化 Prompt、RAG 与上下文</td>
+<td>默认</td>
+<td>—</td>
+<td>低</td>
+</tr>
+<tr>
+<td>SFT</td>
+<td>格式遵循、领域术语、回答风格</td>
+<td>高质量问答对的构建</td>
+<td>中</td>
+</tr>
+<tr>
+<td>DPO</td>
+<td>线上偏好信号充足（纠正、重问、点踩）</td>
+<td>偏好对质量把控</td>
+<td>中</td>
+</tr>
+<tr>
+<td>RLHF + Reward Model</td>
+<td>大规模精细对齐</td>
+<td>数据、算力与团队投入都高</td>
+<td>高</td>
+</tr>
+</tbody></table>
+<p>结论：数据格式押 OTel，平台可以换；Trace ID 从端侧生成，一直贯穿到训练样本；GenAI Span 至少带 model、<code>prompt_version</code>、Token 数、<code>cache_hit</code>、<code>route_reason</code>、guard 结果。评测分公开集、回归集、盲测集三套，回归集做发布门禁，LLM-as-Judge 先与人工标注校准。训练先 SFT 解决格式与术语，再 DPO 学偏好，大多数团队不需要 RLHF。埋点 Schema 见 05 篇，可观测见 13 篇，训练与数据平台见 14、15 篇。</p>
+<h2 id="上线前自查"><a href="#上线前自查" class="headerlink" title="上线前自查"></a>上线前自查</h2><ul>
+<li><input disabled="" type="checkbox"> 每个组件都填了退出成本，标为”高”的项都有对应的隔离手段。</li>
+<li><input disabled="" type="checkbox"> 带副作用的动作都在 Workflow 节点里，且有二次确认与补偿。</li>
+<li><input disabled="" type="checkbox"> 新增 MCP 接入按 Streamable HTTP 实现，注册中心记录了每个接入的规范版本。</li>
+<li><input disabled="" type="checkbox"> 记忆的来源、置信度、有效期落在自有存储，支持单条失效与批量清空。</li>
+<li><input disabled="" type="checkbox"> Embedding 索引名带模型版本，换代可以双写切换。</li>
+<li><input disabled="" type="checkbox"> 网关是 Token 计量的唯一口径，每个 Agent 有日配额与异常熔断。</li>
+<li><input disabled="" type="checkbox"> Trace 字段对齐 OTel GenAI 语义约定，并有一层内部字段映射。</li>
+</ul>
+<hr>
+<p><strong>上一篇</strong>：云管端 AI Agent 模块分析 · <strong>下一篇</strong>：云管端 AI Agent 数据流设计</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2025/09/25/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-05-%E6%95%B0%E6%8D%AE%E6%B5%81/">云管端 AI Agent 数据流设计</a></h3>
+        <p>主链路、控制、埋点、同步、离线闭环与降级六类数据流的通道隔离、形态变化、埋点 Schema 与冲突策略。</p>
+        <a class="btn primary" href="/2025/09/25/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-05-%E6%95%B0%E6%8D%AE%E6%B5%81/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/09/11/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-03-%E6%A8%A1%E5%9D%97%E5%88%86%E6%9E%90/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：云管端 AI Agent 模块分析</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 11 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E6%9C%AC%E7%AF%87%E7%9A%84%E5%AE%9A%E4%BD%8D" data-toc-target="本篇的定位"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">本篇的定位</span></a><a class="toc-level-2" href="#%E5%85%88%E5%AE%9A%E4%B8%8D%E5%8F%AF%E9%80%86%E7%82%B9%EF%BC%8C%E5%86%8D%E9%80%89%E5%8F%AF%E6%9B%BF%E6%8D%A2%E4%BB%B6" data-toc-target="先定不可逆点，再选可替换件"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">先定不可逆点，再选可替换件</span></a><a class="toc-level-2" href="#A-%E7%BC%96%E6%8E%92%E4%B8%8E%E8%83%BD%E5%8A%9B%E6%8E%A5%E5%85%A5" data-toc-target="A-编排与能力接入"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">A 编排与能力接入</span></a><a class="toc-level-3" href="#A1-%E6%89%A7%E8%A1%8C%E5%BD%A2%E6%80%81%EF%BC%9AWorkflow%E3%80%81Agent-%E8%BF%98%E6%98%AF%E7%BB%84%E5%90%88" data-toc-target="A1-执行形态：Workflow、Agent-还是组合"><span class="toc-text">A1 执行形态：Workflow、Agent 还是组合</span></a><a class="toc-level-3" href="#A2-%E6%84%8F%E5%9B%BE%E8%B7%AF%E7%94%B1" data-toc-target="A2-意图路由"><span class="toc-text">A2 意图路由</span></a><a class="toc-level-3" href="#A3-%E8%83%BD%E5%8A%9B%E6%8E%A5%E5%85%A5%EF%BC%9ATool%E3%80%81Skill-%E4%B8%8E-MCP" data-toc-target="A3-能力接入：Tool、Skill-与-MCP"><span class="toc-text">A3 能力接入：Tool、Skill 与 MCP</span></a><a class="toc-level-3" href="#A4-Agent-%E4%BA%92%E9%80%9A" data-toc-target="A4-Agent-互通"><span class="toc-text">A4 Agent 互通</span></a><a class="toc-level-2" href="#B-%E8%AE%B0%E5%BF%86" data-toc-target="B-记忆"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">B 记忆</span></a><a class="toc-level-2" href="#C-%E7%9F%A5%E8%AF%86%E4%B8%8E%E6%A3%80%E7%B4%A2" data-toc-target="C-知识与检索"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">C 知识与检索</span></a><a class="toc-level-3" href="#C1-%E5%90%91%E9%87%8F%E5%AD%98%E5%82%A8" data-toc-target="C1-向量存储"><span class="toc-text">C1 向量存储</span></a><a class="toc-level-3" href="#C2-%E6%A3%80%E7%B4%A2%E5%BD%A2%E6%80%81" data-toc-target="C2-检索形态"><span class="toc-text">C2 检索形态</span></a><a class="toc-level-2" href="#D-%E6%A8%A1%E5%9E%8B%E6%9C%8D%E5%8A%A1" data-toc-target="D-模型服务"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">D 模型服务</span></a><a class="toc-level-2" href="#E-%E7%BC%93%E5%AD%98%E4%B8%8E%E8%AE%A1%E9%87%8F" data-toc-target="E-缓存与计量"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">E 缓存与计量</span></a><a class="toc-level-2" href="#F-%E4%BA%A4%E4%BA%92%E4%B8%8E%E6%B5%81%E5%BC%8F" data-toc-target="F-交互与流式"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">F 交互与流式</span></a><a class="toc-level-2" href="#G-%E5%AE%89%E5%85%A8" data-toc-target="G-安全"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">G 安全</span></a><a class="toc-level-2" href="#H-%E8%A7%82%E6%B5%8B%E3%80%81%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%AE%AD%E7%BB%83" data-toc-target="H-观测、评测与训练"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">H 观测、评测与训练</span></a><a class="toc-level-2" href="#%E4%B8%8A%E7%BA%BF%E5%89%8D%E8%87%AA%E6%9F%A5" data-toc-target="上线前自查"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">上线前自查</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-pipe-edge-agent-platform/" style="--rail: 25%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">5 / 20</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E6%9C%AC%E7%AF%87%E7%9A%84%E5%AE%9A%E4%BD%8D" data-toc-target="本篇的定位" data-title="01 · 本篇的定位" aria-label="本篇的定位"></a><a class="toc-strip__dot" href="#%E5%85%88%E5%AE%9A%E4%B8%8D%E5%8F%AF%E9%80%86%E7%82%B9%EF%BC%8C%E5%86%8D%E9%80%89%E5%8F%AF%E6%9B%BF%E6%8D%A2%E4%BB%B6" data-toc-target="先定不可逆点，再选可替换件" data-title="02 · 先定不可逆点，再选可替换件" aria-label="先定不可逆点，再选可替换件"></a><a class="toc-strip__dot" href="#A-%E7%BC%96%E6%8E%92%E4%B8%8E%E8%83%BD%E5%8A%9B%E6%8E%A5%E5%85%A5" data-toc-target="A-编排与能力接入" data-title="03 · A 编排与能力接入" aria-label="A 编排与能力接入"></a><a class="toc-strip__dot" href="#B-%E8%AE%B0%E5%BF%86" data-toc-target="B-记忆" data-title="04 · B 记忆" aria-label="B 记忆"></a><a class="toc-strip__dot" href="#C-%E7%9F%A5%E8%AF%86%E4%B8%8E%E6%A3%80%E7%B4%A2" data-toc-target="C-知识与检索" data-title="05 · C 知识与检索" aria-label="C 知识与检索"></a><a class="toc-strip__dot" href="#D-%E6%A8%A1%E5%9E%8B%E6%9C%8D%E5%8A%A1" data-toc-target="D-模型服务" data-title="06 · D 模型服务" aria-label="D 模型服务"></a><a class="toc-strip__dot" href="#E-%E7%BC%93%E5%AD%98%E4%B8%8E%E8%AE%A1%E9%87%8F" data-toc-target="E-缓存与计量" data-title="07 · E 缓存与计量" aria-label="E 缓存与计量"></a><a class="toc-strip__dot" href="#F-%E4%BA%A4%E4%BA%92%E4%B8%8E%E6%B5%81%E5%BC%8F" data-toc-target="F-交互与流式" data-title="08 · F 交互与流式" aria-label="F 交互与流式"></a><a class="toc-strip__dot" href="#G-%E5%AE%89%E5%85%A8" data-toc-target="G-安全" data-title="09 · G 安全" aria-label="G 安全"></a><a class="toc-strip__dot" href="#H-%E8%A7%82%E6%B5%8B%E3%80%81%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%AE%AD%E7%BB%83" data-toc-target="H-观测、评测与训练" data-title="10 · H 观测、评测与训练" aria-label="H 观测、评测与训练"></a><a class="toc-strip__dot" href="#%E4%B8%8A%E7%BA%BF%E5%89%8D%E8%87%AA%E6%9F%A5" data-toc-target="上线前自查" data-title="11 · 上线前自查" aria-label="上线前自查"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云管端-04-组件分析","title":"云管端 AI Agent 组件分析与选型决策","url":"/2025/09/18/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-04-%E7%BB%84%E4%BB%B6%E5%88%86%E6%9E%90/","path":"cloud-pipe-edge-agent-platform","index":4,"total":20,"next":{"title":"云管端 AI Agent 数据流设计","url":"/2025/09/25/architecture/%E4%BA%91%E7%AE%A1%E7%AB%AF-05-%E6%95%B0%E6%8D%AE%E6%B5%81/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

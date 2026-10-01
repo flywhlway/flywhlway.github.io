@@ -1,0 +1,969 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Dify 1.12 私有化部署与排障实录 · 飞轮之道</title>
+<meta name="description" content="4C6G 家用服务器上以「内网穿透 → Nginx Proxy Manager → Dify 1.12.1」部署：必改 .env 项、pgvector 兼主库、插件进程代理注入，附 404/502/登录掉线排障决策树与运行时限制调参表。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/02/06/technical-docs/Dify%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Dify 1.12 私有化部署与排障实录 · 飞轮之道">
+<meta property="og:description" content="4C6G 家用服务器上以「内网穿透 → Nginx Proxy Manager → Dify 1.12.1」部署：必改 .env 项、pgvector 兼主库、插件进程代理注入，附 404/502/登录掉线排障决策树与运行时限制调参表。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/02/06/technical-docs/Dify%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3/">技术文档</a> / <a href="/paths/self-hosted-ai-infra/">Dify 平台</a><a class="series-chip" href="/paths/self-hosted-ai-infra/" title="查看学习路径">第 4 / 8 篇</a>
+    </div>
+    <h1>Dify 1.12 私有化部署与排障实录</h1>
+    <p class="article-deck">4C6G 家用服务器上以「内网穿透 → Nginx Proxy Manager → Dify 1.12.1」部署：必改 .env 项、pgvector 兼主库、插件进程代理注入…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>19 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/Dify/">#Dify</a><a class="article-meta__tag" href="/tags/Docker-Compose/">#Docker Compose</a><a class="article-meta__tag" href="/tags/%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2/">#私有化部署</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Cookie 的 secure 标志只看 CONSOLE_WEB_URL 与 CONSOLE_API_URL 是否以 https 开头；Dify 自带 nginx 会用自己看到的协议覆盖 X-Forwarded-Proto（这条链路里是 http），外层反代加这个头没有用。</li><li>1.x 的模型调用从 plugin_daemon 发出，代理必须注入 plugin_daemon；只在 .env 里写 HTTP_PROXY 不会进入任何容器。</li><li>pgvector 兼主库时，DB_PASSWORD、PGVECTOR_PASSWORD、PGVECTOR_POSTGRES_PASSWORD 三者必须一致，而且 PGVECTOR_POSTGRES_PASSWORD 只在首次初始化数据目录时生效。</li><li>改 REDIS_PASSWORD 必须同步改 CELERY_BROKER_URL 里内嵌的密码，否则 worker 认证失败。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="场景与约束"><a href="#场景与约束" class="headerlink" title="场景与约束"></a>场景与约束</h2><p>这份实录对应一台 4 核 6 GB 的家用服务器，部署 Dify 社区版 1.12.1（官方 <code>docker/docker-compose.yaml</code>）。环境有下面这些既定条件：</p>
+<ul>
+<li>宿主机的 80&#x2F;443 已被 Nginx Proxy Manager（下文简称 NPM）占用，后面还要挂别的子域服务；</li>
+<li>服务器没有公网 IP，公网入口由内网穿透隧道提供，<strong>HTTPS 在隧道侧终止</strong>，隧道以 HTTP 转发给 NPM；</li>
+<li>以后多个子域要共享登录态；</li>
+<li>外部多模态模型需要回拉用户上传的文件；</li>
+<li>模型 API 必须经宿主机上的 HTTP 代理出网。</li>
+</ul>
+<p>文中对外域名写作 <code>dify.example.com</code>，根域 <code>example.com</code>；宿主机局域网地址写作 <code>&lt;宿主机IP&gt;</code>，代理端口写作 <code>&lt;代理端口&gt;</code>。所有 <code>*_ChangeMe_*</code> 形式的值都是占位符，上线前必须替换。</p>
+<h2 id="拓扑与三条流量"><a href="#拓扑与三条流量" class="headerlink" title="拓扑与三条流量"></a>拓扑与三条流量</h2><pre class="mermaid">flowchart LR
+  U["浏览器 / API 调用方"] --&gt;|HTTPS| T["内网穿透隧道（TLS 终止）"]
+  T --&gt;|"HTTP，Host 保持 dify.example.com"| N["NPM（宿主机 80）"]
+  N --&gt;|HTTP| D["Dify nginx（宿主机 18080 → 容器 80）"]
+  D --&gt; W["web:3000"]
+  D --&gt; A["api:5001"]
+  D --&gt;|"/e/ 插件 endpoint"| P["plugin_daemon:5002"]
+  P --&gt;|"模型调用：HTTP_PROXY"| X["宿主机代理"]
+  A -.-&gt;|"HTTP 请求节点 / 工具"| S["ssrf_proxy:3128"]
+  SB["sandbox"] -.-&gt; S
+  S -.-&gt;|"可选：cache_peer"| X
+  A --&gt; PG[("pgvector：主库 + 向量库")]
+  A --&gt; R[("redis")]</pre>
+
+
+<p>部署里真正需要分清的是三条互不相干的流量，每条由不同的配置负责：</p>
+<table>
+<thead>
+<tr>
+<th>流量</th>
+<th>路径</th>
+<th>由谁决定</th>
+<th>本文做法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>入站</td>
+<td>隧道 → NPM → Dify nginx → web&#x2F;api</td>
+<td><code>*_URL</code> 系列变量、NPM Proxy Host、<code>EXPOSE_NGINX_PORT</code></td>
+<td>Dify nginx 映射到宿主机 18080，NPM 反代过去</td>
+</tr>
+<tr>
+<td>模型调用出站</td>
+<td>plugin_daemon 内的模型插件进程 → 模型 API</td>
+<td>plugin_daemon 容器的 <code>HTTP_PROXY</code>&#x2F;<code>HTTPS_PROXY</code>&#x2F;<code>NO_PROXY</code></td>
+<td>用 override 文件注入，插件子进程会继承</td>
+</tr>
+<tr>
+<td>工作流出站</td>
+<td>HTTP 请求节点、工具、代码沙箱 → 外网</td>
+<td><code>SSRF_PROXY_*</code>、<code>SANDBOX_HTTP(S)_PROXY</code> 指向 ssrf_proxy（squid）</td>
+<td>保持默认；需要翻墙时给 squid 配上游</td>
+</tr>
+</tbody></table>
+<p>第二条是 1.x 与 0.x 最大的差别：模型供应商以插件形式运行在 plugin_daemon 里，控制台里的「凭据校验」和工作流里的 LLM 调用都从 plugin_daemon 发出。plugin_daemon 0.5.3 启动插件子进程时先继承自身环境，再追加它读到的 <code>HTTP_PROXY</code>、<code>HTTPS_PROXY</code>、<code>NO_PROXY</code>，所以代理只要打进 plugin_daemon 就能覆盖所有模型插件。</p>
+<p>第三条要单独说：sandbox 只挂在 <code>ssrf_proxy_network</code> 上，这个网络在 compose 里声明为 <code>internal: true</code>，不能直接出网。把 <code>SANDBOX_HTTP_PROXY</code> 改成宿主机代理地址，sandbox 根本连不到；正确做法是保持它指向 <code>ssrf_proxy</code>，再让 squid 转发给上游代理（见后文可选配置）。</p>
+<h2 id="关键决策"><a href="#关键决策" class="headerlink" title="关键决策"></a>关键决策</h2><table>
+<thead>
+<tr>
+<th>决策点</th>
+<th>选择</th>
+<th>理由</th>
+<th>代价</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>入口</td>
+<td>NPM → <code>&lt;宿主机IP&gt;:18080</code></td>
+<td>只改 <code>.env</code>，不动官方 compose；NPM 以后给其他子域复用</td>
+<td>多一跳宿主机端口，需防火墙不对外放行 18080</td>
+</tr>
+<tr>
+<td>入口（备选）</td>
+<td>NPM 容器执行 <code>docker network connect docker_default &lt;NPM容器名&gt;</code>，转发到 <code>nginx:80</code></td>
+<td>不占宿主机端口</td>
+<td>NPM 容器重建后要重新 connect；网络名随 compose 项目名变化</td>
+</tr>
+<tr>
+<td>主库与向量库</td>
+<td>同一个 pgvector 容器</td>
+<td>4C6G 上少跑一个 PostgreSQL 与一个 Weaviate，备份只管一个数据目录</td>
+<td>向量规模到百万级以上、检索并发很高时再迁 Qdrant&#x2F;Milvus</td>
+</tr>
+<tr>
+<td>插件库</td>
+<td>保持默认 <code>DB_PLUGIN_DATABASE=dify_plugin</code></td>
+<td>plugin_daemon 连库失败时会自己 <code>CREATE DATABASE</code>，无需手工建库，也不必与主库合并</td>
+<td>无</td>
+</tr>
+<tr>
+<td>代理注入</td>
+<td>新增 <code>docker-compose.override.yaml</code></td>
+<td>官方 compose 头部声明为生成文件、不应手改；override 升级时不冲突</td>
+<td>多维护一个文件</td>
+</tr>
+<tr>
+<td>默认 profile</td>
+<td><code>COMPOSE_PROFILES=pgvector</code></td>
+<td>官方默认值是 <code>$&#123;VECTOR_STORE&#125;,$&#123;DB_TYPE&#125;</code>，会连 <code>db_postgres</code> 一起拉起；api 对 <code>db_postgres</code> 的依赖标了 <code>required: false</code>，不启动它也不影响 api 创建</td>
+<td>api 不等待 pgvector 健康，首次启动可能重启一两次</td>
+</tr>
+</tbody></table>
+<p>向量库只在两种情况下值得离开 pgvector：单库向量过百万且需要复杂过滤，或者要多副本高可用。Weaviate 与 Milvus（后者会拉起 etcd + minio + milvus 三个容器）在 6 GB 内存上都偏重，Chroma 更适合本地原型。</p>
+<h2 id="env-改动清单（唯一一份）"><a href="#env-改动清单（唯一一份）" class="headerlink" title=".env 改动清单（唯一一份）"></a>.env 改动清单（唯一一份）</h2><p>从 <code>docker/.env.example</code> 复制出 <code>.env</code>，只改下面这些项，其余保持默认：</p>
+<figure class="highlight bash cb cb--long" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="53"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># ===== 对外地址：全部显式写 https =====</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="comment"># 这些值决定前端 API 前缀、回调与文件链接的拼接，也决定 Cookie 是否带 secure 标志</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">CONSOLE_API_URL=https://dify.example.com</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">CONSOLE_WEB_URL=https://dify.example.com</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">SERVICE_API_URL=https://dify.example.com</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">APP_API_URL=https://dify.example.com</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">APP_WEB_URL=https://dify.example.com</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="comment"># 默认是 http://localhost，Webhook / 插件触发器的对外地址靠它展示</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">TRIGGER_URL=https://dify.example.com</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="comment"># 外部多模态模型回拉文件用，必须公网可达；链接带签名与过期时间</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">FILES_URL=https://dify.example.com</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="comment"># plugin_daemon 在容器网络内取文件用</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">INTERNAL_FILES_URL=http://api:5001</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="comment"># 插件 endpoint 的对外地址模板，默认是 http://localhost/e/&#123;hook_id&#125;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">ENDPOINT_URL_TEMPLATE=https://dify.example.com/e/&#123;hook_id&#125;</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="comment"># ===== 多子域共享登录态 =====</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="comment"># 后端写 Cookie 时用的域，前导点可有可无</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">COOKIE_DOMAIN=example.com</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx"><span class="comment"># 前端开关：跨子域时填 1（不是填域名）</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">NEXT_PUBLIC_COOKIE_DOMAIN=1</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="comment"># ===== 端口避让：80/443 留给 NPM =====</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">EXPOSE_NGINX_PORT=18080</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">EXPOSE_NGINX_SSL_PORT=18443</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">NGINX_HTTPS_ENABLED=<span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx"><span class="comment"># ===== pgvector 同时做主库与向量库 =====</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">DB_HOST=pgvector</span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">VECTOR_STORE=pgvector</span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">COMPOSE_PROFILES=pgvector</span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"><span class="comment"># 三处密码必须相同；只用字母数字，避免破坏连接串</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">DB_PASSWORD=Db_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">PGVECTOR_PASSWORD=Db_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">PGVECTOR_POSTGRES_PASSWORD=Db_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx"><span class="comment"># ===== 密钥与口令：全部替换 =====</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">SECRET_KEY=Secret_ChangeMe_base64_42</span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">REDIS_PASSWORD=Redis_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx"><span class="comment"># Celery broker 连接串里内嵌了 Redis 密码，必须与上一行同步</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">CELERY_BROKER_URL=redis://:Redis_ChangeMe_hex32@redis:6379/1</span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx"><span class="comment"># 两者必须相同：前者给 sandbox 容器，后者给 api 调 sandbox</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">SANDBOX_API_KEY=Sandbox_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">CODE_EXECUTION_API_KEY=Sandbox_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">PLUGIN_DAEMON_KEY=PluginDaemon_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">PLUGIN_DIFY_INNER_API_KEY=PluginInner_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx"><span class="comment"># ===== 出网代理（供 override 文件引用，名字刻意避开 HTTP_PROXY）=====</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">EGRESS_HTTP_PROXY=http://host.docker.internal:&lt;代理端口&gt;</span></span>
+<span class="cb-line" data-ln="50"><span class="cb-tx">EGRESS_NO_PROXY=localhost,127.0.0.1,api,web,plugin_daemon,sandbox,ssrf_proxy,nginx,redis,pgvector</span></span>
+<span class="cb-line" data-ln="51"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="52"><span class="cb-tx"><span class="comment"># ===== 可选：国内安装插件依赖加速 =====</span></span></span>
+<span class="cb-line" data-ln="53"><span class="cb-tx">PIP_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple</span></span></code></pre></div></div></figure>
+
+<p>生成口令时，<code>SECRET_KEY</code> 用 <code>openssl rand -base64 42</code>，其余进连接串的口令用 <code>openssl rand -hex 24</code>：base64 输出里的 <code>/</code>、<code>+</code>、<code>=</code> 会破坏 <code>redis://</code> 与数据库连接串的解析。</p>
+<p>几个容易写错的点：</p>
+<ul>
+<li><code>NEXT_PUBLIC_COOKIE_DOMAIN</code> 在 <code>.env.example</code> 里的注释就是「跨子域时设为 1」，填成域名字符串是常见误写；</li>
+<li><code>COOKIE_DOMAIN</code> 留空且 URL 为 https 时，后端会给 Cookie 加 <code>__Host-</code> 前缀（<code>__Host-</code> Cookie 不能跨子域共享），在浏览器开发者工具里能直接看到；</li>
+<li>出网代理变量故意叫 <code>EGRESS_*</code>：Compose 做变量替换时 shell 环境变量优先于 <code>.env</code>，运维终端里若恰好有 <code>HTTP_PROXY=http://127.0.0.1:...</code>，会被悄悄注入容器；</li>
+<li><code>RESPECT_XFORWARD_HEADERS_ENABLED</code> 保持默认 <code>false</code>。它只是给 Flask 套上 <code>ProxyFix</code>，而 Dify 自带 nginx 的 <code>proxy.conf.template</code> 固定写了 <code>X-Forwarded-Proto $scheme</code>，在这条链路里传给 api 的永远是 <code>http</code>，打开它得不到 https。</li>
+</ul>
+<h2 id="出网代理：override-文件"><a href="#出网代理：override-文件" class="headerlink" title="出网代理：override 文件"></a>出网代理：override 文件</h2><p>在 <code>docker-compose.yaml</code> 同目录新建 <code>docker-compose.override.yaml</code>，Compose 会自动合并它：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="26"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 给需要直连外网的核心服务注入代理；nginx、web、sandbox 不加</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">x-egress-env:</span> <span class="string">&amp;egress-env</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">HTTP_PROXY:</span> <span class="string">$&#123;EGRESS_HTTP_PROXY&#125;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">HTTPS_PROXY:</span> <span class="string">$&#123;EGRESS_HTTP_PROXY&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">NO_PROXY:</span> <span class="string">$&#123;EGRESS_NO_PROXY&#125;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">http_proxy:</span> <span class="string">$&#123;EGRESS_HTTP_PROXY&#125;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">https_proxy:</span> <span class="string">$&#123;EGRESS_HTTP_PROXY&#125;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">no_proxy:</span> <span class="string">$&#123;EGRESS_NO_PROXY&#125;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="attr">services:</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="attr">plugin_daemon:</span>          <span class="comment"># 模型插件在这里运行，最关键</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="attr">environment:</span> <span class="string">*egress-env</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">extra_hosts:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;host.docker.internal:host-gateway&quot;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="attr">api:</span>                    <span class="comment"># 插件市场、版本检查等直连请求</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="attr">environment:</span> <span class="string">*egress-env</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="attr">extra_hosts:</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;host.docker.internal:host-gateway&quot;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="attr">worker:</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="attr">environment:</span> <span class="string">*egress-env</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="attr">extra_hosts:</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;host.docker.internal:host-gateway&quot;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">  <span class="attr">worker_beat:</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    <span class="attr">environment:</span> <span class="string">*egress-env</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="attr">extra_hosts:</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;host.docker.internal:host-gateway&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>宿主机侧还要满足两点：代理监听在 <code>0.0.0.0</code>（或 docker 网桥地址）而不是 <code>127.0.0.1</code>，并开启允许局域网连接；宿主机防火墙放行来自 docker 网段到 <code>&lt;代理端口&gt;</code> 的连接。容器里的 <code>127.0.0.1</code> 是容器自己，这一点是最常见的失败原因。</p>
+<p><code>NO_PROXY</code> 里必须有 <code>api</code>：plugin_daemon 通过 <code>http://api:5001</code> 回调 Dify，Go 的 HTTP 客户端遵循 <code>NO_PROXY</code>，漏写就会把内部回调送进代理。Postgres 与 Redis 走的是各自的 TCP 协议，不读这些变量，列上无害。网段写法（CIDR）并非所有 HTTP 客户端都支持，服务名逐个列出最稳。</p>
+<h3 id="可选：让-HTTP-请求节点与代码沙箱也走代理"><a href="#可选：让-HTTP-请求节点与代码沙箱也走代理" class="headerlink" title="可选：让 HTTP 请求节点与代码沙箱也走代理"></a>可选：让 HTTP 请求节点与代码沙箱也走代理</h3><p>1.12.1 的 squid 模板在 <code>http_access deny all</code> 之前留了 <code>include /etc/squid/conf.d/*.conf</code>，模板里也注释了 <code>cache_peer</code> 上游代理的写法。用挂载的方式追加一个配置文件，就不用改官方模板：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 追加到 docker-compose.override.yaml 的 services 下</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">ssrf_proxy:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">extra_hosts:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">&quot;host.docker.internal:host-gateway&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">volumes:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">./ssrf_proxy/conf.d/upstream.conf:/etc/squid/conf.d/upstream.conf:ro</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># ./ssrf_proxy/conf.d/upstream.conf</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">cache_peer host.docker.internal parent &lt;代理端口&gt; 0 no-query no-digest default</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"># 私有网段直连；把你的局域网网段追加到这一行</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">acl to_private dst 10.0.0.0/8 172.16.0.0/12</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">always_direct allow to_private</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">never_direct allow all</span></span></code></pre></div></div></figure>
+
+<p><code>SSRF_PROXY_*</code> 与 <code>SANDBOX_HTTP(S)_PROXY</code> 保持指向 <code>http://ssrf_proxy:3128</code>。直接把它们改成宿主机代理，等于绕过了 Dify 的 SSRF 防护，而且 sandbox 所在的内部网络也连不到宿主机。</p>
+<h2 id="启动与验收（可复现步骤）"><a href="#启动与验收（可复现步骤）" class="headerlink" title="启动与验收（可复现步骤）"></a>启动与验收（可复现步骤）</h2><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="19"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cd</span> dify/docker</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># 1. 预检：确认最终服务集合里有 pgvector、没有 db_postgres 和 weaviate</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">docker compose config --services</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># 2. 启动；api 不等待 pgvector 就绪，首次可能重启一两次，属正常</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">docker compose up -d</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">docker compose ps</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="comment"># 3. 本机直打 Dify nginx：首页应返回 200 或 30x</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">curl -sI http://127.0.0.1:18080/ | <span class="built_in">head</span> -n 5</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"><span class="comment"># 4. 经 nginx 打到 api：system-features 无需登录，返回 JSON 即 nginx → api 通</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">curl -s http://127.0.0.1:18080/console/api/system-features | <span class="built_in">head</span> -c 200; <span class="built_in">echo</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"><span class="comment"># 5. 代理是否进了 plugin_daemon（local 版镜像自带 Python）</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">docker compose <span class="built_in">exec</span> plugin_daemon sh -c <span class="string">&#x27;env | grep -i _proxy&#x27;</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">docker compose <span class="built_in">exec</span> plugin_daemon python3 -c \</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="string">&quot;import urllib.request as u; print(u.urlopen(&#x27;https://ipinfo.io/country&#x27;, timeout=10).read().decode())&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>第 5 步输出代理出口所在国家代码，才说明模型插件的出网路径正确。之后改 <code>.env</code> 或 override 文件，用 <code>docker compose up -d</code> 让 Compose 自动重建配置有变化的容器；<code>docker compose restart</code> 不会读取新配置。</p>
+<h3 id="NPM-配置"><a href="#NPM-配置" class="headerlink" title="NPM 配置"></a>NPM 配置</h3><p>新建 Proxy Host：</p>
+<ul>
+<li>Domain Names：<code>dify.example.com</code></li>
+<li>Scheme：<code>http</code>；Forward Hostname &#x2F; IP：<code>&lt;宿主机IP&gt;</code>；Forward Port：<code>18080</code></li>
+<li>SSL 页签不配证书，也<strong>不要</strong>勾 Force SSL：隧道已终止 TLS，NPM 看到的永远是 HTTP，强制跳转会形成重定向循环。http→https 跳转交给隧道侧处理。</li>
+</ul>
+<p>Advanced 里只放真正起作用的指令：</p>
+<figure class="highlight nginx cb" data-lang="nginx" data-label="Nginx" data-ext="conf" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 与 Dify nginx 的 NGINX_CLIENT_MAX_BODY_SIZE（默认 100M）对齐</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attribute">client_max_body_size</span> <span class="number">100m</span>;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># 工作流与 SSE 流式输出可能持续数分钟</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attribute">proxy_read_timeout</span> <span class="number">3600s</span>;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attribute">proxy_send_timeout</span> <span class="number">3600s</span>;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># 关闭缓冲，流式输出才能逐字到达浏览器</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="attribute">proxy_buffering</span> <span class="literal">off</span>;</span></span></code></pre></div></div></figure>
+
+<p>上传链路的三道闸要单调不增：NPM 的 <code>client_max_body_size</code> ≥ Dify nginx 的 <code>NGINX_CLIENT_MAX_BODY_SIZE</code> ≥ 应用层 <code>UPLOAD_FILE_SIZE_LIMIT</code>（默认 15 MB）。不需要远程调试插件时，确认宿主机防火墙不对外放行 plugin_daemon 默认映射出来的 5003 端口。</p>
+<h2 id="排障决策树"><a href="#排障决策树" class="headerlink" title="排障决策树"></a>排障决策树</h2><pre class="mermaid">flowchart TD
+  S&#123;"症状"&#125; --&gt; A1["公网访问 404"]
+  S --&gt; B1["502 Bad Gateway"]
+  S --&gt; C1["登录后被踢回登录页"]
+  S --&gt; D1["模型凭据校验：地区不可用 / 超时"]
+  S --&gt; E1["api / worker 反复重启"]
+  A1 --&gt; A2&#123;"带 Host 头直打 NPM 返回 200/30x？"&#125;
+  A2 --&gt;|否| A3["NPM Proxy Host 域名未匹配或未保存"]
+  A2 --&gt;|是| A4&#123;"公网 https 响应的 Server 是 openresty？"&#125;
+  A4 --&gt;|否| A5["隧道没指向 NPM，或没保留 Host 头"]
+  A4 --&gt;|"是，仅 http:// 404"| A6["http 入口未接入：在隧道侧做 http→https"]
+  B1 --&gt; B2&#123;"错误页来自哪一层？"&#125;
+  B2 --&gt;|"openresty（NPM）"| B3["NPM 到 18080 不通：Dify nginx 未起或被防火墙拦"]
+  B2 --&gt;|"nginx（Dify 自带）"| B4&#123;"api 容器状态？"&#125;
+  B4 --&gt;|"Restarting / unhealthy"| B5["看 api 日志：数据库口令、迁移失败"]
+  B4 --&gt;|"Up，且刚被重建过"| B6["restart nginx，刷新 upstream 解析"]
+  C1 --&gt; C2&#123;"访问协议与 CONSOLE_*_URL 一致？"&#125;
+  C2 --&gt;|否| C3["https 配置下用 http://IP:18080 访问，secure Cookie 被浏览器丢弃"]
+  C2 --&gt;|是| C4["核对 COOKIE_DOMAIN 与 NEXT_PUBLIC_COOKIE_DOMAIN=1，URL 拼写是否统一"]
+  D1 --&gt; D2["plugin_daemon 未注入代理或 NO_PROXY 漏写"]
+  E1 --&gt; E2["CELERY_BROKER_URL 未同步 / pgvector 口令首启固化"]</pre>
+
+
+<p>每个叶子对应的定位命令与修复如下：</p>
+<table>
+<thead>
+<tr>
+<th>叶子</th>
+<th>定位命令</th>
+<th>根因</th>
+<th>修复</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A3</td>
+<td><code>curl -sI -H &#39;Host: dify.example.com&#39; http://&lt;宿主机IP&gt;/</code></td>
+<td>NPM 按 Host 匹配 Proxy Host，没匹配上就返回默认站点 404</td>
+<td>核对 Domain Names 拼写并保存</td>
+</tr>
+<tr>
+<td>A5</td>
+<td><code>curl -sIk https://dify.example.com/ | grep -iE &#39;^(http|server|location)&#39;</code></td>
+<td>流量没到 NPM，或隧道把 Host 改成了隧道自己的域名</td>
+<td>在隧道侧开启保留 Host 头；实在不支持时临时把隧道域名也加进 NPM 的 Domain Names</td>
+</tr>
+<tr>
+<td>A6</td>
+<td>同上，分别测 <code>http://</code> 与 <code>https://</code></td>
+<td>只开了 https 隧道</td>
+<td>隧道侧配置 http→https 跳转</td>
+</tr>
+<tr>
+<td>B3</td>
+<td><code>curl -sI http://127.0.0.1:18080/</code></td>
+<td>Dify nginx 没起，或宿主机防火墙拦了 NPM 容器到 18080</td>
+<td><code>docker compose ps nginx</code>；放行 docker 网段到 18080</td>
+</tr>
+<tr>
+<td>B5</td>
+<td><code>docker compose logs --tail=120 api</code></td>
+<td>常见是 <code>password authentication failed</code>，见 E2</td>
+<td>按 E2 修复后 <code>docker compose up -d</code></td>
+</tr>
+<tr>
+<td>B6</td>
+<td><code>docker compose logs --tail=80 nginx | grep upstream</code></td>
+<td>Dify nginx 在启动时解析 <code>api</code> 的地址；<code>--force-recreate api</code> 后 api 换了容器 IP，nginx 仍指向旧地址</td>
+<td><code>docker compose restart nginx</code>；以后重建 api 就顺手重启 nginx</td>
+</tr>
+<tr>
+<td>C3</td>
+<td>浏览器开发者工具看 Cookie 是否带 Secure、名字是否带 <code>__Host-</code></td>
+<td><code>is_secure()</code> 只看两个 CONSOLE URL 是否以 https 开头，http 访问时浏览器不保存 secure Cookie</td>
+<td>局域网也用 https 域名访问；确需内网直连就另起一套 http 的 URL 配置，不要混用</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>对比地址栏域名与 <code>.env</code> 里所有 <code>*_URL</code></td>
+<td>某个 URL 少了一个点、或子域不同，Cookie 域与请求域对不上</td>
+<td>统一所有 URL，改完 <code>docker compose up -d</code></td>
+</tr>
+<tr>
+<td>D2</td>
+<td>上文验收第 5 步</td>
+<td>代理只写进 <code>.env</code>，没有进容器；或 <code>NO_PROXY</code> 漏了 <code>api</code></td>
+<td>补 override，<code>docker compose up -d</code></td>
+</tr>
+<tr>
+<td>E2</td>
+<td><code>docker compose logs --tail=80 worker</code>、<code>docker compose logs --tail=80 api</code></td>
+<td>worker 报 Redis 认证失败：<code>CELERY_BROKER_URL</code> 仍是旧密码；api 报 Postgres 认证失败：pgvector 数据目录首次初始化时用的是旧口令，之后改 <code>PGVECTOR_POSTGRES_PASSWORD</code> 不再生效</td>
+<td>同步连接串；或进容器改口令：<code>docker compose exec pgvector psql -U postgres -c &quot;ALTER USER postgres WITH PASSWORD &#39;Db_ChangeMe_hex32&#39;;&quot;</code></td>
+</tr>
+</tbody></table>
+<p>插件处理文件失败（文档解析类插件报取文件超时）另查两项：<code>FILES_URL</code> 是否从公网可达，<code>INTERNAL_FILES_URL</code> 是否为 <code>http://api:5001</code>。官方注释写明 <code>FILES_URL</code> 是文件处理插件的必填项。</p>
+<h2 id="工作流运行时限制与调参"><a href="#工作流运行时限制与调参" class="headerlink" title="工作流运行时限制与调参"></a>工作流运行时限制与调参</h2><p>下表取自 1.12.1 的 <code>docker/.env.example</code> 默认值。除标注 web 的几项外，都通过共享环境块注入 api 与 worker：</p>
+<table>
+<thead>
+<tr>
+<th>变量</th>
+<th>默认值</th>
+<th>管什么</th>
+<th>典型超限表现</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>WORKFLOW_MAX_EXECUTION_STEPS</code></td>
+<td>500</td>
+<td>单次运行执行的节点步数，循环与迭代内每一步都计入</td>
+<td>长循环跑到一半失败</td>
+</tr>
+<tr>
+<td><code>WORKFLOW_MAX_EXECUTION_TIME</code></td>
+<td>1200 秒</td>
+<td>单次工作流运行总时长</td>
+<td>长研究任务被终止</td>
+</tr>
+<tr>
+<td><code>APP_MAX_EXECUTION_TIME</code></td>
+<td>1200 秒</td>
+<td>应用请求的最长执行时间</td>
+<td>同上，两者要一起调</td>
+</tr>
+<tr>
+<td><code>WORKFLOW_CALL_MAX_DEPTH</code></td>
+<td>5</td>
+<td>工作流作为工具互相嵌套的深度</td>
+<td>子工作流套娃失败</td>
+</tr>
+<tr>
+<td><code>MAX_VARIABLE_SIZE</code></td>
+<td>204800 字节</td>
+<td>单个变量体积</td>
+<td>LLM 长文输出传给下游时报变量过大</td>
+</tr>
+<tr>
+<td><code>CODE_MAX_STRING_LENGTH</code></td>
+<td>400000</td>
+<td>Code 节点输出字符串长度</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>CODE_MAX_STRING_ARRAY_LENGTH</code> &#x2F; <code>CODE_MAX_OBJECT_ARRAY_LENGTH</code></td>
+<td>30 &#x2F; 30</td>
+<td>Code 节点输出数组元素个数</td>
+<td>返回 50 条搜索结果即校验失败</td>
+</tr>
+<tr>
+<td><code>CODE_MAX_NUMBER_ARRAY_LENGTH</code> &#x2F; <code>CODE_MAX_DEPTH</code></td>
+<td>1000 &#x2F; 5</td>
+<td>数字数组长度 &#x2F; 输出对象嵌套深度</td>
+<td>深层 JSON 原样返回失败</td>
+</tr>
+<tr>
+<td><code>CODE_EXECUTION_READ_TIMEOUT</code> &#x2F; <code>SANDBOX_WORKER_TIMEOUT</code></td>
+<td>60 &#x2F; 15 秒</td>
+<td>api 等待沙箱 &#x2F; 沙箱内单次执行</td>
+<td>重计算代码超时</td>
+</tr>
+<tr>
+<td><code>TEMPLATE_TRANSFORM_MAX_LENGTH</code></td>
+<td>400000</td>
+<td>模板转换输出长度</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>HTTP_REQUEST_NODE_MAX_TEXT_SIZE</code> &#x2F; <code>_MAX_BINARY_SIZE</code></td>
+<td>1 MB &#x2F; 10 MB</td>
+<td>HTTP 请求节点的<strong>响应</strong>体积（请求体不受此限）</td>
+<td>抓取大网页报 <code>Text size is too large</code></td>
+</tr>
+<tr>
+<td><code>HTTP_REQUEST_MAX_READ_TIMEOUT</code></td>
+<td>600 秒</td>
+<td>HTTP 请求节点读超时上限</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>LOOP_NODE_MAX_COUNT</code></td>
+<td>100</td>
+<td>循环节点可设的最大轮数（web 同时读取）</td>
+<td>画布里填不进更大的值</td>
+</tr>
+<tr>
+<td><code>MAX_PARALLEL_LIMIT</code></td>
+<td>10</td>
+<td>并行分支数（web 同时读取）</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>MAX_ITERATIONS_NUM</code></td>
+<td>99</td>
+<td>Agent 的最大推理轮数，不是迭代节点</td>
+<td>常被误调</td>
+</tr>
+<tr>
+<td><code>TEXT_GENERATION_TIMEOUT_MS</code></td>
+<td>60000</td>
+<td>web 端等待文本生成的超时</td>
+<td>慢模型在网页端先超时</td>
+</tr>
+<tr>
+<td><code>TOP_K_MAX_VALUE</code></td>
+<td>10</td>
+<td>知识检索 top_k 上限</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>PLUGIN_MAX_EXECUTION_TIMEOUT</code></td>
+<td>600 秒</td>
+<td>插件单次执行（含模型调用）</td>
+<td>超长输出被中断</td>
+</tr>
+</tbody></table>
+<p>调参顺序：先改工作流结构（分页、分段、外置存储），实在不够再把对应变量调到「刚好够用」。把 <code>MAX_VARIABLE_SIZE</code> 调大十倍，代价是数据库里的运行记录、日志与 Redis 事件都跟着膨胀，4C6G 机器最先被拖垮的是 Postgres。</p>
+<h2 id="长文本外置：MinIO-存储网关"><a href="#长文本外置：MinIO-存储网关" class="headerlink" title="长文本外置：MinIO + 存储网关"></a>长文本外置：MinIO + 存储网关</h2><p>变量体积上限（约 200 KB）与 HTTP 响应上限（1 MB）决定了：长报告、大批量结果不能在工作流变量里流转。做法是<strong>变量里只放引用与摘要，正文落对象存储</strong>。</p>
+<p>MinIO 侧只做一次准备，给网关一个仅限单个 bucket 的账号：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">mc <span class="built_in">alias</span> <span class="built_in">set</span> lab https://minio.example.com &lt;root用户&gt; &lt;root口令&gt;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">mc mb lab/dify-artifacts</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">mc admin user add lab dify-gw Gw_ChangeMe_hex32</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="built_in">cat</span> &gt; dify-artifacts-policy.json &lt;&lt;<span class="string">&#x27;JSON&#x27;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">&#123;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="string">&quot;Version&quot;</span>: <span class="string">&quot;2012-10-17&quot;</span>,</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="string">&quot;Statement&quot;</span>: [</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    &#123;<span class="string">&quot;Effect&quot;</span>: <span class="string">&quot;Allow&quot;</span>, <span class="string">&quot;Action&quot;</span>: [<span class="string">&quot;s3:ListBucket&quot;</span>], <span class="string">&quot;Resource&quot;</span>: [<span class="string">&quot;arn:aws:s3:::dify-artifacts&quot;</span>]&#125;,</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    &#123;<span class="string">&quot;Effect&quot;</span>: <span class="string">&quot;Allow&quot;</span>, <span class="string">&quot;Action&quot;</span>: [<span class="string">&quot;s3:GetObject&quot;</span>, <span class="string">&quot;s3:PutObject&quot;</span>, <span class="string">&quot;s3:DeleteObject&quot;</span>],</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">     <span class="string">&quot;Resource&quot;</span>: [<span class="string">&quot;arn:aws:s3:::dify-artifacts/*&quot;</span>]&#125;</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  ]</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">&#125;</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">JSON</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">mc admin policy create lab dify-artifacts-rw dify-artifacts-policy.json</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">mc admin policy attach lab dify-artifacts-rw --user dify-gw</span></span></code></pre></div></div></figure>
+
+<p>对象存储的 AK&#x2F;SK 不进工作流，只进一个很薄的存储网关（FastAPI + boto3 即可）。网关对 Dify 暴露三个接口，Dify 侧用 HTTP 请求节点调用，网关的访问令牌放在工作流的 secret 类型环境变量里：</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>入参</th>
+<th>出参</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>POST /v1/blob/put-text</code></td>
+<td><code>key</code>、<code>text</code>、<code>content_type</code></td>
+<td><code>object_key</code>、<code>size</code></td>
+<td>每段一个对象；S3 语义没有追加写</td>
+</tr>
+<tr>
+<td><code>POST /v1/blob/compose</code></td>
+<td><code>prefix</code>、<code>part_count</code>、<code>dest_key</code></td>
+<td><code>object_key</code>、<code>url</code></td>
+<td>网关内按序拼接后写回一个对象，返回预签名下载链接</td>
+</tr>
+<tr>
+<td><code>GET /v1/blob/presign</code></td>
+<td><code>key</code>、<code>expires</code></td>
+<td><code>url</code></td>
+<td>按需重新签发下载链接</td>
+</tr>
+</tbody></table>
+<p>长报告的编排顺序：<strong>分段生成 → 每段上传 → 循环结束后合并 → 输出链接与摘要</strong>。不要先生成整篇再上传，整篇文本在变量里就可能先撞上限。</p>
+<ol>
+<li>循环节点：循环变量 <code>part</code>（number，初值 1）、<code>done</code>（boolean，初值 false）、<code>summary</code>（string，初值空），退出条件 <code>done</code> 为 true；</li>
+<li>循环内 LLM 节点：以主题、段号与累积摘要为输入，要求只输出 JSON：<code>chunk_markdown</code>、<code>chunk_summary</code>、<code>is_last</code>，用 <code>max_tokens</code> 控制每段长度；</li>
+<li>HTTP 请求节点：调 <code>put-text</code>，key 用 <code>reports/&#123;&#123;#sys.workflow_run_id#&#125;&#125;/part-&#123;&#123;段号&#125;&#125;.md</code>；</li>
+<li>变量赋值节点：<code>summary</code> 追加本段摘要，<code>part</code> 加 1；条件分支判断 <code>is_last</code>，为真时把 <code>done</code> 置 true；</li>
+<li>循环外 HTTP 请求节点调 <code>compose</code>，结束节点输出摘要与下载链接。</li>
+</ol>
+<p>批量处理同理：<strong>外层循环按游标分页，内层迭代处理一页</strong>，页大小 20–50，迭代并行度 3–5；每条结果在迭代内部直接写入网关，迭代的输出只返回一个短状态字符串，避免聚合出大数组。这些节点在 DSL 里的具体写法见《Dify DSL 工作流设计与校验》。</p>
+<p>HTTP 请求节点的流量走 ssrf_proxy。网关若只在内网可达，最省事的是把网关容器加入 Dify 的默认网络，用服务名访问；调用失败时先看 <code>docker compose logs ssrf_proxy</code> 里是否有 <code>TCP_DENIED</code>。</p>
+<h2 id="Dify-前台联调：迁移成功、运行时连接池超时"><a href="#Dify-前台联调：迁移成功、运行时连接池超时" class="headerlink" title="Dify 前台联调：迁移成功、运行时连接池超时"></a>Dify 前台联调：迁移成功、运行时连接池超时</h2><p>给 Dify 配一个 C 端前台时（例如 DifyChat 这类「前端 + Node 平台层 + MySQL」的项目），遇到过一个很迷惑的故障：平台层容器启动时数据库迁移执行成功，随后初始化管理员时报：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">pool timeout: failed to retrieve a connection from pool after 10001ms (active=0 idle=0)</span></span></code></pre></div></div></figure>
+
+<p><code>active=0 idle=0</code> 说明连接池一个连接都没建起来，不是池被占满。迁移能过，说明地址和口令大概率没错，差别在「谁去连」：迁移由 ORM 的迁移引擎执行，运行时走 Node 驱动的连接池，两者在认证插件协商、连接时机上都不同。当时的环境里平台层用宿主机 IP 连另一个 compose 里的 MySQL，多了一层 NAT 与防火墙，MySQL 刚启动时还在抖动期。</p>
+<p>定位按下面顺序：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 1. 平台容器到 MySQL 的 TCP 通不通</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">docker <span class="built_in">exec</span> -it &lt;平台容器&gt; sh -c <span class="string">&#x27;nc -vz &lt;MySQL地址&gt; 3306&#x27;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># 2. 业务账号用的认证插件</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">docker <span class="built_in">exec</span> -it &lt;MySQL容器&gt; mysql -uroot -p -e <span class="string">&quot;SELECT user, host, plugin FROM mysql.user;&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># 3. MySQL 侧有没有拒绝记录</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">docker logs --<span class="built_in">tail</span>=200 &lt;MySQL容器&gt;</span></span></code></pre></div></div></figure>
+
+<p>最终修复是把 MySQL 并入前台的同一个 compose，用服务名直连、健康检查后再启动平台层，并使用独立业务账号（以下只列与修复相关的部分，其余以项目官方 compose 为准）：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="33"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">services:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">mysql:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">image:</span> <span class="string">mysql:8.0</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">restart:</span> <span class="string">unless-stopped</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">environment:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="attr">MYSQL_ROOT_PASSWORD:</span> <span class="string">$&#123;MYSQL_ROOT_PASSWORD&#125;</span>   <span class="comment"># 在 .env 中设为 Root_ChangeMe_hex32 形式并替换</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="attr">MYSQL_DATABASE:</span> <span class="string">dify-chat</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">MYSQL_USER:</span> <span class="string">appuser</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="attr">MYSQL_PASSWORD:</span> <span class="string">$&#123;MYSQL_APP_PASSWORD&#125;</span>         <span class="comment"># 同上</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="attr">command:</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="comment"># 8.0 可用；8.4 已移除该参数，需改用按用户指定认证插件</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">--default-authentication-plugin=mysql_native_password</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">--character-set-server=utf8mb4</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">--collation-server=utf8mb4_0900_ai_ci</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="attr">volumes:</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">mysql_data:/var/lib/mysql</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="attr">healthcheck:</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">      <span class="attr">test:</span> [<span class="string">&quot;CMD-SHELL&quot;</span>, <span class="string">&quot;mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent&quot;</span>]</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">      <span class="attr">interval:</span> <span class="string">10s</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">      <span class="attr">timeout:</span> <span class="string">5s</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      <span class="attr">retries:</span> <span class="number">20</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="attr">start_period:</span> <span class="string">40s</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">    <span class="comment"># 不映射 3306 到宿主机</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">  <span class="attr">platform:</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    <span class="attr">depends_on:</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">      <span class="attr">mysql:</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        <span class="attr">condition:</span> <span class="string">service_healthy</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">    <span class="attr">environment:</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">      <span class="attr">DATABASE_URL:</span> <span class="string">mysql://appuser:$&#123;MYSQL_APP_PASSWORD&#125;@mysql:3306/dify-chat</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"><span class="attr">volumes:</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">  <span class="attr">mysql_data:</span></span></span></code></pre></div></div></figure>
+
+<p>改完后若故障消失，就坐实了是网络路径或认证插件的问题；若仍然 <code>active=0</code>，再进平台容器打开驱动的调试日志看首个连接的真实报错。前台若挂在 NPM 上，同一个 Host 下用 Custom locations 把 <code>/api</code> 前缀转给平台层、根路径转给前端，这样浏览器端不存在跨域。</p>
+<h2 id="硬约束清单"><a href="#硬约束清单" class="headerlink" title="硬约束清单"></a>硬约束清单</h2><ul>
+<li><input disabled="" type="checkbox"> 所有 <code>*_URL</code> 显式写 https 对外地址，与浏览器地址栏完全一致；<code>TRIGGER_URL</code> 与 <code>ENDPOINT_URL_TEMPLATE</code> 不能留 localhost</li>
+<li><input disabled="" type="checkbox"> 跨子域登录：<code>COOKIE_DOMAIN=根域</code>，<code>NEXT_PUBLIC_COOKIE_DOMAIN=1</code></li>
+<li><input disabled="" type="checkbox"> 不依赖 <code>X-Forwarded-Proto</code> 判断 https；<code>RESPECT_XFORWARD_HEADERS_ENABLED</code> 在本链路保持 false</li>
+<li><input disabled="" type="checkbox"> NPM 不勾 Force SSL；http→https 在隧道侧做</li>
+<li><input disabled="" type="checkbox"> <code>DB_PASSWORD</code> &#x3D; <code>PGVECTOR_PASSWORD</code> &#x3D; <code>PGVECTOR_POSTGRES_PASSWORD</code>，且在首次 <code>up</code> 之前定好</li>
+<li><input disabled="" type="checkbox"> <code>REDIS_PASSWORD</code> 与 <code>CELERY_BROKER_URL</code> 同步；<code>SANDBOX_API_KEY</code> 与 <code>CODE_EXECUTION_API_KEY</code> 相同</li>
+<li><input disabled="" type="checkbox"> 进连接串的口令只用字母数字</li>
+<li><input disabled="" type="checkbox"> 代理只通过 override 注入 plugin_daemon、api、worker、worker_beat，<code>NO_PROXY</code> 含 <code>api</code></li>
+<li><input disabled="" type="checkbox"> <code>SSRF_PROXY_*</code>、<code>SANDBOX_HTTP(S)_PROXY</code> 保持指向 ssrf_proxy</li>
+<li><input disabled="" type="checkbox"> 改 <code>.env</code> 后用 <code>docker compose up -d</code>；重建 api 后重启 nginx</li>
+<li><input disabled="" type="checkbox"> 宿主机防火墙不对外放行 18080、18443、5003</li>
+<li><input disabled="" type="checkbox"> 长文本、大数组走外置存储，变量里只放引用与摘要</li>
+</ul>
+<h2 id="2026-09-补记：升级到-1-13–1-17-1-时部署侧的变化"><a href="#2026-09-补记：升级到-1-13–1-17-1-时部署侧的变化" class="headerlink" title="2026-09 补记：升级到 1.13–1.17.1 时部署侧的变化"></a>2026-09 补记：升级到 1.13–1.17.1 时部署侧的变化</h2><p>本文正文以 1.12.1 为准。截至 2026-09 的最新版本是 1.17.1，升级时与本文配置相关的变化有：</p>
+<ul>
+<li><strong><code>.env</code> 结构重排（1.15.0 起）</strong>：<code>docker/.env.example</code> 只保留启动必需的变量（1.17.1 约 300 行），可选与各供应商变量拆到 <code>docker/envs/</code> 下的 <code>*.env.example</code>，复制去掉 <code>.example</code> 后缀即可启用，<code>docker/.env</code> 的值优先。本文的运行时限制类变量、pgvector 连接变量都不在新的主文件里。升级时不要用旧 <code>.env</code> 整体覆盖，按新结构逐项迁移本文的改动。</li>
+<li><strong><code>SECRET_KEY</code> 可留空（1.17.1 已确认）</strong>：留空时自动生成并持久化到存储目录。</li>
+<li><strong>新增服务</strong>：1.14 起支持多人协同编辑，1.17.1 中对应 <code>api_websocket</code> 服务，挂在 <code>collaboration</code> profile 下，默认 <code>COMPOSE_PROFILES</code> 追加了 <code>collaboration</code>，前端通过 <code>NEXT_PUBLIC_SOCKET_URL</code>（默认 <code>ws://localhost</code>）连接。经 NPM 反代时要打开 Websockets Support，并把该变量改为对外的 <code>wss://</code> 地址。1.16 引入 Dify Agent（Beta），1.17.1 的 compose 里 <code>agent_backend</code>、<code>local_sandbox</code>、<code>agent_ssrf_proxy</code> 没有 profile 门控，默认随 <code>up</code> 启动，6 GB 内存的机器升级前要先评估余量。</li>
+<li><strong>内网访问开关</strong>：1.17.1 新增 <code>SSRF_PROXY_ALLOW_PRIVATE_IPS</code>，填 CIDR 列表即可放行 HTTP 请求节点、工具、插件访问内网地址，存储网关在内网时不必再改 squid。</li>
+<li>1.17.1 的 nginx <code>proxy.conf.template</code> 仍把 <code>X-Forwarded-Proto</code> 写成 <code>$scheme</code>，本文关于 https 判定的结论不变。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/02/09/technical-docs/Dify-DSL%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%A0%A1%E9%AA%8C/">Dify DSL 工作流设计与校验：Schema 硬约束与导入预检</a></h3>
+        <p>对照 Dify 1.12.1 源码整理 DSL 0.5.0 的 Schema 硬约束：导入各阶段各校验什么、节点与容器的字段规则、导出时被改…</p>
+        <a class="btn primary" href="/2026/02/09/technical-docs/Dify-DSL%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%A0%A1%E9%AA%8C/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2025/10/21/technical-docs/Nacos%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%B2%BB%E7%90%86/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Nacos 3.x：从服务注册到 MCP / A2A 注册中心</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 12 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%9C%BA%E6%99%AF%E4%B8%8E%E7%BA%A6%E6%9D%9F" data-toc-target="场景与约束"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">场景与约束</span></a><a class="toc-level-2" href="#%E6%8B%93%E6%89%91%E4%B8%8E%E4%B8%89%E6%9D%A1%E6%B5%81%E9%87%8F" data-toc-target="拓扑与三条流量"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">拓扑与三条流量</span></a><a class="toc-level-2" href="#%E5%85%B3%E9%94%AE%E5%86%B3%E7%AD%96" data-toc-target="关键决策"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">关键决策</span></a><a class="toc-level-2" href="#env-%E6%94%B9%E5%8A%A8%E6%B8%85%E5%8D%95%EF%BC%88%E5%94%AF%E4%B8%80%E4%B8%80%E4%BB%BD%EF%BC%89" data-toc-target="env-改动清单（唯一一份）"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">.env 改动清单（唯一一份）</span></a><a class="toc-level-2" href="#%E5%87%BA%E7%BD%91%E4%BB%A3%E7%90%86%EF%BC%9Aoverride-%E6%96%87%E4%BB%B6" data-toc-target="出网代理：override-文件"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">出网代理：override 文件</span></a><a class="toc-level-3" href="#%E5%8F%AF%E9%80%89%EF%BC%9A%E8%AE%A9-HTTP-%E8%AF%B7%E6%B1%82%E8%8A%82%E7%82%B9%E4%B8%8E%E4%BB%A3%E7%A0%81%E6%B2%99%E7%AE%B1%E4%B9%9F%E8%B5%B0%E4%BB%A3%E7%90%86" data-toc-target="可选：让-HTTP-请求节点与代码沙箱也走代理"><span class="toc-text">可选：让 HTTP 请求节点与代码沙箱也走代理</span></a><a class="toc-level-2" href="#%E5%90%AF%E5%8A%A8%E4%B8%8E%E9%AA%8C%E6%94%B6%EF%BC%88%E5%8F%AF%E5%A4%8D%E7%8E%B0%E6%AD%A5%E9%AA%A4%EF%BC%89" data-toc-target="启动与验收（可复现步骤）"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">启动与验收（可复现步骤）</span></a><a class="toc-level-3" href="#NPM-%E9%85%8D%E7%BD%AE" data-toc-target="NPM-配置"><span class="toc-text">NPM 配置</span></a><a class="toc-level-2" href="#%E6%8E%92%E9%9A%9C%E5%86%B3%E7%AD%96%E6%A0%91" data-toc-target="排障决策树"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">排障决策树</span></a><a class="toc-level-2" href="#%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%BF%90%E8%A1%8C%E6%97%B6%E9%99%90%E5%88%B6%E4%B8%8E%E8%B0%83%E5%8F%82" data-toc-target="工作流运行时限制与调参"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">工作流运行时限制与调参</span></a><a class="toc-level-2" href="#%E9%95%BF%E6%96%87%E6%9C%AC%E5%A4%96%E7%BD%AE%EF%BC%9AMinIO-%E5%AD%98%E5%82%A8%E7%BD%91%E5%85%B3" data-toc-target="长文本外置：MinIO-存储网关"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">长文本外置：MinIO + 存储网关</span></a><a class="toc-level-2" href="#Dify-%E5%89%8D%E5%8F%B0%E8%81%94%E8%B0%83%EF%BC%9A%E8%BF%81%E7%A7%BB%E6%88%90%E5%8A%9F%E3%80%81%E8%BF%90%E8%A1%8C%E6%97%B6%E8%BF%9E%E6%8E%A5%E6%B1%A0%E8%B6%85%E6%97%B6" data-toc-target="Dify-前台联调：迁移成功、运行时连接池超时"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">Dify 前台联调：迁移成功、运行时连接池超时</span></a><a class="toc-level-2" href="#%E7%A1%AC%E7%BA%A6%E6%9D%9F%E6%B8%85%E5%8D%95" data-toc-target="硬约束清单"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">硬约束清单</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E5%8D%87%E7%BA%A7%E5%88%B0-1-13%E2%80%931-17-1-%E6%97%B6%E9%83%A8%E7%BD%B2%E4%BE%A7%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：升级到-1-13–1-17-1-时部署侧的变化"><i class="toc-num" aria-hidden="true">12</i><span class="toc-text">2026-09 补记：升级到 1.13–1.17.1 时部署侧的变化</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/self-hosted-ai-infra/" style="--rail: 50%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">4 / 8</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%9C%BA%E6%99%AF%E4%B8%8E%E7%BA%A6%E6%9D%9F" data-toc-target="场景与约束" data-title="01 · 场景与约束" aria-label="场景与约束"></a><a class="toc-strip__dot" href="#%E6%8B%93%E6%89%91%E4%B8%8E%E4%B8%89%E6%9D%A1%E6%B5%81%E9%87%8F" data-toc-target="拓扑与三条流量" data-title="02 · 拓扑与三条流量" aria-label="拓扑与三条流量"></a><a class="toc-strip__dot" href="#%E5%85%B3%E9%94%AE%E5%86%B3%E7%AD%96" data-toc-target="关键决策" data-title="03 · 关键决策" aria-label="关键决策"></a><a class="toc-strip__dot" href="#env-%E6%94%B9%E5%8A%A8%E6%B8%85%E5%8D%95%EF%BC%88%E5%94%AF%E4%B8%80%E4%B8%80%E4%BB%BD%EF%BC%89" data-toc-target="env-改动清单（唯一一份）" data-title="04 · .env 改动清单（唯一一份）" aria-label=".env 改动清单（唯一一份）"></a><a class="toc-strip__dot" href="#%E5%87%BA%E7%BD%91%E4%BB%A3%E7%90%86%EF%BC%9Aoverride-%E6%96%87%E4%BB%B6" data-toc-target="出网代理：override-文件" data-title="05 · 出网代理：override 文件" aria-label="出网代理：override 文件"></a><a class="toc-strip__dot" href="#%E5%90%AF%E5%8A%A8%E4%B8%8E%E9%AA%8C%E6%94%B6%EF%BC%88%E5%8F%AF%E5%A4%8D%E7%8E%B0%E6%AD%A5%E9%AA%A4%EF%BC%89" data-toc-target="启动与验收（可复现步骤）" data-title="06 · 启动与验收（可复现步骤）" aria-label="启动与验收（可复现步骤）"></a><a class="toc-strip__dot" href="#%E6%8E%92%E9%9A%9C%E5%86%B3%E7%AD%96%E6%A0%91" data-toc-target="排障决策树" data-title="07 · 排障决策树" aria-label="排障决策树"></a><a class="toc-strip__dot" href="#%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%BF%90%E8%A1%8C%E6%97%B6%E9%99%90%E5%88%B6%E4%B8%8E%E8%B0%83%E5%8F%82" data-toc-target="工作流运行时限制与调参" data-title="08 · 工作流运行时限制与调参" aria-label="工作流运行时限制与调参"></a><a class="toc-strip__dot" href="#%E9%95%BF%E6%96%87%E6%9C%AC%E5%A4%96%E7%BD%AE%EF%BC%9AMinIO-%E5%AD%98%E5%82%A8%E7%BD%91%E5%85%B3" data-toc-target="长文本外置：MinIO-存储网关" data-title="09 · 长文本外置：MinIO + 存储网关" aria-label="长文本外置：MinIO + 存储网关"></a><a class="toc-strip__dot" href="#Dify-%E5%89%8D%E5%8F%B0%E8%81%94%E8%B0%83%EF%BC%9A%E8%BF%81%E7%A7%BB%E6%88%90%E5%8A%9F%E3%80%81%E8%BF%90%E8%A1%8C%E6%97%B6%E8%BF%9E%E6%8E%A5%E6%B1%A0%E8%B6%85%E6%97%B6" data-toc-target="Dify-前台联调：迁移成功、运行时连接池超时" data-title="10 · Dify 前台联调：迁移成功、运行时连接池超时" aria-label="Dify 前台联调：迁移成功、运行时连接池超时"></a><a class="toc-strip__dot" href="#%E7%A1%AC%E7%BA%A6%E6%9D%9F%E6%B8%85%E5%8D%95" data-toc-target="硬约束清单" data-title="11 · 硬约束清单" aria-label="硬约束清单"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E5%8D%87%E7%BA%A7%E5%88%B0-1-13%E2%80%931-17-1-%E6%97%B6%E9%83%A8%E7%BD%B2%E4%BE%A7%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：升级到-1-13–1-17-1-时部署侧的变化" data-title="12 · 2026-09 补记：升级到 1.13–1.17.1 时部署侧的变化" aria-label="2026-09 补记：升级到 1.13–1.17.1 时部署侧的变化"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"technical-docs/Dify私有化部署指南","title":"Dify 1.12 私有化部署与排障实录","url":"/2026/02/06/technical-docs/Dify%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97/","path":"self-hosted-ai-infra","index":3,"total":8,"next":{"title":"Dify DSL 工作流设计与校验：Schema 硬约束与导入预检","url":"/2026/02/09/technical-docs/Dify-DSL%E5%B7%A5%E4%BD%9C%E6%B5%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%A0%A1%E9%AA%8C/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

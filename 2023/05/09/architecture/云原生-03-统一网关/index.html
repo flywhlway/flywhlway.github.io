@@ -1,0 +1,661 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>统一网关：WAF、流量网关与微服务网关三合一 · 飞轮之道</title>
+<meta name="description" content="把 WAF、流量网关、多套 Spring Cloud Gateway 收敛为一层基于 Envoy 的统一网关：候选方案对比、Higress 选型条件、Nacos 对接与插件配置、分阶段迁移、容量规划与风险清单。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2023/05/09/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-03-%E7%BB%9F%E4%B8%80%E7%BD%91%E5%85%B3/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="统一网关：WAF、流量网关与微服务网关三合一 · 飞轮之道">
+<meta property="og:description" content="把 WAF、流量网关、多套 Spring Cloud Gateway 收敛为一层基于 Envoy 的统一网关：候选方案对比、Higress 选型条件、Nacos 对接与插件配置、分阶段迁移、容量规划与风险清单。">
+<meta property="og:url" content="https://flywhlway.github.io/2023/05/09/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-03-%E7%BB%9F%E4%B8%80%E7%BD%91%E5%85%B3/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E4%BA%91%E7%AE%A1%E7%AB%AF%E6%9E%B6%E6%9E%84/">云管端架构</a> / <a href="/paths/cloud-native-platform/">平台规划</a><a class="series-chip" href="/paths/cloud-native-platform/" title="查看学习路径">第 4 / 9 篇</a>
+    </div>
+    <h1>统一网关：WAF、流量网关与微服务网关三合一</h1>
+    <p class="article-deck">把 WAF、流量网关、多套 Spring Cloud Gateway 收敛为一层基于 Envoy 的统一网关：候选方案对比、Higress 选型条件、Nacos 对接与插件配置、分…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>12 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">#架构设计</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E5%8E%9F%E7%94%9F/">#云原生</a><a class="article-meta__tag" href="/tags/%E8%BD%A6%E8%81%94%E7%BD%91/">#车联网</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>先二合一、再三合一：流量网关与微服务网关先合并，WAF 内置以引擎成熟度和压测结果为前提。</li><li>选 Higress 的前提是 1.0 GA、配置尽量落在 Ingress 与兼容注解上，并为 Gateway API 迁移留路。</li><li>网关只做通用的横切能力；聚合、编排等业务逻辑迁往 BFF 服务，MQTT 长连接与大文件上传不经过统一网关。</li><li>按域名组拆分多个数据面实例、共用控制面，控制单点故障的影响范围。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="现状：一次请求穿过三层网关"><a href="#现状：一次请求穿过三层网关" class="headerlink" title="现状：一次请求穿过三层网关"></a>现状：一次请求穿过三层网关</h2><p>车联网平台的南北向 HTTP 流量来自三类调用方：手机 App、第三方开放 API、内部运营系统。历史上每接入一类就建一套网关，形成了三层串联的结构：</p>
+<pre class="mermaid">flowchart LR
+  C["客户端"] --&gt; W["WAF&lt;br/&gt;独立集群"]
+  W --&gt; N["流量网关&lt;br/&gt;Nginx：TLS、域名路由"]
+  N --&gt; G1["微服务网关 A&lt;br/&gt;App 接入"]
+  N --&gt; G2["微服务网关 B&lt;br/&gt;开放 API"]
+  N --&gt; G3["微服务网关 C&lt;br/&gt;统一账号"]
+  G1 --&gt; S["Kubernetes 服务"]
+  G2 --&gt; S
+  G3 --&gt; S</pre>
+
+
+<p>这套结构的问题可以逐条量化：</p>
+<ul>
+<li><strong>跳数与资源。</strong> 一次请求至少经过三个代理进程，每跳都有一次连接复用、头部解析与日志写入。三层网关各自按峰值预留容量，整体资源利用率低。</li>
+<li><strong>配置分散。</strong> 一个新接口上线，要在 WAF 放行规则、Nginx 配置、Spring Cloud Gateway 路由三处分别变更，任何一处遗漏都会表现为难以定位的 403 或 404。</li>
+<li><strong>Nginx reload 伤害长连接。</strong> 配置变更触发 reload 后，旧 worker 要等存量连接关闭才退出；App 的长轮询与 WebSocket 连接会让多代 worker 并存，内存成倍上涨，频繁变更时尤为明显。</li>
+<li><strong>鉴权重复实现。</strong> 三套微服务网关各有一份 Token 校验逻辑，版本不一，安全修复要改三遍。</li>
+<li><strong>可观测断链。</strong> WAF、Nginx、Java 网关的日志格式与追踪上下文各不相同，一次超时要在三处日志里人工对齐时间戳。</li>
+</ul>
+<h2 id="目标：两步走的三合一"><a href="#目标：两步走的三合一" class="headerlink" title="目标：两步走的三合一"></a>目标：两步走的三合一</h2><p>目标架构是一层基于 Envoy 的统一网关，同时承担 WAF、流量网关与微服务网关的职责。但 WAF 内置并不是一个可以一步到位的决定，因此分两步：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>形态</th>
+<th>前提条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>二合一</td>
+<td>WAF 保持独立；流量网关与三套微服务网关合并为统一网关</td>
+<td>统一网关 GA 版本，完成压测与迁移演练</td>
+</tr>
+<tr>
+<td>三合一</td>
+<td>WAF 以插件形式内置到统一网关，独立 WAF 下线</td>
+<td>WAF 引擎达到生产可用，开启规则集后的性能损耗可接受，误报率经过回放验证</td>
+</tr>
+</tbody></table>
+<pre class="mermaid">flowchart LR
+  subgraph GW["统一网关数据面（Envoy）"]
+    P1["WAF 插件&lt;br/&gt;三合一阶段启用"] --&gt; P2["认证插件"] --&gt; P3["限流"] --&gt; P4["路由与灰度"]
+  end
+  C["客户端"] --&gt; LB["云负载均衡&lt;br/&gt;四层"] --&gt; P1
+  CP["网关控制面&lt;br/&gt;监听 Ingress / 插件 / 服务来源"] -. xDS .-&gt; P1
+  P4 --&gt; K["Kubernetes Service"]
+  P4 --&gt; NA["Nacos 注册的服务"]</pre>
+
+
+<p>有两类流量明确不进入统一网关：车辆的 MQTT 长连接由专用 Broker 集群承接（原因见第 00 篇）；车辆日志、录制片段等大文件上传，由业务接口签发对象存储的预签名地址，车端直传对象存储，避免大请求体占用网关缓冲与带宽。</p>
+<h2 id="选型"><a href="#选型" class="headerlink" title="选型"></a>选型</h2><h3 id="候选方案"><a href="#候选方案" class="headerlink" title="候选方案"></a>候选方案</h3><p>2023 年 5 月可选的方案如下：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>数据面</th>
+<th>配置生效方式</th>
+<th>对接 Nacos</th>
+<th>扩展方式</th>
+<th>WAF</th>
+<th>主要顾虑</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Spring Cloud Gateway 3.1 &#x2F; 4.0</td>
+<td>JVM + Netty</td>
+<td>配置中心动态刷新</td>
+<td>原生</td>
+<td>Java Filter</td>
+<td>无</td>
+<td>GC 带来的尾延迟；4.0 要求 Spring Boot 3 与 Java 17；不适合承担 TLS 与域名管理</td>
+</tr>
+<tr>
+<td>Ingress NGINX &#x2F; OpenResty</td>
+<td>Nginx</td>
+<td>配置变更需 reload</td>
+<td>无</td>
+<td>Lua</td>
+<td>ModSecurity 模块（商业支持将于 2024 年 7 月终止）</td>
+<td>reload 影响长连接</td>
+</tr>
+<tr>
+<td>Apache APISIX 3.x</td>
+<td>Nginx + Lua</td>
+<td>etcd 动态下发，无需 reload</td>
+<td>支持</td>
+<td>Lua、外部插件、Wasm</td>
+<td>无内置</td>
+<td>引入 etcd 运维与 Lua 技能栈</td>
+</tr>
+<tr>
+<td>Istio Ingress Gateway 1.17</td>
+<td>Envoy</td>
+<td>xDS 动态下发</td>
+<td>需 ServiceEntry 转换</td>
+<td>EnvoyFilter、Wasm</td>
+<td>无内置</td>
+<td>以 VirtualService 建模入口，对入口场景偏重</td>
+</tr>
+<tr>
+<td>Envoy Gateway 0.4</td>
+<td>Envoy</td>
+<td>Gateway API</td>
+<td>无</td>
+<td>功能面仍在快速迭代</td>
+<td>无</td>
+<td>仍处 0.x 早期</td>
+</tr>
+<tr>
+<td>Higress 1.0.0-rc</td>
+<td>Envoy + Istio 控制面</td>
+<td>xDS 动态下发</td>
+<td>McpBridge 对接 Nacos、ZooKeeper</td>
+<td>Wasm 插件（C++、Go），可按全局、域名、路由生效</td>
+<td>开源版暂无内置</td>
+<td>2022 年 11 月才开源，GA 版尚未发布</td>
+</tr>
+</tbody></table>
+<h3 id="为什么是-Higress，以及附带的条件"><a href="#为什么是-Higress，以及附带的条件" class="headerlink" title="为什么是 Higress，以及附带的条件"></a>为什么是 Higress，以及附带的条件</h3><p>决定采用 Higress，理由集中在三点：</p>
+<ol>
+<li><strong>与服务网格路线同一数据面。</strong> 服务治理的远期方向是 Istio（第 01 篇），网关选 Envoy 系意味着 xDS、Envoy 指标与排障技能只需建设一套。</li>
+<li><strong>迁移成本最低。</strong> 它兼容大部分 Nginx Ingress 注解，包括完整的灰度注解；通过 McpBridge 直接发现 Nacos 中注册的服务，存量 Spring Cloud 服务无需改造就能挂到新网关后面。</li>
+<li><strong>变更不 reload。</strong> 路由、证书、插件配置都经 xDS 下发，长连接不受影响。</li>
+</ol>
+<p>Envoy 为 C++ 实现、没有 GC 停顿，同等资源下吞吐与尾延迟通常优于 JVM 网关，但差距高度依赖插件链的长度，选型结论以自有流量模型的压测为准，不引用任何未经复现的倍数。</p>
+<p>同时写明四个约束条件，任何一条不满足就回退到 APISIX 方案：</p>
+<ul>
+<li><strong>以 1.0 GA 为生产上线前提。</strong> 当前是 2023 年 4 月发布的 1.0.0-rc，rc 只进入测试环境。</li>
+<li><strong>配置尽量落在标准资源上。</strong> 路由使用 Kubernetes Ingress 与兼容注解，私有 CRD 只用于服务来源与插件。Gateway API 目前是 v0.6（Beta），Higress 尚未支持，但它是未来的标准，配置规范要按「能平移到 HTTPRoute」来设计。</li>
+<li><strong>自研插件用 Go 编写并设性能预算。</strong> 每个插件在压测中单独度量 P99 增量，超过 1 ms 需要评审。</li>
+<li><strong>WAF 暂不内置。</strong> 开源版尚无 WAF 插件。可行路线是 Coraza：OWASP 旗下的 Go 实现，兼容 ModSecurity 规则语言与 OWASP CRS，并有面向 Envoy 的 Wasm 版本，v3 目前处于 RC 阶段。等它 GA，并在自有流量上完成误报与性能评估，再启动三合一。</li>
+</ul>
+<h2 id="关键配置"><a href="#关键配置" class="headerlink" title="关键配置"></a>关键配置</h2><h3 id="对接-Nacos-服务来源"><a href="#对接-Nacos-服务来源" class="headerlink" title="对接 Nacos 服务来源"></a>对接 Nacos 服务来源</h3><figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">apiVersion:</span> <span class="string">networking.higress.io/v1</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">kind:</span> <span class="string">McpBridge</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">metadata:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">name:</span> <span class="string">default</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">namespace:</span> <span class="string">higress-system</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">spec:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">registries:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">nacos-prod</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="attr">type:</span> <span class="string">nacos2</span>                 <span class="comment"># Nacos 2.x，使用 gRPC 协议</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="attr">domain:</span> <span class="string">nacos.middleware.svc.cluster.local</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="attr">port:</span> <span class="number">8848</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">      <span class="attr">nacosNamespaceId:</span> <span class="string">prod</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="attr">nacosGroups:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="bullet">-</span> <span class="string">DEFAULT_GROUP</span></span></span></code></pre></div></div></figure>
+
+<h3 id="路由到-Nacos-服务并按请求头灰度"><a href="#路由到-Nacos-服务并按请求头灰度" class="headerlink" title="路由到 Nacos 服务并按请求头灰度"></a>路由到 Nacos 服务并按请求头灰度</h3><figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="46"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 基线路由：目标为 Nacos 中 prod 命名空间下的 vehicle-service</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">apiVersion:</span> <span class="string">networking.k8s.io/v1</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">kind:</span> <span class="string">Ingress</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">metadata:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">name:</span> <span class="string">vehicle-api</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">namespace:</span> <span class="string">gateway-routes</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">annotations:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attr">higress.io/destination:</span> <span class="string">vehicle-service.DEFAULT-GROUP.prod.nacos</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">spec:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="attr">ingressClassName:</span> <span class="string">higress</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  <span class="attr">rules:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">host:</span> <span class="string">api.example.com</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="attr">http:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="attr">paths:</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">          <span class="bullet">-</span> <span class="attr">path:</span> <span class="string">/v1/vehicles</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">            <span class="attr">pathType:</span> <span class="string">Prefix</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">            <span class="attr">backend:</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">              <span class="attr">resource:</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">                <span class="attr">apiGroup:</span> <span class="string">networking.higress.io</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">                <span class="attr">kind:</span> <span class="string">McpBridge</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">                <span class="attr">name:</span> <span class="string">default</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx"><span class="meta">---</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="comment"># 灰度路由：携带 x-release-tag: canary 的请求进入灰度服务</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx"><span class="attr">apiVersion:</span> <span class="string">networking.k8s.io/v1</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx"><span class="attr">kind:</span> <span class="string">Ingress</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx"><span class="attr">metadata:</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">  <span class="attr">name:</span> <span class="string">vehicle-api-canary</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">  <span class="attr">namespace:</span> <span class="string">gateway-routes</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">  <span class="attr">annotations:</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">    <span class="attr">nginx.ingress.kubernetes.io/canary:</span> <span class="string">&quot;true&quot;</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">    <span class="attr">nginx.ingress.kubernetes.io/canary-by-header:</span> <span class="string">x-release-tag</span></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx">    <span class="attr">nginx.ingress.kubernetes.io/canary-by-header-value:</span> <span class="string">canary</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">    <span class="attr">higress.io/destination:</span> <span class="string">vehicle-service-canary.DEFAULT-GROUP.prod.nacos</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx"><span class="attr">spec:</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">  <span class="attr">ingressClassName:</span> <span class="string">higress</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">  <span class="attr">rules:</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">host:</span> <span class="string">api.example.com</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx">      <span class="attr">http:</span></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx">        <span class="attr">paths:</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">          <span class="bullet">-</span> <span class="attr">path:</span> <span class="string">/v1/vehicles</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">            <span class="attr">pathType:</span> <span class="string">Prefix</span></span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">            <span class="attr">backend:</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">              <span class="attr">resource:</span></span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">                <span class="attr">apiGroup:</span> <span class="string">networking.higress.io</span></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx">                <span class="attr">kind:</span> <span class="string">McpBridge</span></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx">                <span class="attr">name:</span> <span class="string">default</span></span></span></code></pre></div></div></figure>
+
+<p>网关层只做两种灰度：按请求头（内部测试人员、测试车辆的客户端配置携带灰度标记）与按权重。按 VIN 名单、车型、车端软件版本的大规模灰度，由服务层按标签路由完成（第 01 篇），网关只负责把标签透传下去。</p>
+<h3 id="插件按路由生效"><a href="#插件按路由生效" class="headerlink" title="插件按路由生效"></a>插件按路由生效</h3><figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">apiVersion:</span> <span class="string">extensions.higress.io/v1alpha1</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">kind:</span> <span class="string">WasmPlugin</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">metadata:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">name:</span> <span class="string">openapi-key-limit</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">namespace:</span> <span class="string">higress-system</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">spec:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="attr">url:</span> <span class="string">oci://registry.example.com/gateway-plugins/key-rate-limit:1.0.0</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  <span class="attr">matchRules:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">ingress:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">        <span class="bullet">-</span> <span class="string">gateway-routes/open-api</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="attr">config:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        <span class="attr">limit_by_header:</span> <span class="string">x-app-key</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">        <span class="attr">limit_keys:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">          <span class="bullet">-</span> <span class="attr">key:</span> <span class="string">partner-a</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">            <span class="attr">query_per_second:</span> <span class="number">200</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">          <span class="bullet">-</span> <span class="attr">key:</span> <span class="string">partner-b</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">            <span class="attr">query_per_minute:</span> <span class="number">3000</span></span></span></code></pre></div></div></figure>
+
+<p>这个插件适合开放 API 按调用方限流：调用方数量有限，可以逐个列出。它的计数在每个网关实例本地进行，集群总阈值要按实例数折算。按 VIN 这类百万级键的逐键限流不适合放在这里，仍由服务侧的热点参数限流承担。</p>
+<h2 id="认证与可观测：收敛之后才有的统一"><a href="#认证与可观测：收敛之后才有的统一" class="headerlink" title="认证与可观测：收敛之后才有的统一"></a>认证与可观测：收敛之后才有的统一</h2><p>三套网关合一，最大的收益不在省了几台机器，而在认证与可观测终于只有一份实现。</p>
+<p><strong>认证分两类调用方处理。</strong> App 用户令牌采用 JWT，网关用缓存的公钥集本地验签，不逐请求调用认证服务；令牌有效期控制在 15 分钟，配合刷新令牌，主动吊销通过一份很小的吊销名单推送到插件。开放 API 采用 AppKey 加 HMAC 签名，签名覆盖方法、路径、时间戳与请求体摘要，时间戳偏差超过 5 分钟即拒绝，随机数在短期缓存中去重以防重放。</p>
+<p><strong>身份以内部请求头向下游传递。</strong> 验证通过后，网关写入 <code>x-auth-user-id</code>、<code>x-auth-app-id</code> 等内部头，下游服务只信任这些头。前提是网关在入口处先删除客户端自带的同名头，否则任何人都能伪造身份，这是收敛过程中最容易遗漏的一步。</p>
+<p><strong>访问日志统一字段。</strong> 所有域名使用同一份访问日志格式：追踪 ID、路由名、上游服务、上游耗时、总耗时、响应码，以及 Envoy 的响应标志（如上游连接失败、无健康上游、无匹配路由）。响应标志能直接区分「网关没找到路由」与「上游挂了」，是排查 5xx 最快的线索。网关作为链路起点生成 W3C Trace Context，并对接现有的 SkyWalking，使一次请求从入口到服务再到消息队列可以在一条链路里查到。</p>
+<h2 id="迁移路径"><a href="#迁移路径" class="headerlink" title="迁移路径"></a>迁移路径</h2><pre class="mermaid">flowchart TB
+  A["1. 并行部署统一网关&lt;br/&gt;导入现有 Ingress 资源"] --&gt; B["2. 流量回放与对比&lt;br/&gt;状态码、响应头、延迟分布"]
+  B --&gt; C["3. 按域名切流&lt;br/&gt;1% → 10% → 50% → 100%"]
+  C --&gt; D["4. 迁移 Java 网关路由&lt;br/&gt;过滤器逐类改写"]
+  D --&gt; E["5. 旧网关保留 30 天&lt;br/&gt;作为回切目标后下线"]</pre>
+
+
+<p>Spring Cloud Gateway 上的自定义 Java Filter 是迁移中最费力的部分，按性质分三类处理：</p>
+<table>
+<thead>
+<tr>
+<th>过滤器类型</th>
+<th>典型例子</th>
+<th>去向</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>请求改写</td>
+<td>路径重写、增删请求头、跨域</td>
+<td>改为注解配置，零代码</td>
+</tr>
+<tr>
+<td>认证鉴权</td>
+<td>Token 校验、签名校验、调用方白名单</td>
+<td>收敛为认证插件；需要查库的复杂鉴权收敛到独立认证服务，插件调用并缓存结果</td>
+</tr>
+<tr>
+<td>业务逻辑</td>
+<td>多接口聚合、按用户裁剪字段、协议转换</td>
+<td>迁出网关，放到面向 App 的 BFF 服务</td>
+</tr>
+</tbody></table>
+<p>第三类是判断网关边界的试金石。网关一旦开始写业务聚合，就会变成所有团队都要改、谁也不敢改的单点。</p>
+<h2 id="容量与可用性"><a href="#容量与可用性" class="headerlink" title="容量与可用性"></a>容量与可用性</h2><ul>
+<li><strong>容量规划方法。</strong> 以完整插件链压测单实例，得到稳定吞吐。例如 4 vCPU 实例在完整插件链下稳定承载 8,000 QPS（示例值，以实测为准），平台南北向峰值 3 万 QPS，按两倍冗余需要 8 个实例，再按可用区均衡部署，任一可用区故障时剩余容量仍能承接峰值。</li>
+<li><strong>按域名组拆分数据面。</strong> App、开放 API、内部运营三组域名各自一套网关数据面实例，共享同一控制面与插件仓库。Higress 1.0 支持只监听部分命名空间下的 Ingress，可以在同一集群内部署多套实例。开放 API 被刷时，不会拖垮 App 入口。</li>
+<li><strong>控制面故障不影响数据面。</strong> 控制面不可用时，Envoy 按最后一次收到的配置继续转发，只是新变更无法生效。控制面按两副本部署，并对配置推送耗时设告警。</li>
+<li><strong>TLS 与证书。</strong> TLS 在网关终结，证书由 cert-manager 统一签发与轮换；到上游服务的连接开启 keepalive，避免每请求建连。</li>
+<li><strong>大规模路由的推送耗时。</strong> 路由达到数千条后，一次变更推送到所有实例的耗时需要纳入压测场景，而不只是测转发性能。</li>
+</ul>
+<h2 id="反例与风险"><a href="#反例与风险" class="headerlink" title="反例与风险"></a>反例与风险</h2><ul>
+<li><strong>在网关插件里写业务。</strong> 聚合、编排、字段裁剪写进网关，迁移与升级都会被业务逻辑绑架。</li>
+<li><strong>WAF 规则对车端请求一刀切。</strong> 车端的请求体多为 Protobuf 二进制，按通用规则检查会产生大量误报。三合一阶段要为车端路由单独配置规则集，或只检查请求头与 URL。</li>
+<li><strong>所有域名共用一个数据面。</strong> 任何一个插件的缺陷或一次错误配置，都会让全部入口同时故障。</li>
+<li><strong>插件失败策略未定义。</strong> 认证插件异常时是放行还是拒绝，要逐个插件明确：认证类失败即拒绝，观测类失败即放行。</li>
+<li><strong>过度依赖私有扩展。</strong> 私有注解与 CRD 用得越多，日后迁移到标准 API 或其他实现的成本越高。</li>
+<li><strong>早期项目的社区风险。</strong> 开源仅半年，版本迭代快、文档变动频繁。锁定版本、跟踪社区问题列表，并保持 APISIX 方案的可行性评估不过期。</li>
+</ul>
+<h2 id="2026-回看：三合一方向正确，配置契约应当更早押注-Gateway-API"><a href="#2026-回看：三合一方向正确，配置契约应当更早押注-Gateway-API" class="headerlink" title="2026 回看：三合一方向正确，配置契约应当更早押注 Gateway API"></a>2026 回看：三合一方向正确，配置契约应当更早押注 Gateway API</h2><h3 id="经受住时间的判断"><a href="#经受住时间的判断" class="headerlink" title="经受住时间的判断"></a>经受住时间的判断</h3><ul>
+<li><strong>Envoy 系统一网关与服务网格共用数据面</strong>，这一判断在之后几年被整个行业的走向印证。</li>
+<li><strong>兼容 Nginx Ingress 注解的迁移策略</strong>，在 Ingress NGINX 于 2026 年 3 月退役时显出价值：入口早已迁离 Nginx，退役对平台没有影响。</li>
+<li><strong>两步走的 WAF 策略。</strong> 事后看，Higress 在 2023 年 6 月加入了基于 Coraza 的 WAF 插件，Coraza v3 在 2023 年 5 月底 GA；ModSecurity 的商业支持在 2024 年 7 月终止，并于 2024 年 1 月起移交 OWASP 维护；OWASP CRS 4.0 在 2024 年 2 月发布。当年没有把三合一押在 ModSecurity 上，是对的。</li>
+<li><strong>BFF 逻辑迁出网关、大文件不经网关、按域名组拆分数据面</strong>，这些边界没有过时。</li>
+</ul>
+<h3 id="需要修正的判断"><a href="#需要修正的判断" class="headerlink" title="需要修正的判断"></a>需要修正的判断</h3><ul>
+<li><strong>配置契约。</strong> Gateway API 在 2023 年 10 月发布 v1.0，Higress 在 2023 年 9 月的 1.2 版本支持 Gateway API，到 2026 年 6 月 Gateway API 已迭代到 v1.6。当年「用 Ingress 加注解、日后平移」的过渡期拖得越长，平移成本越高。今天会直接以 HTTPRoute 为路由契约，网关实现按一致性测试结果选择，私有扩展只放在插件里。</li>
+<li><strong>网关承载的流量类型。</strong> 规划时只考虑业务 API。今天大模型调用已经成为南北向与出口流量的重要组成部分，它按 token 计费、响应以流式返回、单次耗时以秒计，限流、配额与路由逻辑都和普通 API 不同。</li>
+</ul>
+<h3 id="今天会怎么做"><a href="#今天会怎么做" class="headerlink" title="今天会怎么做"></a>今天会怎么做</h3><ul>
+<li><strong>业务 API 网关与 AI 网关分实例部署。</strong> 两者可以是同一产品，但数据面分开，避免模型调用的长耗时请求挤占业务入口的连接与内存。Higress 自 2024 年起转向 AI 网关方向，2.2.x 版本支持托管 MCP Server，并于 2026 年 3 月进入 CNCF Sandbox；Envoy AI Gateway 在 2026 年 6 月发布 v1.0；自建推理服务的入口可以采用 Gateway API Inference Extension（v1.0，2025 年 9 月），按模型与推理负载路由。</li>
+<li><strong>Java 网关只留在 BFF 场景。</strong> Spring Cloud Gateway 5.0 于 2025 年 11 月随 Spring Boot 4 发布，对以 Java 为主、需要编写复杂聚合逻辑的 BFF 仍是合适的工具，但不再承担入口职责。</li>
+<li><strong>WAF 规则集按 CRS 4 管理</strong>，车端路由与 App 路由使用不同的规则集与误报白名单，规则变更走与代码相同的评审与回放流程。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2023/05/23/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-04-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/">车辆信号实时计算平台：Flink 与动态规则引擎</a></h3>
+        <p>基于 Flink 1.17 构建车辆信号实时计算平台：纠正「状态存在 Kafka」的误解，拆分解析与规则作业，用广播状态实现规则分钟级生效…</p>
+        <a class="btn primary" href="/2023/05/23/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-04-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2023/04/11/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-02-%E4%BA%91%E8%BE%B9%E5%8D%8F%E5%90%8C%E4%B8%8E%E7%AE%97%E5%8A%9B%E4%B8%8B%E6%B2%89/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：车云协同计算：云端管控面下发、车端数据面执行</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 9 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E7%8E%B0%E7%8A%B6%EF%BC%9A%E4%B8%80%E6%AC%A1%E8%AF%B7%E6%B1%82%E7%A9%BF%E8%BF%87%E4%B8%89%E5%B1%82%E7%BD%91%E5%85%B3" data-toc-target="现状：一次请求穿过三层网关"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">现状：一次请求穿过三层网关</span></a><a class="toc-level-2" href="#%E7%9B%AE%E6%A0%87%EF%BC%9A%E4%B8%A4%E6%AD%A5%E8%B5%B0%E7%9A%84%E4%B8%89%E5%90%88%E4%B8%80" data-toc-target="目标：两步走的三合一"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">目标：两步走的三合一</span></a><a class="toc-level-2" href="#%E9%80%89%E5%9E%8B" data-toc-target="选型"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">选型</span></a><a class="toc-level-3" href="#%E5%80%99%E9%80%89%E6%96%B9%E6%A1%88" data-toc-target="候选方案"><span class="toc-text">候选方案</span></a><a class="toc-level-3" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF-Higress%EF%BC%8C%E4%BB%A5%E5%8F%8A%E9%99%84%E5%B8%A6%E7%9A%84%E6%9D%A1%E4%BB%B6" data-toc-target="为什么是-Higress，以及附带的条件"><span class="toc-text">为什么是 Higress，以及附带的条件</span></a><a class="toc-level-2" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE" data-toc-target="关键配置"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">关键配置</span></a><a class="toc-level-3" href="#%E5%AF%B9%E6%8E%A5-Nacos-%E6%9C%8D%E5%8A%A1%E6%9D%A5%E6%BA%90" data-toc-target="对接-Nacos-服务来源"><span class="toc-text">对接 Nacos 服务来源</span></a><a class="toc-level-3" href="#%E8%B7%AF%E7%94%B1%E5%88%B0-Nacos-%E6%9C%8D%E5%8A%A1%E5%B9%B6%E6%8C%89%E8%AF%B7%E6%B1%82%E5%A4%B4%E7%81%B0%E5%BA%A6" data-toc-target="路由到-Nacos-服务并按请求头灰度"><span class="toc-text">路由到 Nacos 服务并按请求头灰度</span></a><a class="toc-level-3" href="#%E6%8F%92%E4%BB%B6%E6%8C%89%E8%B7%AF%E7%94%B1%E7%94%9F%E6%95%88" data-toc-target="插件按路由生效"><span class="toc-text">插件按路由生效</span></a><a class="toc-level-2" href="#%E8%AE%A4%E8%AF%81%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%EF%BC%9A%E6%94%B6%E6%95%9B%E4%B9%8B%E5%90%8E%E6%89%8D%E6%9C%89%E7%9A%84%E7%BB%9F%E4%B8%80" data-toc-target="认证与可观测：收敛之后才有的统一"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">认证与可观测：收敛之后才有的统一</span></a><a class="toc-level-2" href="#%E8%BF%81%E7%A7%BB%E8%B7%AF%E5%BE%84" data-toc-target="迁移路径"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">迁移路径</span></a><a class="toc-level-2" href="#%E5%AE%B9%E9%87%8F%E4%B8%8E%E5%8F%AF%E7%94%A8%E6%80%A7" data-toc-target="容量与可用性"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">容量与可用性</span></a><a class="toc-level-2" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">反例与风险</span></a><a class="toc-level-2" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E4%B8%89%E5%90%88%E4%B8%80%E6%96%B9%E5%90%91%E6%AD%A3%E7%A1%AE%EF%BC%8C%E9%85%8D%E7%BD%AE%E5%A5%91%E7%BA%A6%E5%BA%94%E5%BD%93%E6%9B%B4%E6%97%A9%E6%8A%BC%E6%B3%A8-Gateway-API" data-toc-target="2026-回看：三合一方向正确，配置契约应当更早押注-Gateway-API"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">2026 回看：三合一方向正确，配置契约应当更早押注 Gateway API</span></a><a class="toc-level-3" href="#%E7%BB%8F%E5%8F%97%E4%BD%8F%E6%97%B6%E9%97%B4%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="经受住时间的判断"><span class="toc-text">经受住时间的判断</span></a><a class="toc-level-3" href="#%E9%9C%80%E8%A6%81%E4%BF%AE%E6%AD%A3%E7%9A%84%E5%88%A4%E6%96%AD" data-toc-target="需要修正的判断"><span class="toc-text">需要修正的判断</span></a><a class="toc-level-3" href="#%E4%BB%8A%E5%A4%A9%E4%BC%9A%E6%80%8E%E4%B9%88%E5%81%9A" data-toc-target="今天会怎么做"><span class="toc-text">今天会怎么做</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/cloud-native-platform/" style="--rail: 44%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">4 / 9</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E7%8E%B0%E7%8A%B6%EF%BC%9A%E4%B8%80%E6%AC%A1%E8%AF%B7%E6%B1%82%E7%A9%BF%E8%BF%87%E4%B8%89%E5%B1%82%E7%BD%91%E5%85%B3" data-toc-target="现状：一次请求穿过三层网关" data-title="01 · 现状：一次请求穿过三层网关" aria-label="现状：一次请求穿过三层网关"></a><a class="toc-strip__dot" href="#%E7%9B%AE%E6%A0%87%EF%BC%9A%E4%B8%A4%E6%AD%A5%E8%B5%B0%E7%9A%84%E4%B8%89%E5%90%88%E4%B8%80" data-toc-target="目标：两步走的三合一" data-title="02 · 目标：两步走的三合一" aria-label="目标：两步走的三合一"></a><a class="toc-strip__dot" href="#%E9%80%89%E5%9E%8B" data-toc-target="选型" data-title="03 · 选型" aria-label="选型"></a><a class="toc-strip__dot" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE" data-toc-target="关键配置" data-title="04 · 关键配置" aria-label="关键配置"></a><a class="toc-strip__dot" href="#%E8%AE%A4%E8%AF%81%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%EF%BC%9A%E6%94%B6%E6%95%9B%E4%B9%8B%E5%90%8E%E6%89%8D%E6%9C%89%E7%9A%84%E7%BB%9F%E4%B8%80" data-toc-target="认证与可观测：收敛之后才有的统一" data-title="05 · 认证与可观测：收敛之后才有的统一" aria-label="认证与可观测：收敛之后才有的统一"></a><a class="toc-strip__dot" href="#%E8%BF%81%E7%A7%BB%E8%B7%AF%E5%BE%84" data-toc-target="迁移路径" data-title="06 · 迁移路径" aria-label="迁移路径"></a><a class="toc-strip__dot" href="#%E5%AE%B9%E9%87%8F%E4%B8%8E%E5%8F%AF%E7%94%A8%E6%80%A7" data-toc-target="容量与可用性" data-title="07 · 容量与可用性" aria-label="容量与可用性"></a><a class="toc-strip__dot" href="#%E5%8F%8D%E4%BE%8B%E4%B8%8E%E9%A3%8E%E9%99%A9" data-toc-target="反例与风险" data-title="08 · 反例与风险" aria-label="反例与风险"></a><a class="toc-strip__dot" href="#2026-%E5%9B%9E%E7%9C%8B%EF%BC%9A%E4%B8%89%E5%90%88%E4%B8%80%E6%96%B9%E5%90%91%E6%AD%A3%E7%A1%AE%EF%BC%8C%E9%85%8D%E7%BD%AE%E5%A5%91%E7%BA%A6%E5%BA%94%E5%BD%93%E6%9B%B4%E6%97%A9%E6%8A%BC%E6%B3%A8-Gateway-API" data-toc-target="2026-回看：三合一方向正确，配置契约应当更早押注-Gateway-API" data-title="09 · 2026 回看：三合一方向正确，配置契约应当更早押注 Gateway API" aria-label="2026 回看：三合一方向正确，配置契约应当更早押注 Gateway API"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"architecture/云原生-03-统一网关","title":"统一网关：WAF、流量网关与微服务网关三合一","url":"/2023/05/09/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-03-%E7%BB%9F%E4%B8%80%E7%BD%91%E5%85%B3/","path":"cloud-native-platform","index":3,"total":9,"next":{"title":"车辆信号实时计算平台：Flink 与动态规则引擎","url":"/2023/05/23/architecture/%E4%BA%91%E5%8E%9F%E7%94%9F-04-%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97%E5%B9%B3%E5%8F%B0/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,727 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>让 AI Agent 操作 Obsidian：obsidian-skills 与 Obsidian CLI 实践 · 飞轮之道</title>
+<meta name="description" content="obsidian-skills 教 Agent 写 Obsidian 格式，Obsidian CLI 让 Agent 调用运行中的 Obsidian。给出知识库约定、读写边界与权限配置，以及剪藏、会议纪要、周报、双链重构四个工作流。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/03/10/engineering-practice/Obsidian-Agent-Skills%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="让 AI Agent 操作 Obsidian：obsidian-skills 与 Obsidian CLI 实践 · 飞轮之道">
+<meta property="og:description" content="obsidian-skills 教 Agent 写 Obsidian 格式，Obsidian CLI 让 Agent 调用运行中的 Obsidian。给出知识库约定、读写边界与权限配置，以及剪藏、会议纪要、周报、双链重构四个工作流。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/03/10/engineering-practice/Obsidian-Agent-Skills%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5/">工程实践</a> / <a href="/paths/ai-coding-toolchain/">通用方法</a><a class="series-chip" href="/paths/ai-coding-toolchain/" title="查看学习路径">第 7 / 7 篇</a>
+    </div>
+    <h1>让 AI Agent 操作 Obsidian：obsidian-skills 与 Obsidian CLI 实践</h1>
+    <p class="article-deck">obsidian-skills 教 Agent 写 Obsidian 格式，Obsidian CLI 让 Agent 调用运行中的 Obsidian。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>12 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/Claude-Code/">#Claude Code</a><a class="article-meta__tag" href="/tags/Agent-Skills/">#Agent Skills</a><a class="article-meta__tag" href="/tags/%E5%B7%A5%E7%A8%8B%E6%95%88%E7%8E%87/">#工程效率</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>技能只是说明书，真正的能力来自两条通道：直接读写文件，或通过 Obsidian CLI 让 Obsidian 自己执行。</li><li>新建笔记直接写文件；搜索、反链、移动、改名、查询 Bases 走 CLI，因为只有 Obsidian 知道链接关系。</li><li>让 Agent 只在 inbox 新建、只追加日记、不碰模板，并用权限规则兜底；但前缀匹配的 deny 规则拦不住所有写法，删除保护最终要靠回收站和 git。</li><li>obsidian-cli 技能示例里的 silent 在 1.12.2 之后已无必要，CLI 默认就不打开文件。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <h2 id="先分清两样东西"><a href="#先分清两样东西" class="headerlink" title="先分清两样东西"></a>先分清两样东西</h2><p>“让 Agent 操作 Obsidian”常被混成一件事，实际上是两层：</p>
+<ul>
+<li><strong>obsidian-skills</strong>（<code>kepano/obsidian-skills</code>，2026 年 1 月开源，维护者是 Obsidian 的 Steph Ango）：一组遵循 Agent Skills 规范的 <code>SKILL.md</code>，告诉 Agent Obsidian 的文件格式怎么写、CLI 怎么调用。它本身不提供任何能力，只是说明书。</li>
+<li><strong>Obsidian CLI</strong>：Obsidian 1.12.0 抢先体验版（2026-02-10）引入，1.12.4 公开版（2026-02-27）正式发布。它把命令发给<strong>正在运行的</strong> Obsidian 应用执行，能用到 Obsidian 的链接索引、模板、Bases 查询引擎。</li>
+</ul>
+<p>截至本文写作时，仓库里有五个技能：</p>
+<table>
+<thead>
+<tr>
+<th>技能</th>
+<th>教会 Agent 什么</th>
+<th>外部依赖</th>
+<th>主要用在</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>obsidian-markdown</code></td>
+<td>双链、嵌入、Callout、Properties 等 Obsidian 风格 Markdown</td>
+<td>无</td>
+<td>写任何笔记</td>
+</tr>
+<tr>
+<td><code>obsidian-bases</code></td>
+<td><code>.base</code> 文件的过滤、公式、视图、汇总语法</td>
+<td>无</td>
+<td>建看板、做查询</td>
+</tr>
+<tr>
+<td><code>json-canvas</code></td>
+<td><code>.canvas</code> 文件的节点、连线、分组</td>
+<td>无</td>
+<td>画关系图</td>
+</tr>
+<tr>
+<td><code>obsidian-cli</code></td>
+<td>CLI 语法、文件与仓库定位规则、插件开发调试</td>
+<td>Obsidian 1.12+，且应用在运行</td>
+<td>搜索、反链、移动、查询</td>
+</tr>
+<tr>
+<td><code>defuddle</code></td>
+<td>用 Defuddle 把网页转成干净的 Markdown</td>
+<td><code>npm install -g defuddle</code></td>
+<td>剪藏</td>
+</tr>
+</tbody></table>
+<p>两条通道的分工决定了后面所有工作流怎么设计：</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>直接写文件</th>
+<th>走 CLI</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>新建笔记</td>
+<td>推荐</td>
+<td>可以</td>
+<td>没有链接要维护；长正文用 <code>content=</code> 要把换行转义成 <code>\n</code>，不如直接写文件</td>
+</tr>
+<tr>
+<td>搜索、反链、未解析链接、孤立笔记</td>
+<td>只能 grep，别名和嵌入识别不了</td>
+<td>推荐</td>
+<td>Obsidian 有完整的链接索引</td>
+</tr>
+<tr>
+<td>移动、改名</td>
+<td>不要</td>
+<td>必须</td>
+<td>shell 里 <code>mv</code> 后，指向它的双链全部失效；CLI 的 <code>move</code>&#x2F;<code>rename</code> 会按”自动更新内部链接”设置修正链接</td>
+</tr>
+<tr>
+<td>删除</td>
+<td>不要</td>
+<td>慎用</td>
+<td>CLI 的 <code>delete</code> 默认进回收站，<code>rm</code> 直接没了</td>
+</tr>
+<tr>
+<td>查询 Bases 视图</td>
+<td>自己解析 YAML 再筛选，结果不可靠</td>
+<td>推荐</td>
+<td><code>base:query</code> 直接返回视图结果</td>
+</tr>
+<tr>
+<td>Obsidian 没有运行时</td>
+<td>可用</td>
+<td>第一条命令会把 Obsidian 拉起来</td>
+<td>批处理脚本要考虑启动时间</td>
+</tr>
+</tbody></table>
+<h2 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h2><h3 id="技能"><a href="#技能" class="headerlink" title="技能"></a>技能</h3><p>Claude Code 走插件市场：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">/plugin marketplace add kepano/obsidian-skills</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">/plugin install obsidian@obsidian-skills</span></span></code></pre></div></div></figure>
+
+<p>或者用通用的 <code>npx skills</code> 安装器：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">npx skills add git@github.com:kepano/obsidian-skills.git</span></span></code></pre></div></div></figure>
+
+<p>手动安装时注意目录层级。Claude Code 的项目级技能路径是 <code>.claude/skills/&lt;技能名&gt;/SKILL.md</code>，要拷的是仓库里 <code>skills/</code> 下的各个子目录，而不是把它们直接铺在 <code>.claude/</code> 下：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="9"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git <span class="built_in">clone</span> https://github.com/kepano/obsidian-skills.git /tmp/obsidian-skills</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="built_in">mkdir</span> -p ~/Vault/.claude/skills</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="built_in">cp</span> -R /tmp/obsidian-skills/skills/* ~/Vault/.claude/skills/</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">find ~/Vault/.claude -name SKILL.md</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="comment"># ~/Vault/.claude/skills/defuddle/SKILL.md</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># ~/Vault/.claude/skills/obsidian-markdown/SKILL.md</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="comment"># ~/Vault/.claude/skills/obsidian-bases/SKILL.md</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="comment"># ~/Vault/.claude/skills/obsidian-cli/SKILL.md</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="comment"># ~/Vault/.claude/skills/json-canvas/SKILL.md</span></span></span></code></pre></div></div></figure>
+
+<p>其他 Agent 按仓库 README：Codex CLI 把 <code>skills/</code> 下的内容拷进技能目录（README 给的是 <code>~/.codex/skills</code>）；OpenCode 要把<strong>整个仓库</strong> clone 到 <code>~/.opencode/skills/obsidian-skills</code>，只拷内层 <code>skills/</code> 反而识别不到。</p>
+<h3 id="Obsidian-CLI"><a href="#Obsidian-CLI" class="headerlink" title="Obsidian CLI"></a>Obsidian CLI</h3><ol>
+<li>升级到 1.12.4 或更新版本。</li>
+<li><strong>设置 → 通用</strong>，打开 <strong>Command line interface</strong>，按提示注册命令。</li>
+<li>验证：</li>
+</ol>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">obsidian version</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">obsidian <span class="built_in">help</span>                <span class="comment"># 全部命令</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">obsidian <span class="built_in">help</span> base:query     <span class="comment"># 单个命令的参数（1.12.2 起支持）</span></span></span></code></pre></div></div></figure>
+
+<p>参数用 <code>key=value</code>，布尔开关直接写名字；<code>file=</code> 按双链规则解析（只写文件名），<code>path=</code> 是相对仓库根的精确路径。<strong>给 Agent 用时一律写 <code>path=</code></strong>，避免同名笔记被解析到别处。多个仓库时 <code>vault=&quot;名称&quot;</code> 必须放在第一个参数。</p>
+<p>1.12.2 改了默认行为：命令默认静默执行、不打开文件，原来的 <code>silent</code> 参数被 <code>open</code> 取代，<code>all</code> 被 <code>active</code> 取代。obsidian-cli 技能的示例里仍然写着 <code>silent</code>，照抄不会带来好处，可以在规则文件里告诉 Agent 不要再加。</p>
+<h2 id="知识库结构约定"><a href="#知识库结构约定" class="headerlink" title="知识库结构约定"></a>知识库结构约定</h2><p>Agent 能不能稳定地干活，取决于知识库有没有它能读懂的约定。两种常见组织方式都可以：</p>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>目录</th>
+<th>适合</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PARA</td>
+<td><code>10-Projects</code>、<code>20-Areas</code>、<code>30-Resources</code>、<code>40-Archive</code></td>
+<td>以项目推进为主，笔记有明确的生命周期</td>
+</tr>
+<tr>
+<td>主题目录</td>
+<td><code>Kubernetes/</code>、<code>数据库/</code>、<code>读书/</code></td>
+<td>以长期积累为主，主题边界稳定</td>
+</tr>
+</tbody></table>
+<p>无论哪种，都加上三个固定目录和一组固定属性：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">Vault/</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">├── 00-Inbox/        # Agent 唯一可以新建笔记的地方</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">├── Templates/       # 模板，Agent 只读</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">├── Bases/           # .base 视图</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">├── 10-Projects/ …   # 正式内容（PARA 或主题目录）</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">├── CLAUDE.md        # 给 Agent 的规则（Codex 用 AGENTS.md）</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">└── .claude/         # 技能与权限配置</span></span></code></pre></div></div></figure>
+
+<p>Agent 新建的每篇笔记都带同一组 properties，Bases 才能按它过滤：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">---</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">type:</span> <span class="string">clipping</span>        <span class="comment"># clipping | meeting | report | note</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">status:</span> <span class="string">inbox</span>         <span class="comment"># inbox | active | done</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">source:</span> <span class="string">&quot;https://example.com/article&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">created:</span> <span class="number">2026-03-10</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="attr">tags:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  <span class="bullet">-</span> <span class="string">待整理</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="meta">---</span></span></span></code></pre></div></div></figure>
+
+<p><code>Bases/Inbox.base</code> 把收件箱变成一张待办表，人每天看一眼决定每篇笔记的去向：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="11"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">filters:</span> <span class="string">&#x27;file.inFolder(&quot;00-Inbox&quot;)&#x27;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="attr">formulas:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="attr">age_days:</span> <span class="string">&#x27;(now() - file.ctime).days&#x27;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="attr">views:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">type:</span> <span class="string">table</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">name:</span> <span class="string">&quot;待整理&quot;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">order:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">file.name</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">type</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">source</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">formula.age_days</span></span></span></code></pre></div></div></figure>
+
+<p>两个日期计算的写法要注意：日期相减得到的是 Duration，要先取 <code>.days</code> 才是数字；给日期加减时长用字符串，如 <code>today() - &quot;7d&quot;</code>。这两点 obsidian-bases 技能里都有说明，Agent 生成的 <code>.base</code> 报错时多半是这里写错了。</p>
+<h2 id="边界：Agent-能写哪里"><a href="#边界：Agent-能写哪里" class="headerlink" title="边界：Agent 能写哪里"></a>边界：Agent 能写哪里</h2><h3 id="规则文件"><a href="#规则文件" class="headerlink" title="规则文件"></a>规则文件</h3><p>仓库根目录的 <code>CLAUDE.md</code>（Codex 读 <code>AGENTS.md</code>）写清楚：</p>
+<figure class="highlight markdown cb" data-lang="markdown" data-label="Markdown" data-ext="md" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="section">## 读写边界</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="bullet">-</span> 只在 00-Inbox/ 新建笔记；新笔记必须带 type、status、source、created 属性。</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="bullet">-</span> 其他目录的笔记：可以读；修改只限追加内容或改属性，动手前列出文件清单等我确认。</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="bullet">-</span> 日记只能用 obsidian daily:append 追加，不改已有内容。</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="bullet">-</span> 不修改 Templates/、.obsidian/ 下的任何文件。</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="bullet">-</span> 不删除笔记。不要的移到 40-Archive/：obsidian move path=&quot;…&quot; to=&quot;40-Archive/&quot;。</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="bullet">-</span> 移动和改名只用 obsidian move / rename，禁止 mv。</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"><span class="bullet">-</span> Journal/ 目录不读、不搜索。</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="section">## CLI 约定</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="bullet">-</span> 一律用 path= 定位文件，不用 file=。</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx"><span class="bullet">-</span> CLI 默认不打开文件，不要加 silent。</span></span></code></pre></div></div></figure>
+
+<h3 id="权限兜底"><a href="#权限兜底" class="headerlink" title="权限兜底"></a>权限兜底</h3><p>规则文件是给 Agent 看的，权限配置是给 Claude Code 执行的。<code>.claude/settings.json</code>：</p>
+<figure class="highlight json cb" data-lang="json" data-label="JSON" data-ext="json" data-lines="27"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">&quot;permissions&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">&quot;allow&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian read:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian search:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian search:context:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian backlinks:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian unresolved:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian base:query:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="string">&quot;Bash(defuddle parse:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="string">&quot;Edit(/00-Inbox/**)&quot;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">&quot;ask&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian move:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian rename:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian property:set:*)&quot;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">    <span class="punctuation">]</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    <span class="attr">&quot;deny&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian delete:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">      <span class="string">&quot;Bash(obsidian eval:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      <span class="string">&quot;Bash(rm:*)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="string">&quot;Edit(/Templates/**)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">      <span class="string">&quot;Edit(/.obsidian/**)&quot;</span><span class="punctuation">,</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">      <span class="string">&quot;Read(/Journal/**)&quot;</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">    <span class="punctuation">]</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">  <span class="punctuation">&#125;</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx"><span class="punctuation">&#125;</span></span></span></code></pre></div></div></figure>
+
+<p><code>/</code> 开头的路径相对于这份配置所在的项目根。<code>eval</code> 能在 Obsidian 里执行任意 JavaScript，一并禁掉。</p>
+<p>这份配置有三个漏洞，必须清楚：</p>
+<ol>
+<li><strong>Bash 规则是前缀匹配。</strong> <code>obsidian vault=&quot;Notes&quot; delete path=…</code> 不以 <code>obsidian delete</code> 开头，deny 拦不住。</li>
+<li><strong><code>Read</code> 规则管不住 CLI。</strong> <code>obsidian read path=&quot;Journal/…&quot;</code> 读的是 Obsidian 返回的内容，不经过文件读取工具；<code>search</code> 也会搜到 Journal 里的内容。</li>
+<li><strong>CLI 能访问本机所有已注册的仓库。</strong> 把隐私内容挪到另一个仓库，并不能让它脱离 Agent 的访问范围。</li>
+</ol>
+<p>所以权限配置只是减少误操作，不是安全边界。真正的兜底是：仓库纳入 git 或至少开启核心插件”文件恢复”（CLI 的 <code>history</code> 可列出版本），删除走回收站；高度隐私的内容不放进这台机器上 Agent 能调用的 Obsidian 里。</p>
+<h2 id="四个工作流"><a href="#四个工作流" class="headerlink" title="四个工作流"></a>四个工作流</h2><h3 id="网页剪藏整理"><a href="#网页剪藏整理" class="headerlink" title="网页剪藏整理"></a>网页剪藏整理</h3><p>目标：给一批 URL，产出带摘要、要点和出处的笔记，放进 inbox 等人工归档。技能：<code>defuddle</code> + <code>obsidian-markdown</code> + <code>obsidian-cli</code>。</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="3"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">url=<span class="string">&quot;https://example.com/post&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">defuddle parse <span class="string">&quot;<span class="variable">$url</span>&quot;</span> -p title                       <span class="comment"># 取标题，用作文件名</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">defuddle parse <span class="string">&quot;<span class="variable">$url</span>&quot;</span> --md -o /tmp/clip.md           <span class="comment"># 正文转 Markdown，比直接抓网页省大量 token</span></span></span></code></pre></div></div></figure>
+
+<p>Agent 读 <code>/tmp/clip.md</code>，按上面的属性约定在 <code>00-Inbox/</code> 写笔记：摘要放在 <code>&gt; [!summary]</code> Callout 里，要点列表，文末保留原文链接。关联已有笔记前先查它是否存在：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">obsidian search query=<span class="string">&quot;向量数据库&quot;</span> path=<span class="string">&quot;30-Resources&quot;</span> <span class="built_in">limit</span>=5</span></span></code></pre></div></div></figure>
+
+<p>写完检查新笔记有没有引入断链：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">obsidian unresolved verbose format=json</span></span></code></pre></div></div></figure>
+
+<p>边界：只存摘要和要点，不转存全文；这类笔记只进 inbox，由人决定是否转正。只剪一两篇时，官方的 Web Clipper 浏览器扩展更直接；Agent 的价值在批量处理和与已有笔记建立链接。</p>
+<h3 id="会议纪要入库"><a href="#会议纪要入库" class="headerlink" title="会议纪要入库"></a>会议纪要入库</h3><p>目标：把转写稿或速记整理成结构化纪要，行动项可追踪，日记里留入口。技能：<code>obsidian-markdown</code> + <code>obsidian-cli</code>。</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># 用模板建文件，模板变量由 Obsidian 解析</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">obsidian create path=<span class="string">&quot;00-Inbox/2026-03-10 架构周会.md&quot;</span> template=<span class="string">&quot;Meeting&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>Agent 再直接编辑这个文件填正文：结论、决策、行动项。行动项统一写成任务，<code>- [ ] 事项（负责人，截止日期）</code>，这样可以按文件列出：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">obsidian tasks path=<span class="string">&quot;00-Inbox/2026-03-10 架构周会.md&quot;</span> todo</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">obsidian daily:append content=<span class="string">&quot;- 会议纪要：[[2026-03-10 架构周会]]&quot;</span></span></span></code></pre></div></div></figure>
+
+<p>如果要先看模板里的变量展开成什么样，用 <code>obsidian template:read name=&quot;Meeting&quot; resolve title=&quot;2026-03-10 架构周会&quot;</code>。</p>
+<p>边界：纪要里点名的人和事，转写稿里常有不该落盘的内容，Agent 输出后人要过一遍再移出 inbox。</p>
+<h3 id="按-Bases-生成周报"><a href="#按-Bases-生成周报" class="headerlink" title="按 Bases 生成周报"></a>按 Bases 生成周报</h3><p>目标：每周五用固定的查询得到本周变化，Agent 据此写周报。技能：<code>obsidian-bases</code> + <code>obsidian-cli</code>。</p>
+<p><code>Bases/Weekly.base</code>：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="17"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">filters:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">and:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="bullet">-</span> <span class="string">&#x27;file.inFolder(&quot;10-Projects&quot;)&#x27;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="bullet">-</span> <span class="string">&#x27;file.mtime &gt;= today() - &quot;7d&quot;&#x27;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="attr">views:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">type:</span> <span class="string">table</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">name:</span> <span class="string">&quot;本周更新&quot;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="attr">order:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">file.name</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">status</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">file.mtime</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="bullet">-</span> <span class="attr">type:</span> <span class="string">table</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">name:</span> <span class="string">&quot;本周完成&quot;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">    <span class="attr">filters:</span> <span class="string">&#x27;status == &quot;done&quot;&#x27;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="attr">order:</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">file.name</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">file.mtime</span></span></span></code></pre></div></div></figure>
+
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">obsidian base:query path=<span class="string">&quot;Bases/Weekly.base&quot;</span> view=<span class="string">&quot;本周更新&quot;</span> format=md</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">obsidian base:query path=<span class="string">&quot;Bases/Weekly.base&quot;</span> view=<span class="string">&quot;本周完成&quot;</span> format=paths</span></span></code></pre></div></div></figure>
+
+<p><code>format=paths</code> 只输出路径，Agent 按需逐篇 <code>obsidian read path=…</code> 读正文，写成 <code>00-Inbox/周报 2026-W11.md</code>。好处是”哪些笔记算本周”由 <code>.base</code> 决定而不是由 Agent 临场判断，每周结果可复现；调整口径只改 <code>.base</code>，在 Obsidian 里打开就能直接看到筛选结果。</p>
+<p>边界：<code>file.mtime</code> 是文件修改时间，同步工具或批量改属性都会刷新它。口径要求严格时，改用笔记里自己维护的日期属性过滤。</p>
+<h3 id="批量重构双链"><a href="#批量重构双链" class="headerlink" title="批量重构双链"></a>批量重构双链</h3><p>目标：合并重复概念（比如 <code>K8s</code> 和 <code>Kubernetes</code> 两篇）、修复断链，而不留下一地失效链接。技能：<code>obsidian-cli</code> + <code>obsidian-markdown</code>。</p>
+<p>先确认<strong>设置 → 文件与链接 → 自动更新内部链接</strong>已打开，再给仓库打快照：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">git -C ~/Vault add -A &amp;&amp; git -C ~/Vault commit -m <span class="string">&quot;双链重构前快照&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">obsidian unresolved total                                        <span class="comment"># 记下重构前的断链数</span></span></span></code></pre></div></div></figure>
+
+<p>盘点：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">obsidian backlinks path=<span class="string">&quot;30-Resources/K8s.md&quot;</span> format=json        <span class="comment"># 谁引用了要合并掉的那篇</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">obsidian search:context query=<span class="string">&quot;K8s&quot;</span> path=<span class="string">&quot;30-Resources&quot;</span>          <span class="comment"># 纯文本提及，grep 风格 path:line: text</span></span></span></code></pre></div></div></figure>
+
+<p>执行分三步，每一步都先让 Agent 列清单、人确认后再动手：</p>
+<ol>
+<li>把 <code>K8s.md</code> 独有的内容合并进 <code>Kubernetes.md</code>，并把 <code>K8s</code> 加进后者的 <code>aliases</code> 属性，以后输入 <code>[[K8s</code> 时链接补全仍能找到它。</li>
+<li>逐篇把 <code>[[K8s]]</code> 改成 <code>[[Kubernetes|K8s]]</code>，保留原来的显示文字。</li>
+<li>旧笔记不删，移走：<code>obsidian move path=&quot;30-Resources/K8s.md&quot; to=&quot;40-Archive/&quot;</code>。</li>
+</ol>
+<p>验证：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="4"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">obsidian unresolved total                                        <span class="comment"># 不应增加</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">obsidian backlinks path=<span class="string">&quot;30-Resources/K8s.md&quot;</span> total              <span class="comment"># 应为 0</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">obsidian orphans                                                 <span class="comment"># 检查有没有被孤立的笔记</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">git -C ~/Vault diff --<span class="built_in">stat</span>                                       <span class="comment"># 改动范围是否符合预期</span></span></span></code></pre></div></div></figure>
+
+<p>只是改名的话不需要这么多步骤：<code>obsidian rename path=&quot;30-Resources/K8s.md&quot; name=&quot;Kubernetes&quot;</code> 会同步修正所有链接，前提同样是那个设置已打开。</p>
+<h2 id="风险清单"><a href="#风险清单" class="headerlink" title="风险清单"></a>风险清单</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>典型场景</th>
+<th>缓解</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>同步冲突</td>
+<td>Agent 改的文件正开在编辑器里，或另一台设备同时在改，同步后内容被覆盖或出现冲突副本</td>
+<td>Agent 只在 inbox 新建文件，不改已有文件；批量重构前暂停同步，做完确认再恢复</td>
+</tr>
+<tr>
+<td>断链</td>
+<td>在 shell 里 <code>mv</code>、改名</td>
+<td>规则文件禁止 <code>mv</code>，移动改名只走 CLI</td>
+</tr>
+<tr>
+<td>误删</td>
+<td><code>rm</code>、<code>delete permanent</code></td>
+<td>deny 规则 + 回收站 + git 快照；deny 有前缀绕过，不能只依赖它</td>
+</tr>
+<tr>
+<td>模板被改坏</td>
+<td>Agent 把模板当普通笔记”顺手优化”</td>
+<td><code>Edit(/Templates/**)</code> 进 deny，规则文件写明只读</td>
+</tr>
+<tr>
+<td>隐私外泄</td>
+<td>读到日记、病历、账号类笔记并发给模型</td>
+<td>规则文件划出禁区；真正敏感的内容不进 Agent 能访问的 Obsidian</td>
+</tr>
+<tr>
+<td>批量操作失控</td>
+<td>一次改几百个文件，出错后难以定位</td>
+<td>每步先出清单再执行；执行前后对比 <code>unresolved total</code> 和 <code>git diff --stat</code></td>
+</tr>
+</tbody></table>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>obsidian-skills 解决”Agent 会不会写 Obsidian 的格式”，Obsidian CLI 解决”Agent 能不能用 Obsidian 自己的能力”。实践中的分工很简单：新建直接写文件，涉及链接关系的一律走 CLI。真正决定效果的是知识库的约定：固定的 inbox、固定的属性、用 Bases 固化查询口径，以及一份写清楚读写边界的规则文件。</p>
+<h2 id="2026-09-补记：半年来的变化"><a href="#2026-09-补记：半年来的变化" class="headerlink" title="2026-09 补记：半年来的变化"></a>2026-09 补记：半年来的变化</h2><p>obsidian-skills 仓库：</p>
+<ul>
+<li>2026-09-10 新增第六个技能 <code>knap</code>：用 Knap CLI（<code>npm install -g knap</code>，需要 Node.js 20+）把 JSON 或 CSV 数据按模板渲染成 Markdown，支持批量生成文件，也能把 Defuddle 的输出套进笔记模板。剪藏工作流里”Agent 按约定拼属性和正文”的那一步，可以改由模板固定下来。</li>
+<li>README 补充了 <code>npx skills add https://github.com/kepano/obsidian-skills</code> 的 https 写法，并把 defuddle 链接指向合并后的 <code>defuddle</code> 主仓库（npm 上的 <code>defuddle</code> 包自 0.8.0 起自带命令行）。</li>
+<li>obsidian-cli 技能的示例截至 2026-09 仍写着 <code>silent</code>，规则文件里那条提醒继续有用。</li>
+</ul>
+<p>Obsidian：</p>
+<ul>
+<li>1.12.7（2026-03-23 公开版）为 CLI 附带了独立的可执行文件，不再通过 Electron 主程序调用，终端交互明显更快，需要重新下载安装包。现在的官方文档要求安装包版本 1.12.7 及以上；macOS 上注册 CLI 会在 <code>/usr/local/bin/obsidian</code> 建一个指向应用内 <code>obsidian-cli</code> 的符号链接。</li>
+<li>1.13 公开版（2026-07-30）的更新说明里，CLI 只有一条修复（flatpak 安装），本文用到的命令没有行为变化。</li>
+<li>1.14 抢先体验版（2026-09）给 Bases 加了看板布局；按 <code>file.folder</code> 分组时，拖动卡片会把笔记移到对应文件夹。用它来整理 inbox 很顺手，但要知道拖动就是在移动文件。</li>
+</ul>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列已读完</div>
+        <h3>「AI 编程工具链横向实战」到此结束</h3>
+        <p>回到路径总览，选择下一条要完成的学习路径。</p>
+        <a class="btn primary" href="/paths/">选择下一条路径</a>
+      </div>
+      
+      <a class="article-prev" href="/2024/11/12/engineering-practice/macOS-Python%E7%8E%AF%E5%A2%83%E7%AE%A1%E7%90%86/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：macOS Python 环境管理：pyenv 与 uv 的分工与迁移</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 8 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#%E5%85%88%E5%88%86%E6%B8%85%E4%B8%A4%E6%A0%B7%E4%B8%9C%E8%A5%BF" data-toc-target="先分清两样东西"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">先分清两样东西</span></a><a class="toc-level-2" href="#%E5%AE%89%E8%A3%85" data-toc-target="安装"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">安装</span></a><a class="toc-level-3" href="#%E6%8A%80%E8%83%BD" data-toc-target="技能"><span class="toc-text">技能</span></a><a class="toc-level-3" href="#Obsidian-CLI" data-toc-target="Obsidian-CLI"><span class="toc-text">Obsidian CLI</span></a><a class="toc-level-2" href="#%E7%9F%A5%E8%AF%86%E5%BA%93%E7%BB%93%E6%9E%84%E7%BA%A6%E5%AE%9A" data-toc-target="知识库结构约定"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">知识库结构约定</span></a><a class="toc-level-2" href="#%E8%BE%B9%E7%95%8C%EF%BC%9AAgent-%E8%83%BD%E5%86%99%E5%93%AA%E9%87%8C" data-toc-target="边界：Agent-能写哪里"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">边界：Agent 能写哪里</span></a><a class="toc-level-3" href="#%E8%A7%84%E5%88%99%E6%96%87%E4%BB%B6" data-toc-target="规则文件"><span class="toc-text">规则文件</span></a><a class="toc-level-3" href="#%E6%9D%83%E9%99%90%E5%85%9C%E5%BA%95" data-toc-target="权限兜底"><span class="toc-text">权限兜底</span></a><a class="toc-level-2" href="#%E5%9B%9B%E4%B8%AA%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="四个工作流"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">四个工作流</span></a><a class="toc-level-3" href="#%E7%BD%91%E9%A1%B5%E5%89%AA%E8%97%8F%E6%95%B4%E7%90%86" data-toc-target="网页剪藏整理"><span class="toc-text">网页剪藏整理</span></a><a class="toc-level-3" href="#%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81%E5%85%A5%E5%BA%93" data-toc-target="会议纪要入库"><span class="toc-text">会议纪要入库</span></a><a class="toc-level-3" href="#%E6%8C%89-Bases-%E7%94%9F%E6%88%90%E5%91%A8%E6%8A%A5" data-toc-target="按-Bases-生成周报"><span class="toc-text">按 Bases 生成周报</span></a><a class="toc-level-3" href="#%E6%89%B9%E9%87%8F%E9%87%8D%E6%9E%84%E5%8F%8C%E9%93%BE" data-toc-target="批量重构双链"><span class="toc-text">批量重构双链</span></a><a class="toc-level-2" href="#%E9%A3%8E%E9%99%A9%E6%B8%85%E5%8D%95" data-toc-target="风险清单"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">风险清单</span></a><a class="toc-level-2" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">总结</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E5%8D%8A%E5%B9%B4%E6%9D%A5%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：半年来的变化"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">2026-09 补记：半年来的变化</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/ai-coding-toolchain/" style="--rail: 100%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">7 / 7</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#%E5%85%88%E5%88%86%E6%B8%85%E4%B8%A4%E6%A0%B7%E4%B8%9C%E8%A5%BF" data-toc-target="先分清两样东西" data-title="01 · 先分清两样东西" aria-label="先分清两样东西"></a><a class="toc-strip__dot" href="#%E5%AE%89%E8%A3%85" data-toc-target="安装" data-title="02 · 安装" aria-label="安装"></a><a class="toc-strip__dot" href="#%E7%9F%A5%E8%AF%86%E5%BA%93%E7%BB%93%E6%9E%84%E7%BA%A6%E5%AE%9A" data-toc-target="知识库结构约定" data-title="03 · 知识库结构约定" aria-label="知识库结构约定"></a><a class="toc-strip__dot" href="#%E8%BE%B9%E7%95%8C%EF%BC%9AAgent-%E8%83%BD%E5%86%99%E5%93%AA%E9%87%8C" data-toc-target="边界：Agent-能写哪里" data-title="04 · 边界：Agent 能写哪里" aria-label="边界：Agent 能写哪里"></a><a class="toc-strip__dot" href="#%E5%9B%9B%E4%B8%AA%E5%B7%A5%E4%BD%9C%E6%B5%81" data-toc-target="四个工作流" data-title="05 · 四个工作流" aria-label="四个工作流"></a><a class="toc-strip__dot" href="#%E9%A3%8E%E9%99%A9%E6%B8%85%E5%8D%95" data-toc-target="风险清单" data-title="06 · 风险清单" aria-label="风险清单"></a><a class="toc-strip__dot" href="#%E6%80%BB%E7%BB%93" data-toc-target="总结" data-title="07 · 总结" aria-label="总结"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E5%8D%8A%E5%B9%B4%E6%9D%A5%E7%9A%84%E5%8F%98%E5%8C%96" data-toc-target="2026-09-补记：半年来的变化" data-title="08 · 2026-09 补记：半年来的变化" aria-label="2026-09 补记：半年来的变化"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"engineering-practice/Obsidian-Agent-Skills最佳实践","title":"让 AI Agent 操作 Obsidian：obsidian-skills 与 Obsidian CLI 实践","url":"/2026/03/10/engineering-practice/Obsidian-Agent-Skills%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5/","path":"ai-coding-toolchain","index":6,"total":7,"next":null}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

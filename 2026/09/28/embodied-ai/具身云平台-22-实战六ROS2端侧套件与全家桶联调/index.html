@@ -1,0 +1,766 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>第 22 章 实战六：ROS 2 端侧套件与全家桶联调 · 飞轮之道</title>
+<meta name="description" content="p06 是全书唯一运行在“机器人上”的工程：一个 ROS 2 Jazzy 工作空间，包含自定义接口、底盘仿真、状态聚合、任务执行器与 MQTT 云桥——机器人的“TBox”。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-22-%E5%AE%9E%E6%88%98%E5%85%ADROS2%E7%AB%AF%E4%BE%A7%E5%A5%97%E4%BB%B6%E4%B8%8E%E5%85%A8%E5%AE%B6%E6%A1%B6%E8%81%94%E8%B0%83/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="第 22 章 实战六：ROS 2 端侧套件与全家桶联调 · 飞轮之道">
+<meta property="og:description" content="p06 是全书唯一运行在“机器人上”的工程：一个 ROS 2 Jazzy 工作空间，包含自定义接口、底盘仿真、状态聚合、任务执行器与 MQTT 云桥——机器人的“TBox”。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-22-%E5%AE%9E%E6%88%98%E5%85%ADROS2%E7%AB%AF%E4%BE%A7%E5%A5%97%E4%BB%B6%E4%B8%8E%E5%85%A8%E5%AE%B6%E6%A1%B6%E8%81%94%E8%B0%83/">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Robotics_Cutting_Bridge_Building_Parts.jpg/1280px-Robotics_Cutting_Bridge_Building_Parts.jpg">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/">具身智能</a> / <a href="/paths/embodied-cloud-book/">实战</a><a class="series-chip" href="/paths/embodied-cloud-book/" title="查看学习路径">第 23 / 28 篇</a>
+    </div>
+    <h1>第 22 章 实战六：ROS 2 端侧套件与全家桶联调</h1>
+    <p class="article-deck">p06 是全书唯一运行在“机器人上”的工程：一个 ROS 2 Jazzy 工作空间，包含自定义接口、底盘仿真、状态聚合、任务执行器与 MQTT 云桥——机器人的“TBox”。</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>11 分钟</span>
+      <span>发布于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/ROS-2/">#ROS 2</a><a class="article-meta__tag" href="/tags/%E4%BA%91%E8%BE%B9%E5%8D%8F%E5%90%8C/">#云边协同</a><a class="article-meta__tag" href="/tags/%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE/">#实战项目</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>云桥是唯一通道：只读状态、只调任务与参数。</li><li>回调只入队：隔离网络线程与 ROS 执行器。</li><li>任务事件永不丢：离线队列三级优先级。</li><li>契约测试：端云实现漂移时先红。</li><li>真实形态联调：部署相关缺陷只在真实形态出现。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p><strong>本章定位</strong>：p06 是全书唯一运行在“机器人上”的工程：一个 ROS 2 Jazzy 工作空间，包含自定义接口、底盘仿真、状态聚合、任务执行器与 MQTT 云桥——机器人的“TBox”。本章讲清 p06 的设计与验证方式，再把六个工程拼成一套全家桶：一条命令拉起 broker、云端、仿真机队、具身 Agent，以及可选的真 ROS 2 机器人。<br><strong>代码位置</strong>：<code>code/p06-ros2-edge-kit</code>、<code>code/capstone</code>｜<strong>对应理论</strong>：第 4、5 章（ROS 2）、第 8 章（接入）、第 10 章（任务）｜<strong>建议学时</strong>：8 小时</p>
+</blockquote>
+<h2 id="22-1-目标与验收"><a href="#22-1-目标与验收" class="headerlink" title="22.1 目标与验收"></a>22.1 目标与验收</h2><h3 id="22-1-1-p06-的四个节点"><a href="#22-1-1-p06-的四个节点" class="headerlink" title="22.1.1 p06 的四个节点"></a>22.1.1 p06 的四个节点</h3><table>
+<thead>
+<tr>
+<th>节点</th>
+<th>职责</th>
+<th>车联网类比</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sim_base</code></td>
+<td>模拟底盘：位姿、电量、温度，接收速度与模式</td>
+<td>车辆 ECU 仿真</td>
+</tr>
+<tr>
+<td><code>state_aggregator</code></td>
+<td>多源状态聚合为 <code>RobotState</code>（上云唯一数据源）</td>
+<td>车端信号聚合</td>
+</tr>
+<tr>
+<td><code>task_executor</code></td>
+<td><code>RobotTask</code> 动作服务器：准入、分阶段执行、反馈、取消</td>
+<td>车端远控执行</td>
+</tr>
+<tr>
+<td><code>cloud_bridge</code></td>
+<td>MQTT ⇄ ROS 2：遥测上行、任务下行、影子 delta → 参数</td>
+<td><strong>TBox</strong></td>
+</tr>
+</tbody></table>
+<h3 id="22-1-2-验证方式与边界"><a href="#22-1-2-验证方式与边界" class="headerlink" title="22.1.2 验证方式与边界"></a>22.1.2 验证方式与边界</h3><p>p06 的验收分五层，前三层不需要 ROS 2，后两层在本地 Docker 的真实 ROS 2 Jazzy 镜像里执行：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>内容</th>
+<th>能发现什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>静态校验</td>
+<td>包结构、<code>package.xml</code>、入口点、消息与动作字段、launch 与配置、Dockerfile 基线</td>
+<td>拼写、漏声明、结构性错误</td>
+</tr>
+<tr>
+<td>协议映射单测</td>
+<td>纯 Python 的 <code>protocol_mapping</code>：主题、遥测、任务命令到动作目标、影子参数计划（白名单&#x2F;范围&#x2F;类型）、上行限速、离线优先级队列、设备 ID → 命名空间</td>
+<td>映射逻辑错误</td>
+</tr>
+<tr>
+<td>与 p01 的契约测试</td>
+<td>p06 产生的上行消息能被 p01 的协议解析与服务处理</td>
+<td>端云实现漂移</td>
+</tr>
+<tr>
+<td>rclpy 运行时测试</td>
+<td>同进程起三个节点，用动作客户端与参数接口驱动：分阶段执行、忙时拒单、取消、准入、参数回调</td>
+<td>端侧行为与并发</td>
+</tr>
+<tr>
+<td>compose 真机联调</td>
+<td>broker + p01 云端 + ROS 2 机器人容器：开通、派单、影子、故障注入、遗嘱、重启恢复</td>
+<td>部署形态、启动顺序、ROS 名称与类型规则</td>
+</tr>
+</tbody></table>
+<p>宿主机上 p06 的 16 项测试直接运行（rclpy 运行时测试自动跳过）；在 ROS 2 镜像里 21 项全部运行。<code>make e2e-docker</code> 把后两层纳入交付门禁——下面 22.5.5 会看到，<strong>只做前三层时 p06 其实根本启动不了</strong>。</p>
+<h2 id="22-2-架构"><a href="#22-2-架构" class="headerlink" title="22.2 架构"></a>22.2 架构</h2><h3 id="22-2-1-节点与数据流"><a href="#22-2-1-节点与数据流" class="headerlink" title="22.2.1 节点与数据流"></a>22.2.1 节点与数据流</h3><pre class="mermaid">flowchart LR
+  subgraph Robot["ROS 2 Jazzy（机器人内部，DDS）"]
+    SB["sim_base&lt;br/&gt;底盘仿真"] --&gt;|"odom · battery · temps"| AGG["state_aggregator"]
+    AGG --&gt;|"RobotState"| BR["cloud_bridge"]
+    BR --&gt;|"RobotTask 动作目标"| EX["task_executor"]
+    EX --&gt;|"cmd_vel · mode"| SB
+    BR --&gt;|"SetParameters"| EX &amp; AGG
+  end
+  BR &lt;--&gt;|"MQTT · ECL v1"| MQ["broker"]
+  MQ &lt;--&gt; CL["p01 云端"]</pre>
+
+
+<p>云桥是机器人与外界的<strong>唯一通道</strong>：它只订阅聚合后的状态、只调用任务动作与参数服务，从不直接发布速度指令。这让第 16 章的 SROS2 最小权限可以精确描述为一份很短的权限文件。</p>
+<h3 id="22-2-2-接口定义"><a href="#22-2-2-接口定义" class="headerlink" title="22.2.2 接口定义"></a>22.2.2 接口定义</h3><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="27"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"># RobotState.msg —— 字段与 ECL v1 telemetry 一一对应</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">std_msgs/Header header</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">string robot_id</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">float64 x</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">float64 y</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">float64 theta</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">float32 battery</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">float32 cpu</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">float32 gpu_temp</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">float32 joint_temp_max</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">uint16 error_code</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">string mode</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">string task_id</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">string model_ver</span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"># RobotTask.action —— 通用平台任务：类型 + JSON 参数（目标 / 结果 / 反馈）</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">string task_id</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">string type</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">string params_json</span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">float32 lease_s</span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">string trace_id</span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">bool success</span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">string detail</span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">---</span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">string stage</span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">float32 progress</span></span></code></pre></div></div></figure>
+
+<p><strong>通用任务动作 + JSON 参数</strong>是一个有意的取舍：新增任务类型不需要改接口、不需要重新编译所有包，代价是参数校验下沉到执行器——执行器必须对每种任务类型做参数白名单校验（与 p04 安全笼同理）。</p>
+<h2 id="22-3-云桥的三条纪律"><a href="#22-3-云桥的三条纪律" class="headerlink" title="22.3 云桥的三条纪律"></a>22.3 云桥的三条纪律</h2><h3 id="22-3-1-线程纪律：回调只入队"><a href="#22-3-1-线程纪律：回调只入队" class="headerlink" title="22.3.1 线程纪律：回调只入队"></a>22.3.1 线程纪律：回调只入队</h3><figure class="highlight python cb" data-lang="python" data-label="Python" data-ext="py" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="comment"># paho 回调运行在网络线程：只把消息放进队列</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">c.on_message = <span class="keyword">lambda</span> _c, _u, msg: <span class="variable language_">self</span>.inbox.put((msg.topic, msg.payload))  <span class="comment"># 只入队</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="comment"># 所有 ROS 调用都在执行器线程的定时器里完成</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">def</span> <span class="title function_">drain_inbox</span>(<span class="params">self</span>):</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="keyword">while</span> <span class="keyword">not</span> <span class="variable language_">self</span>.inbox.empty():</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        t, raw = <span class="variable language_">self</span>.inbox.get_nowait()</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">        ...</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="keyword">if</span> t.endswith(<span class="string">&quot;task/cmd&quot;</span>):</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">            <span class="variable language_">self</span>.handle_task(p)</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        <span class="keyword">elif</span> t.endswith(<span class="string">&quot;shadow/delta&quot;</span>):</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">            <span class="variable language_">self</span>.handle_delta(p)</span></span></code></pre></div></div></figure>
+
+<p>在 paho 的网络线程里直接调用 rclpy 是一类难以复现的并发缺陷来源。“回调只入队、定时器里处理”把两个事件循环隔离开——这与你在车端 TBox 软件中隔离通信线程与业务线程是同一原则（第 5 章 5.8.2）。</p>
+<h3 id="22-3-2-离线纪律：优先级队列"><a href="#22-3-2-离线纪律：优先级队列" class="headerlink" title="22.3.2 离线纪律：优先级队列"></a>22.3.2 离线纪律：优先级队列</h3><p>断网时上行消息按优先级区别对待（<code>OfflineQueue</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>内容</th>
+<th>断网时的处理</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P0</td>
+<td>任务事件与结果</td>
+<td>有界缓存（默认 500 条），满了丢最旧，恢复后全部补发</td>
+<td>云端靠它判断任务结局</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>影子回报</td>
+<td>只保留最新一条</td>
+<td>回报是“状态”，旧的没有意义</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>遥测</td>
+<td>直接丢弃并计数</td>
+<td>过期遥测无价值，补发只会挤占带宽</td>
+</tr>
+</tbody></table>
+<p><strong>任务事件永远不能被遥测挤掉</strong>——否则云端会因为收不到“已完成”而回收一个其实已经完成的任务。恢复连接后先补 P0、再补 P1。</p>
+<h3 id="22-3-3-影子纪律：白名单、范围、逐项回报"><a href="#22-3-3-影子纪律：白名单、范围、逐项回报" class="headerlink" title="22.3.3 影子纪律：白名单、范围、逐项回报"></a>22.3.3 影子纪律：白名单、范围、逐项回报</h3><p>影子 delta 经 <code>plan_param_ops</code> 转换为“哪个节点的哪个参数设为什么值”：不在白名单的键拒绝，超出范围的值拒绝，拒绝原因写进回报的 <code>rejected</code> 字段。第 17 章实验 3 指出 p01 的仿真机器人没有范围校验；p06 的云桥正是它的生产化答案。</p>
+<h2 id="22-4-契约测试：端云之间的“接口合同”"><a href="#22-4-契约测试：端云之间的“接口合同”" class="headerlink" title="22.4 契约测试：端云之间的“接口合同”"></a>22.4 契约测试：端云之间的“接口合同”</h2><h3 id="22-4-1-为什么需要"><a href="#22-4-1-为什么需要" class="headerlink" title="22.4.1 为什么需要"></a>22.4.1 为什么需要</h3><p>p01 的仿真机器人与 p06 的云桥是两份独立实现，它们必须说同一种 ECL v1。契约测试用 p06 的 <code>protocol_mapping</code> 生成上行消息，交给 p01 的协议解析与服务处理，断言云端能正确更新在线状态、影子与任务。<strong>任一方改协议，契约测试先红</strong>——这比任何文档都可靠。</p>
+<h3 id="22-4-2-测试地图"><a href="#22-4-2-测试地图" class="headerlink" title="22.4.2 测试地图"></a>22.4.2 测试地图</h3><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>覆盖</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>test_static</td>
+<td>包清单、依赖声明、入口点、消息&#x2F;动作字段与 ECL v1 对应、launch 与参数文件、Dockerfile 使用 Jazzy 基线</td>
+</tr>
+<tr>
+<td>test_protocol_mapping</td>
+<td>主题格式、遥测映射、任务命令 → 动作目标（含不支持类型）、影子参数计划（白名单&#x2F;范围）、上行限速、离线优先级队列</td>
+</tr>
+<tr>
+<td>test_contract_with_p01</td>
+<td>p06 生成的上线、遥测、影子回报、任务事件被 p01 正确处理；端侧可回报的任务状态集合与云端一致</td>
+</tr>
+<tr>
+<td>test_ros_runtime</td>
+<td>只在 ROS 2 环境运行：动作分阶段执行与反馈、忙时拒第二单、取消、未知类型与非 auto 模式准入、参数回调拒绝越界、电量未知前不发布状态</td>
+</tr>
+</tbody></table>
+<h2 id="22-5-全家桶：六个工程拼成一个平台"><a href="#22-5-全家桶：六个工程拼成一个平台" class="headerlink" title="22.5 全家桶：六个工程拼成一个平台"></a>22.5 全家桶：六个工程拼成一个平台</h2><h3 id="22-5-1-组成"><a href="#22-5-1-组成" class="headerlink" title="22.5.1 组成"></a>22.5.1 组成</h3><pre class="mermaid">flowchart TB
+  subgraph Compose["capstone/docker-compose.yml"]
+    MQ["mosquitto"]
+    CL["cloud（p01 服务）"]
+    SF["sim-fleet（p01 run_sim × 5）"]
+    AG["agent（p04 remote）"]
+    RR["ros-robot（p06，profile: ros）"]
+  end
+  AG --&gt;|HTTP| CL
+  CL &lt;--&gt;|MQTT| MQ
+  SF &lt;--&gt;|MQTT| MQ
+  RR &lt;--&gt;|MQTT| MQ
+  subgraph Offline["离线工具（本地运行）"]
+    P2["p02 OTA 灰度"]
+    P3["p03 数据飞轮"]
+    P5["p05 远程诊断"]
+  end</pre>
+
+
+<p>p02、p03、p05 是批处理式的工具工程，以剧本方式本地运行；p01、p04、p06 组成在线链路。</p>
+<h3 id="22-5-2-一次指令的全链路"><a href="#22-5-2-一次指令的全链路" class="headerlink" title="22.5.2 一次指令的全链路"></a>22.5.2 一次指令的全链路</h3><pre class="mermaid">---
+title: "全家桶：一句话到一次动作"
+---
+sequenceDiagram
+  participant AG as agent&lt;br/&gt;(p04 remote)
+  participant CL as cloud&lt;br/&gt;(p01 server)
+  participant MQ as mosquitto
+  participant RB as sim-fleet 或 ros-robot&lt;br/&gt;(p01 SimRobot / p06 云桥)
+  AG-&gt;&gt;CL: GET /robots（等待有机器人 ONLINE）
+  AG-&gt;&gt;AG: 规划 move_to → 安全笼七道检查
+  AG-&gt;&gt;CL: POST /robots/cap-001/tasks &#123;type, params:&#123;target, agent_trace_id&#125;&#125;
+  CL-&gt;&gt;MQ: ecl/v1/cap-001/task/cmd（lease_s）
+  MQ-&gt;&gt;RB: 下发
+  RB-&gt;&gt;MQ: task/event ACCEPTED → RUNNING(续租) → SUCCEEDED
+  MQ-&gt;&gt;CL: 更新任务状态
+  AG-&gt;&gt;CL: GET /tasks/&#123;id&#125; → SUCCEEDED
+  AG-&gt;&gt;AG: 审计哈希链校验</pre>
+
+
+<h3 id="22-5-3-实测：多进程联调"><a href="#22-5-3-实测：多进程联调" class="headerlink" title="22.5.3 实测：多进程联调"></a>22.5.3 实测：多进程联调</h3><p><code>capstone/verify_multiprocess.py</code> 用子进程拉起 p01 服务端、3 台仿真机器人和 p04 Agent；broker 优先用本机 mosquitto，没有就起一个 <code>eclipse-mosquitto:2</code> 容器。端口取 <code>code/ports.env</code> 的测试临时栈（23610&#x2F;23630），与开发栈、compose 栈可以同时存在。启动过程按就绪条件轮询（broker 端口 → <code>/healthz</code> → 3 台 ONLINE），不靠固定等待。实测输出：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="8"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">fleet: &#123;&quot;robots&quot;:3,&quot;by_online_state&quot;:&#123;&quot;ONLINE&quot;:3&#125;,&quot;tasks_by_state&quot;:&#123;&#125;,&quot;active_tasks&quot;:0,&quot;rejected_uplink_msgs&quot;:0&#125;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">&#123;&quot;text&quot;: &quot;机队状态怎么样&quot;, &quot;verdict&quot;: &quot;allow&quot;, ...&#125;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">&#123;&quot;text&quot;: &quot;让 cap-001 去 3号工位&quot;, &quot;verdict&quot;: &quot;allow&quot;, &quot;output&quot;: &#123;&quot;task_id&quot;: &quot;…&quot;, &quot;state&quot;: &quot;SENT&quot;&#125;, ...&#125;</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">&#123;&quot;text&quot;: &quot;让 cap-001 去 配电间&quot;, &quot;verdict&quot;: &quot;deny&quot;, &quot;reasons&quot;: [&quot;target=配电间 not allowed&quot;, &quot;target=配电间 is a forbidden zone&quot;]&#125;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">&#123;&quot;text&quot;: &quot;直接控制 cap-001 的关节到 90 度&quot;, &quot;verdict&quot;: &quot;deny&quot;, &quot;reasons&quot;: [&quot;tool &#x27;set_joint&#x27; not in catalog ...&quot;]&#125;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">&#123;&quot;task_id&quot;: &quot;…&quot;, &quot;final_state&quot;: &quot;SUCCEEDED&quot;&#125;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">&#123;&quot;audit_entries&quot;: 9, &quot;audit_ok&quot;: true, &quot;guard_ok&quot;: true&#125;</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">fleet: &#123;&quot;robots&quot;:3,&quot;by_online_state&quot;:&#123;&quot;ONLINE&quot;:3&#125;,&quot;tasks_by_state&quot;:&#123;&quot;SUCCEEDED&quot;:1&#125;,...&#125;</span></span></code></pre></div></div></figure>
+
+<p>注意任务创建时的状态是 <code>SENT</code> 而不是单进程剧本里的 <code>ACCEPTED</code>：经过真实 broker 后，端侧的接受回执是异步到达的。<strong>同一套代码在不同部署形态下的时序差异，只有真实形态的联调才能看到</strong>。</p>
+<h3 id="22-5-4-联调发现的缺陷"><a href="#22-5-4-联调发现的缺陷" class="headerlink" title="22.5.4 联调发现的缺陷"></a>22.5.4 联调发现的缺陷</h3><p>第一次多进程联调时，Agent 对所有指令都返回“无法规划”。原因是规则规划器的机器人 ID 正则写死了 <code>amr-</code>、<code>ros-</code> 等前缀，而全家桶里的仿真机队叫 <code>cap-001</code>（第 20 章缺陷 4）。单进程剧本恰好都用 <code>amr-</code> 前缀，测试全绿，问题被掩盖了。<strong>这就是为什么全家桶联调是交付前的必经步骤</strong>。</p>
+<h3 id="22-5-5-真实-ROS-2-容器验收发现的缺陷"><a href="#22-5-5-真实-ROS-2-容器验收发现的缺陷" class="headerlink" title="22.5.5 真实 ROS 2 容器验收发现的缺陷"></a>22.5.5 真实 ROS 2 容器验收发现的缺陷</h3><p>p06 早期只做了静态校验、映射单测与契约测试（全部通过）。第一次在 <code>ros:jazzy-ros-base</code> 镜像里真正启动，暴露了一串这三层都测不到的问题：</p>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>根因</th>
+<th>修复</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>launch 报 <code>Invalid namespace</code>，四个节点一个都没起来</td>
+<td>ROS 2 名称只允许字母数字与下划线，launch 直接用 <code>ros-001</code> 当命名空间</td>
+<td><code>ros_namespace()</code> 把设备 ID 映射为 <code>ros_001</code>，云端身份不变；单测覆盖</td>
+</tr>
+<tr>
+<td>影子下发 <code>{&quot;report_hz&quot;: 2}</code> 不生效</td>
+<td>JSON 整数 2 → ROS 整数参数，而 <code>report_hz</code> 声明为 double，ROS 2 强类型拒绝</td>
+<td>协议映射层按参数类型规范化（2 → 2.0），布尔值不再被当成数字</td>
+</tr>
+<tr>
+<td>ROS 结果事件把云端记录的最后阶段清空</td>
+<td>动作结果里没有阶段，云桥上报 <code>stage=&quot;&quot;</code>，云端直接覆盖</td>
+<td>云端空阶段不覆盖已知阶段；p01 回归测试</td>
+</tr>
+<tr>
+<td>云端未就绪时机器人永远“未激活”</td>
+<td>开发态开通只试一次，编排启动顺序稍有偏差就失败，之后所有上行被拒收</td>
+<td>开通退避重试（已注册则沿用身份）；compose 加健康检查，云端健康后才启动机器人</td>
+</tr>
+<tr>
+<td>刚上线就派单被拒“电量 0.00”</td>
+<td>电池话题 1 Hz，首帧状态里电量还是初始值 0</td>
+<td>电量未知前不发布 <code>RobotState</code></td>
+</tr>
+<tr>
+<td>偶发云桥网络线程崩溃（竞态）</td>
+<td><code>on_connect</code> 可能早于 <code>self.client</code> 赋值被回调</td>
+<td>先赋值再连接；拒绝码不再当作已连接</td>
+</tr>
+</tbody></table>
+<p>这张表是本章最重要的结论之一：<strong>契约测试保证“说同一种语言”，运行时验收才保证“真的能说出口”</strong>。把 ROS 2 镜像里的运行时测试与 compose 联调放进交付门禁，成本是几分钟，换来的是“书里的命令读者照做就能跑通”。</p>
+<h2 id="22-6-在你的机器上运行"><a href="#22-6-在你的机器上运行" class="headerlink" title="22.6 在你的机器上运行"></a>22.6 在你的机器上运行</h2><h3 id="22-6-1-四种方式"><a href="#22-6-1-四种方式" class="headerlink" title="22.6.1 四种方式"></a>22.6.1 四种方式</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="18"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="built_in">cd</span> code</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="comment"># ① 多进程联调（本机 mosquitto 或自动起 mosquitto 容器）：退出码 0 即通过</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">make verify</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx"><span class="comment"># ② Docker：云 + 5 台仿真机器人 + Agent，Agent 退出码即结果（宿主机 API 23130）</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="built_in">cd</span> capstone &amp;&amp; docker compose up --build --exit-code-from agent</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="comment"># ③ Docker + 真 ROS 2 机器人（Jazzy）</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">docker compose --profile ros up --build -d</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">curl localhost:23130/robots/ros-001                      <span class="comment"># 云端看到 ROS 2 机器人上线</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">curl -X POST localhost:23130/robots/ros-001/tasks -H <span class="string">&#x27;content-type: application/json&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">     -d <span class="string">&#x27;&#123;&quot;type&quot;:&quot;move_to&quot;,&quot;params&quot;:&#123;&quot;target&quot;:&quot;P3&quot;&#125;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">docker compose <span class="built_in">exec</span> ros-robot bash -lc <span class="string">&quot;. install/setup.sh &amp;&amp; ros2 topic echo /ros_001/state --once&quot;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">docker compose --profile ros down -v</span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx"><span class="comment"># ④ 交付门禁：以上全部 + 测试镜像内全量测试 + ROS 2 运行时测试 + p06 场景验收，报告在 .e2e-report/</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx"><span class="built_in">cd</span> .. &amp;&amp; make e2e-docker</span></span></code></pre></div></div></figure>
+
+<p>端口全部来自 <code>code/ports.env</code>（全家桶 23110&#x2F;23130、p06 23210&#x2F;23230、多进程联调 23610&#x2F;23630），各栈可同时运行；启动前可用 <code>make ports-check</code> 预检占用。</p>
+<h3 id="22-6-2-ROS-2-侧的排障清单"><a href="#22-6-2-ROS-2-侧的排障清单" class="headerlink" title="22.6.2 ROS 2 侧的排障清单"></a>22.6.2 ROS 2 侧的排障清单</h3><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>检查</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>launch 报 <code>Invalid namespace</code></td>
+<td>命名空间是否含连字符等非法字符（应为 <code>ros_namespace(robot_id)</code>）</td>
+</tr>
+<tr>
+<td>云端看不到 ros-001</td>
+<td>云桥日志中的开通与 MQTT 连接；<code>MQTT_HOST</code> 是否为服务名；云端是否健康</td>
+</tr>
+<tr>
+<td>上线但状态 DEGRADED</td>
+<td><code>state_aggregator</code> 是否在发布；<code>ros2 topic hz</code> 查看频率</td>
+</tr>
+<tr>
+<td>任务一直 SENT</td>
+<td><code>ros2 action list</code> 是否有任务动作；执行器是否拒绝（类型&#x2F;电量&#x2F;模式）</td>
+</tr>
+<tr>
+<td>影子参数不生效</td>
+<td>回报里的 <code>rejected</code> 字段；参数是否在白名单与范围内；<code>Wrong parameter type</code> 说明类型未规范化</td>
+</tr>
+<tr>
+<td>容器间 DDS 串扰</td>
+<td><code>ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST</code> 是否生效（Jazzy 的发现范围设置）</td>
+</tr>
+</tbody></table>
+<h2 id="22-7-扩展练习"><a href="#22-7-扩展练习" class="headerlink" title="22.7 扩展练习"></a>22.7 扩展练习</h2><h3 id="22-7-1-从套件到产品"><a href="#22-7-1-从套件到产品" class="headerlink" title="22.7.1 从套件到产品"></a>22.7.1 从套件到产品</h3><ol>
+<li>为 <code>task_executor</code> 增加每种任务类型的参数白名单校验，并补单元测试；</li>
+<li>实现漫游宽限：云桥短暂断线在 N 秒内恢复时，不发布离线相关的回报；</li>
+<li>在 p06 中加入一个“诊断原语”服务：接收云端的白名单命令（节点列表、话题频率），返回结构化结果，接入 p05 的检查环节；</li>
+<li>为 p06 的四个节点写 SROS2 权限文件，并在 Docker 中启用访问控制；</li>
+<li>在 CI 中用 Gazebo 替换 <code>sim_base</code>，跑一次端到端冒烟测试（第 14 章）。</li>
+</ol>
+<hr>
+<h2 id="🚗→🤖-迁移对照"><a href="#🚗→🤖-迁移对照" class="headerlink" title="🚗→🤖 迁移对照"></a>🚗→🤖 迁移对照</h2><table>
+<thead>
+<tr>
+<th>车端 TBox &#x2F; 车联网</th>
+<th>p06</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>TBox 通信模块</td>
+<td>cloud_bridge</td>
+<td>回调只入队</td>
+</tr>
+<tr>
+<td>车端信号聚合</td>
+<td>state_aggregator</td>
+<td>上云唯一数据源</td>
+</tr>
+<tr>
+<td>远控执行</td>
+<td>task_executor（动作服务器）</td>
+<td>带反馈与取消</td>
+</tr>
+<tr>
+<td>离线缓存补发</td>
+<td>三级优先级离线队列</td>
+<td>任务事件永不丢</td>
+</tr>
+<tr>
+<td>端云联调台架</td>
+<td>capstone 全家桶</td>
+<td>多进程或 Docker</td>
+</tr>
+</tbody></table>
+<h2 id="⚠️-一线踩坑"><a href="#⚠️-一线踩坑" class="headerlink" title="⚠️ 一线踩坑"></a>⚠️ 一线踩坑</h2><ul>
+<li><strong>在网络线程里调用 ROS</strong>：偶发死锁或崩溃。对策：回调只入队。</li>
+<li><strong>离线队列不分优先级</strong>：遥测挤掉任务事件，已完成的任务被误回收。对策：P0 必补、P1 留最新、P2 断网即丢。</li>
+<li><strong>只做单进程测试</strong>：部署形态相关的问题被掩盖（ID 前缀、异步时序）。对策：全家桶联调进入交付门禁。</li>
+<li><strong>容器内 DDS 互相发现</strong>：多个机器人容器的话题串在一起。对策：限制发现范围、区分域 ID。</li>
+<li><strong>设备 ID 直接当 ROS 命名空间</strong>：连字符是非法字符，launch 当场失败。对策：ID → 命名空间做成确定性纯函数并单测。</li>
+</ul>
+<h2 id="🎯-面试与评审要点"><a href="#🎯-面试与评审要点" class="headerlink" title="🎯 面试与评审要点"></a>🎯 面试与评审要点</h2><ol>
+<li>机器人的“TBox”应该怎么设计？（唯一通道、回调只入队、优先级离线队列、影子白名单与范围、不直接发控制指令）</li>
+<li>端云协议怎么防止双方实现漂移？（契约测试）</li>
+<li>你如何在没有真机的情况下验证整个平台？（分层：单元、契约、ROS 2 运行时、多进程联调、Docker 全家桶、Gazebo CI）</li>
+</ol>
+<h2 id="📝-本章卡片"><a href="#📝-本章卡片" class="headerlink" title="📝 本章卡片"></a>📝 本章卡片</h2><ul>
+<li><strong>云桥是唯一通道</strong>：只读状态、只调任务与参数。</li>
+<li><strong>回调只入队</strong>：隔离网络线程与 ROS 执行器。</li>
+<li><strong>任务事件永不丢</strong>：离线队列三级优先级。</li>
+<li><strong>契约测试</strong>：端云实现漂移时先红。</li>
+<li><strong>真实形态联调</strong>：部署相关缺陷只在真实形态出现。</li>
+</ul>
+<hr>
+<p>⬅️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-21-%E5%AE%9E%E6%88%98%E4%BA%94%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%ADCopilot/">第 21 章</a> ｜ ➡️ <a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-23-%E4%B8%80%E7%BA%BF%E8%90%BD%E5%9C%B0%E6%96%B9%E6%B3%95%E8%AE%BA%E4%B8%8E%E7%BB%8F%E9%AA%8C%E6%95%99%E8%AE%AD/">第 23 章 一线落地方法论与经验教训</a></p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-23-%E4%B8%80%E7%BA%BF%E8%90%BD%E5%9C%B0%E6%96%B9%E6%B3%95%E8%AE%BA%E4%B8%8E%E7%BB%8F%E9%AA%8C%E6%95%99%E8%AE%AD/">第 23 章 一线落地方法论与经验教训</a></h3>
+        <p>前 22 章讲“做什么、怎么做”，本章讲“按什么顺序做、和谁一起做、怎么知道做对了”。</p>
+        <a class="btn primary" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-23-%E4%B8%80%E7%BA%BF%E8%90%BD%E5%9C%B0%E6%96%B9%E6%B3%95%E8%AE%BA%E4%B8%8E%E7%BB%8F%E9%AA%8C%E6%95%99%E8%AE%AD/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-21-%E5%AE%9E%E6%88%98%E4%BA%94%E8%BF%9C%E7%A8%8B%E8%AF%8A%E6%96%ADCopilot/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：第 21 章 实战五：远程诊断 Copilot——可解释、可恢复、可闭环</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 11 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#22-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="22-1-目标与验收"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">22.1 目标与验收</span></a><a class="toc-level-3" href="#22-1-1-p06-%E7%9A%84%E5%9B%9B%E4%B8%AA%E8%8A%82%E7%82%B9" data-toc-target="22-1-1-p06-的四个节点"><span class="toc-text">22.1.1 p06 的四个节点</span></a><a class="toc-level-3" href="#22-1-2-%E9%AA%8C%E8%AF%81%E6%96%B9%E5%BC%8F%E4%B8%8E%E8%BE%B9%E7%95%8C" data-toc-target="22-1-2-验证方式与边界"><span class="toc-text">22.1.2 验证方式与边界</span></a><a class="toc-level-2" href="#22-2-%E6%9E%B6%E6%9E%84" data-toc-target="22-2-架构"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">22.2 架构</span></a><a class="toc-level-3" href="#22-2-1-%E8%8A%82%E7%82%B9%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81" data-toc-target="22-2-1-节点与数据流"><span class="toc-text">22.2.1 节点与数据流</span></a><a class="toc-level-3" href="#22-2-2-%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89" data-toc-target="22-2-2-接口定义"><span class="toc-text">22.2.2 接口定义</span></a><a class="toc-level-2" href="#22-3-%E4%BA%91%E6%A1%A5%E7%9A%84%E4%B8%89%E6%9D%A1%E7%BA%AA%E5%BE%8B" data-toc-target="22-3-云桥的三条纪律"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">22.3 云桥的三条纪律</span></a><a class="toc-level-3" href="#22-3-1-%E7%BA%BF%E7%A8%8B%E7%BA%AA%E5%BE%8B%EF%BC%9A%E5%9B%9E%E8%B0%83%E5%8F%AA%E5%85%A5%E9%98%9F" data-toc-target="22-3-1-线程纪律：回调只入队"><span class="toc-text">22.3.1 线程纪律：回调只入队</span></a><a class="toc-level-3" href="#22-3-2-%E7%A6%BB%E7%BA%BF%E7%BA%AA%E5%BE%8B%EF%BC%9A%E4%BC%98%E5%85%88%E7%BA%A7%E9%98%9F%E5%88%97" data-toc-target="22-3-2-离线纪律：优先级队列"><span class="toc-text">22.3.2 离线纪律：优先级队列</span></a><a class="toc-level-3" href="#22-3-3-%E5%BD%B1%E5%AD%90%E7%BA%AA%E5%BE%8B%EF%BC%9A%E7%99%BD%E5%90%8D%E5%8D%95%E3%80%81%E8%8C%83%E5%9B%B4%E3%80%81%E9%80%90%E9%A1%B9%E5%9B%9E%E6%8A%A5" data-toc-target="22-3-3-影子纪律：白名单、范围、逐项回报"><span class="toc-text">22.3.3 影子纪律：白名单、范围、逐项回报</span></a><a class="toc-level-2" href="#22-4-%E5%A5%91%E7%BA%A6%E6%B5%8B%E8%AF%95%EF%BC%9A%E7%AB%AF%E4%BA%91%E4%B9%8B%E9%97%B4%E7%9A%84%E2%80%9C%E6%8E%A5%E5%8F%A3%E5%90%88%E5%90%8C%E2%80%9D" data-toc-target="22-4-契约测试：端云之间的“接口合同”"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">22.4 契约测试：端云之间的“接口合同”</span></a><a class="toc-level-3" href="#22-4-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81" data-toc-target="22-4-1-为什么需要"><span class="toc-text">22.4.1 为什么需要</span></a><a class="toc-level-3" href="#22-4-2-%E6%B5%8B%E8%AF%95%E5%9C%B0%E5%9B%BE" data-toc-target="22-4-2-测试地图"><span class="toc-text">22.4.2 测试地图</span></a><a class="toc-level-2" href="#22-5-%E5%85%A8%E5%AE%B6%E6%A1%B6%EF%BC%9A%E5%85%AD%E4%B8%AA%E5%B7%A5%E7%A8%8B%E6%8B%BC%E6%88%90%E4%B8%80%E4%B8%AA%E5%B9%B3%E5%8F%B0" data-toc-target="22-5-全家桶：六个工程拼成一个平台"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">22.5 全家桶：六个工程拼成一个平台</span></a><a class="toc-level-3" href="#22-5-1-%E7%BB%84%E6%88%90" data-toc-target="22-5-1-组成"><span class="toc-text">22.5.1 组成</span></a><a class="toc-level-3" href="#22-5-2-%E4%B8%80%E6%AC%A1%E6%8C%87%E4%BB%A4%E7%9A%84%E5%85%A8%E9%93%BE%E8%B7%AF" data-toc-target="22-5-2-一次指令的全链路"><span class="toc-text">22.5.2 一次指令的全链路</span></a><a class="toc-level-3" href="#22-5-3-%E5%AE%9E%E6%B5%8B%EF%BC%9A%E5%A4%9A%E8%BF%9B%E7%A8%8B%E8%81%94%E8%B0%83" data-toc-target="22-5-3-实测：多进程联调"><span class="toc-text">22.5.3 实测：多进程联调</span></a><a class="toc-level-3" href="#22-5-4-%E8%81%94%E8%B0%83%E5%8F%91%E7%8E%B0%E7%9A%84%E7%BC%BA%E9%99%B7" data-toc-target="22-5-4-联调发现的缺陷"><span class="toc-text">22.5.4 联调发现的缺陷</span></a><a class="toc-level-3" href="#22-5-5-%E7%9C%9F%E5%AE%9E-ROS-2-%E5%AE%B9%E5%99%A8%E9%AA%8C%E6%94%B6%E5%8F%91%E7%8E%B0%E7%9A%84%E7%BC%BA%E9%99%B7" data-toc-target="22-5-5-真实-ROS-2-容器验收发现的缺陷"><span class="toc-text">22.5.5 真实 ROS 2 容器验收发现的缺陷</span></a><a class="toc-level-2" href="#22-6-%E5%9C%A8%E4%BD%A0%E7%9A%84%E6%9C%BA%E5%99%A8%E4%B8%8A%E8%BF%90%E8%A1%8C" data-toc-target="22-6-在你的机器上运行"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">22.6 在你的机器上运行</span></a><a class="toc-level-3" href="#22-6-1-%E5%9B%9B%E7%A7%8D%E6%96%B9%E5%BC%8F" data-toc-target="22-6-1-四种方式"><span class="toc-text">22.6.1 四种方式</span></a><a class="toc-level-3" href="#22-6-2-ROS-2-%E4%BE%A7%E7%9A%84%E6%8E%92%E9%9A%9C%E6%B8%85%E5%8D%95" data-toc-target="22-6-2-ROS-2-侧的排障清单"><span class="toc-text">22.6.2 ROS 2 侧的排障清单</span></a><a class="toc-level-2" href="#22-7-%E6%89%A9%E5%B1%95%E7%BB%83%E4%B9%A0" data-toc-target="22-7-扩展练习"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">22.7 扩展练习</span></a><a class="toc-level-3" href="#22-7-1-%E4%BB%8E%E5%A5%97%E4%BB%B6%E5%88%B0%E4%BA%A7%E5%93%81" data-toc-target="22-7-1-从套件到产品"><span class="toc-text">22.7.1 从套件到产品</span></a><a class="toc-level-2" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">🚗→🤖 迁移对照</span></a><a class="toc-level-2" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">⚠️ 一线踩坑</span></a><a class="toc-level-2" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">🎯 面试与评审要点</span></a><a class="toc-level-2" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片"><i class="toc-num" aria-hidden="true">11</i><span class="toc-text">📝 本章卡片</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/embodied-cloud-book/" style="--rail: 82%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">23 / 28</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#22-1-%E7%9B%AE%E6%A0%87%E4%B8%8E%E9%AA%8C%E6%94%B6" data-toc-target="22-1-目标与验收" data-title="01 · 22.1 目标与验收" aria-label="22.1 目标与验收"></a><a class="toc-strip__dot" href="#22-2-%E6%9E%B6%E6%9E%84" data-toc-target="22-2-架构" data-title="02 · 22.2 架构" aria-label="22.2 架构"></a><a class="toc-strip__dot" href="#22-3-%E4%BA%91%E6%A1%A5%E7%9A%84%E4%B8%89%E6%9D%A1%E7%BA%AA%E5%BE%8B" data-toc-target="22-3-云桥的三条纪律" data-title="03 · 22.3 云桥的三条纪律" aria-label="22.3 云桥的三条纪律"></a><a class="toc-strip__dot" href="#22-4-%E5%A5%91%E7%BA%A6%E6%B5%8B%E8%AF%95%EF%BC%9A%E7%AB%AF%E4%BA%91%E4%B9%8B%E9%97%B4%E7%9A%84%E2%80%9C%E6%8E%A5%E5%8F%A3%E5%90%88%E5%90%8C%E2%80%9D" data-toc-target="22-4-契约测试：端云之间的“接口合同”" data-title="04 · 22.4 契约测试：端云之间的“接口合同”" aria-label="22.4 契约测试：端云之间的“接口合同”"></a><a class="toc-strip__dot" href="#22-5-%E5%85%A8%E5%AE%B6%E6%A1%B6%EF%BC%9A%E5%85%AD%E4%B8%AA%E5%B7%A5%E7%A8%8B%E6%8B%BC%E6%88%90%E4%B8%80%E4%B8%AA%E5%B9%B3%E5%8F%B0" data-toc-target="22-5-全家桶：六个工程拼成一个平台" data-title="05 · 22.5 全家桶：六个工程拼成一个平台" aria-label="22.5 全家桶：六个工程拼成一个平台"></a><a class="toc-strip__dot" href="#22-6-%E5%9C%A8%E4%BD%A0%E7%9A%84%E6%9C%BA%E5%99%A8%E4%B8%8A%E8%BF%90%E8%A1%8C" data-toc-target="22-6-在你的机器上运行" data-title="06 · 22.6 在你的机器上运行" aria-label="22.6 在你的机器上运行"></a><a class="toc-strip__dot" href="#22-7-%E6%89%A9%E5%B1%95%E7%BB%83%E4%B9%A0" data-toc-target="22-7-扩展练习" data-title="07 · 22.7 扩展练习" aria-label="22.7 扩展练习"></a><a class="toc-strip__dot" href="#%F0%9F%9A%97%E2%86%92%F0%9F%A4%96-%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7" data-toc-target="🚗→🤖-迁移对照" data-title="08 · 🚗→🤖 迁移对照" aria-label="🚗→🤖 迁移对照"></a><a class="toc-strip__dot" href="#%E2%9A%A0%EF%B8%8F-%E4%B8%80%E7%BA%BF%E8%B8%A9%E5%9D%91" data-toc-target="⚠️-一线踩坑" data-title="09 · ⚠️ 一线踩坑" aria-label="⚠️ 一线踩坑"></a><a class="toc-strip__dot" href="#%F0%9F%8E%AF-%E9%9D%A2%E8%AF%95%E4%B8%8E%E8%AF%84%E5%AE%A1%E8%A6%81%E7%82%B9" data-toc-target="🎯-面试与评审要点" data-title="10 · 🎯 面试与评审要点" aria-label="🎯 面试与评审要点"></a><a class="toc-strip__dot" href="#%F0%9F%93%9D-%E6%9C%AC%E7%AB%A0%E5%8D%A1%E7%89%87" data-toc-target="📝-本章卡片" data-title="11 · 📝 本章卡片" aria-label="📝 本章卡片"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"embodied-ai/具身云平台-22-实战六ROS2端侧套件与全家桶联调","title":"第 22 章 实战六：ROS 2 端侧套件与全家桶联调","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-22-%E5%AE%9E%E6%88%98%E5%85%ADROS2%E7%AB%AF%E4%BE%A7%E5%A5%97%E4%BB%B6%E4%B8%8E%E5%85%A8%E5%AE%B6%E6%A1%B6%E8%81%94%E8%B0%83/","path":"embodied-cloud-book","index":22,"total":28,"next":{"title":"第 23 章 一线落地方法论与经验教训","url":"/2026/09/28/embodied-ai/%E5%85%B7%E8%BA%AB%E4%BA%91%E5%B9%B3%E5%8F%B0-23-%E4%B8%80%E7%BA%BF%E8%90%BD%E5%9C%B0%E6%96%B9%E6%B3%95%E8%AE%BA%E4%B8%8E%E7%BB%8F%E9%AA%8C%E6%95%99%E8%AE%AD/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>

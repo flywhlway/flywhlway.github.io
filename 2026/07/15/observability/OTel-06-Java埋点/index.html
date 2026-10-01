@@ -1,0 +1,942 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7fb">
+
+<script>/* 首帧前写入 JS 标记、护眼模式与代码块偏好（配色 / 换行 / 行号），避免闪烁 */(function(d){d.classList.add('js');var eye='default';try{eye=localStorage.getItem('obs:eye-mode')||'default';}catch(e){}var ok=["sepia","green","night"];if(ok.indexOf(eye)<0)eye='default';if(eye!=='default')d.setAttribute('data-eye',eye);var tc={sepia:'#f3ecdb',green:'#cfe9d3',night:'#191d25'};var m=document.querySelector('meta[name="theme-color"]');if(m&&tc[eye])m.setAttribute('content',tc[eye]);var cs=document.querySelector('meta[name="color-scheme"]');if(cs&&eye==='night')cs.setAttribute('content','dark');var p={};try{p=JSON.parse(localStorage.getItem('obs:code-prefs')||'{}')||{};}catch(e){}var t=/^(light|dark|auto|follow)$/.test(p.theme)?p.theme:'follow';d.setAttribute('data-code-theme',t);d.setAttribute('data-code-scheme',t==='auto'?(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t==='follow'?(eye==='night'?'dark':'light'):t);if(p.wrap===true)d.setAttribute('data-code-wrap','');if(p.ln===false)d.setAttribute('data-code-ln','off');})(document.documentElement);</script>
+<title>Java 埋点：Spring Cloud Gateway 与 Nacos · 飞轮之道</title>
+<meta name="description" content="Java 控制面埋点：Boot 3.5 与 4.0 两条版本线、Java Agent 与 Micrometer Tracing 的取舍、跨语言链路的逐跳验证、Nacos 与健康检查降噪，以及 Spring AI 观测配置的真实行为。">
+<meta name="author" content="Flywhl">
+<meta name="keywords" content="云管端,Agent,可观测性,具身智能,架构设计,工程实践,AIoT">
+<link rel="canonical" href="https://flywhlway.github.io/2026/07/15/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="飞轮之道">
+<meta property="og:title" content="Java 埋点：Spring Cloud Gateway 与 Nacos · 飞轮之道">
+<meta property="og:description" content="Java 控制面埋点：Boot 3.5 与 4.0 两条版本线、Java Agent 与 Micrometer Tracing 的取舍、跨语言链路的逐跳验证、Nacos 与健康检查降噪，以及 Spring AI 观测配置的真实行为。">
+<meta property="og:url" content="https://flywhlway.github.io/2026/07/15/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/">
+<meta property="og:image" content="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&amp;fit=crop&amp;w=1200&amp;q=80">
+<link rel="icon" type="image/png" href="/images/favicon.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="飞轮之道" href="/atom.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="/css/observatory.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body class="observatory kind-post">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="site-shell task-shell kind-post">
+<header class="global-header">
+  <a class="brand" href="/" aria-label="飞轮之道 首页">
+    <img src="/images/logo.png" alt="" width="58" height="58">
+    <span>飞轮之道</span>
+  </a>
+  <div class="mobile-title" aria-hidden="true">文章</div>
+  <nav class="global-nav" aria-label="主导航">
+    
+    <a href="/discover/" class="">发现</a>
+    
+    <a href="/topics/" class="">专题</a>
+    
+    <a href="/paths/" class="">路径</a>
+    
+    <a href="/archives/" class="">归档</a>
+    
+    <a href="/about/" class="">关于</a>
+    
+  </nav>
+  <div class="header-actions">
+    <button class="icon-button" type="button" data-open-search aria-label="搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span></button>
+
+    <div class="eye-switch" data-eye-switch>
+      <button class="icon-button eye-switch__btn" type="button" aria-label="护眼模式" aria-haspopup="true" aria-expanded="false" aria-controls="eye-popover" data-eye-toggle><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><circle class="eye-glyph__pupil" cx="12" cy="12" r="1.2"></circle></svg></span></button>
+      <div class="eye-popover" id="eye-popover" role="group" aria-label="护眼模式" hidden>
+        <div class="eye-popover__head"><strong>护眼模式</strong><span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+    </div>
+
+    
+    
+    <button class="header-ask" type="button" data-open-search aria-label="输入你的问题（快捷键 ⌘K 或 /）">
+      <span class="ask-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ask-mark__ring" cx="12" cy="12" r="10.2" stroke-dasharray="2.4 3.4"/>
+          <circle cx="11" cy="11" r="3.7"/>
+          <path d="m13.8 13.8 3.6 3.6"/>
+        </svg>
+      </span>
+      <span class="ask-label">输入你的问题</span>
+      <kbd class="ask-kbd" data-ask-kbd aria-hidden="true">⌘K</kbd>
+    </button>
+    
+    <button class="icon-button mobile-menu" type="button" data-open-menu aria-label="更多菜单" aria-expanded="false" aria-controls="mobile-menu"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></button>
+  </div>
+  <div class="reading-bar" aria-hidden="true"><span data-reading-bar style="--progress: 0"></span></div>
+</header>
+
+
+<main class="page-main article-layout" id="main" data-article>
+  <script>try{if(localStorage.getItem('obs:toc-collapsed')==='true')document.getElementById('main').classList.add('toc-collapsed');}catch(e){}</script>
+  <article class="article-main">
+    <div class="article-category">
+      <a href="/categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a> / <a href="/paths/agent-observability/">采集证据</a><a class="series-chip" href="/paths/agent-observability/" title="查看学习路径">第 6 / 12 篇</a>
+    </div>
+    <h1>Java 埋点：Spring Cloud Gateway 与 Nacos</h1>
+    <p class="article-deck">Java 控制面埋点：Boot 3.5 与 4.0 两条版本线、Java Agent 与 Micrometer Tracing 的取舍、跨语言链路的逐跳验证、Nacos 与健康检查…</p>
+    <div class="article-meta">
+      <span>Flywhl</span>
+      <span>19 分钟</span>
+      <span>更新于 2026.09</span>
+      <a class="article-meta__tag" href="/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">#可观测性</a><a class="article-meta__tag" href="/tags/OpenTelemetry/">#OpenTelemetry</a><a class="article-meta__tag" href="/tags/Spring-Boot/">#Spring Boot</a>
+    </div>
+    
+    <section class="takeaways" id="takeaways">
+      <h3>先读结论</h3>
+      <ol><li>Java Agent 2.x 默认走 http/protobuf，端点要指向 4318；指向 4317 会静默导出失败。</li><li>Spring Boot 的默认采样率是 0.1，网关按 10% 采样会让下游 Python 服务跟着丢 90% 的 Trace。</li><li>Nacos 2.x/3.x 客户端的注册、心跳、配置监听走内置的 gRPC 长连接，Agent 不会为它们生成 Span；真正的噪声大户是健康检查。</li><li>Spring AI GA 版本的 log-prompt / log-completion 只写应用日志，不进 Span，属性名也仍是 gen_ai.system。</li></ol>
+      
+    </section>
+    
+    <div class="article-content" id="article-content">
+      <blockquote>
+<p>Java 控制面（网关、编排、管理服务）与 Python 执行面必须共享同一条 Trace。本篇给出两条埋点路线的配置与取舍、跨语言链路的逐跳验证方法、Nacos 与健康检查的降噪方案，以及 Spring AI 观测配置的真实行为。基准：JDK 21，按写作时点区分 Spring Boot 3.5 与 4.0 两条版本线。</p>
+</blockquote>
+<h2 id="1-版本基线：两条线并存"><a href="#1-版本基线：两条线并存" class="headerlink" title="1. 版本基线：两条线并存"></a>1. 版本基线：两条线并存</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>存量线</th>
+<th>新建线</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Spring Boot</td>
+<td>3.5.x（开源支持已于 2026-06-30 结束）</td>
+<td>4.0.x（2025-11 GA）</td>
+</tr>
+<tr>
+<td>Spring Cloud</td>
+<td>2025.0.x（Gateway 4.3）</td>
+<td>2025.1.x（Gateway 5.0，2025-11-24 GA）</td>
+</tr>
+<tr>
+<td>Spring Cloud Alibaba</td>
+<td>2025.0.0.0（nacos-client 3.0.3）</td>
+<td>2025.1.0.0（nacos-client 3.1.1）</td>
+</tr>
+<tr>
+<td>Spring AI</td>
+<td>1.1.x</td>
+<td>2.0.x（2026-06-12 GA）</td>
+</tr>
+<tr>
+<td>OTel 集成入口</td>
+<td>手工组合 Micrometer 桥接与导出器</td>
+<td><code>spring-boot-starter-opentelemetry</code></td>
+</tr>
+<tr>
+<td>OTel Java Agent</td>
+<td>v2.29.0（写作时最新）</td>
+<td>同左</td>
+</tr>
+</tbody></table>
+<p>Spring Boot 4.1 已于 2026-06 发布，但 Spring Cloud Alibaba 2025.1.0.0 的适配基线是 4.0，Nacos 体系的服务先停在 4.0.x，等 SCA 官方声明兼容再升。两条线在 OTel 层面的主要差异是 Micrometer 路线的配置键改名（见 4.2），Agent 路线的写法两条线完全一致。</p>
+<h2 id="2-两条路线怎么选"><a href="#2-两条路线怎么选" class="headerlink" title="2. 两条路线怎么选"></a>2. 两条路线怎么选</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>A. OTel Java Agent</th>
+<th>B. Micrometer Tracing 桥接</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>原理</td>
+<td><code>-javaagent</code> 字节码增强</td>
+<td>Spring 的 Observation API，经 OTel 桥接导出</td>
+</tr>
+<tr>
+<td>代码改动</td>
+<td>零改动，只改启动参数</td>
+<td>加依赖与配置，少量 Bean</td>
+</tr>
+<tr>
+<td>覆盖面</td>
+<td>200+ 库：WebFlux、Reactor Netty、JDBC、Lettuce、Kafka、gRPC、HttpURLConnection、OpenAI Java SDK 等</td>
+<td>只覆盖接入了 Observation 的组件；<code>new</code> 出来的 <code>RestTemplate</code> &#x2F; <code>WebClient</code> 不会传播上下文</td>
+</tr>
+<tr>
+<td>三信号</td>
+<td>Trace、指标、日志默认全开</td>
+<td>Trace 与指标；日志需手动安装 Appender</td>
+</tr>
+<tr>
+<td>默认采样</td>
+<td><code>parentbased_always_on</code></td>
+<td><code>management.tracing.sampling.probability</code> 默认 <strong>0.1</strong></td>
+</tr>
+<tr>
+<td>HTTP 指标命名</td>
+<td>OTel 语义约定（<code>http.server.request.duration</code>，单位 s）</td>
+<td>Micrometer 的 <code>http.server.requests</code>，与 Python 侧不同名</td>
+</tr>
+<tr>
+<td>Baggage</td>
+<td>默认透传全部键</td>
+<td>只透传 <code>remote-fields</code> 列出的键</td>
+</tr>
+<tr>
+<td>Spring AI 观测</td>
+<td>Agent 不桥接 Observation API，Spring AI 的 Span 不会出现</td>
+<td>原生支持</td>
+</tr>
+<tr>
+<td>版本耦合</td>
+<td>Agent 需要覆盖你所用库的版本</td>
+<td>随 Boot BOM 走</td>
+</tr>
+<tr>
+<td>GraalVM 原生镜像</td>
+<td>不支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>与其他 APM Agent 共存</td>
+<td>冲突风险高</td>
+<td>无</td>
+</tr>
+</tbody></table>
+<p>决策规则：</p>
+<ol>
+<li><strong>存量服务批量接入、网关、没有 Spring AI 的服务</strong>：选 A。改动只在部署层，回滚就是去掉一个参数。</li>
+<li><strong>用 Spring AI 调模型的服务、原生镜像服务</strong>：选 B。</li>
+<li><strong>同一服务只选一条。</strong> 两条同时启用会有两套 SDK 各自创建 Span、各自导出，父子关系在两套 SDK 之间断开。</li>
+<li>两条路线产出的都是标准 OTLP，同一集群混用没有问题，但 HTTP 指标名不同，跨服务大盘需要分开查询或用 recording rule 归一。</li>
+</ol>
+<h2 id="3-路线-A：OTel-Java-Agent"><a href="#3-路线-A：OTel-Java-Agent" class="headerlink" title="3. 路线 A：OTel Java Agent"></a>3. 路线 A：OTel Java Agent</h2><h3 id="3-1-获取与启动"><a href="#3-1-获取与启动" class="headerlink" title="3.1 获取与启动"></a>3.1 获取与启动</h3><figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">AGENT_VERSION=v2.29.0</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">curl -L -o otel/opentelemetry-javaagent.jar \</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="string">&quot;https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/<span class="variable">$&#123;AGENT_VERSION&#125;</span>/opentelemetry-javaagent.jar&quot;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">java -javaagent:otel/opentelemetry-javaagent.jar \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  -Dotel.service.name=scg-gateway \</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  -Dotel.exporter.otlp.endpoint=http://localhost:4318 \</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">  -Dotel.resource.attributes=service.namespace=agent-platform,deployment.environment.name=poc \</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  -Dotel.instrumentation.spring-cloud-gateway.experimental-span-attributes=<span class="literal">true</span> \</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  -jar scg-gateway.jar</span></span></code></pre></div></div></figure>
+
+<p>容器化（Dockerfile 片段）：</p>
+<figure class="highlight dockerfile cb" data-lang="dockerfile" data-label="Dockerfile" data-ext="dockerfile" data-lines="7"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="keyword">FROM</span> eclipse-temurin:<span class="number">21</span>-jre</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">COPY</span><span class="language-bash"> opentelemetry-javaagent.jar /otel/agent.jar</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="keyword">COPY</span><span class="language-bash"> app.jar /app.jar</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx"><span class="keyword">ENV</span> JAVA_TOOL_OPTIONS=<span class="string">&quot;-javaagent:/otel/agent.jar&quot;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"><span class="keyword">ENV</span> OTEL_SERVICE_NAME=scg-gateway \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:<span class="number">4318</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx"><span class="keyword">ENTRYPOINT</span><span class="language-bash"> [<span class="string">&quot;java&quot;</span>,<span class="string">&quot;-jar&quot;</span>,<span class="string">&quot;/app.jar&quot;</span>]</span></span></span></code></pre></div></div></figure>
+
+<p>三处容易照抄出错的地方：</p>
+<ul>
+<li><strong>协议与端口必须匹配。</strong> Agent 从 2.0 起默认协议是 <code>http/protobuf</code>，端点应指向 4318。沿用 1.x 时代的 <code>http://...:4317</code> 会把 HTTP 请求打到 gRPC 端口，Agent 只在自身日志里报导出失败，应用照常运行，很难第一时间发现。确实要走 gRPC 时，显式加 <code>otel.exporter.otlp.protocol=grpc</code> 再用 4317。</li>
+<li><strong>下载地址锁版本。</strong> <code>releases/latest</code> 会让两次构建拿到不同的 Agent，插桩行为随之变化。</li>
+<li><strong>日志导出默认已开启。</strong> 2.x 的 <code>otel.logs.exporter</code> 默认就是 <code>otlp</code>，无需再显式设置；若日志已由 Filebeat 之类的采集器收走，要设为 <code>none</code>，否则 Loki 里会有两份。</li>
+</ul>
+<h3 id="3-2-Agent-自动覆盖的内容"><a href="#3-2-Agent-自动覆盖的内容" class="headerlink" title="3.2 Agent 自动覆盖的内容"></a>3.2 Agent 自动覆盖的内容</h3><ul>
+<li>Spring Cloud Gateway（WebFlux + Reactor Netty）入站 SERVER Span 与转发 CLIENT Span，自动透传 W3C <code>traceparent</code> &#x2F; <code>baggage</code>；</li>
+<li>服务发现之后的 OpenFeign、RestTemplate、WebClient、<code>RestClient</code> 调用；</li>
+<li>JDBC、Lettuce、Kafka 生产消费（含跨消息链路）；</li>
+<li>JVM 指标（内存、GC、线程）与 HTTP 服务端&#x2F;客户端时延直方图；</li>
+<li>Logback&#x2F;Log4j2 的 MDC 自动注入 <code>trace_id</code> &#x2F; <code>span_id</code>，日志经 OTLP 发往 Collector；</li>
+<li>OpenAI Java SDK 调用产出 <code>gen_ai.*</code> Span 与指标，内容捕获开关是 <code>otel.instrumentation.genai.capture-message-content</code>（默认 false，内容写入日志事件）。</li>
+</ul>
+<p>Micrometer 指标在 Agent 路线下默认<strong>不</strong>导出（Agent 的 Micrometer 插桩默认关闭），如果业务自定义了 Micrometer 指标，需要加 <code>-Dotel.instrumentation.micrometer.enabled=true</code>。</p>
+<h3 id="3-3-网关路由维度"><a href="#3-3-网关路由维度" class="headerlink" title="3.3 网关路由维度"></a>3.3 网关路由维度</h3><p><code>otel.instrumentation.spring-cloud-gateway.experimental-span-attributes=true</code> 打开后，网关 Span 上会带 <code>spring-cloud-gateway.route.id</code>、<code>spring-cloud-gateway.route.uri</code>、<code>spring-cloud-gateway.route.order</code>。不必再手写 GlobalFilter 往 <code>Span.current()</code> 上写路由 ID。属性名带 experimental 前缀，升级 Agent 时留意变更日志。</p>
+<h2 id="4-路线-B：Micrometer-Tracing-桥接"><a href="#4-路线-B：Micrometer-Tracing-桥接" class="headerlink" title="4. 路线 B：Micrometer Tracing 桥接"></a>4. 路线 B：Micrometer Tracing 桥接</h2><h3 id="4-1-依赖（Maven）"><a href="#4-1-依赖（Maven）" class="headerlink" title="4.1 依赖（Maven）"></a>4.1 依赖（Maven）</h3><p>Boot 3.5：</p>
+<figure class="highlight xml cb" data-lang="xml" data-label="XML" data-ext="xml" data-lines="23"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-actuator<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.micrometer<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>micrometer-tracing-bridge-otel<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span>  <span class="comment">&lt;!-- OTLP Trace / Log 导出，版本由 Boot 管理 --&gt;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.opentelemetry<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>opentelemetry-exporter-otlp<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span>  <span class="comment">&lt;!-- OTLP Metrics 导出 --&gt;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.micrometer<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>micrometer-registry-otlp<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span>  <span class="comment">&lt;!-- Logback → OTLP Logs，只有 alpha 版本 --&gt;</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.opentelemetry.instrumentation<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>opentelemetry-logback-appender-1.0<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>2.29.0-alpha<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx"><span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span></span></code></pre></div></div></figure>
+
+<p>Boot 4.0：前三个依赖由一个 Starter 取代。</p>
+<figure class="highlight xml cb" data-lang="xml" data-label="XML" data-ext="xml" data-lines="15"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-actuator<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span>  <span class="comment">&lt;!-- 含 OTel API、Micrometer OTel 桥接、OTLP 指标注册表 --&gt;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-opentelemetry<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.opentelemetry.instrumentation<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>opentelemetry-logback-appender-1.0<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>2.29.0-alpha<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx"><span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span></span></code></pre></div></div></figure>
+
+<h3 id="4-2-application-yml"><a href="#4-2-application-yml" class="headerlink" title="4.2 application.yml"></a>4.2 <code>application.yml</code></h3><p>配置键在 4.0 发生了改名，对照如下：</p>
+<table>
+<thead>
+<tr>
+<th>用途</th>
+<th>Boot 3.5</th>
+<th>Boot 4.0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Trace 端点</td>
+<td><code>management.otlp.tracing.endpoint</code></td>
+<td><code>management.opentelemetry.tracing.export.otlp.endpoint</code></td>
+</tr>
+<tr>
+<td>日志端点</td>
+<td><code>management.otlp.logging.endpoint</code></td>
+<td><code>management.opentelemetry.logging.export.otlp.endpoint</code></td>
+</tr>
+<tr>
+<td>Span 批处理</td>
+<td><code>management.tracing.opentelemetry.export.*</code></td>
+<td><code>management.opentelemetry.tracing.export.*</code></td>
+</tr>
+<tr>
+<td>指标端点</td>
+<td><code>management.otlp.metrics.export.url</code></td>
+<td>不变</td>
+</tr>
+<tr>
+<td>采样率</td>
+<td><code>management.tracing.sampling.probability</code>（默认 0.1）</td>
+<td>不变</td>
+</tr>
+<tr>
+<td>Resource 属性</td>
+<td><code>management.opentelemetry.resource-attributes.*</code></td>
+<td>不变</td>
+</tr>
+<tr>
+<td>Baggage 透传</td>
+<td><code>management.tracing.baggage.remote-fields</code></td>
+<td>不变</td>
+</tr>
+</tbody></table>
+<p>Boot 3.5 写法：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="31"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">spring:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">application:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">name:</span> <span class="string">scg-gateway</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">reactor:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="attr">context-propagation:</span> <span class="string">auto</span>       <span class="comment"># WebFlux 下让 MDC / ThreadLocal 能看到当前 Span</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="attr">cloud:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">nacos:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">discovery:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="attr">server-addr:</span> <span class="string">$&#123;NACOS_ADDR:127.0.0.1:8848&#125;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx"><span class="attr">management:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  <span class="attr">tracing:</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    <span class="attr">sampling:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">      <span class="attr">probability:</span> <span class="number">1.0</span>              <span class="comment"># 全量产出，采样交给 Collector 尾采样</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="attr">baggage:</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">      <span class="attr">remote-fields:</span> [<span class="string">session.id</span>, <span class="string">user.id</span>]</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="attr">correlation:</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">        <span class="attr">fields:</span> [<span class="string">session.id</span>]        <span class="comment"># 写进 MDC，日志里可按会话检索</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">  <span class="attr">opentelemetry:</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">    <span class="attr">resource-attributes:</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">      <span class="string">&quot;[service.namespace]&quot;</span><span class="string">:</span> <span class="string">agent-platform</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">      <span class="string">&quot;[deployment.environment.name]&quot;</span><span class="string">:</span> <span class="string">poc</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">  <span class="attr">otlp:</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">    <span class="attr">tracing:</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">      <span class="attr">endpoint:</span> <span class="string">http://localhost:4318/v1/traces</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">    <span class="attr">logging:</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">      <span class="attr">endpoint:</span> <span class="string">http://localhost:4318/v1/logs</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">    <span class="attr">metrics:</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">      <span class="attr">export:</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">        <span class="attr">url:</span> <span class="string">http://localhost:4318/v1/metrics</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx">        <span class="attr">step:</span> <span class="string">15s</span></span></span></code></pre></div></div></figure>
+
+<p>Boot 4.0 只需替换两处端点：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">management:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">opentelemetry:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">tracing:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">export:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">otlp:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">          <span class="attr">endpoint:</span> <span class="string">http://localhost:4318/v1/traces</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="attr">logging:</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">export:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="attr">otlp:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">          <span class="attr">endpoint:</span> <span class="string">http://localhost:4318/v1/logs</span></span></span></code></pre></div></div></figure>
+
+<p>几点说明：</p>
+<ul>
+<li><strong>采样率必须显式写。</strong> 默认 0.1 意味着网关只采 10% 的请求，而下游 Python 服务的采样器是父级决定（ParentBased），跟随网关的 sampled 标志，于是整条链路 90% 的请求在两端都不会被记录。这是跨语言排障时「偶尔能查到、大多查不到」的首要原因。</li>
+<li><strong>Resource 属性的键用方括号包住</strong>，保证带点的键原样进入 Map。</li>
+<li><strong>不要再手写 <code>logging.pattern.level</code> 注入 traceId</strong>。Boot 在检测到 Micrometer Tracing 时会自动把 trace&#x2F;span ID 加进日志格式，手写一份会重复。</li>
+</ul>
+<h3 id="4-3-Logback-→-OTLP"><a href="#4-3-Logback-→-OTLP" class="headerlink" title="4.3 Logback → OTLP"></a>4.3 Logback → OTLP</h3><p>Boot 会配置日志的 OTLP 导出器，但不会替你把 Appender 装进 Logback。<code>logback-spring.xml</code>：</p>
+<figure class="highlight xml cb" data-lang="xml" data-label="XML" data-ext="xml" data-lines="10"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="tag">&lt;<span class="name">configuration</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="tag">&lt;<span class="name">include</span> <span class="attr">resource</span>=<span class="string">&quot;org/springframework/boot/logging/logback/base.xml&quot;</span>/&gt;</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">  <span class="tag">&lt;<span class="name">appender</span> <span class="attr">name</span>=<span class="string">&quot;OTEL&quot;</span> <span class="attr">class</span>=<span class="string">&quot;io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender&quot;</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="tag">&lt;<span class="name">captureMdcAttributes</span>&gt;</span>*<span class="tag">&lt;/<span class="name">captureMdcAttributes</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">appender</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  <span class="tag">&lt;<span class="name">root</span> <span class="attr">level</span>=<span class="string">&quot;INFO&quot;</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">    <span class="tag">&lt;<span class="name">appender-ref</span> <span class="attr">ref</span>=<span class="string">&quot;CONSOLE&quot;</span>/&gt;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    <span class="tag">&lt;<span class="name">appender-ref</span> <span class="attr">ref</span>=<span class="string">&quot;OTEL&quot;</span>/&gt;</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">  <span class="tag">&lt;/<span class="name">root</span>&gt;</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx"><span class="tag">&lt;/<span class="name">configuration</span>&gt;</span></span></span></code></pre></div></div></figure>
+
+<p>再把 Spring 管理的 <code>OpenTelemetry</code> 实例交给 Appender：</p>
+<figure class="highlight java cb" data-lang="java" data-label="Java" data-ext="java" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">@Component</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">class</span> <span class="title class_">InstallOpenTelemetryAppender</span> <span class="keyword">implements</span> <span class="title class_">InitializingBean</span> &#123;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="keyword">private</span> <span class="keyword">final</span> OpenTelemetry openTelemetry;</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    InstallOpenTelemetryAppender(OpenTelemetry openTelemetry) &#123;</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="built_in">this</span>.openTelemetry = openTelemetry;</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">    <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">void</span> <span class="title function_">afterPropertiesSet</span><span class="params">()</span> &#123;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        OpenTelemetryAppender.install(<span class="built_in">this</span>.openTelemetry);</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>安装之前产生的启动日志不会进入 OTLP，这是预期行为。</p>
+<h3 id="4-4-线程切换与客户端构造"><a href="#4-4-线程切换与客户端构造" class="headerlink" title="4.4 线程切换与客户端构造"></a>4.4 线程切换与客户端构造</h3><p>Micrometer 的上下文存放在 ThreadLocal 中，以下情况会断链：</p>
+<ul>
+<li><code>@Async</code> 与 <code>AsyncTaskExecutor</code>：注册一个 <code>ContextPropagatingTaskDecorator</code> Bean，Boot 会自动把它装进执行器。</li>
+<li>自己 <code>new RestTemplate()</code> &#x2F; <code>WebClient.create()</code>：这样构造的客户端没有观测拦截器，不注入 <code>traceparent</code>。一律注入 <code>RestTemplateBuilder</code>、<code>RestClient.Builder</code>、<code>WebClient.Builder</code> 再构造。</li>
+<li>WebFlux 中读取 MDC 或 <code>Span.current()</code>：默认的 <code>limited</code> 模式下 Reactor 算子之间不恢复 ThreadLocal，4.2 里的 <code>spring.reactor.context-propagation: auto</code> 就是为此设置的。</li>
+</ul>
+<h3 id="4-5-网关路由维度"><a href="#4-5-网关路由维度" class="headerlink" title="4.5 网关路由维度"></a>4.5 网关路由维度</h3><p>路线 B 没有 3.3 的现成属性。给观测上下文追加键值，比往 <code>Span.current()</code> 写属性更可靠，因为它不依赖 ThreadLocal：</p>
+<figure class="highlight java cb" data-lang="java" data-label="Java" data-ext="java" data-lines="19"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="meta">@Component</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RouteTagFilter</span> <span class="keyword">implements</span> <span class="title class_">GlobalFilter</span>, Ordered &#123;</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">Mono</span>&lt;Void&gt; <span class="title function_">filter</span><span class="params">(ServerWebExchange exchange, GatewayFilterChain chain)</span> &#123;</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="type">Route</span> <span class="variable">route</span> <span class="operator">=</span> exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR);</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="keyword">if</span> (route != <span class="literal">null</span>) &#123;</span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">            ServerRequestObservationContext.findCurrent(exchange.getAttributes())</span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">                .ifPresent(ctx -&gt; ctx.addLowCardinalityKeyValue(</span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">                        KeyValue.of(<span class="string">&quot;com.example.gateway.route.id&quot;</span>, route.getId())));</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">        &#125;</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">        <span class="keyword">return</span> chain.filter(exchange);</span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">    <span class="meta">@Override</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getOrder</span><span class="params">()</span> &#123;</span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">        <span class="keyword">return</span> Ordered.LOWEST_PRECEDENCE;</span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">    &#125;</span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">&#125;</span></span></code></pre></div></div></figure>
+
+<p>路由 ID 数量有限，按低基数键写入，会同时出现在 Span 属性和 <code>http.server.requests</code> 指标标签上。私有键沿用系列统一的反向域名前缀，以你的组织域名替换 <code>com.example</code>。</p>
+<h2 id="5-Spring-Cloud-Gateway-的链路职责"><a href="#5-Spring-Cloud-Gateway-的链路职责" class="headerlink" title="5. Spring Cloud Gateway 的链路职责"></a>5. Spring Cloud Gateway 的链路职责</h2><p>SCG 在链路中承担「入口 Span + 上下文透传」，两条路线都会自动完成 W3C Trace Context 传播。需要人工把关的有三点：</p>
+<ol>
+<li><strong>自定义 GlobalFilter 不要重建请求头。</strong> 转发时保留 <code>traceparent</code>、<code>tracestate</code>、<code>baggage</code>。用 <code>exchange.getRequest().mutate()</code> 增删单个头是安全的，整体替换 <code>HttpHeaders</code> 会把它们一起丢掉。</li>
+<li><strong>外部 baggage 不可信。</strong> 公网客户端可以随意构造 <code>baggage</code> 头，把伪造的 <code>user.id</code> 送进下游和 Langfuse。路线 A 的 Agent 在请求进入 WebFlux 之前就已经把入站 <code>baggage</code> 解析进上下文，在 GlobalFilter 里删头已经来不及，必须在网关之前的边缘代理上剥离；路线 B 只透传 <code>remote-fields</code> 白名单里的键，天然收窄了范围。无论哪条路线，下游消费端也只读白名单键（见文档 08 的 Baggage 白名单一节）。</li>
+<li><strong>业务标识由网关在鉴权之后写入。</strong> <code>user.id</code> 用哈希值，<code>session.id</code> 用会话 ID，Python 侧与 Langfuse 都从这里取值。</li>
+</ol>
+<h2 id="6-跨语言链路验证（Java-→-Python）"><a href="#6-跨语言链路验证（Java-→-Python）" class="headerlink" title="6. 跨语言链路验证（Java → Python）"></a>6. 跨语言链路验证（Java → Python）</h2><figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl → SCG(scg-gateway) → FastAPI(diag-agent) → DeepSeek</span></span></code></pre></div></div></figure>
+
+<h3 id="6-1-用固定-Trace-ID-走一遍"><a href="#6-1-用固定-Trace-ID-走一遍" class="headerlink" title="6.1 用固定 Trace ID 走一遍"></a>6.1 用固定 Trace ID 走一遍</h3><p>自己生成 <code>traceparent</code>，就不用在 Tempo 里大海捞针：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="12"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">TRACE_ID=$(openssl rand -hex 16)</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">PARENT_ID=$(openssl rand -hex 8)</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">curl -s http://localhost:8080/api/diagnose \</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  -H <span class="string">&quot;Content-Type: application/json&quot;</span> \</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  -H <span class="string">&quot;traceparent: 00-<span class="variable">$&#123;TRACE_ID&#125;</span>-<span class="variable">$&#123;PARENT_ID&#125;</span>-01&quot;</span> \</span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">  -H <span class="string">&quot;baggage: session.id=s-demo-001&quot;</span> \</span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">  -d <span class="string">&#x27;&#123;&quot;session_id&quot;:&quot;s-demo-001&quot;,&quot;question&quot;:&quot;P0301 故障码的含义？&quot;&#125;&#x27;</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="built_in">sleep</span> 10   <span class="comment"># 等待批处理导出</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">curl -s <span class="string">&quot;http://localhost:3200/api/traces/<span class="variable">$&#123;TRACE_ID&#125;</span>&quot;</span> \</span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">  | jq -r <span class="string">&#x27;.batches[] | .resource.attributes[] | select(.key==&quot;service.name&quot;) | .value.stringValue&#x27;</span> \</span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">  | <span class="built_in">sort</span> | <span class="built_in">uniq</span> -c</span></span></code></pre></div></div></figure>
+
+<p>期望输出同时包含 <code>scg-gateway</code> 与 <code>diag-agent</code>。Tempo 会提示缺少根 Span，因为父 Span 是我们伪造的，属预期现象。在 Grafana 打开该 Trace，树形应为：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">scg-gateway   POST /api/diagnose            (SERVER)</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"> └─ scg-gateway   POST                      (CLIENT)  ← route.id 属性在这一层或上一层</span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">     └─ diag-agent   POST /api/diagnose     (SERVER)  ← parent 是网关 CLIENT Span</span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">         └─ invoke_agent vehicle-diag-agent</span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">             └─ LangGraph → plan → chat deepseek-chat (CLIENT)</span></span></code></pre></div></div></figure>
+
+<h3 id="6-2-逐跳检查"><a href="#6-2-逐跳检查" class="headerlink" title="6.2 逐跳检查"></a>6.2 逐跳检查</h3><table>
+<thead>
+<tr>
+<th>检查点</th>
+<th>方法</th>
+<th>期望</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>网关是否延续入站上下文</td>
+<td>网关 SERVER Span 的 parent span id</td>
+<td>等于 <code>PARENT_ID</code></td>
+</tr>
+<tr>
+<td>网关是否注入下游</td>
+<td>diag-agent 打印收到的请求头</td>
+<td>含 <code>traceparent</code>，trace id 等于 <code>TRACE_ID</code></td>
+</tr>
+<tr>
+<td>Python 是否接续</td>
+<td>diag-agent SERVER Span 的 parent</td>
+<td>等于网关 CLIENT Span 的 span id</td>
+</tr>
+<tr>
+<td>结构关系</td>
+<td>TraceQL <code>{ resource.service.name = &quot;scg-gateway&quot; } &gt;&gt; { resource.service.name = &quot;diag-agent&quot; }</code></td>
+<td>能查到该 Trace</td>
+</tr>
+<tr>
+<td>采样一致</td>
+<td>不带 <code>traceparent</code> 连发 20 次，统计 Tempo 中的 Trace 数</td>
+<td>20 条；只有两三条说明网关在按 0.1 采样</td>
+</tr>
+<tr>
+<td>日志关联</td>
+<td>diag-agent 控制台日志</td>
+<td><code>trace_id</code> 等于 <code>TRACE_ID</code>，<code>trace_sampled=True</code>（格式见文档 05）</td>
+</tr>
+<tr>
+<td>Baggage</td>
+<td>diag-agent 中读取 <code>baggage.get_baggage(&quot;session.id&quot;)</code></td>
+<td>路线 A 能读到；路线 B 需在 <code>remote-fields</code> 中声明</td>
+</tr>
+</tbody></table>
+<h3 id="6-3-断链时按症状定位"><a href="#6-3-断链时按症状定位" class="headerlink" title="6.3 断链时按症状定位"></a>6.3 断链时按症状定位</h3><table>
+<thead>
+<tr>
+<th>症状</th>
+<th>最可能的原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>两个服务各有一条 Trace，trace id 不同</td>
+<td>网关到 Python 之间有未透传头的中间层（Nginx、自研代理），或 GlobalFilter 重建了请求头</td>
+</tr>
+<tr>
+<td>trace id 相同但 Python 段挂在根上</td>
+<td>Python 侧在 extract 之前就创建了 Span（例如在中间件之外手动建 Span）</td>
+</tr>
+<tr>
+<td>带 <code>traceparent</code> 能查到，不带就查不到</td>
+<td>网关采样率 0.1；或 Collector 尾采样策略过严</td>
+</tr>
+<tr>
+<td>网关 Span 完全没有</td>
+<td>Agent 端点指向了 4317 而协议是 http&#x2F;protobuf</td>
+</tr>
+<tr>
+<td>Python 日志 <code>trace_sampled=False</code></td>
+<td>上游传来的 sampled 标志为 0，问题在上游采样，不在 Python</td>
+</tr>
+</tbody></table>
+<h2 id="7-Nacos-与健康检查降噪"><a href="#7-Nacos-与健康检查降噪" class="headerlink" title="7. Nacos 与健康检查降噪"></a>7. Nacos 与健康检查降噪</h2><h3 id="7-1-先确认噪声来源"><a href="#7-1-先确认噪声来源" class="headerlink" title="7.1 先确认噪声来源"></a>7.1 先确认噪声来源</h3><p>流传较广的「Nacos 心跳产生大量 Span、关闭 okhttp 插桩即可」的说法与当前版本不符，按客户端版本区分：</p>
+<ul>
+<li><strong>nacos-client 2.x &#x2F; 3.x</strong>（SCA 2025.x 系列即 3.x）：服务注册、心跳、订阅推送、配置监听都走 gRPC 长连接，而这套 gRPC 被重新打包在 <code>com.alibaba.nacos.shaded.io.grpc</code> 下，Agent 的 gRPC 插桩匹配的是原始包名，不会为它们生成 Span。剩下的只有鉴权登录之类的零星 HTTP 调用。</li>
+<li><strong>nacos-client 1.x</strong>（遗留系统）：心跳是每 5 秒一次的 HTTP 请求（<code>/nacos/v1/ns/instance/beat</code>），配置监听是 30 秒挂起的长轮询（<code>/nacos/v1/cs/configs/listener</code>），经 JDK HttpURLConnection 发出，每一次都会成为一条独立的 CLIENT 根 Span，这才是真正的噪声。</li>
+<li>Nacos 客户端不使用 OkHttp，关闭 <code>okhttp</code> 插桩对它没有任何作用；<code>otel.instrumentation.common.default-enabled</code> 默认值本来就是 true，写上也没有效果。</li>
+</ul>
+<p>对多数 Java 服务，量最大的噪声其实是 Kubernetes 探针和 Prometheus 抓取打到 <code>/actuator/*</code> 上的 SERVER Span。先用 TraceQL 看清楚再动手：</p>
+<figure class="highlight text cb" data-lang="text" data-label="Text" data-ext="txt" data-lines="2"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">&#123; span.url.full =~ &quot;.*/nacos/.*&quot; &#125;</span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">&#123; kind = server &amp;&amp; span.url.path =~ &quot;/actuator.*&quot; &#125;</span></span></code></pre></div></div></figure>
+
+<h3 id="7-2-源头丢弃：Agent-的规则采样器"><a href="#7-2-源头丢弃：Agent-的规则采样器" class="headerlink" title="7.2 源头丢弃：Agent 的规则采样器"></a>7.2 源头丢弃：Agent 的规则采样器</h3><p>Agent 2.26.0 起支持声明式配置，并内置了 contrib 的 <code>rule_based_routing</code> 采样器，可以在 Span 创建时直接丢弃，数据不出进程。<code>otel-config.yaml</code>：</p>
+<figure class="highlight yaml cb cb--long" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="49"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">file_format:</span> <span class="string">&quot;1.0&quot;</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx"><span class="attr">resource:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">  <span class="attr">attributes_list:</span> <span class="string">$&#123;OTEL_RESOURCE_ATTRIBUTES&#125;</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">  <span class="attr">detection/development:</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">    <span class="attr">detectors:</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">      <span class="bullet">-</span> <span class="attr">service:</span>        <span class="comment"># 从 OTEL_SERVICE_NAME 取 service.name，并补 service.instance.id</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx"><span class="attr">propagator:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">  <span class="attr">composite:</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">tracecontext:</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">baggage:</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx"><span class="attr">tracer_provider:</span></span></span>
+<span class="cb-line" data-ln="15"><span class="cb-tx">  <span class="attr">sampler:</span></span></span>
+<span class="cb-line" data-ln="16"><span class="cb-tx">    <span class="attr">parent_based:</span></span></span>
+<span class="cb-line" data-ln="17"><span class="cb-tx">      <span class="attr">root:</span></span></span>
+<span class="cb-line" data-ln="18"><span class="cb-tx">        <span class="attr">rule_based_routing:</span></span></span>
+<span class="cb-line" data-ln="19"><span class="cb-tx">          <span class="attr">fallback_sampler:</span></span></span>
+<span class="cb-line" data-ln="20"><span class="cb-tx">            <span class="attr">always_on:</span></span></span>
+<span class="cb-line" data-ln="21"><span class="cb-tx">          <span class="attr">span_kind:</span> <span class="string">SERVER</span></span></span>
+<span class="cb-line" data-ln="22"><span class="cb-tx">          <span class="attr">rules:</span></span></span>
+<span class="cb-line" data-ln="23"><span class="cb-tx">            <span class="bullet">-</span> <span class="attr">action:</span> <span class="string">DROP</span></span></span>
+<span class="cb-line" data-ln="24"><span class="cb-tx">              <span class="attr">attribute:</span> <span class="string">url.path</span></span></span>
+<span class="cb-line" data-ln="25"><span class="cb-tx">              <span class="attr">pattern:</span> <span class="string">/actuator.*</span></span></span>
+<span class="cb-line" data-ln="26"><span class="cb-tx">  <span class="attr">processors:</span></span></span>
+<span class="cb-line" data-ln="27"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">batch:</span></span></span>
+<span class="cb-line" data-ln="28"><span class="cb-tx">        <span class="attr">exporter:</span></span></span>
+<span class="cb-line" data-ln="29"><span class="cb-tx">          <span class="attr">otlp_http:</span></span></span>
+<span class="cb-line" data-ln="30"><span class="cb-tx">            <span class="attr">endpoint:</span> <span class="string">$&#123;OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://localhost:4318/v1/traces&#125;</span></span></span>
+<span class="cb-line" data-ln="31"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="32"><span class="cb-tx"><span class="attr">meter_provider:</span></span></span>
+<span class="cb-line" data-ln="33"><span class="cb-tx">  <span class="attr">readers:</span></span></span>
+<span class="cb-line" data-ln="34"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">periodic:</span></span></span>
+<span class="cb-line" data-ln="35"><span class="cb-tx">        <span class="attr">exporter:</span></span></span>
+<span class="cb-line" data-ln="36"><span class="cb-tx">          <span class="attr">otlp_http:</span></span></span>
+<span class="cb-line" data-ln="37"><span class="cb-tx">            <span class="attr">endpoint:</span> <span class="string">$&#123;OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-http://localhost:4318/v1/metrics&#125;</span></span></span>
+<span class="cb-line" data-ln="38"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="39"><span class="cb-tx"><span class="attr">logger_provider:</span></span></span>
+<span class="cb-line" data-ln="40"><span class="cb-tx">  <span class="attr">processors:</span></span></span>
+<span class="cb-line" data-ln="41"><span class="cb-tx">    <span class="bullet">-</span> <span class="attr">batch:</span></span></span>
+<span class="cb-line" data-ln="42"><span class="cb-tx">        <span class="attr">exporter:</span></span></span>
+<span class="cb-line" data-ln="43"><span class="cb-tx">          <span class="attr">otlp_http:</span></span></span>
+<span class="cb-line" data-ln="44"><span class="cb-tx">            <span class="attr">endpoint:</span> <span class="string">$&#123;OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:-http://localhost:4318/v1/logs&#125;</span></span></span>
+<span class="cb-line" data-ln="45"><span class="cb-tx"></span></span>
+<span class="cb-line" data-ln="46"><span class="cb-tx"><span class="attr">instrumentation/development:</span></span></span>
+<span class="cb-line" data-ln="47"><span class="cb-tx">  <span class="attr">java:</span></span></span>
+<span class="cb-line" data-ln="48"><span class="cb-tx">    <span class="attr">spring_cloud_gateway:</span></span></span>
+<span class="cb-line" data-ln="49"><span class="cb-tx">      <span class="attr">experimental_span_attributes:</span> <span class="literal">true</span></span></span></code></pre></div></div></figure>
+
+<p>启动参数改为 <code>-Dotel.config.file=/otel/otel-config.yaml</code>。注意两点：启用声明式配置后，SDK 相关的 <code>otel.*</code> 系统属性与环境变量不再直接生效，需要像上面这样在文件里用 <code>${...}</code> 引用；Agent 对声明式配置的支持仍标注为实验性，上线前在预发环境确认 Span 与指标都正常。</p>
+<h3 id="7-3-Collector-兜底：filter-处理器"><a href="#7-3-Collector-兜底：filter-处理器" class="headerlink" title="7.3 Collector 兜底：filter 处理器"></a>7.3 Collector 兜底：filter 处理器</h3><p>遗留的 nacos-client 1.x 服务，或者暂时不想切声明式配置的服务，在 Collector 里丢弃（文档 04 的 Collector 版本为 0.156.0，使用 <code>trace_conditions</code> 写法）：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="6"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">processors:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">filter/noise:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">error_mode:</span> <span class="string">ignore</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">trace_conditions:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">span.kind</span> <span class="string">==</span> <span class="string">SPAN_KIND_CLIENT</span> <span class="string">and</span> <span class="string">IsMatch(span.attributes[&quot;url.full&quot;],</span> <span class="string">&quot;.*/nacos/v[0-9]+/.*&quot;</span><span class="string">)</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">span.kind</span> <span class="string">==</span> <span class="string">SPAN_KIND_SERVER</span> <span class="string">and</span> <span class="string">IsMatch(span.attributes[&quot;url.path&quot;],</span> <span class="string">&quot;^/actuator/.*&quot;</span><span class="string">)</span></span></span></code></pre></div></div></figure>
+
+<p>把 <code>filter/noise</code> 放在 traces 管道里 <code>memory_limiter</code> 之后、尾采样之前，避免噪声占用尾采样的内存缓冲。HTTP 客户端 Span 按语义约定只有 <code>url.full</code>，没有 <code>url.path</code>，条件写错字段会静默不生效。</p>
+<h3 id="7-4-不建议的做法"><a href="#7-4-不建议的做法" class="headerlink" title="7.4 不建议的做法"></a>7.4 不建议的做法</h3><ul>
+<li>关闭 <code>http-url-connection</code> 插桩：会连带丢掉业务里所有经 HttpURLConnection 发出的调用。</li>
+<li>在网关用正则排除所有 <code>/actuator</code> 以外的路径：维护成本高，新接口上线就会漏。</li>
+</ul>
+<h2 id="8-Spring-AI-服务的-GenAI-观测"><a href="#8-Spring-AI-服务的-GenAI-观测" class="headerlink" title="8. Spring AI 服务的 GenAI 观测"></a>8. Spring AI 服务的 GenAI 观测</h2><p>Java 服务经 Spring AI 调模型时（路线 B），<code>ChatClient</code>、<code>ChatModel</code>、工具调用、向量库都会产出观测。按 Spring AI 1.1.x &#x2F; 2.0.x 的实际行为配置：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="14"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">spring:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">ai:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">chat:</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">      <span class="attr">observations:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">        <span class="attr">log-prompt:</span> <span class="literal">false</span>            <span class="comment"># true：把提示词写进应用日志（带 trace_id），不进 Span</span></span></span>
+<span class="cb-line" data-ln="6"><span class="cb-tx">        <span class="attr">log-completion:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="7"><span class="cb-tx">        <span class="attr">include-error-logging:</span> <span class="literal">true</span></span></span>
+<span class="cb-line" data-ln="8"><span class="cb-tx">      <span class="attr">client:</span></span></span>
+<span class="cb-line" data-ln="9"><span class="cb-tx">        <span class="attr">observations:</span></span></span>
+<span class="cb-line" data-ln="10"><span class="cb-tx">          <span class="attr">log-prompt:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="11"><span class="cb-tx">          <span class="attr">log-completion:</span> <span class="literal">false</span></span></span>
+<span class="cb-line" data-ln="12"><span class="cb-tx">    <span class="attr">tools:</span></span></span>
+<span class="cb-line" data-ln="13"><span class="cb-tx">      <span class="attr">observations:</span></span></span>
+<span class="cb-line" data-ln="14"><span class="cb-tx">        <span class="attr">include-content:</span> <span class="literal">false</span>       <span class="comment"># true：工具参数与结果写入 Span 属性</span></span></span></code></pre></div></div></figure>
+
+<p>网上常见的两种说法与现行版本不符：</p>
+<ol>
+<li><strong>提示词和回答不会进 Span。</strong> <code>log-prompt</code> &#x2F; <code>log-completion</code> 只是把内容写进应用日志（日志带 trace 信息，可以从 Trace 跳过去）。早期里程碑版本中把内容写成 Span 属性的 <code>ChatModelPromptContentObservationFilter</code> 在 1.0.0-RC1 已移除，网上照抄的 Bean 注册写法会直接编译失败。确实需要在 Langfuse 里看到 Java 侧的提示词，要么自定义 <code>ObservationFilter</code> 从 <code>ChatModelObservationContext</code> 取内容写入高基数键值，要么把调模型的逻辑放在 Python 执行面统一处理。</li>
+<li><strong>属性与 Python 侧并不同构。</strong> Spring AI 的 Span 用的是 <code>gen_ai.system</code>，Python 侧开启最新实验约定后是 <code>gen_ai.provider.name</code>；工具内容的键是 <code>spring.ai.tool.call.arguments</code> &#x2F; <code>spring.ai.tool.call.result</code>；指标由 Micrometer 产出（<code>gen_ai.client.operation</code> 计时器、<code>gen_ai.client.token.usage</code> 计数器），Python 侧的同名概念是 OTel 直方图。查询语句不能直接复用。</li>
+</ol>
+<p>属性层面在 Collector 统一：</p>
+<figure class="highlight yaml cb" data-lang="yaml" data-label="YAML" data-ext="yaml" data-lines="5"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx"><span class="attr">processors:</span></span></span>
+<span class="cb-line" data-ln="2"><span class="cb-tx">  <span class="attr">transform/genai-align:</span></span></span>
+<span class="cb-line" data-ln="3"><span class="cb-tx">    <span class="attr">error_mode:</span> <span class="string">ignore</span></span></span>
+<span class="cb-line" data-ln="4"><span class="cb-tx">    <span class="attr">trace_statements:</span></span></span>
+<span class="cb-line" data-ln="5"><span class="cb-tx">      <span class="bullet">-</span> <span class="string">set(span.attributes[&quot;gen_ai.provider.name&quot;],</span> <span class="string">span.attributes[&quot;gen_ai.system&quot;])</span> <span class="string">where</span> <span class="string">span.attributes[&quot;gen_ai.provider.name&quot;]</span> <span class="string">==</span> <span class="string">nil</span> <span class="string">and</span> <span class="string">span.attributes[&quot;gen_ai.system&quot;]</span> <span class="type">!=</span> <span class="string">nil</span></span></span></code></pre></div></div></figure>
+
+<p>指标层面，两边进入 Prometheus 后名称和类型都不同，先确认实际名称再写大盘：</p>
+<figure class="highlight bash cb" data-lang="bash" data-label="Bash" data-ext="sh" data-lines="1"><div class="cb-frame"><div class="cb-body"><pre class="cb-pre"><code class="cb-code" style="--cb-digits:2"><span class="cb-line" data-ln="1"><span class="cb-tx">curl -s http://localhost:9090/api/v1/label/__name__/values | jq -r <span class="string">&#x27;.data[]&#x27;</span> | grep <span class="string">&#x27;^gen_ai&#x27;</span></span></span></code></pre></div></div></figure>
+
+<p>然后用 recording rule 把两边的 token 用量归一到同一个序列名（PromQL 写法见文档 09）。</p>
+<h2 id="9-验收清单"><a href="#9-验收清单" class="headerlink" title="9. 验收清单"></a>9. 验收清单</h2><ul>
+<li><input disabled="" type="checkbox"> 固定 <code>traceparent</code> 的请求在 Tempo 中同时出现 <code>scg-gateway</code> 与 <code>diag-agent</code>，逐跳父子关系正确；</li>
+<li><input disabled="" type="checkbox"> 不带 <code>traceparent</code> 连发 20 次，Tempo 中有 20 条 Trace（采样率已显式设为 1.0 或由 Agent 默认全采）；</li>
+<li><input disabled="" type="checkbox"> Grafana 服务拓扑（Tempo service graph）出现 <code>scg-gateway → diag-agent</code> 边；</li>
+<li><input disabled="" type="checkbox"> Loki 中 Java 日志携带 <code>trace_id</code>，与 Tempo 双向互跳成功，且每条日志只有一份；</li>
+<li><input disabled="" type="checkbox"> Prometheus 中有网关的 HTTP 服务端时延指标（路线 A 为 <code>http_server_request_duration_seconds_*</code>）与 JVM 指标；</li>
+<li><input disabled="" type="checkbox"> <code>/actuator/*</code> 与 Nacos 相关 Span 已按 7.2 或 7.3 处理，TraceQL 复查为空；</li>
+<li><input disabled="" type="checkbox"> 网关之前的边缘代理已剥离外部 <code>baggage</code> 头。</li>
+</ul>
+<h2 id="2026-09-补记：规则采样器将被替换"><a href="#2026-09-补记：规则采样器将被替换" class="headerlink" title="2026-09 补记：规则采样器将被替换"></a>2026-09 补记：规则采样器将被替换</h2><p>2026-09-26，opentelemetry-java-instrumentation 主干合入了一项弃用：Agent 与 Spring Boot Starter 内置的声明式 <code>rule_based_routing</code> 采样器被标记为 deprecated，计划在 3.0 移除，官方建议迁移到 SDK 孵化模块中的组合式规则采样器（配置路径 <code>composite/development</code> 下的 <code>rule_based</code>），两者的配置结构与匹配行为并不相同。该变更随 v2.31.1 之后的版本发布，届时启用 7.2 的配置会在启动日志中看到弃用警告。7.2 的写法在 2.x 期间仍然可用；新服务如果准备直接上组合式采样器，注意它仍带 <code>/development</code> 后缀，属于实验特性，升级 Agent 时要重新验证。</p>
+
+    </div>
+    <nav class="article-next" aria-label="下一步">
+      
+      <div class="next-reading surface">
+        <div class="rule-title">系列下一篇</div>
+        <h3><a href="/2026/07/17/observability/OTel-07-Higress%E4%B8%8ETemporal/">Higress 与 Temporal 链路观测</a></h3>
+        <p>补齐两类链路断点：Higress AI 网关的 Token、首 Token 时延与 Trace 接入…</p>
+        <a class="btn primary" href="/2026/07/17/observability/OTel-07-Higress%E4%B8%8ETemporal/">继续阅读</a>
+      </div>
+      
+      <a class="article-prev" href="/2026/07/13/observability/OTel-05-Python%E5%9F%8B%E7%82%B9/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg></span>上一篇：Python 埋点：FastAPI、LangGraph 与 mem0</a>
+    </nav>
+  </article>
+  <aside class="article-aside" aria-label="文章目录与阅读工具">
+    <div class="toc-sticky">
+      <div class="toc-dock" data-toc>
+        <div class="toc-head">
+          <div class="toc-ring" data-reading-ring style="--p: 0" aria-hidden="true">
+            <svg viewBox="0 0 40 40">
+              <defs><linearGradient id="toc-ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#356be8"/><stop offset="1" stop-color="#c79663"/></linearGradient></defs>
+              <circle class="toc-ring__track" cx="20" cy="20" r="17"/>
+              <circle class="toc-ring__bar" cx="20" cy="20" r="17" pathLength="100"/>
+            </svg>
+            <b data-reading-percent>0%</b>
+          </div>
+          <div class="toc-head__copy">
+            <h3>文章目录</h3>
+            <span class="toc-head__count"><b data-toc-current>0</b> / 10 节</span>
+          </div>
+          <button class="toc-collapse" type="button" data-toc-toggle aria-expanded="true" aria-label="折叠目录" title="折叠目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 6 6-6 6M13 6l6 6-6 6"></path></svg></span></button>
+        </div>
+        <div class="toc-list" data-toc-list>
+          <a class="toc-level-2 toc-intro active" href="#takeaways" data-toc-target="takeaways"><i class="toc-num" aria-hidden="true">✦</i><span class="toc-text">先读结论</span></a>
+          <a class="toc-level-2" href="#1-%E7%89%88%E6%9C%AC%E5%9F%BA%E7%BA%BF%EF%BC%9A%E4%B8%A4%E6%9D%A1%E7%BA%BF%E5%B9%B6%E5%AD%98" data-toc-target="1-版本基线：两条线并存"><i class="toc-num" aria-hidden="true">01</i><span class="toc-text">1. 版本基线：两条线并存</span></a><a class="toc-level-2" href="#2-%E4%B8%A4%E6%9D%A1%E8%B7%AF%E7%BA%BF%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="2-两条路线怎么选"><i class="toc-num" aria-hidden="true">02</i><span class="toc-text">2. 两条路线怎么选</span></a><a class="toc-level-2" href="#3-%E8%B7%AF%E7%BA%BF-A%EF%BC%9AOTel-Java-Agent" data-toc-target="3-路线-A：OTel-Java-Agent"><i class="toc-num" aria-hidden="true">03</i><span class="toc-text">3. 路线 A：OTel Java Agent</span></a><a class="toc-level-3" href="#3-1-%E8%8E%B7%E5%8F%96%E4%B8%8E%E5%90%AF%E5%8A%A8" data-toc-target="3-1-获取与启动"><span class="toc-text">3.1 获取与启动</span></a><a class="toc-level-3" href="#3-2-Agent-%E8%87%AA%E5%8A%A8%E8%A6%86%E7%9B%96%E7%9A%84%E5%86%85%E5%AE%B9" data-toc-target="3-2-Agent-自动覆盖的内容"><span class="toc-text">3.2 Agent 自动覆盖的内容</span></a><a class="toc-level-3" href="#3-3-%E7%BD%91%E5%85%B3%E8%B7%AF%E7%94%B1%E7%BB%B4%E5%BA%A6" data-toc-target="3-3-网关路由维度"><span class="toc-text">3.3 网关路由维度</span></a><a class="toc-level-2" href="#4-%E8%B7%AF%E7%BA%BF-B%EF%BC%9AMicrometer-Tracing-%E6%A1%A5%E6%8E%A5" data-toc-target="4-路线-B：Micrometer-Tracing-桥接"><i class="toc-num" aria-hidden="true">04</i><span class="toc-text">4. 路线 B：Micrometer Tracing 桥接</span></a><a class="toc-level-3" href="#4-1-%E4%BE%9D%E8%B5%96%EF%BC%88Maven%EF%BC%89" data-toc-target="4-1-依赖（Maven）"><span class="toc-text">4.1 依赖（Maven）</span></a><a class="toc-level-3" href="#4-2-application-yml" data-toc-target="4-2-application-yml"><span class="toc-text">4.2 application.yml</span></a><a class="toc-level-3" href="#4-3-Logback-%E2%86%92-OTLP" data-toc-target="4-3-Logback-→-OTLP"><span class="toc-text">4.3 Logback → OTLP</span></a><a class="toc-level-3" href="#4-4-%E7%BA%BF%E7%A8%8B%E5%88%87%E6%8D%A2%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%9E%84%E9%80%A0" data-toc-target="4-4-线程切换与客户端构造"><span class="toc-text">4.4 线程切换与客户端构造</span></a><a class="toc-level-3" href="#4-5-%E7%BD%91%E5%85%B3%E8%B7%AF%E7%94%B1%E7%BB%B4%E5%BA%A6" data-toc-target="4-5-网关路由维度"><span class="toc-text">4.5 网关路由维度</span></a><a class="toc-level-2" href="#5-Spring-Cloud-Gateway-%E7%9A%84%E9%93%BE%E8%B7%AF%E8%81%8C%E8%B4%A3" data-toc-target="5-Spring-Cloud-Gateway-的链路职责"><i class="toc-num" aria-hidden="true">05</i><span class="toc-text">5. Spring Cloud Gateway 的链路职责</span></a><a class="toc-level-2" href="#6-%E8%B7%A8%E8%AF%AD%E8%A8%80%E9%93%BE%E8%B7%AF%E9%AA%8C%E8%AF%81%EF%BC%88Java-%E2%86%92-Python%EF%BC%89" data-toc-target="6-跨语言链路验证（Java-→-Python）"><i class="toc-num" aria-hidden="true">06</i><span class="toc-text">6. 跨语言链路验证（Java → Python）</span></a><a class="toc-level-3" href="#6-1-%E7%94%A8%E5%9B%BA%E5%AE%9A-Trace-ID-%E8%B5%B0%E4%B8%80%E9%81%8D" data-toc-target="6-1-用固定-Trace-ID-走一遍"><span class="toc-text">6.1 用固定 Trace ID 走一遍</span></a><a class="toc-level-3" href="#6-2-%E9%80%90%E8%B7%B3%E6%A3%80%E6%9F%A5" data-toc-target="6-2-逐跳检查"><span class="toc-text">6.2 逐跳检查</span></a><a class="toc-level-3" href="#6-3-%E6%96%AD%E9%93%BE%E6%97%B6%E6%8C%89%E7%97%87%E7%8A%B6%E5%AE%9A%E4%BD%8D" data-toc-target="6-3-断链时按症状定位"><span class="toc-text">6.3 断链时按症状定位</span></a><a class="toc-level-2" href="#7-Nacos-%E4%B8%8E%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5%E9%99%8D%E5%99%AA" data-toc-target="7-Nacos-与健康检查降噪"><i class="toc-num" aria-hidden="true">07</i><span class="toc-text">7. Nacos 与健康检查降噪</span></a><a class="toc-level-3" href="#7-1-%E5%85%88%E7%A1%AE%E8%AE%A4%E5%99%AA%E5%A3%B0%E6%9D%A5%E6%BA%90" data-toc-target="7-1-先确认噪声来源"><span class="toc-text">7.1 先确认噪声来源</span></a><a class="toc-level-3" href="#7-2-%E6%BA%90%E5%A4%B4%E4%B8%A2%E5%BC%83%EF%BC%9AAgent-%E7%9A%84%E8%A7%84%E5%88%99%E9%87%87%E6%A0%B7%E5%99%A8" data-toc-target="7-2-源头丢弃：Agent-的规则采样器"><span class="toc-text">7.2 源头丢弃：Agent 的规则采样器</span></a><a class="toc-level-3" href="#7-3-Collector-%E5%85%9C%E5%BA%95%EF%BC%9Afilter-%E5%A4%84%E7%90%86%E5%99%A8" data-toc-target="7-3-Collector-兜底：filter-处理器"><span class="toc-text">7.3 Collector 兜底：filter 处理器</span></a><a class="toc-level-3" href="#7-4-%E4%B8%8D%E5%BB%BA%E8%AE%AE%E7%9A%84%E5%81%9A%E6%B3%95" data-toc-target="7-4-不建议的做法"><span class="toc-text">7.4 不建议的做法</span></a><a class="toc-level-2" href="#8-Spring-AI-%E6%9C%8D%E5%8A%A1%E7%9A%84-GenAI-%E8%A7%82%E6%B5%8B" data-toc-target="8-Spring-AI-服务的-GenAI-观测"><i class="toc-num" aria-hidden="true">08</i><span class="toc-text">8. Spring AI 服务的 GenAI 观测</span></a><a class="toc-level-2" href="#9-%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="9-验收清单"><i class="toc-num" aria-hidden="true">09</i><span class="toc-text">9. 验收清单</span></a><a class="toc-level-2" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E8%A7%84%E5%88%99%E9%87%87%E6%A0%B7%E5%99%A8%E5%B0%86%E8%A2%AB%E6%9B%BF%E6%8D%A2" data-toc-target="2026-09-补记：规则采样器将被替换"><i class="toc-num" aria-hidden="true">10</i><span class="toc-text">2026-09 补记：规则采样器将被替换</span></a>
+        </div>
+        <div class="toc-foot">
+          
+          <a class="toc-series" href="/paths/agent-observability/" style="--rail: 50%" title="回到学习路径">
+            <span class="toc-series__label">系列进度</span>
+            <span class="toc-series__count">6 / 12</span>
+            <span class="toc-series__bar" aria-hidden="true"><i></i></span>
+          </a>
+          
+          <div class="font-scale font-scale--inline" role="group" aria-label="正文字号" data-font-scale>
+            <button type="button" data-scale="sm" aria-pressed="false" aria-label="字号：小" title="小">A</button>
+            <button type="button" data-scale="md" aria-pressed="true" aria-label="字号：默认" title="默认">A</button>
+            <button type="button" data-scale="lg" aria-pressed="false" aria-label="字号：大" title="大">A</button>
+            <button type="button" data-scale="xl" aria-pressed="false" aria-label="字号：特大" title="特大">A</button>
+          </div>
+          
+
+<div class="eye-scale" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  <span class="eye-scale__label" aria-hidden="true">护眼</span>
+  <button type="button" role="radio" aria-checked="true" data-eye-mode="default" aria-label="清亮" title="清亮 · 默认蓝白"><span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="sepia" aria-label="暖纸" title="暖纸 · 米黄纸感"><span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="green" aria-label="豆沙绿" title="豆沙绿 · 经典护眼绿"><span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span></button><button type="button" role="radio" aria-checked="false" data-eye-mode="night" aria-label="墨夜" title="墨夜 · 低亮深色"><span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span></button>
+</div>
+
+
+          <div class="article-tools">
+            <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+            <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+            <button type="button" data-scroll-top><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span><span>顶部</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="toc-strip" data-toc-strip>
+        <button class="toc-strip__expand" type="button" data-toc-toggle aria-expanded="false" aria-label="展开目录" title="展开目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m17 6-6 6 6 6M11 6l-6 6 6 6"></path></svg></span></button>
+        <div class="toc-strip__dots" data-toc-dots>
+          <a class="toc-strip__dot" href="#takeaways" data-toc-target="takeaways" data-title="先读结论" aria-label="先读结论"></a>
+          <a class="toc-strip__dot" href="#1-%E7%89%88%E6%9C%AC%E5%9F%BA%E7%BA%BF%EF%BC%9A%E4%B8%A4%E6%9D%A1%E7%BA%BF%E5%B9%B6%E5%AD%98" data-toc-target="1-版本基线：两条线并存" data-title="01 · 1. 版本基线：两条线并存" aria-label="1. 版本基线：两条线并存"></a><a class="toc-strip__dot" href="#2-%E4%B8%A4%E6%9D%A1%E8%B7%AF%E7%BA%BF%E6%80%8E%E4%B9%88%E9%80%89" data-toc-target="2-两条路线怎么选" data-title="02 · 2. 两条路线怎么选" aria-label="2. 两条路线怎么选"></a><a class="toc-strip__dot" href="#3-%E8%B7%AF%E7%BA%BF-A%EF%BC%9AOTel-Java-Agent" data-toc-target="3-路线-A：OTel-Java-Agent" data-title="03 · 3. 路线 A：OTel Java Agent" aria-label="3. 路线 A：OTel Java Agent"></a><a class="toc-strip__dot" href="#4-%E8%B7%AF%E7%BA%BF-B%EF%BC%9AMicrometer-Tracing-%E6%A1%A5%E6%8E%A5" data-toc-target="4-路线-B：Micrometer-Tracing-桥接" data-title="04 · 4. 路线 B：Micrometer Tracing 桥接" aria-label="4. 路线 B：Micrometer Tracing 桥接"></a><a class="toc-strip__dot" href="#5-Spring-Cloud-Gateway-%E7%9A%84%E9%93%BE%E8%B7%AF%E8%81%8C%E8%B4%A3" data-toc-target="5-Spring-Cloud-Gateway-的链路职责" data-title="05 · 5. Spring Cloud Gateway 的链路职责" aria-label="5. Spring Cloud Gateway 的链路职责"></a><a class="toc-strip__dot" href="#6-%E8%B7%A8%E8%AF%AD%E8%A8%80%E9%93%BE%E8%B7%AF%E9%AA%8C%E8%AF%81%EF%BC%88Java-%E2%86%92-Python%EF%BC%89" data-toc-target="6-跨语言链路验证（Java-→-Python）" data-title="06 · 6. 跨语言链路验证（Java → Python）" aria-label="6. 跨语言链路验证（Java → Python）"></a><a class="toc-strip__dot" href="#7-Nacos-%E4%B8%8E%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5%E9%99%8D%E5%99%AA" data-toc-target="7-Nacos-与健康检查降噪" data-title="07 · 7. Nacos 与健康检查降噪" aria-label="7. Nacos 与健康检查降噪"></a><a class="toc-strip__dot" href="#8-Spring-AI-%E6%9C%8D%E5%8A%A1%E7%9A%84-GenAI-%E8%A7%82%E6%B5%8B" data-toc-target="8-Spring-AI-服务的-GenAI-观测" data-title="08 · 8. Spring AI 服务的 GenAI 观测" aria-label="8. Spring AI 服务的 GenAI 观测"></a><a class="toc-strip__dot" href="#9-%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95" data-toc-target="9-验收清单" data-title="09 · 9. 验收清单" aria-label="9. 验收清单"></a><a class="toc-strip__dot" href="#2026-09-%E8%A1%A5%E8%AE%B0%EF%BC%9A%E8%A7%84%E5%88%99%E9%87%87%E6%A0%B7%E5%99%A8%E5%B0%86%E8%A2%AB%E6%9B%BF%E6%8D%A2" data-toc-target="2026-09-补记：规则采样器将被替换" data-title="10 · 2026-09 补记：规则采样器将被替换" aria-label="2026-09 补记：规则采样器将被替换"></a>
+        </div>
+        <span class="toc-strip__pct" data-reading-percent>0%</span>
+        <div class="toc-strip__tools">
+          <button type="button" data-bookmark aria-pressed="false" aria-label="收藏" title="收藏"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span></button>
+          <button type="button" data-share aria-label="分享" title="分享"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span></button>
+          <button type="button" data-scroll-top aria-label="回到顶部" title="回到顶部"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="mobile-reading-tools" role="toolbar" aria-label="阅读工具">
+    <button type="button" data-bookmark aria-pressed="false"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg></span><span>收藏</span></button>
+    <button type="button" data-share><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="m8 11 8-5M8 13l8 5"></path></svg></span><span>分享</span></button>
+    <button type="button" data-open-sheet="look-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M8 6v14M16 6v14M6 20h4M14 20h4"></path></svg></span><span>外观</span></button>
+    <button type="button" data-open-sheet="toc-sheet"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></span><span>目录</span></button>
+  </div>
+  <div class="sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="文章目录" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>文章目录</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭目录"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="toc-list sheet__toc" data-toc-clone></div>
+    </div>
+  </div>
+  <div class="sheet" id="look-sheet" role="dialog" aria-modal="true" aria-label="阅读外观" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel">
+      <div class="sheet__head"><strong>阅读外观</strong><button class="icon-button" type="button" data-close-sheet aria-label="关闭"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button></div>
+      <div class="sheet__section">
+        <div class="eye-group__title">正文字号</div>
+        <div class="font-scale" role="group" aria-label="字号档位" data-font-scale>
+          <button type="button" data-scale="sm" aria-pressed="false">小</button>
+          <button type="button" data-scale="md" aria-pressed="true">默认</button>
+          <button type="button" data-scale="lg" aria-pressed="false">大</button>
+          <button type="button" data-scale="xl" aria-pressed="false">特大</button>
+        </div>
+      </div>
+
+      <div class="sheet__section eye-group">
+        <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+        
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+      </div>
+
+    </div>
+  </div>
+  <script type="application/json" id="article-data">{"slug":"observability/OTel-06-Java埋点","title":"Java 埋点：Spring Cloud Gateway 与 Nacos","url":"/2026/07/15/observability/OTel-06-Java%E5%9F%8B%E7%82%B9/","path":"agent-observability","index":5,"total":12,"next":{"title":"Higress 与 Temporal 链路观测","url":"/2026/07/17/observability/OTel-07-Higress%E4%B8%8ETemporal/"}}</script>
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">&copy; 2026 飞轮之道 · Flywhl</span>
+    <nav class="site-footer__links" aria-label="页脚导航">
+      <a href="/atom.xml">RSS 订阅</a><a href="/archives/">归档</a><a href="/about/">关于</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="mobile-bottom-nav" aria-label="移动端主导航">
+  
+  <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+  
+  <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+  
+  <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+  
+  <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+  
+  <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+  
+</nav>
+
+  </div>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" hidden>
+  <div class="search-overlay__backdrop" data-close-search></div>
+  <div class="search-overlay__panel">
+    <form class="search-box search-box--overlay" role="search" action="/discover/" method="get" data-search-form>
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+      <input type="search" name="q" id="search-overlay-input" aria-label="输入你的问题" placeholder="例如：如何让 Agent 系统真正可观测？" autocomplete="off" enterkeyhint="search">
+      <span class="shortcut" aria-hidden="true">ESC</span>
+      <button class="btn primary" type="submit">查找内容</button>
+    </form>
+    <div class="search-overlay__hint" data-search-hint>输入问题关键词，回车进入发现页查看全部结果。</div>
+    <div class="search-overlay__results" data-search-results aria-live="polite"></div>
+    <button class="icon-button search-overlay__close" type="button" data-close-search aria-label="关闭搜索"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+  </div>
+</div>
+
+<div class="mobile-drawer" id="mobile-menu" role="dialog" aria-modal="true" aria-label="更多菜单" hidden>
+  <div class="mobile-drawer__backdrop" data-close-menu></div>
+  <div class="mobile-drawer__panel">
+    <div class="mobile-drawer__head">
+      <span class="mobile-drawer__title">菜单</span>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭菜单"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></button>
+    </div>
+    <nav class="mobile-drawer__nav" aria-label="全站导航">
+      <a href="/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 8-6 8 6v9H4z"></path><path d="M9 19v-6h6v6"></path></svg></span><span>首页</span></a>
+      
+      <a href="/discover/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"></path></svg></span><span>发现</span></a>
+      
+      <a href="/topics/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5M3 16l9 5 9-5"></path></svg></span><span>专题</span></a>
+      
+      <a href="/paths/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18h3a4 4 0 0 0 4-4v-4a4 4 0 0 1 4-4"></path></svg></span><span>路径</span></a>
+      
+      <a href="/archives/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM3 4h18v3H3z"></path><path d="M9 11h6"></path></svg></span><span>归档</span></a>
+      
+      <a href="/about/" class=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span>关于</span></a>
+      
+      <a href="/tags/"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.5"></circle></svg></span><span>标签</span></a>
+      <a href="/atom.xml"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg></span><span>RSS 订阅</span></a>
+    </nav>
+
+    <div class="mobile-drawer__eye eye-group">
+      <div class="eye-group__title">护眼模式<span>全站记忆你的选择</span></div>
+      
+
+<div class="eye-options" role="radiogroup" aria-label="护眼模式" data-eye-group>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="true" data-eye-mode="default">
+    <span class="eye-swatch" data-mode="default" aria-hidden="true">Aa</span>
+    <span><strong>清亮</strong><small>默认蓝白</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="sepia">
+    <span class="eye-swatch" data-mode="sepia" aria-hidden="true">Aa</span>
+    <span><strong>暖纸</strong><small>米黄纸感</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="green">
+    <span class="eye-swatch" data-mode="green" aria-hidden="true">Aa</span>
+    <span><strong>豆沙绿</strong><small>经典护眼绿</small></span>
+  </button>
+  
+  <button class="eye-option" type="button" role="radio" aria-checked="false" data-eye-mode="night">
+    <span class="eye-swatch" data-mode="night" aria-hidden="true">Aa</span>
+    <span><strong>墨夜</strong><small>低亮深色</small></span>
+  </button>
+  
+</div>
+
+
+    </div>
+
+    <button class="btn primary mobile-drawer__search" type="button" data-open-search><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>输入你的问题</button>
+  </div>
+</div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>window.__OBS = {"kind":"post","root":"/","eyeModes":["default","sepia","green","night"],"mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js","katex":null};</script>
+  <script src="/js/observatory.js" defer></script>
+  <script src="/js/codeblock.js" defer></script>
+</body>
+</html>
